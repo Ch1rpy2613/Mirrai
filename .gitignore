@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+uploads/
+*.log
+.DS_Store
+drizzle/meta/
+*.tsbuildinfo
+.vite/
