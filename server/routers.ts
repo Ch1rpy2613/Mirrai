@@ -26,7 +26,7 @@ import {
   getExportData, getRecentEmotionTrend, getMessageCountInRange, setGraduationStatus,
 } from "./db";
 import { nanoid } from "nanoid";
-import { getBotStatus, startWeChatBot, stopWeChatBot } from "./wechat/bot";
+import { getBotStatus, startWeChatBot, stopWeChatBot, listWechatContacts } from "./wechat/bot";
 import { runSkillPipeline } from "./skill-engine/pipeline";
 import { getEmotionalStateDesc, computeEmotionalState, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
 
@@ -555,6 +555,8 @@ export const appRouter = router({
       await stopWeChatBot();
       return { success: true };
     }),
+
+    listContacts: protectedProcedure.query(() => listWechatContacts()),
 
     bindContact: protectedProcedure
       .input(z.object({
