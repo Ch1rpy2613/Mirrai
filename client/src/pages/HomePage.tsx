@@ -1,20 +1,20 @@
+import { Suspense, lazy } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Leaf } from "lucide-react";
-import Lobby from "./Lobby";
-import Landing from "./Landing";
+import PageLoader from "@/components/PageLoader";
+
+const Lobby = lazy(() => import("./Lobby"));
+const Landing = lazy(() => import("./Landing"));
 
 export default function HomePage() {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center animate-pulse-soft">
-          <Leaf className="w-4 h-4 text-primary" />
-        </div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
-  return isAuthenticated ? <Lobby /> : <Landing />;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      {isAuthenticated ? <Lobby /> : <Landing />}
+    </Suspense>
+  );
 }

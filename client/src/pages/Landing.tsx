@@ -3,20 +3,19 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Wordmark } from "@/components/Wordmark";
 import {
-  Leaf, Globe, Brain, Smartphone, Heart, Shield,
-  UserPlus, Upload, MessageCircle, Quote, ChevronDown,
-  Sparkles, ArrowRight, BookOpen, ChevronUp,
-  Layers, GraduationCap, Code2, Database, Zap, Server,
+  Globe, ChevronDown, ArrowRight, ChevronUp, Moon, Sun,
 } from "lucide-react";
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 24 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" as const } },
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
 };
 
 const stagger = {
-  visible: { transition: { staggerChildren: 0.12 } },
+  visible: { transition: { staggerChildren: 0.1 } },
 };
 
 /* ─── Nav ─── */
@@ -24,72 +23,39 @@ const stagger = {
 function LandingNav() {
   const [, navigate] = useLocation();
   const { t, locale, setLocale } = useLocale();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 app-header">
       <div className="container app-nav">
         <div className="app-nav-brand">
-          <div className="app-nav-mark">
-            <Leaf className="w-5 h-5 text-primary" />
-          </div>
-          <span className="app-nav-title text-lg tracking-tight">Mirrai</span>
+          <Wordmark size="text-lg" />
         </div>
         <div className="app-nav-spacer" />
         <div className="app-nav-actions">
+          {toggleTheme && (
+            <button onClick={toggleTheme} className="app-nav-icon" aria-label="切换主题">
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+          )}
           <button
             onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
-            className="app-nav-back flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-sm"
+            className="app-nav-back gap-1.5 text-sm"
+            aria-label={t.nav.language}
           >
             <Globe className="w-4 h-4" />
             <span className="hidden sm:inline">{t.nav.language}</span>
           </button>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="app-nav-back text-sm">
+          <div className="app-nav-divider" />
+          <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="text-sm">
             {t.nav.login}
           </Button>
-          <Button size="sm" onClick={() => navigate("/login")} className="hidden sm:inline-flex text-sm rounded-xl">
+          <Button size="sm" onClick={() => navigate("/login")} className="hidden sm:inline-flex text-sm rounded-md px-4">
             {t.nav.register}
           </Button>
         </div>
       </div>
     </nav>
-  );
-}
-
-/* ─── Hero Backdrop ─── */
-function HeroBackdrop() {
-  return (
-    <div className="landing-hero-scene" aria-hidden>
-      <div className="landing-chat-column left">
-        <div className="landing-chat-card">
-          <div className="landing-chat-line primary" />
-          <div className="landing-chat-line" />
-          <div className="landing-chat-line short" />
-        </div>
-        <div className="landing-chat-card small offset">
-          <div className="landing-chat-line" />
-          <div className="landing-chat-line primary short" />
-        </div>
-        <div className="landing-chat-card">
-          <div className="landing-chat-line" />
-          <div className="landing-chat-line short" />
-        </div>
-      </div>
-      <div className="landing-chat-column right">
-        <div className="landing-chat-card small">
-          <div className="landing-chat-line primary short" />
-          <div className="landing-chat-line" />
-        </div>
-        <div className="landing-chat-card offset">
-          <div className="landing-chat-line" />
-          <div className="landing-chat-line" />
-          <div className="landing-chat-line primary short" />
-        </div>
-        <div className="landing-chat-card small">
-          <div className="landing-chat-line" />
-          <div className="landing-chat-line short" />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -100,61 +66,54 @@ function HeroSection() {
   const { t } = useLocale();
 
   return (
-    <section className="relative min-h-[92svh] flex items-center justify-center overflow-hidden pt-24 pb-16">
-      <HeroBackdrop />
-      <div className="landing-hero-glow" />
-
+    <section className="relative min-h-[92svh] flex items-center pt-20 pb-16">
       <motion.div
-        className="relative z-10 text-center px-4 max-w-3xl mx-auto"
+        className="container"
         initial="hidden"
         animate="visible"
         variants={stagger}
       >
-        <motion.div variants={fadeUp} className="mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-8">
-            <Sparkles className="w-4 h-4" />
-            AI-Powered Emotional Companion
-          </div>
-        </motion.div>
+        <div className="max-w-3xl">
+          <motion.p variants={fadeUp} className="kicker kicker-accent mb-8">
+            情感记忆操作系统
+          </motion.p>
 
-        <motion.div variants={fadeUp} className="mb-6 inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10">
-          <Leaf className="w-10 h-10 text-primary animate-float" />
-        </motion.div>
-
-        <motion.h1
-          variants={fadeUp}
-          className="text-5xl sm:text-6xl lg:text-7xl font-bold text-foreground tracking-tight mb-6 leading-tight"
-        >
-          {t.hero.tagline}
-        </motion.h1>
-
-        <motion.p variants={fadeUp} className="text-lg sm:text-xl text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed">
-          {t.hero.subtitle}
-        </motion.p>
-
-        <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-          <Button size="lg" onClick={() => navigate("/login")} className="w-full sm:w-auto rounded-xl px-8 h-12 text-base gap-2">
-            {t.hero.cta}
-            <ArrowRight className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => document.getElementById("story")?.scrollIntoView({ behavior: "smooth" })}
-            className="w-full sm:w-auto rounded-xl px-8 h-12 text-base gap-2"
+          <motion.h1
+            variants={fadeUp}
+            className="font-display text-5xl sm:text-6xl lg:text-7xl font-semibold text-foreground leading-[1.2] mb-8"
           >
-            {t.hero.ctaSecondary}
-            <ChevronDown className="w-4 h-4" />
-          </Button>
-        </motion.div>
+            {t.hero.tagline}
+          </motion.h1>
+
+          <motion.p variants={fadeUp} className="text-lg text-muted-foreground max-w-xl mb-4 leading-relaxed">
+            {t.hero.subtitle}
+          </motion.p>
+
+          <motion.div variants={fadeUp} className="rule w-16 my-10" />
+
+          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-3">
+            <Button size="lg" onClick={() => navigate("/login")} className="rounded-md px-8 h-11 text-[0.9375rem] gap-2">
+              {t.hero.cta}
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => document.getElementById("story")?.scrollIntoView({ behavior: "smooth" })}
+              className="rounded-md px-8 h-11 text-[0.9375rem] gap-2 bg-transparent"
+            >
+              {t.hero.ctaSecondary}
+            </Button>
+          </motion.div>
+        </div>
       </motion.div>
 
       <motion.div
         className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        animate={{ y: [0, 8, 0] }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        animate={{ y: [0, 6, 0] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
       >
-        <ChevronDown className="w-6 h-6 text-muted-foreground/40" />
+        <ChevronDown className="w-4 h-4 text-muted-foreground/50" />
       </motion.div>
     </section>
   );
@@ -163,32 +122,51 @@ function HeroSection() {
 /* ─── Stats ─── */
 function StatsSection() {
   const { t } = useLocale();
-  const stats = [
-    { value: "10K+", label: t.stats.users },
-    { value: "50K+", label: t.stats.personas },
-    { value: "2M+", label: t.stats.messages },
-    { value: "98%", label: t.stats.satisfaction },
-  ];
 
   return (
-    <section className="py-16">
+    <section className="border-y border-border">
       <div className="container">
         <motion.div
-          className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-3xl mx-auto"
+          className="grid grid-cols-2 md:grid-cols-4"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {stats.map((s, i) => (
-            <motion.div key={i} variants={fadeUp} className="text-center">
-              <div className="text-3xl sm:text-4xl font-bold text-primary mb-1">{s.value}</div>
-              <div className="text-sm text-muted-foreground">{s.label}</div>
+          {t.stats.items.map((s, i) => (
+            <motion.div
+              key={s.value}
+              variants={fadeUp}
+              className={`py-10 pr-4 ${i % 2 === 1 ? "pl-6 border-l border-border" : ""} ${i >= 2 ? "border-t border-border md:border-t-0" : ""} ${i > 0 ? "md:border-l md:border-border md:pl-10" : ""}`}
+            >
+              <div className="font-display text-3xl font-semibold text-foreground mb-1">{s.value}</div>
+              <div className="text-sm text-muted-foreground leading-relaxed">{s.label}</div>
             </motion.div>
           ))}
         </motion.div>
       </div>
     </section>
+  );
+}
+
+/* ─── Section Heading ─── */
+function SectionHeading({ index, title, subtitle }: { index: string; title: string; subtitle: string }) {
+  return (
+    <motion.div
+      className="mb-14"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-100px" }}
+      variants={stagger}
+    >
+      <motion.div variants={fadeUp} className="font-display text-sm text-cinnabar mb-3">{index}</motion.div>
+      <motion.h2 variants={fadeUp} className="font-display text-3xl sm:text-4xl font-semibold text-foreground mb-3">
+        {title}
+      </motion.h2>
+      <motion.p variants={fadeUp} className="text-muted-foreground max-w-md">
+        {subtitle}
+      </motion.p>
+    </motion.div>
   );
 }
 
@@ -198,31 +176,28 @@ function StorySection() {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <section id="story" className="landing-section">
+    <section id="story" className="py-24 sm:py-28">
       <div className="container">
         <motion.div
-          className="max-w-3xl mx-auto"
+          className="max-w-2xl"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={stagger}
         >
-          <motion.div variants={fadeUp} className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 mb-5">
-              <BookOpen className="w-7 h-7 text-primary" />
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">{t.story.title}</h2>
-            <p className="text-muted-foreground text-lg max-w-md mx-auto">{t.story.subtitle}</p>
-          </motion.div>
+          <motion.div variants={fadeUp} className="font-display text-sm text-cinnabar mb-3">前序</motion.div>
+          <motion.h2 variants={fadeUp} className="font-display text-3xl sm:text-4xl font-semibold text-foreground mb-3">
+            {t.story.title}
+          </motion.h2>
+          <motion.p variants={fadeUp} className="text-muted-foreground mb-10">
+            {t.story.subtitle}
+          </motion.p>
 
-          <motion.div variants={fadeUp}>
-            <blockquote className="landing-story-quote">
-              <div className="landing-story-quote-mark">"</div>
-              <p className="text-lg sm:text-xl leading-relaxed text-foreground/90 italic">
-                {t.story.quote}
-              </p>
-            </blockquote>
-          </motion.div>
+          <motion.blockquote variants={fadeUp} className="border-l-2 border-cinnabar/50 pl-6 sm:pl-8">
+            <p className="letter-prose text-lg sm:text-xl text-foreground/90">
+              {t.story.quote}
+            </p>
+          </motion.blockquote>
 
           <AnimatePresence initial={false}>
             {expanded && (
@@ -230,25 +205,16 @@ function StorySection() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
+                transition={{ duration: 0.45, ease: "easeInOut" }}
                 className="overflow-hidden"
               >
-                <div className="space-y-6 mt-8 text-foreground/80 leading-relaxed">
+                <div className="letter-prose text-foreground/80 mt-10">
                   {t.story.body.map((p, i) => (
-                    <motion.p
-                      key={i}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1, duration: 0.4 }}
-                    >
-                      {p}
-                    </motion.p>
+                    <p key={i}>{p}</p>
                   ))}
-                  <div className="h-px bg-border/60 my-8" />
-                  <p className="text-lg font-medium text-foreground text-center">
-                    {t.story.closing}
-                  </p>
-                  <p className="text-sm text-muted-foreground text-right">
+                  <hr className="rule my-10" />
+                  <p className="text-lg text-foreground">{t.story.closing}</p>
+                  <p className="text-sm font-sans text-muted-foreground text-right">
                     {t.story.signature}
                   </p>
                 </div>
@@ -256,11 +222,11 @@ function StorySection() {
             )}
           </AnimatePresence>
 
-          <motion.div variants={fadeUp} className="text-center mt-8">
+          <motion.div variants={fadeUp} className="mt-8">
             <Button
               variant="ghost"
               onClick={() => setExpanded(!expanded)}
-              className="rounded-xl gap-2 text-primary hover:text-primary"
+              className="gap-1.5 px-0 text-cinnabar hover:text-cinnabar hover:bg-transparent"
             >
               {expanded ? t.story.collapse : t.story.readMore}
               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -272,49 +238,35 @@ function StorySection() {
   );
 }
 
-/* ─── Features ─── */
-const featureIcons = [Brain, Smartphone, Heart, Shield, Layers, GraduationCap];
-
+/* ─── Features · 目录式编号列表 ─── */
 function FeaturesSection() {
   const { t } = useLocale();
 
   return (
-    <section id="features" className="landing-section bg-muted/30">
+    <section id="features" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <motion.div
-          className="text-center mb-16"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            {t.features.title}
-          </motion.h2>
-          <motion.p variants={fadeUp} className="text-muted-foreground text-lg max-w-md mx-auto">
-            {t.features.subtitle}
-          </motion.p>
-        </motion.div>
+        <SectionHeading index="01" title={t.features.title} subtitle={t.features.subtitle} />
 
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-0 max-w-6xl"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {t.features.items.map((item, i) => {
-            const Icon = featureIcons[i];
-            return (
-              <motion.div key={i} variants={fadeUp} className="warm-card p-8 group hover:shadow-lg transition-shadow">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-5 group-hover:bg-primary/15 transition-colors">
-                  <Icon className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">{item.title}</h3>
-                <p className="text-muted-foreground leading-relaxed">{item.desc}</p>
-              </motion.div>
-            );
-          })}
+          {t.features.items.map((item, i) => (
+            <motion.div
+              key={i}
+              variants={fadeUp}
+              className="border-t border-border py-7"
+            >
+              <div className="font-display text-sm text-muted-foreground mb-3">
+                {String(i + 1).padStart(2, "0")}
+              </div>
+              <h3 className="font-display text-lg font-semibold text-foreground mb-2">{item.title}</h3>
+              <p className="text-muted-foreground leading-relaxed text-[0.9375rem]">{item.desc}</p>
+            </motion.div>
+          ))}
         </motion.div>
       </div>
     </section>
@@ -322,55 +274,36 @@ function FeaturesSection() {
 }
 
 /* ─── How It Works ─── */
-
-const stepIcons = [UserPlus, Upload, MessageCircle];
-
 function HowItWorksSection() {
   const { t } = useLocale();
 
   return (
-    <section id="how-it-works" className="landing-section">
+    <section id="how-it-works" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <motion.div
-          className="text-center mb-16"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            {t.howItWorks.title}
-          </motion.h2>
-          <motion.p variants={fadeUp} className="text-muted-foreground text-lg max-w-md mx-auto">
-            {t.howItWorks.subtitle}
-          </motion.p>
-        </motion.div>
+        <SectionHeading index="02" title={t.howItWorks.title} subtitle={t.howItWorks.subtitle} />
 
         <motion.div
-          className="flex flex-col md:flex-row items-start justify-center gap-8 md:gap-4 max-w-4xl mx-auto"
+          className="max-w-3xl"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {t.howItWorks.steps.map((step, i) => {
-            const Icon = stepIcons[i];
-            return (
-              <motion.div key={i} variants={fadeUp} className="flex-1 text-center relative">
-                {i < 2 && (
-                  <div className="hidden md:block absolute top-10 left-[calc(50%+40px)] w-[calc(100%-80px)] border-t-2 border-dashed border-primary/20" />
-                )}
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-5 relative">
-                  <Icon className="w-8 h-8 text-primary" />
-                  <span className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center">
-                    {i + 1}
-                  </span>
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{step.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed max-w-xs mx-auto">{step.desc}</p>
-              </motion.div>
-            );
-          })}
+          {t.howItWorks.steps.map((step, i) => (
+            <motion.div
+              key={i}
+              variants={fadeUp}
+              className="flex gap-6 sm:gap-10 py-8 border-t border-border last:border-b"
+            >
+              <div className="font-display text-2xl font-semibold text-cinnabar w-10 shrink-0 pt-0.5">
+                {String(i + 1).padStart(2, "0")}
+              </div>
+              <div>
+                <h3 className="font-display text-lg font-semibold text-foreground mb-1.5">{step.title}</h3>
+                <p className="text-muted-foreground leading-relaxed text-[0.9375rem]">{step.desc}</p>
+              </div>
+            </motion.div>
+          ))}
         </motion.div>
       </div>
     </section>
@@ -378,65 +311,38 @@ function HowItWorksSection() {
 }
 
 /* ─── Tech ─── */
-const techIcons = [Code2, Code2, Server, Database, Database, Zap];
-
 function TechSection() {
   const { t } = useLocale();
 
   return (
-    <section id="tech" className="landing-section bg-muted/30">
+    <section id="tech" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <motion.div
-          className="text-center mb-16"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            {t.tech.title}
-          </motion.h2>
-          <motion.p variants={fadeUp} className="text-muted-foreground text-lg max-w-lg mx-auto">
-            {t.tech.subtitle}
-          </motion.p>
-        </motion.div>
+        <SectionHeading index="03" title={t.tech.title} subtitle={t.tech.subtitle} />
 
         <motion.div
-          className="grid grid-cols-3 sm:grid-cols-6 gap-4 max-w-3xl mx-auto mb-12"
+          className="max-w-4xl"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {t.tech.stack.map((item, i) => {
-            const Icon = techIcons[i];
-            return (
-              <motion.div
-                key={i}
-                variants={fadeUp}
-                className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-background border border-border/60 hover:border-primary/30 transition-colors"
-              >
-                <Icon className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground text-center leading-tight">{item.name}</span>
-                <span className="text-[0.6875rem] text-muted-foreground text-center leading-tight">{item.desc}</span>
+          <motion.div variants={fadeUp} className="flex flex-wrap gap-x-8 gap-y-3 mb-14 pb-8 border-b border-border">
+            {t.tech.stack.map((item, i) => (
+              <div key={i} className="flex items-baseline gap-2">
+                <span className="font-display font-semibold text-foreground">{item.name}</span>
+                <span className="text-sm text-muted-foreground">{item.desc}</span>
+              </div>
+            ))}
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-8">
+            {t.tech.highlights.map((item, i) => (
+              <motion.div key={i} variants={fadeUp}>
+                <h3 className="font-display text-base font-semibold text-foreground mb-2">{item.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
-            );
-          })}
-        </motion.div>
-
-        <motion.div
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          variants={stagger}
-        >
-          {t.tech.highlights.map((item, i) => (
-            <motion.div key={i} variants={fadeUp} className="warm-card p-6">
-              <h3 className="text-base font-semibold text-foreground mb-2">{item.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
-            </motion.div>
-          ))}
+            ))}
+          </div>
         </motion.div>
       </div>
     </section>
@@ -448,44 +354,27 @@ function TestimonialsSection() {
   const { t } = useLocale();
 
   return (
-    <section id="testimonials" className="landing-section">
+    <section id="testimonials" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <motion.div
-          className="text-center mb-16"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={stagger}
-        >
-          <motion.h2 variants={fadeUp} className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            {t.testimonials.title}
-          </motion.h2>
-          <motion.p variants={fadeUp} className="text-muted-foreground text-lg max-w-md mx-auto">
-            {t.testimonials.subtitle}
-          </motion.p>
-        </motion.div>
+        <SectionHeading index="04" title={t.testimonials.title} subtitle={t.testimonials.subtitle} />
 
         <motion.div
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-10 max-w-6xl"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
           {t.testimonials.items.map((item, i) => (
-            <motion.div key={i} variants={fadeUp} className="warm-card p-8 relative">
-              <Quote className="w-8 h-8 text-primary/15 absolute top-6 right-6" />
-              <p className="text-foreground leading-relaxed mb-6 relative z-10">"{item.quote}"</p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
-                  {item.author[0]}
-                </div>
-                <div>
-                  <div className="font-medium text-foreground">{item.author}</div>
-                  <div className="text-sm text-muted-foreground">{item.role}</div>
-                </div>
-              </div>
-            </motion.div>
+            <motion.figure key={i} variants={fadeUp} className="border-t border-border pt-7 flex flex-col">
+              <blockquote className="letter-prose text-[0.9375rem] text-foreground/90 flex-1">
+                {item.quote}
+              </blockquote>
+              <figcaption className="mt-6 text-sm">
+                <span className="font-display font-semibold text-foreground">{item.author}</span>
+                <span className="text-muted-foreground"> · {item.role}</span>
+              </figcaption>
+            </motion.figure>
           ))}
         </motion.div>
       </div>
@@ -500,26 +389,23 @@ function CTASection() {
   const { t } = useLocale();
 
   return (
-    <section className="landing-section bg-primary/5">
+    <section className="py-24 sm:py-32 border-t border-border">
       <div className="container">
         <motion.div
-          className="text-center max-w-2xl mx-auto"
+          className="max-w-2xl"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          <motion.div variants={fadeUp} className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-6">
-            <Leaf className="w-8 h-8 text-primary" />
-          </motion.div>
-          <motion.h2 variants={fadeUp} className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+          <motion.h2 variants={fadeUp} className="font-display text-3xl sm:text-5xl font-semibold text-foreground mb-5 leading-[1.25]">
             {t.hero.tagline}
           </motion.h2>
-          <motion.p variants={fadeUp} className="text-muted-foreground text-lg mb-8">
+          <motion.p variants={fadeUp} className="text-muted-foreground text-lg mb-10">
             {t.hero.subtitle}
           </motion.p>
           <motion.div variants={fadeUp}>
-            <Button size="lg" onClick={() => navigate("/login")} className="rounded-xl px-10 h-12 text-base gap-2">
+            <Button size="lg" onClick={() => navigate("/login")} className="rounded-md px-10 h-11 text-[0.9375rem] gap-2">
               {t.hero.cta}
               <ArrowRight className="w-4 h-4" />
             </Button>
@@ -536,40 +422,34 @@ function LandingFooter() {
   const { t } = useLocale();
 
   return (
-    <footer className="border-t border-border bg-background">
-      <div className="container py-12">
-        <div className="flex flex-col md:flex-row justify-between gap-8">
+    <footer className="border-t border-border">
+      <div className="container py-14">
+        <div className="flex flex-col md:flex-row justify-between gap-10">
           <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Leaf className="w-4 h-4 text-primary" />
-              </div>
-              <span className="text-base font-semibold text-foreground">Mirrai</span>
-            </div>
-            <p className="text-sm text-muted-foreground max-w-xs">{t.footer.tagline}</p>
+            <Wordmark size="text-lg" />
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mt-3">{t.footer.tagline}</p>
           </div>
 
-          <div className="flex gap-16">
+          <div className="flex gap-16 sm:gap-20">
             <div>
-              <h4 className="text-sm font-medium text-foreground mb-3">{t.footer.product}</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <h4 className="text-sm font-medium text-foreground mb-4">{t.footer.product}</h4>
+              <ul className="space-y-2.5 text-sm text-muted-foreground">
                 <li><a href="#features" className="hover:text-foreground transition-colors">{t.footer.features}</a></li>
-                <li><a href="#how-it-works" className="hover:text-foreground transition-colors">{t.footer.pricing}</a></li>
-                <li><a href="#tech" className="hover:text-foreground transition-colors">{t.footer.changelog}</a></li>
+                <li><a href="#how-it-works" className="hover:text-foreground transition-colors">{t.footer.how}</a></li>
+                <li><a href="#tech" className="hover:text-foreground transition-colors">{t.footer.tech}</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-foreground mb-3">{t.footer.company}</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
+              <h4 className="text-sm font-medium text-foreground mb-4">{t.footer.company}</h4>
+              <ul className="space-y-2.5 text-sm text-muted-foreground">
                 <li><a href="#story" className="hover:text-foreground transition-colors">{t.footer.about}</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">{t.footer.privacy}</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">{t.footer.terms}</a></li>
               </ul>
             </div>
           </div>
         </div>
 
-        <div className="mt-10 pt-6 border-t border-border text-center text-sm text-muted-foreground">
+        <hr className="rule mt-12 mb-6" />
+        <div className="text-xs text-muted-foreground">
           &copy; {new Date().getFullYear()} {t.footer.copyright}
         </div>
       </div>

@@ -1,19 +1,38 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ArrowLeft, MessageCircle, Calendar, Flame, TrendingUp } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import {
-  AreaChart, Area, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+};
+
+const stagger = {
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
+/* 情绪色：取自设计系统 mood tokens，与日记页的情绪 chip 呼应 */
 const EMOTION_COLORS: Record<string, string> = {
-  warm: "var(--color-chart-1)", playful: "var(--color-chart-2)", nostalgic: "var(--color-chart-3)",
-  melancholy: "var(--color-muted-foreground)", happy: "var(--color-chart-5)", distant: "var(--color-chart-4)",
+  warm: "var(--color-mood-warm)", playful: "var(--color-mood-playful)", nostalgic: "var(--color-mood-nostalgic)",
+  melancholy: "var(--color-mood-melancholy)", happy: "var(--color-mood-happy)", distant: "var(--color-mood-distant)",
 };
 const EMOTION_LABELS: Record<string, string> = {
   warm: "温柔", playful: "俏皮", nostalgic: "思念", melancholy: "忧郁", happy: "开心", distant: "疏离",
+};
+
+const TOOLTIP_STYLE = {
+  background: "var(--color-card)",
+  border: "1px solid var(--color-border)",
+  borderRadius: 6,
+  fontSize: 12,
+  color: "var(--color-foreground)",
 };
 
 export default function Analytics() {
@@ -42,17 +61,20 @@ export default function Analytics() {
       <header className="sticky top-0 z-40 app-header">
         <div className="container app-nav">
           <button onClick={() => navigate("/")}
-            className="app-nav-back -ml-1">
+            className="app-nav-back -ml-1" aria-label="返回">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="app-nav-title-group">
-            <h1 className="app-nav-title">数据看板</h1>
+            <div>
+              <h1 className="app-nav-title">数据看板</h1>
+              <p className="app-nav-subtitle">消息与情绪统计</p>
+            </div>
           </div>
           <div className="app-nav-spacer" />
-          <div className="flex bg-muted/70 border border-border/60 rounded-lg p-0.5">
+          <div className="flex gap-1 border-b border-border">
             {[7, 30, 90].map(d => (
               <button key={d} onClick={() => setDays(d)}
-                className={`text-xs px-3 py-1 rounded-md transition-colors ${days === d ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                className={`text-xs px-3 py-2 -mb-px border-b-2 transition-colors ${days === d ? "border-cinnabar text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                 {d}天
               </button>
             ))}
@@ -60,55 +82,67 @@ export default function Analytics() {
         </div>
       </header>
 
-      <div className="container py-6 max-w-4xl mx-auto space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard icon={<MessageCircle className="w-4 h-4" />} label="总消息" value={stats.totalMessages} />
-          <StatCard icon={<Calendar className="w-4 h-4" />} label="活跃天数" value={stats.activeDays} />
-          <StatCard icon={<Flame className="w-4 h-4" />} label="最长连续" value={`${stats.longestStreak}天`} />
-          <StatCard icon={<TrendingUp className="w-4 h-4" />} label="日均消息" value={stats.avgPerDay} />
-        </div>
+      <main className="container page-main max-w-4xl space-y-6">
+        <motion.div initial="hidden" animate="visible" variants={fadeUp}>
+          <p className="kicker kicker-accent mb-3">回看</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">数据看板</h1>
+          <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">
+            消息、情绪与陪伴的痕迹，安静地记在这里。
+          </p>
+        </motion.div>
 
-        <div className="warm-card p-4">
-          <p className="text-sm font-medium text-foreground mb-3">每日消息量</p>
-          <div className="h-48">
+        <motion.div
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"
+          initial="hidden"
+          animate="visible"
+          variants={stagger}
+        >
+          <StatCard label="总消息" value={stats.totalMessages} />
+          <StatCard label="活跃天数" value={stats.activeDays} />
+          <StatCard label="最长连续" value={`${stats.longestStreak}天`} />
+          <StatCard label="日均消息" value={stats.avgPerDay} />
+        </motion.div>
+
+        <ChartCard title="每日消息量">
+          <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.messageVolume || []}>
-                <defs>
-                  <linearGradient id="msgGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" />
-                <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" />
-                <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
-                <Area type="monotone" dataKey="count" stroke="var(--color-chart-1)" fill="url(#msgGrad)" strokeWidth={2} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Area type="monotone" dataKey="count" stroke="var(--color-chart-2)" fill="var(--color-chart-2)" fillOpacity={0.12} strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </ChartCard>
 
         <div className="grid md:grid-cols-2 gap-6">
-          <div className="warm-card p-4">
-            <p className="text-sm font-medium text-foreground mb-3">情绪分布趋势</p>
+          <ChartCard title="情绪分布趋势">
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={emotionChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" />
-                  <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
                   {Object.keys(EMOTION_COLORS).map(key => (
-                    <Area key={key} type="monotone" dataKey={key} stackId="1" stroke={EMOTION_COLORS[key]} fill={EMOTION_COLORS[key]} fillOpacity={0.4} />
+                    <Area key={key} type="monotone" dataKey={key} stackId="1" stroke={EMOTION_COLORS[key]} fill={EMOTION_COLORS[key]} fillOpacity={0.12} />
                   ))}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-4 pt-4 border-t border-border/50">
+              {Object.entries(EMOTION_LABELS).map(([key, label]) => (
+                <span key={key} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-1.5 h-1.5" style={{ background: EMOTION_COLORS[key] }} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </ChartCard>
 
-          <div className="warm-card p-4">
-            <p className="text-sm font-medium text-foreground mb-3">聊天时段分布</p>
+          <ChartCard title="聊天时段分布">
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={hourlyData.filter((_, i) => i % 2 === 0)}>
@@ -118,42 +152,58 @@ export default function Analytics() {
                 </RadarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </ChartCard>
         </div>
 
-        <div className="warm-card p-4">
-          <p className="text-sm font-medium text-foreground mb-3">Persona 互动排名</p>
+        <ChartCard title="分身互动排名">
           {(data?.personaEngagement || []).length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">暂无数据</p>
+            <div className="py-10 text-center">
+              <p className="text-sm text-muted-foreground">暂无数据</p>
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {(data?.personaEngagement || []).map((p: any, i: number) => {
                 const max = Math.max(...(data?.personaEngagement || []).map((x: any) => Number(x.messageCount)));
                 const pct = max > 0 ? (Number(p.messageCount) / max) * 100 : 0;
                 return (
                   <div key={p.personaId} className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
+                    <span className="font-display text-sm font-semibold text-muted-foreground w-4">{i + 1}</span>
                     <span className="text-sm text-foreground w-20 truncate">{p.name}</span>
-                    <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${pct}%` }} />
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="progress-bar h-full" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="text-xs text-muted-foreground w-10 text-right">{p.messageCount}</span>
+                    <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">{p.messageCount}</span>
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
-      </div>
+        </ChartCard>
+      </main>
     </div>
   );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="warm-card p-3 text-center">
-      <div className="flex items-center justify-center gap-1.5 text-muted-foreground mb-1">{icon}<span className="text-xs">{label}</span></div>
-      <p className="text-xl font-semibold text-foreground">{value}</p>
-    </div>
+    <motion.section
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-60px" }}
+      variants={fadeUp}
+      className="surface p-5 sm:p-6"
+    >
+      <h2 className="font-display text-lg font-semibold text-foreground mb-5">{title}</h2>
+      {children}
+    </motion.section>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <motion.div variants={fadeUp} className="surface p-4 sm:p-5">
+      <p className="font-display text-2xl sm:text-3xl font-semibold text-foreground leading-tight">{value}</p>
+      <p className="text-xs text-muted-foreground mt-2">{label}</p>
+    </motion.div>
   );
 }
