@@ -316,7 +316,7 @@ girlfriend/
 │   └── src/
 │       ├── App.tsx                  # 路由定义
 │       ├── main.tsx                 # 入口 (tRPC + React Query)
-│       ├── index.css                # 全局样式 (Glassmorphism 设计系统)
+│       ├── index.css                # 全局样式 (「深夜来信」设计系统)
 │       ├── pages/
 │       │   ├── Landing.tsx          # 落地页
 │       │   ├── Lobby.tsx            # 分身大厅

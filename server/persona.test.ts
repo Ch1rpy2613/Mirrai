@@ -12,6 +12,7 @@ vi.mock("./db", () => ({
   createUser: vi.fn(),
   updateUserLastSignedIn: vi.fn(),
   getPersonasByUserId: vi.fn().mockResolvedValue([]),
+  getPersonasWithStats: vi.fn().mockResolvedValue([]),
   getPersonaById: vi.fn().mockResolvedValue(null),
   createPersona: vi.fn().mockResolvedValue({ id: 1, name: "Test", userId: 1 }),
   updatePersona: vi.fn().mockResolvedValue({ id: 1, name: "Updated" }),

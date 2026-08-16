@@ -1,4 +1,4 @@
-import { WechatyBuilder, ScanStatus } from "wechaty";
+import { WechatyBuilder, ScanStatus, types } from "wechaty";
 import type { WechatyInterface } from "wechaty/impls";
 import { handleWeChatMessage } from "./message-handler";
 
@@ -9,6 +9,36 @@ let loggedInUser: string | null = null;
 
 export function getBotStatus() {
   return { status: botStatus, qrCodeUrl: currentQrUrl, loggedInUser };
+}
+
+export interface WechatContactInfo {
+  id: string;
+  name: string;
+  alias: string | null;
+}
+
+export async function listWechatContacts(): Promise<WechatContactInfo[]> {
+  if (!bot || botStatus !== "logged_in") return [];
+  try {
+    const contacts = await bot.Contact.findAll();
+    const list: WechatContactInfo[] = [];
+    for (const contact of contacts) {
+      if (contact.self()) continue;
+      if (contact.type() !== types.Contact.Individual) continue;
+      const name = contact.name();
+      if (!name) continue;
+      list.push({
+        id: contact.id,
+        name,
+        alias: (await contact.alias()) || null,
+      });
+    }
+    list.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+    return list;
+  } catch (e) {
+    console.error("[WeChat] List contacts error:", e);
+    return [];
+  }
 }
 
 export function startWeChatBot() {
