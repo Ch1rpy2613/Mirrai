@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useParams } from "wouter";
+import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  ArrowLeft, Send, Sparkles, ChevronDown, Trash2, MoreVertical,
+  ArrowLeft, Send, ChevronDown, Trash2, MoreVertical, Loader2,
   Plus, Image, Mic, X, Play, Pause, Clock, BarChart3, Search, BookOpen, Theater,
-  Volume2, Download,
+  Volume2, Download, Check,
 } from "lucide-react";
+import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
@@ -27,37 +29,42 @@ interface Message {
   isStreaming?: boolean;
 }
 
-const STATES: Record<string, { label: string; emoji: string; desc: string }> = {
-  warm:       { label: "温柔",  emoji: "🌸", desc: "温柔体贴，充满关怀" },
-  playful:    { label: "俏皮",  emoji: "😄", desc: "轻松活泼，爱开玩笑" },
-  nostalgic:  { label: "思念",  emoji: "🌙", desc: "有些想念，带着回忆" },
-  melancholy: { label: "忧郁",  emoji: "🌧️", desc: "情绪低落，需要安慰" },
-  happy:      { label: "开心",  emoji: "✨", desc: "心情很好，充满活力" },
-  distant:    { label: "疏离",  emoji: "❄️", desc: "有些距离感，话不多" },
+/* ─── Mood · 六种情感状态（类名必须为字面量，供 Tailwind 扫描） ─── */
+const MOODS: Record<string, {
+  label: string; desc: string; cssVar: string;
+  chip: string; dot: string;
+}> = {
+  warm: {
+    label: "温柔", desc: "温柔体贴，充满关怀", cssVar: "--color-mood-warm",
+    chip: "text-mood-warm bg-mood-warm/10 border-mood-warm/30", dot: "bg-mood-warm",
+  },
+  playful: {
+    label: "俏皮", desc: "轻松活泼，爱开玩笑", cssVar: "--color-mood-playful",
+    chip: "text-mood-playful bg-mood-playful/10 border-mood-playful/30", dot: "bg-mood-playful",
+  },
+  nostalgic: {
+    label: "思念", desc: "有些想念，带着回忆", cssVar: "--color-mood-nostalgic",
+    chip: "text-mood-nostalgic bg-mood-nostalgic/10 border-mood-nostalgic/30", dot: "bg-mood-nostalgic",
+  },
+  melancholy: {
+    label: "忧郁", desc: "情绪低落，需要安慰", cssVar: "--color-mood-melancholy",
+    chip: "text-mood-melancholy bg-mood-melancholy/10 border-mood-melancholy/30", dot: "bg-mood-melancholy",
+  },
+  happy: {
+    label: "开心", desc: "心情很好，充满活力", cssVar: "--color-mood-happy",
+    chip: "text-mood-happy bg-mood-happy/10 border-mood-happy/30", dot: "bg-mood-happy",
+  },
+  distant: {
+    label: "疏离", desc: "有些距离感，话不多", cssVar: "--color-mood-distant",
+    chip: "text-mood-distant bg-mood-distant/10 border-mood-distant/30", dot: "bg-mood-distant",
+  },
 };
-
-function generateAvatar(name: string): string {
-  const colors = [
-    ["#7CB69D", "#5A9E7F"], ["#D4A574", "#C08B5C"],
-    ["#8BAEC4", "#6B96B0"], ["#C4A0C4", "#A882A8"],
-  ];
-  const idx = (name?.charCodeAt(0) || 0) % colors.length;
-  const [c1, c2] = colors[idx];
-  const char = (name || "?").charAt(0).toUpperCase();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-    <defs><linearGradient id="a" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:${c1}"/>
-      <stop offset="100%" style="stop-color:${c2}"/>
-    </linearGradient></defs>
-    <rect width="40" height="40" rx="10" fill="url(#a)"/>
-    <text x="20" y="26" font-family="sans-serif" font-size="16" font-weight="600" fill="white" text-anchor="middle">${char}</text>
-  </svg>`;
-  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
-}
 
 function VoicePlayer({ url, duration }: { url: string; duration?: number | null }) {
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // 波形高度固定一次，避免父组件重渲染（如录音计时每秒一次）时跳动
+  const barHeights = useMemo(() => Array.from({ length: 12 }, () => 4 + Math.random() * 12), []);
 
   const toggle = () => {
     if (!audioRef.current) {
@@ -69,12 +76,12 @@ function VoicePlayer({ url, duration }: { url: string; duration?: number | null 
   };
 
   return (
-    <button onClick={toggle} className="flex items-center gap-2 min-w-[120px]">
+    <button onClick={toggle} aria-label={playing ? "暂停语音" : "播放语音"} className="flex items-center gap-2 min-w-[120px]">
       {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
       <div className="flex-1 flex items-center gap-0.5">
-        {[...Array(12)].map((_, i) => (
+        {barHeights.map((h, i) => (
           <div key={i} className={`w-1 rounded-full bg-current transition-all ${playing ? "animate-pulse" : ""}`}
-            style={{ height: `${4 + Math.random() * 12}px`, animationDelay: `${i * 0.05}s` }} />
+            style={{ height: `${h}px`, animationDelay: `${i * 0.05}s` }} />
         ))}
       </div>
       {duration != null && <span className="text-xs opacity-60">{duration}″</span>}
@@ -109,16 +116,16 @@ function TTSButton({ text }: { text: string }) {
   };
 
   return (
-    <button onClick={handlePlay} disabled={loading} title="朗读"
-      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors disabled:opacity-30 p-0.5">
-      {loading ? <Sparkles className="w-3 h-3 animate-pulse" /> : <Volume2 className={`w-3 h-3 ${playing ? "text-primary" : ""}`} />}
+    <button onClick={handlePlay} disabled={loading} title="朗读" aria-label="朗读"
+      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className={`w-3 h-3 ${playing ? "text-foreground" : ""}`} />}
     </button>
   );
 }
 
 function MessageBubble({ msg, personaName }: { msg: Message; personaName: string }) {
   const isUser = msg.role === "user";
-  const state = msg.emotionalState ? STATES[msg.emotionalState] : null;
+  const mood = msg.emotionalState ? MOODS[msg.emotionalState] : null;
   const [imgExpanded, setImgExpanded] = useState(false);
 
   const renderContent = () => {
@@ -126,12 +133,15 @@ function MessageBubble({ msg, personaName }: { msg: Message; personaName: string
       return (
         <>
           <img src={msg.mediaUrl} alt="" onClick={() => setImgExpanded(true)}
-            className="max-w-[200px] max-h-[200px] rounded-lg cursor-pointer hover:opacity-90 transition-opacity" />
+            className="max-w-[200px] max-h-[200px] rounded-md cursor-pointer hover:opacity-90 transition-opacity" />
           {msg.content !== "[图片]" && <p className="mt-1.5 text-sm">{msg.content}</p>}
-          {imgExpanded && (
-            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setImgExpanded(false)}>
-              <img src={msg.mediaUrl!} alt="" className="max-w-full max-h-full object-contain rounded-lg" />
-            </div>
+          {/* Portal：祖先的 animate-fade-in-up 以 forwards 保留 transform，会把 fixed 定位锚定到气泡上 */}
+          {imgExpanded && createPortal(
+            <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 animate-fade-in"
+              onClick={() => setImgExpanded(false)}>
+              <img src={msg.mediaUrl!} alt="" className="max-w-full max-h-full object-contain rounded-md" />
+            </div>,
+            document.body
           )}
         </>
       );
@@ -147,30 +157,40 @@ function MessageBubble({ msg, personaName }: { msg: Message; personaName: string
       );
     }
     if (msg.isStreaming) {
+      if (!msg.content) {
+        return (
+          <span className="inline-flex items-center gap-1 px-0.5 py-1.5">
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+          </span>
+        );
+      }
       return <span>{msg.content}<span className="inline-block w-1 h-4 bg-primary/40 ml-0.5 animate-pulse" /></span>;
     }
     if (isUser) return <span>{msg.content}</span>;
-    return <Streamdown>{msg.content}</Streamdown>;
+    return <Streamdown className="letter-prose text-[0.9375rem]">{msg.content}</Streamdown>;
   };
 
   return (
-    <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4`}>
+    <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-5 animate-fade-in-up`}>
       {!isUser && (
-        <img src={generateAvatar(personaName)} alt="" className="w-9 h-9 rounded-xl flex-shrink-0 mt-0.5" />
+        <PersonaAvatar name={personaName} className="w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5" />
       )}
-      <div className={`max-w-[75%] flex flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
-        {!isUser && state && (
-          <span className={`text-xs px-2 py-0.5 rounded-full border state-bg-${msg.emotionalState} state-${msg.emotionalState}`}>
-            {state.emoji} {state.label}
+      <div className={`max-w-[78%] sm:max-w-[75%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
+        {!isUser && mood && (
+          <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md border ${mood.chip}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${mood.dot}`} />
+            {mood.label}
           </span>
         )}
-        <div className={`px-3.5 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
+        <div className={`px-4 py-3 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
           {renderContent()}
         </div>
         {msg.createdAt && !msg.isStreaming && (
-          <span className="text-xs text-muted-foreground/50 px-1 flex items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground/50 px-1 flex items-center gap-1.5">
             {new Date(msg.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-            {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 rounded">微信</span>}
+            {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-mood-happy/10 text-mood-happy">微信</span>}
             {!isUser && msg.messageType !== "voice" && <TTSButton text={msg.content} />}
           </span>
         )}
@@ -193,8 +213,26 @@ export default function Chat() {
   const [currentState, setCurrentState] = useState("warm");
   const [showStatePanel, setShowStatePanel] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showAttach, setShowAttach] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showEmotionReport, setShowEmotionReport] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showScenePanel, setShowScenePanel] = useState(false);
+  const [showGraduation, setShowGraduation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 录音波形高度在一次录音内固定，避免计时每秒重渲染导致跳动
+  const recordingBarHeights = useMemo(
+    () => (isRecording ? Array.from({ length: 20 }, () => 4 + Math.random() * 16) : []),
+    [isRecording]
+  );
 
   useEffect(() => {
     const onOnline = () => { setIsOnline(true); toast.success("网络已恢复"); };
@@ -233,19 +271,6 @@ export default function Chat() {
     onSuccess: () => { setMessages([]); toast.success("对话已清空"); setShowMenu(false); },
     onError: (e: any) => toast.error(e.message),
   });
-
-  const [showMenu, setShowMenu] = useState(false);
-  const [showAttach, setShowAttach] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [showTimeline, setShowTimeline] = useState(false);
-  const [showEmotionReport, setShowEmotionReport] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showScenePanel, setShowScenePanel] = useState(false);
-  const [showGraduation, setShowGraduation] = useState(false);
 
   const { data: scenesList } = trpc.scene.list.useQuery(undefined, { enabled: isAuthenticated });
   const activateSceneMutation = trpc.scene.activate.useMutation({
@@ -425,164 +450,195 @@ export default function Chat() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const stateInfo = STATES[currentState] || STATES.warm;
+  const mood = MOODS[currentState] || MOODS.warm;
+  const moodRingStyle = { ["--mood-color" as string]: `var(${mood.cssVar})` };
+  const starterQuestions: string[] = ((persona?.personaData as any)?.starterQuestions?.length > 0
+    ? (persona?.personaData as any).starterQuestions
+    : ["最近怎么样？", "你还记得我们第一次见面吗？", "我有点想你了", "你现在在做什么？"]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-dvh bg-background flex flex-col relative">
       {/* Header */}
       <header className="sticky top-0 z-40 app-header flex-shrink-0">
         <div className="container app-nav">
-          <button onClick={() => navigate("/")}
+          <button onClick={() => navigate("/")} aria-label="返回"
             className="app-nav-back -ml-1">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <img src={generateAvatar(persona?.name || "?")} alt="" className="w-9 h-9 rounded-xl" />
+            <div className="mood-ring-sm flex-shrink-0" style={moodRingStyle}>
+              <PersonaAvatar name={persona?.name || "?"} className="w-8 h-8 rounded-full text-sm" />
+            </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
-                <p className="text-foreground font-medium text-sm leading-tight truncate">{persona?.name || "..."}</p>
-                {intimacy && <span className="text-xs opacity-70" title={`${intimacy.level} · ${intimacy.score}分`}>{intimacy.icon}</span>}
-                {activeScene && <span className="hidden sm:inline-flex max-w-[140px] truncate text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">{activeScene.icon} {activeScene.name}</span>}
+                <p className="app-nav-title truncate">{persona?.name || "..."}</p>
+                {intimacy && <span className="text-xs flex-shrink-0" title={`${intimacy.level} · ${intimacy.score}分`}>{intimacy.icon}</span>}
+                {activeScene && (
+                  <span className="hidden md:inline-flex items-center max-w-[140px] truncate text-[11px] px-2 py-0.5 rounded-md border border-border text-muted-foreground">
+                    {activeScene.icon} {activeScene.name}
+                  </span>
+                )}
               </div>
-              <p className="text-muted-foreground text-xs leading-tight truncate">{persona?.relationshipDesc || "TA"}</p>
+              <p className="app-nav-subtitle truncate">{persona?.relationshipDesc || "TA"}</p>
             </div>
           </div>
-          <button onClick={() => setShowStatePanel(!showStatePanel)}
-            className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full border text-xs font-medium transition-all state-bg-${currentState} state-${currentState}`}>
-            <span>{stateInfo.emoji}</span><span className="hidden sm:inline">{stateInfo.label}</span>
-            <ChevronDown className={`w-3 h-3 transition-transform ${showStatePanel ? "rotate-180" : ""}`} />
-          </button>
-          <button onClick={() => setShowSearch(!showSearch)} title="搜索消息"
-            className="app-nav-icon hidden sm:inline-flex">
-            <Search className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowTimeline(true)} title="记忆时间线"
-            className="app-nav-icon hidden md:inline-flex">
-            <Clock className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowEmotionReport(true)} title="情绪报告"
-            className="app-nav-icon hidden md:inline-flex">
-            <BarChart3 className="w-4 h-4" />
-          </button>
-          <button onClick={() => navigate(`/diary`)} title="对话日记"
-            className="app-nav-icon hidden md:inline-flex">
-            <BookOpen className="w-4 h-4" />
-          </button>
-          <button onClick={handleExport} title="导出对话" disabled={exportMutation.isPending}
-            className="app-nav-icon hidden lg:inline-flex disabled:opacity-50">
-            <Download className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowScenePanel(!showScenePanel)} title="场景模式"
-            className={`app-nav-icon hidden sm:inline-flex ${activeScene ? "app-nav-icon-active" : ""}`}>
-            <Theater className="w-4 h-4" />
-          </button>
-          <div className="relative">
-            <button onClick={() => setShowMenu(!showMenu)}
-              className="app-nav-icon">
-              <MoreVertical className="w-4 h-4" />
+
+          <div className="app-nav-actions">
+            {/* 情感状态切换 */}
+            <div className="relative">
+              <button onClick={() => setShowStatePanel(!showStatePanel)}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md border text-xs font-medium transition-colors ${mood.chip}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${mood.dot}`} />
+                <span className="hidden sm:inline">{mood.label}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showStatePanel ? "rotate-180" : ""}`} />
+              </button>
+              {showStatePanel && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowStatePanel(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, ease: "easeOut" as const }}
+                    className="absolute right-0 top-full mt-2 z-50 w-60 surface p-1.5">
+                    <p className="kicker px-2.5 pt-2 pb-1.5">切换情感状态</p>
+                    {Object.entries(MOODS).map(([key, m]) => (
+                      <button key={key} onClick={() => {
+                        changeStateMutation.mutate({ id: personaId, emotionalState: key as any });
+                        setCurrentState(key); setShowStatePanel(false);
+                      }} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors ${currentState === key ? "bg-muted" : "hover:bg-muted/60"}`}>
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${m.dot}`} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm text-foreground leading-tight">{m.label}</span>
+                          <span className="block text-[11px] text-muted-foreground leading-tight mt-0.5 truncate">{m.desc}</span>
+                        </span>
+                        {currentState === key && <Check className="w-3.5 h-3.5 text-foreground flex-shrink-0" />}
+                      </button>
+                    ))}
+                  </motion.div>
+                </>
+              )}
+            </div>
+
+            <button onClick={() => setShowScenePanel(!showScenePanel)} title="场景模式" aria-label="场景模式"
+              className={`app-nav-icon ${activeScene || showScenePanel ? "app-nav-icon-active" : ""}`}>
+              <Theater className="w-4 h-4" />
             </button>
-            {showMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[160px] z-50 animate-fade-in">
-                <button onClick={() => { setShowSearch(true); setShowMenu(false); }}
-                  className="sm:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                  <Search className="w-3.5 h-3.5" />搜索消息
-                </button>
-                <button onClick={() => { setShowTimeline(true); setShowMenu(false); }}
-                  className="md:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                  <Clock className="w-3.5 h-3.5" />记忆时间线
-                </button>
-                <button onClick={() => { setShowEmotionReport(true); setShowMenu(false); }}
-                  className="md:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                  <BarChart3 className="w-3.5 h-3.5" />情绪报告
-                </button>
-                <button onClick={() => { navigate(`/diary`); setShowMenu(false); }}
-                  className="md:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                  <BookOpen className="w-3.5 h-3.5" />对话日记
-                </button>
-                <button onClick={() => { handleExport(); setShowMenu(false); }} disabled={exportMutation.isPending}
-                  className="lg:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50">
-                  <Download className="w-3.5 h-3.5" />导出对话
-                </button>
-                <button onClick={() => { setShowScenePanel(!showScenePanel); setShowMenu(false); }}
-                  className="sm:hidden w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                  <Theater className="w-3.5 h-3.5" />场景模式
-                </button>
-                <button onClick={() => clearMutation.mutate({ personaId })}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />清空对话
-                </button>
-              </div>
-            )}
+            <div className="relative">
+              <button onClick={() => setShowMenu(!showMenu)} aria-label="更多操作"
+                className="app-nav-icon">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: "easeOut" as const }}
+                    className="absolute right-0 top-full mt-2 z-50 surface p-1.5 min-w-[168px]">
+                    <button onClick={() => { setShowSearch(true); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
+                      <Search className="w-4 h-4 text-muted-foreground" />搜索消息
+                    </button>
+                    <button onClick={() => { setShowTimeline(true); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
+                      <Clock className="w-4 h-4 text-muted-foreground" />记忆时间线
+                    </button>
+                    <button onClick={() => { setShowEmotionReport(true); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
+                      <BarChart3 className="w-4 h-4 text-muted-foreground" />情绪报告
+                    </button>
+                    <button onClick={() => { navigate(`/diary`); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
+                      <BookOpen className="w-4 h-4 text-muted-foreground" />对话日记
+                    </button>
+                    <button onClick={() => { handleExport(); setShowMenu(false); }} disabled={exportMutation.isPending}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors disabled:opacity-50">
+                      <Download className="w-4 h-4 text-muted-foreground" />导出对话
+                    </button>
+                    <button onClick={() => clearMutation.mutate({ personaId })}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors">
+                      <Trash2 className="w-4 h-4" />清空对话
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        {showStatePanel && (
-          <div className="border-t border-border bg-card px-4 py-3 animate-fade-in">
-            <p className="text-muted-foreground text-xs mb-2">切换情感状态</p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(STATES).map(([key, s]) => (
-                <button key={key} onClick={() => {
-                  changeStateMutation.mutate({ id: personaId, emotionalState: key as any });
-                  setCurrentState(key); setShowStatePanel(false);
-                }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all state-bg-${key} state-${key} ${currentState === key ? "opacity-100 ring-1 ring-primary/30" : "opacity-60 hover:opacity-90"}`}>
-                  {s.emoji} {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
+
+        {/* 场景模式面板 */}
+        {showScenePanel && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setShowScenePanel(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" as const }}
+              className="absolute inset-x-0 top-full z-40 px-4 pt-2">
+              <div className="container max-w-2xl mx-auto">
+                <div className="surface p-4 max-h-[70vh] overflow-y-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-display text-sm font-semibold text-foreground">场景模式</p>
+                    <button onClick={() => setShowScenePanel(false)} aria-label="关闭"
+                      className="app-nav-icon !h-7 !min-w-7">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {activeScene && (
+                    <div className="mb-3 flex items-center gap-2 px-1">
+                      <span className="text-xs text-muted-foreground">当前场景：{activeScene.icon} {activeScene.name}</span>
+                      <button onClick={() => deactivateSceneMutation.mutate({ personaId })}
+                        className="text-xs text-destructive hover:underline">退出场景</button>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(scenesList || []).map((scene: any) => (
+                      <button key={scene.id} onClick={() => activateSceneMutation.mutate({ personaId, sceneId: scene.id })}
+                        className={`text-left p-3 rounded-md border transition-colors ${scene.id === persona?.activeSceneId ? "border-cinnabar/40 bg-cinnabar/5" : "border-border hover:border-foreground/30 hover:bg-muted/40"}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          {scene.icon
+                            ? <span className="text-base leading-none">{scene.icon}</span>
+                            : <Theater className="w-4 h-4 text-muted-foreground" />}
+                          <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">{scene.name}</span>
+                          {scene.id === persona?.activeSceneId && <Check className="w-3.5 h-3.5 text-cinnabar flex-shrink-0" />}
+                        </div>
+                        {scene.description && <p className="text-xs text-muted-foreground line-clamp-2">{scene.description}</p>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </header>
 
       {showSearch && <SearchPanel personaId={personaId} onClose={() => { setShowSearch(false); setSearchQuery(""); }} />}
 
-      {showScenePanel && (
-        <div className="border-b border-border bg-card/95 backdrop-blur-sm px-4 py-4 animate-fade-in">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold">场景模式</p>
-            <button onClick={() => setShowScenePanel(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          {activeScene && (
-            <div className="mb-3 flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">当前场景：{activeScene.icon} {activeScene.name}</span>
-              <button onClick={() => deactivateSceneMutation.mutate({ personaId })}
-                className="text-xs text-destructive hover:underline">退出场景</button>
-            </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {(scenesList || []).map((scene: any) => (
-              <button key={scene.id} onClick={() => activateSceneMutation.mutate({ personaId, sceneId: scene.id })}
-                className={`text-left p-3 rounded-xl border transition-all ${scene.id === persona?.activeSceneId ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-base">{scene.icon || "🎭"}</span>
-                  <span className="text-sm font-medium">{scene.name}</span>
-                </div>
-                {scene.description && <p className="text-xs text-muted-foreground line-clamp-2">{scene.description}</p>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="container py-6 max-w-2xl mx-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="container py-6 sm:py-8 max-w-2xl mx-auto">
           {messages.length === 0 && (
-            <div className="text-center py-16 animate-fade-in">
-              <div className="text-5xl mb-4 animate-float">{stateInfo.emoji}</div>
-              <p className="text-foreground font-medium mb-1">{persona?.name} 在等你</p>
-              <p className="text-muted-foreground text-sm">{stateInfo.desc}</p>
-              <div className="mt-6 flex flex-wrap gap-2 justify-center">
-                {(((persona?.personaData as any)?.starterQuestions?.length > 0
-                  ? (persona?.personaData as any).starterQuestions
-                  : ["最近怎么样？", "你还记得我们第一次见面吗？", "我有点想你了", "你现在在做什么？"]) as string[]).map((q: string) => (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" as const }}
+              className="text-center py-12 sm:py-16">
+              <div className="mood-ring-sm inline-flex" style={moodRingStyle}>
+                <PersonaAvatar name={persona?.name || "?"} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full text-2xl sm:text-3xl" />
+              </div>
+              <h2 className="font-display text-2xl sm:text-3xl font-semibold text-foreground mt-7">
+                {persona?.name || "TA"} 在等你
+              </h2>
+              <p className="text-muted-foreground text-sm mt-2.5">{mood.desc}</p>
+              <hr className="rule w-16 mx-auto my-8" />
+              <div className="flex flex-wrap gap-2 justify-center max-w-md mx-auto">
+                {starterQuestions.map((q: string) => (
                   <button key={q} onClick={() => setInput(q)}
-                    className="text-xs px-3 py-1.5 bg-muted border border-border rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-all">
+                    className="text-xs px-3.5 py-2 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors">
                     {q}
                   </button>
                 ))}
               </div>
-            </div>
+              <button onClick={() => setShowScenePanel(true)}
+                className="mt-6 inline-flex items-center gap-2 text-xs px-4 py-2 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors">
+                <Theater className="w-3.5 h-3.5" />
+                选择一个场景开始
+              </button>
+            </motion.div>
           )}
           {messages.map(msg => (
             <MessageBubble key={msg.id} msg={msg} personaName={persona?.name || "?"} />
@@ -593,56 +649,63 @@ export default function Chat() {
 
       {/* Input */}
       <div className="flex-shrink-0 chat-composer">
-        <div className="container py-3 max-w-2xl mx-auto">
+        <div className="container pt-3 max-w-2xl mx-auto">
           {isRecording ? (
             <div className="flex items-center gap-3 h-11">
-              <button onClick={cancelRecording} className="text-destructive hover:bg-destructive/10 rounded-xl w-10 h-10 flex items-center justify-center">
+              <button onClick={cancelRecording} aria-label="取消录音"
+                className="w-10 h-10 rounded-md flex items-center justify-center text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 transition-colors flex-shrink-0">
                 <X className="w-5 h-5" />
               </button>
-              <div className="flex-1 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-sm text-foreground">录音中 {recordingTime}″</span>
-                <div className="flex-1 flex items-center gap-0.5 px-2">
-                  {[...Array(20)].map((_, i) => (
-                    <div key={i} className="w-1 rounded-full bg-primary/40 animate-pulse"
-                      style={{ height: `${4 + Math.random() * 16}px`, animationDelay: `${i * 0.08}s` }} />
+              <div className="flex-1 flex items-center gap-2.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-destructive breathing-dot flex-shrink-0" />
+                <span className="text-sm text-foreground whitespace-nowrap">录音中 {recordingTime}″</span>
+                <div className="flex-1 flex items-center gap-0.5 px-2 overflow-hidden">
+                  {recordingBarHeights.map((h, i) => (
+                    <div key={i} className="w-1 rounded-full bg-primary/40 animate-pulse flex-shrink-0"
+                      style={{ height: `${h}px`, animationDelay: `${i * 0.08}s` }} />
                   ))}
                 </div>
               </div>
-              <Button onClick={stopRecording} className="h-11 w-11 p-0 bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-xl flex-shrink-0">
+              <Button onClick={stopRecording} aria-label="发送语音"
+                className="h-11 w-11 p-0 rounded-md flex-shrink-0">
                 <Send className="w-5 h-5" />
               </Button>
             </div>
           ) : (
-            <div className="flex gap-2.5 items-end">
+            <div className="flex gap-2 items-end">
               <div className="relative">
-                <button onClick={() => setShowAttach(!showAttach)}
-                  className="h-11 w-11 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors">
+                <button onClick={() => setShowAttach(!showAttach)} aria-label="附件"
+                  className={`h-11 w-11 flex items-center justify-center rounded-md border transition-colors ${showAttach ? "text-foreground bg-muted border-border" : "text-muted-foreground hover:text-foreground hover:bg-muted border-transparent"}`}>
                   <Plus className={`w-5 h-5 transition-transform ${showAttach ? "rotate-45" : ""}`} />
                 </button>
                 {showAttach && (
-                  <div className="absolute bottom-full left-0 mb-2 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[140px] z-50 animate-fade-in">
-                    <label className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer">
-                      <Image className="w-4 h-4" />发送图片
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
-                    </label>
-                    <button onClick={() => { setShowAttach(false); startRecording(); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                      <Mic className="w-4 h-4" />语音消息
-                    </button>
-                  </div>
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowAttach(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: "easeOut" as const }}
+                      className="absolute bottom-full left-0 mb-2 z-50 surface p-1.5 min-w-[150px]">
+                      <label className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors cursor-pointer">
+                        <Image className="w-4 h-4 text-muted-foreground" />发送图片
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+                      </label>
+                      <button onClick={() => { setShowAttach(false); startRecording(); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
+                        <Mic className="w-4 h-4 text-muted-foreground" />语音消息
+                      </button>
+                    </motion.div>
+                  </>
                 )}
               </div>
               <Textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown} placeholder={`对 ${persona?.name || "TA"} 说点什么...`}
-                rows={1} className="flex-1 resize-none bg-muted/50 border-border text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50 rounded-xl min-h-[44px] max-h-32" />
-              <Button onClick={handleSend} disabled={!input.trim() || isSending || !isOnline}
-                className="h-11 w-11 p-0 bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-xl flex-shrink-0">
-                {isSending ? <Sparkles className="w-5 h-5 animate-pulse" /> : <Send className="w-5 h-5" />}
+                rows={1} className="flex-1 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-foreground/50 rounded-md min-h-[44px] max-h-32 px-4 py-3" />
+              <Button onClick={handleSend} disabled={!input.trim() || isSending || !isOnline} aria-label="发送"
+                className="h-11 w-11 p-0 rounded-md flex-shrink-0">
+                {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
               </Button>
             </div>
           )}
-          <p className="hidden sm:block text-muted-foreground/40 text-xs mt-2 text-center">
+          <p className="hidden sm:block text-muted-foreground/40 text-[11px] mt-2 text-center">
             Enter 发送 · Shift+Enter 换行
           </p>
         </div>
@@ -678,19 +741,19 @@ function SearchPanel({ personaId, onClose }: { personaId: number; onClose: () =>
     const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
     return parts.map((part, i) =>
       part.toLowerCase() === q.toLowerCase()
-        ? <mark key={i} className="bg-primary/30 text-foreground rounded px-0.5">{part}</mark>
+        ? <mark key={i} className="bg-cinnabar/20 text-foreground rounded-sm px-0.5">{part}</mark>
         : part
     );
   };
 
   return (
-    <div className="border-b border-border bg-card animate-fade-in">
+    <div className="bg-background border-b border-border animate-fade-in">
       <div className="container max-w-2xl mx-auto py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-md border border-border bg-muted/40">
           <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <input value={query} onChange={e => handleChange(e.target.value)} autoFocus
             placeholder="搜索消息..." className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none" />
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} aria-label="关闭搜索" className="text-muted-foreground hover:text-foreground transition-colors"><X className="w-4 h-4" /></button>
         </div>
         {debouncedQuery && results && (
           <div className="mt-3 max-h-64 overflow-y-auto space-y-1.5">
@@ -698,8 +761,8 @@ function SearchPanel({ personaId, onClose }: { personaId: number; onClose: () =>
               <p className="text-xs text-muted-foreground text-center py-4">没有找到相关消息</p>
             ) : (
               results.map((m: any) => (
-                <div key={m.id} className="flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={onClose}>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${m.role === "user" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                <div key={m.id} className="flex items-start gap-2 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer" onClick={onClose}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-sm flex-shrink-0 mt-0.5 ${m.role === "user" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                     {m.role === "user" ? "我" : "TA"}
                   </span>
                   <div className="flex-1 min-w-0">
@@ -720,10 +783,10 @@ function SearchPanel({ personaId, onClose }: { personaId: number; onClose: () =>
 
 // ─── MEMORY TIMELINE ─────────────────────────────────────────────────────────
 
-const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
-  milestone: { label: "里程碑", color: "bg-amber-500" },
-  memory: { label: "记忆", color: "bg-primary" },
-  anniversary: { label: "纪念日", color: "bg-rose-500" },
+const CATEGORY_LABELS: Record<string, { label: string; dot: string; chip: string }> = {
+  milestone: { label: "里程碑", dot: "bg-mood-playful", chip: "bg-mood-playful/10 text-mood-playful" },
+  memory: { label: "记忆", dot: "bg-primary", chip: "bg-primary/10 text-primary" },
+  anniversary: { label: "纪念日", dot: "bg-chart-2", chip: "bg-chart-2/10 text-chart-2" },
 };
 
 function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: () => void }) {
@@ -743,13 +806,13 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative ml-auto w-full max-w-sm bg-card border-l border-border h-full flex flex-col animate-slide-in-right">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-medium text-foreground">记忆时间线</h3>
-          <div className="flex gap-2">
+          <h3 className="font-display font-semibold text-foreground">记忆时间线</h3>
+          <div className="flex items-center gap-2">
             <button onClick={() => extractMutation.mutate({ personaId })} disabled={extractMutation.isPending}
-              className="text-xs px-3 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50">
+              className="text-xs px-3 py-1.5 rounded-md border border-cinnabar/30 text-cinnabar hover:bg-cinnabar/5 transition-colors disabled:opacity-50">
               {extractMutation.isPending ? "提取中..." : "AI 提取"}
             </button>
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            <button onClick={onClose} aria-label="关闭" className="app-nav-icon !h-8 !min-w-8"><X className="w-4 h-4" /></button>
           </div>
         </div>
 
@@ -768,16 +831,16 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
               const cat = CATEGORY_LABELS[m.category] || CATEGORY_LABELS.memory;
               return (
                 <div key={m.id} className="relative pl-8 pb-6 group">
-                  <div className={`absolute left-1.5 top-1 w-3 h-3 rounded-full ${cat.color} ring-2 ring-card`} />
+                  <div className={`absolute left-1.5 top-1 w-3 h-3 rounded-full ${cat.dot} ring-2 ring-card`} />
                   <div className="flex items-start justify-between">
-                    <div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${cat.color}/10 text-foreground`}>{cat.label}</span>
+                    <div className="min-w-0">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-sm ${cat.chip}`}>{cat.label}</span>
                       {m.date && <span className="text-xs text-muted-foreground ml-2">{m.date}</span>}
                       <p className="text-sm font-medium text-foreground mt-1">{m.title}</p>
                       {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
                     </div>
-                    <button onClick={() => deleteMutation.mutate({ id: m.id })}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all">
+                    <button onClick={() => deleteMutation.mutate({ id: m.id })} aria-label="删除记忆"
+                      className="md:opacity-0 md:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -787,26 +850,26 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
           </div>
 
           {showAdd && (
-            <div className="mt-4 p-3 bg-muted/50 rounded-xl border border-border space-y-2">
+            <div className="mt-4 p-3.5 bg-muted/40 rounded-md border border-border space-y-2">
               <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="标题" className="w-full text-sm bg-transparent border-b border-border pb-1 text-foreground placeholder:text-muted-foreground/50 outline-none" />
+                placeholder="标题" className="w-full text-sm bg-transparent border-b border-border pb-1.5 text-foreground placeholder:text-muted-foreground/50 outline-none" />
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="描述（可选）" rows={2} className="w-full text-xs bg-transparent border-b border-border pb-1 text-foreground placeholder:text-muted-foreground/50 outline-none resize-none" />
+                placeholder="描述（可选）" rows={2} className="w-full text-xs bg-transparent border-b border-border pb-1.5 text-foreground placeholder:text-muted-foreground/50 outline-none resize-none" />
               <div className="flex gap-2">
                 <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as "memory" | "milestone" | "anniversary" }))}
-                  className="text-xs bg-muted border border-border rounded-lg px-2 py-1 text-foreground">
+                  className="text-xs bg-muted border border-border rounded-md px-2 py-1.5 text-foreground">
                   <option value="memory">记忆</option>
                   <option value="milestone">里程碑</option>
                   <option value="anniversary">纪念日</option>
                 </select>
                 <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                  className="text-xs bg-muted border border-border rounded-lg px-2 py-1 text-foreground" />
+                  className="text-xs bg-muted border border-border rounded-md px-2 py-1.5 text-foreground" />
               </div>
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowAdd(false)} className="text-xs px-3 py-1.5 text-muted-foreground hover:text-foreground">取消</button>
+              <div className="flex gap-2 justify-end pt-1">
+                <button onClick={() => setShowAdd(false)} className="text-xs px-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors">取消</button>
                 <button onClick={() => { if (form.title.trim()) createMutation.mutate({ personaId, ...form }); }}
                   disabled={!form.title.trim() || createMutation.isPending}
-                  className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg disabled:opacity-50">保存</button>
+                  className="text-xs px-3.5 py-1.5 rounded-md bg-primary text-primary-foreground disabled:opacity-50">保存</button>
               </div>
             </div>
           )}
@@ -814,8 +877,8 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
 
         <div className="p-4 border-t border-border">
           <button onClick={() => { setShowAdd(true); setForm({ title: "", description: "", category: "memory", date: "" }); }}
-            className="w-full text-sm py-2 bg-muted hover:bg-muted/80 text-foreground rounded-xl transition-colors">
-            + 添加记忆
+            className="w-full flex items-center justify-center gap-1.5 text-sm py-2.5 bg-muted hover:bg-muted/80 text-foreground rounded-md transition-colors">
+            <Plus className="w-4 h-4" />添加记忆
           </button>
         </div>
       </div>
@@ -826,8 +889,8 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
 // ─── EMOTION REPORT ──────────────────────────────────────────────────────────
 
 const STATE_COLORS: Record<string, string> = {
-  warm: "var(--color-chart-1)", playful: "var(--color-chart-2)", nostalgic: "var(--color-chart-3)",
-  melancholy: "var(--color-muted-foreground)", happy: "var(--color-chart-5)", distant: "var(--color-chart-4)",
+  warm: "var(--color-mood-warm)", playful: "var(--color-mood-playful)", nostalgic: "var(--color-mood-nostalgic)",
+  melancholy: "var(--color-mood-melancholy)", happy: "var(--color-mood-happy)", distant: "var(--color-mood-distant)",
 };
 
 function EmotionReport({ personaId, personaName, onClose }: { personaId: number; personaName: string; onClose: () => void }) {
@@ -836,16 +899,16 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
 
   const chartData = (report?.snapshots || []).map((s: any) => ({
     date: s.date,
-    value: Object.keys(STATES).indexOf(s.emotionalState) + 1,
+    value: Object.keys(MOODS).indexOf(s.emotionalState) + 1,
     state: s.emotionalState,
-    label: STATES[s.emotionalState]?.label || s.emotionalState,
+    label: MOODS[s.emotionalState]?.label || s.emotionalState,
     messages: s.messageCount,
   }));
 
   const pieData = (report?.distribution || []).map((d: any) => ({
-    name: STATES[d.emotionalState]?.label || d.emotionalState,
+    name: MOODS[d.emotionalState]?.label || d.emotionalState,
     value: Number(d.count),
-    fill: STATE_COLORS[d.emotionalState] || "#999",
+    fill: STATE_COLORS[d.emotionalState] || "var(--color-muted-foreground)",
   }));
 
   const mostCommon = pieData.length > 0 ? pieData.reduce((a: any, b: any) => a.value > b.value ? a : b) : null;
@@ -853,35 +916,37 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in">
-        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10 rounded-t-2xl">
-          <h3 className="font-medium text-foreground">{personaName} 的情绪报告</h3>
+      <div className="relative surface w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in">
+        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10 rounded-t-lg">
+          <h3 className="font-display font-semibold text-foreground">{personaName} 的情绪报告</h3>
           <div className="flex items-center gap-2">
-            <div className="flex bg-muted rounded-lg p-0.5">
+            <div className="flex bg-muted rounded-md p-0.5">
               {[7, 30].map(d => (
                 <button key={d} onClick={() => setDays(d)}
-                  className={`text-xs px-3 py-1 rounded-md transition-colors ${days === d ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  className={`text-xs px-3 py-1 rounded-md transition-colors ${days === d ? "bg-card text-foreground" : "text-muted-foreground"}`}>
                   {d}天
                 </button>
               ))}
             </div>
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            <button onClick={onClose} aria-label="关闭" className="app-nav-icon !h-8 !min-w-8"><X className="w-4 h-4" /></button>
           </div>
         </div>
 
         <div className="p-4 space-y-6">
           <div className="grid grid-cols-3 gap-3">
-            <div className="bg-muted/50 rounded-xl p-3 text-center">
-              <p className="text-2xl font-semibold text-foreground">{report?.totalDays || 0}</p>
-              <p className="text-xs text-muted-foreground">聊天天数</p>
+            <div className="bg-muted/40 border border-border rounded-md p-3 text-center">
+              <p className="font-display text-2xl font-semibold text-foreground">{report?.totalDays || 0}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">聊天天数</p>
             </div>
-            <div className="bg-muted/50 rounded-xl p-3 text-center">
-              <p className="text-2xl font-semibold text-foreground">{report?.totalMessages || 0}</p>
-              <p className="text-xs text-muted-foreground">消息数</p>
+            <div className="bg-muted/40 border border-border rounded-md p-3 text-center">
+              <p className="font-display text-2xl font-semibold text-foreground">{report?.totalMessages || 0}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">消息数</p>
             </div>
-            <div className="bg-muted/50 rounded-xl p-3 text-center">
-              <p className="text-2xl font-semibold text-foreground">{mostCommon ? STATES[Object.keys(STATE_COLORS).find(k => STATE_COLORS[k] === mostCommon.fill) || ""]?.emoji || "🌸" : "—"}</p>
-              <p className="text-xs text-muted-foreground">{mostCommon?.name || "暂无数据"}</p>
+            <div className="bg-muted/40 border border-border rounded-md p-3 text-center flex flex-col items-center justify-center">
+              {mostCommon
+                ? <span className="w-5 h-5 rounded-full mt-1" style={{ backgroundColor: mostCommon.fill }} />
+                : <p className="font-display text-2xl font-semibold text-foreground">—</p>}
+              <p className="text-xs text-muted-foreground mt-1.5">{mostCommon?.name || "暂无数据"}</p>
             </div>
           </div>
 
@@ -893,7 +958,7 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
                   {chartData.map((d: any, i: number) => (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1" title={`${d.date}: ${d.label} (${d.messages}条消息)`}>
                       <div className="w-full rounded-t-sm transition-all hover:opacity-80"
-                        style={{ height: `${(d.value / 6) * 100}%`, backgroundColor: STATE_COLORS[d.state] || "#999", minHeight: "4px" }} />
+                        style={{ height: `${(d.value / 6) * 100}%`, backgroundColor: STATE_COLORS[d.state] || "var(--color-muted-foreground)", minHeight: "4px" }} />
                     </div>
                   ))}
                 </div>

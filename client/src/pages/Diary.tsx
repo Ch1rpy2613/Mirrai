@@ -1,17 +1,39 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, Sparkles, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, PenLine, Trash2, Loader2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-const EMOTION_EMOJI: Record<string, string> = {
-  warm: "🌸", playful: "😄", nostalgic: "🌙", melancholy: "🌧️", happy: "✨", distant: "❄️",
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+};
+
+const MOOD_LABELS: Record<string, string> = {
+  warm: "温柔", playful: "俏皮", nostalgic: "思念", melancholy: "忧郁", happy: "开心", distant: "疏离",
+};
+
+/* 静态类名映射：Tailwind 需在源码中看到完整类名才会生成对应样式 */
+const MOOD_CHIP: Record<string, string> = {
+  warm: "bg-mood-warm/10 text-mood-warm border-mood-warm/25",
+  playful: "bg-mood-playful/10 text-mood-playful border-mood-playful/25",
+  nostalgic: "bg-mood-nostalgic/10 text-mood-nostalgic border-mood-nostalgic/25",
+  melancholy: "bg-mood-melancholy/10 text-mood-melancholy border-mood-melancholy/25",
+  happy: "bg-mood-happy/10 text-mood-happy border-mood-happy/25",
+  distant: "bg-mood-distant/10 text-mood-distant border-mood-distant/25",
 };
 
 function formatMonth(year: number, month: number) {
   return `${year}年${month + 1}月`;
+}
+
+function formatDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return dateStr;
+  return `${y}年${m}月${d}日`;
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -22,40 +44,67 @@ function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
+function MoodChip({ mood, small }: { mood: string; small?: boolean }) {
+  const cls = MOOD_CHIP[mood] ?? "bg-muted/60 text-muted-foreground border-border/60";
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-md border ${small ? "px-2 py-0.5 text-[0.6875rem]" : "px-2.5 py-1 text-xs"} ${cls}`}>
+      <span className="w-1 h-1 bg-current" />
+      {MOOD_LABELS[mood] ?? mood}
+    </span>
+  );
+}
+
 function DiaryCard({ entry, onDelete }: { entry: any; onDelete: (id: number) => void }) {
+  const [confirming, setConfirming] = useState(false);
   const arcs: string[] = Array.isArray(entry.emotionalArc) ? entry.emotionalArc.map(String) : [];
   const highlights: string[] = Array.isArray(entry.highlights) ? entry.highlights.map(String) : [];
   const quotes: string[] = Array.isArray(entry.quotes) ? entry.quotes.map(String) : [];
 
   return (
-    <div className="bg-card/90 border border-border rounded-xl p-5 space-y-4 animate-fade-in shadow-xs">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm leading-relaxed text-foreground">{entry.summary}</p>
-          <p className="text-xs text-muted-foreground mt-1">{entry.messageCount} 条消息</p>
-        </div>
-        <button onClick={() => onDelete(entry.id)}
-          className="text-muted-foreground hover:text-destructive transition-colors p-1">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+    <article className="surface p-6 sm:p-7 space-y-5 animate-fade-in-up">
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <MessageCircle className="w-3.5 h-3.5" />
+          {entry.messageCount} 条消息
+        </span>
+        {confirming ? (
+          <span className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">删除这篇日记？</span>
+            <button onClick={() => onDelete(entry.id)}
+              className="text-xs px-2.5 py-1 rounded-md bg-destructive/10 text-destructive border border-destructive/25 hover:bg-destructive/15 transition-colors">
+              删除
+            </button>
+            <button onClick={() => setConfirming(false)}
+              className="text-xs px-2.5 py-1 rounded-md text-muted-foreground border border-border/60 hover:text-foreground transition-colors">
+              取消
+            </button>
+          </span>
+        ) : (
+          <button onClick={() => setConfirming(true)} aria-label="删除日记"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
+
+      <p className="letter-prose text-[0.9375rem] sm:text-base text-foreground/90">{entry.summary}</p>
+
       {arcs.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1.5">情绪弧线</p>
+          <p className="kicker mb-2.5">情绪弧线</p>
           <div className="flex gap-1.5 flex-wrap">
-            {arcs.map((e, i) => (
-              <span key={i} className="text-lg" title={e}>{EMOTION_EMOJI[e] || e}</span>
-            ))}
+            {arcs.map((e, i) => <MoodChip key={i} mood={e} />)}
           </div>
         </div>
       )}
       {highlights.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1.5">亮点</p>
-          <ul className="space-y-1">
+          <p className="kicker mb-2.5">亮点</p>
+          <ul className="space-y-1.5">
             {highlights.map((h, i) => (
-              <li key={i} className="text-sm text-foreground/80 flex items-start gap-2">
-                <span className="text-primary mt-0.5">•</span>{h}
+              <li key={i} className="text-sm text-foreground/80 flex items-start gap-2 leading-relaxed">
+                <span className="w-1 h-1 bg-cinnabar mt-[0.55rem] flex-shrink-0" />
+                <span>{h}</span>
               </li>
             ))}
           </ul>
@@ -63,21 +112,21 @@ function DiaryCard({ entry, onDelete }: { entry: any; onDelete: (id: number) => 
       )}
       {quotes.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1.5">金句</p>
-          <div className="space-y-1.5">
+          <p className="kicker mb-2.5">金句</p>
+          <div className="space-y-2.5">
             {quotes.map((q, i) => (
-              <p key={i} className="text-sm italic text-foreground/70 border-l-2 border-primary/30 pl-3">"{q}"</p>
+              <p key={i} className="letter-prose text-[0.9375rem] text-foreground/80 border-l-2 border-cinnabar/50 pl-4">"{q}"</p>
             ))}
           </div>
         </div>
       )}
       {entry.reflection && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1.5">反思</p>
-          <p className="text-sm text-foreground/80 leading-relaxed">{entry.reflection}</p>
+          <p className="kicker mb-2.5">反思</p>
+          <p className="letter-prose text-sm text-foreground/80">{entry.reflection}</p>
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -135,52 +184,62 @@ export default function Diary() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-30 app-header">
+      <header className="sticky top-0 z-40 app-header">
         <div className="container app-nav max-w-2xl">
-          <button onClick={() => navigate("/")} className="app-nav-back -ml-1">
+          <button onClick={() => navigate("/")} className="app-nav-back -ml-1" aria-label="返回">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="app-nav-title-group">
-            <div className="app-nav-mark">
-              <BookOpen className="w-3.5 h-3.5" />
-            </div>
             <div>
               <h1 className="app-nav-title">对话日记</h1>
-              <p className="app-nav-subtitle">回顾每天的对话</p>
+              <p className="app-nav-subtitle">每日回顾</p>
             </div>
           </div>
           <div className="app-nav-spacer" />
         </div>
       </header>
 
-      <main className="flex-1 container max-w-2xl mx-auto py-6 px-4 space-y-6">
+      <main className="flex-1 container max-w-2xl page-main space-y-6">
+        <motion.div variants={fadeUp} initial="hidden" animate="visible">
+          <p className="kicker kicker-accent mb-3">每日回顾</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">对话日记</h1>
+          <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">
+            把一天的对话收成一封信，留给以后的自己。
+          </p>
+        </motion.div>
+
         {/* Persona selector */}
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide">
           {(personas || []).map((p: any) => (
             <button key={p.id} onClick={() => { setSelectedPersonaId(p.id); setSelectedDate(null); }}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-all ${selectedPersonaId === p.id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"}`}>
+              className={`flex-shrink-0 px-3 sm:px-4 py-2.5 -mb-px text-sm border-b-2 transition-colors ${selectedPersonaId === p.id ? "border-cinnabar text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
               {p.name}
             </button>
           ))}
-        </div>
+        </motion.div>
 
         {!selectedPersonaId && (
-          <div className="text-center py-20 text-muted-foreground">
-            <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>选择一个分身查看日记</p>
-          </div>
+          <motion.div variants={fadeUp} initial="hidden" animate="visible" className="surface p-10 sm:p-14 text-center">
+            <p className="kicker kicker-accent mb-3">尚未开卷</p>
+            <p className="font-display text-lg font-semibold text-foreground">
+              {(personas || []).length === 0 ? "还没有分身，先去大厅创建一位" : "选择一个分身查看日记"}
+            </p>
+            {(personas || []).length === 0 && (
+              <Button className="mt-6" onClick={() => navigate("/")}>回到大厅</Button>
+            )}
+          </motion.div>
         )}
 
         {selectedPersonaId && (
           <>
             {/* Calendar */}
-            <div className="bg-card/90 border border-border rounded-xl p-4 shadow-xs">
+            <motion.section variants={fadeUp} initial="hidden" animate="visible" className="surface p-4 sm:p-5">
               <div className="flex items-center justify-between mb-4">
-                <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <button onClick={prevMonth} className="app-nav-icon" aria-label="上个月">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm font-semibold">{formatMonth(year, month)}</span>
-                <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <span className="font-display text-base font-semibold text-foreground">{formatMonth(year, month)}</span>
+                <button onClick={nextMonth} className="app-nav-icon" aria-label="下个月">
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -197,57 +256,66 @@ export default function Diary() {
                   const isSelected = dateStr === selectedDate;
                   return (
                     <button key={day} onClick={() => setSelectedDate(dateStr)}
-                      className={`relative aspect-square flex items-center justify-center rounded-lg text-sm transition-all
-                        ${isSelected ? "bg-primary text-primary-foreground font-semibold" : isToday ? "ring-1 ring-primary/40 font-medium" : "hover:bg-muted"}`}>
+                      className={`cal-cell relative aspect-square flex items-center justify-center rounded-md text-sm
+                        ${isSelected ? "bg-primary text-primary-foreground font-semibold" : isToday ? "border border-foreground/40 font-medium text-foreground" : "text-foreground/80 hover:bg-muted"}`}>
                       {day}
-                      {hasDiary && <span className="absolute bottom-0.5 w-1.5 h-1.5 rounded-full bg-primary" />}
+                      {hasDiary && <span className={`absolute bottom-1 w-1 h-1 ${isSelected ? "bg-primary-foreground" : "bg-cinnabar"}`} />}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </motion.section>
 
             {/* Selected date content */}
             {selectedDate && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold">{selectedDate}</h2>
+              <motion.section
+                key={selectedDate}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="space-y-4"
+              >
+                <div className="flex items-end justify-between gap-3">
+                  <h2 className="font-display text-2xl font-semibold text-foreground">{formatDate(selectedDate)}</h2>
                   {!dayEntry && (
                     <Button size="sm" onClick={() => handleGenerate(selectedDate)} disabled={generating}
-                      className="rounded-full gap-1.5">
-                      {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                      生成日记
+                      className="gap-1.5">
+                      {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PenLine className="w-3.5 h-3.5" />}
+                      写下这一天
                     </Button>
                   )}
                 </div>
                 {dayEntry && (
                   <DiaryCard entry={dayEntry} onDelete={(id) => deleteMutation.mutate({ id })} />
                 )}
-              </div>
+              </motion.section>
             )}
 
             {/* Recent entries list */}
             {!selectedDate && entries && entries.length > 0 && (
-              <div className="space-y-3">
-                <h2 className="text-sm font-semibold text-muted-foreground">最近日记</h2>
+              <motion.section variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="font-display text-lg font-semibold text-foreground">最近日记</h2>
+                  <span className="kicker">近期</span>
+                </div>
                 {entries.map((entry: any) => (
                   <button key={entry.id} onClick={() => setSelectedDate(entry.date)}
-                    className="w-full text-left bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition-all">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">{entry.date}</span>
+                    className="surface surface-interactive w-full text-left p-5">
+                    <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                      <span className="font-display text-base font-semibold text-foreground">{entry.date}</span>
                       <span className="text-xs text-muted-foreground">{entry.personaName || ""}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">{entry.summary}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{entry.summary}</p>
                     {Array.isArray(entry.emotionalArc) && entry.emotionalArc.length > 0 && (
-                      <div className="flex gap-1 mt-2">
+                      <div className="flex gap-1.5 mt-3 flex-wrap">
                         {entry.emotionalArc.slice(0, 5).map((e: unknown, i: number) => (
-                          <span key={i} className="text-sm">{EMOTION_EMOJI[String(e)] || String(e)}</span>
+                          <MoodChip key={i} mood={String(e)} small />
                         ))}
                       </div>
                     )}
                   </button>
                 ))}
-              </div>
+              </motion.section>
             )}
           </>
         )}
