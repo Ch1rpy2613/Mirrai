@@ -10,6 +10,10 @@ export const ENV = {
   openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o",
   openaiSystemMessage: process.env.OPENAI_SYSTEM_MESSAGE ?? "",
 
+  atlasApiKey: process.env.ATLASCLOUD_API_KEY ?? "",
+  atlasBaseUrl: process.env.ATLAS_BASE_URL ?? "https://api.atlascloud.ai/v1",
+  atlasModel: process.env.ATLAS_MODEL ?? "google/gemini-3-flash-preview",
+
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
