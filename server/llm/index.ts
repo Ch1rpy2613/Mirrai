@@ -10,6 +10,7 @@ import { DifyProvider } from "./providers/dify";
 const registry = new ProviderRegistry();
 
 registry.register(new OpenAIProvider("OpenAI", ENV.openaiApiKey, ENV.openaiBaseUrl, ENV.openaiModel, ENV.openaiSystemMessage || undefined));
+registry.register(new OpenAIProvider("Atlas", ENV.atlasApiKey, ENV.atlasBaseUrl, ENV.atlasModel, undefined, 1));
 registry.register(new OpenAIProvider("Kimi", ENV.kimiApiKey, ENV.kimiBaseUrl, ENV.kimiModel));
 registry.register(new OpenAIProvider("Qwen", ENV.tongyiApiKey, ENV.tongyiUrl || "https://dashscope.aliyuncs.com/compatible-mode/v1", ENV.tongyiModel));
 registry.register(new OpenAIProvider("DeepSeek", ENV.deepseekApiKey, ENV.deepseekBaseUrl, ENV.deepseekModel));
@@ -34,10 +35,12 @@ function isVersionError(err: unknown): boolean {
   return /version|deprecated|unsupported.*model|model.*not found|invalid.*api/.test(msg);
 }
 
-class LLMService {
+export class LLMService {
+  constructor(private providerRegistry = registry) {}
+
   async invoke(params: InvokeParams): Promise<string> {
     const providerName = params.options?.provider;
-    const provider = registry.get(providerName);
+    const provider = this.providerRegistry.get(providerName);
     if (!provider) {
       throw new Error(`No LLM provider available${providerName ? ` (requested: ${providerName})` : ""}. Configure at least one provider in .env`);
     }
@@ -46,7 +49,8 @@ class LLMService {
     }
 
     let lastError: unknown;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const maxAttempts = provider.maxAttempts ?? 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         return await provider.invoke(params.messages, params.options);
       } catch (err) {
@@ -55,9 +59,9 @@ class LLMService {
           console.warn(`[LLM] Provider "${provider.name}" returned a version/compatibility error:`, (err as Error).message);
           break;
         }
-        if (isTransientError(err) && attempt < 2) {
+        if (isTransientError(err) && attempt < maxAttempts - 1) {
           const delay = 200 * Math.pow(2, attempt);
-          console.warn(`[LLM] Transient error from "${provider.name}", retrying in ${delay}ms (attempt ${attempt + 1}/3)`);
+          console.warn(`[LLM] Transient error from "${provider.name}", retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
@@ -68,7 +72,7 @@ class LLMService {
   }
 
   getRegistry() {
-    return registry;
+    return this.providerRegistry;
   }
 }
 

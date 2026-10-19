@@ -54,13 +54,14 @@
 
 情感状态不仅影响回复语气，还会在聊天界面实时显示，用户也可以手动切换。
 
-### 3. 统一 LLM 抽象层 — 10 家 AI 提供商即插即用
+### 3. 统一 LLM 抽象层 — 11 家 AI 提供商即插即用
 
 一套统一接口，支持国内外主流 AI 服务，用户可在设置页面自由切换：
 
 | 提供商 | 协议 | 默认模型 |
 |--------|------|---------|
 | OpenAI | REST | gpt-4o |
+| Atlas Cloud | OpenAI 兼容 | google/gemini-3-flash-preview |
 | Claude | REST | claude-sonnet-4-6 |
 | DeepSeek | OpenAI 兼容 | deepseek-chat |
 | Kimi (月之暗面) | OpenAI 兼容 | moonshot-v1-8k |
@@ -273,10 +274,13 @@ bash scripts/build-macos-app.sh
 
 | 变量 | 说明 |
 |------|------|
-| `DEFAULT_LLM_PROVIDER` | 默认提供商名称 (`openai` / `claude` / `deepseek` / `kimi` / `ollama` / `dify` / `xunfei` / `tongyi` / `doubao` / `302ai`) |
+| `DEFAULT_LLM_PROVIDER` | 默认提供商名称 (`openai` / `atlas` / `claude` / `deepseek` / `kimi` / `ollama` / `dify` / `xunfei` / `tongyi` / `doubao` / `302ai`) |
 | `OPENAI_API_KEY` | OpenAI API Key |
 | `OPENAI_BASE_URL` | OpenAI 接口地址 (默认 `https://api.openai.com/v1`) |
 | `OPENAI_MODEL` | 模型名称 (默认 `gpt-4o`) |
+| `ATLASCLOUD_API_KEY` | Atlas Cloud API Key |
+| `ATLAS_BASE_URL` | Atlas Cloud 接口地址 (默认 `https://api.atlascloud.ai/v1`) |
+| `ATLAS_MODEL` | Atlas Cloud 模型名称 (默认 `google/gemini-3-flash-preview`) |
 | `CLAUDE_API_KEY` | Anthropic API Key |
 | `CLAUDE_MODEL` | Claude 模型 (默认 `claude-sonnet-4-6`) |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
@@ -787,4 +791,3 @@ registry.register(createMyProvider(ENV.myApiKey));
 ---
 
 MIT License
-
