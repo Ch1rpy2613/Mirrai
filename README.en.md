@@ -11,11 +11,11 @@
 
 [简体中文](README.md) | **English**
 
+![Mirrai landing page](docs/images/landing-hero.png)
+
 Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digital persona from real chat history — their tone, their habits, even the moments they go cold. Every byte stays on your machine, 11 LLM providers plug in out of the box, and it ships with something no other companion product has: a **graduation mechanism** — designed not to keep you, but to help you say goodbye.
 
 > ⚠️ The app UI is currently Chinese-first; full English localization is on the [roadmap](#roadmap). English-speaking users can still set it up and the landing page is bilingual.
-
-<!-- TODO: hero demo GIF -->
 
 ## Why Mirrai is different
 
