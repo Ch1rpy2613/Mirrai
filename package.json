@@ -1,8 +1,34 @@
 {
   "name": "mirrai",
   "version": "1.0.0",
+  "description": "不在身边的时候，TA 还在这里 —— 上传聊天记录，AI 重建 TA 的数字分身。Open-source AI companion with persona distillation, emotional state machine, and a graduation mechanism.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ch1rpy2613/Mirrai.git"
+  },
+  "homepage": "https://github.com/Ch1rpy2613/Mirrai#readme",
+  "bugs": {
+    "url": "https://github.com/Ch1rpy2613/Mirrai/issues"
+  },
+  "keywords": [
+    "ai-companion",
+    "digital-persona",
+    "llm",
+    "chatbot",
+    "wechat-bot",
+    "openai",
+    "ollama",
+    "deepseek",
+    "react",
+    "typescript",
+    "trpc",
+    "self-hosted"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
