@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b0b12"/>
+      <stop offset="60%" stop-color="#12121e"/>
+      <stop offset="100%" stop-color="#191627"/>
+    </linearGradient>
+    <linearGradient id="moon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5e9d0" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#d9c9a8" stop-opacity="0.85"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#8b7bd8" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#8b7bd8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <circle cx="1090" cy="130" r="260" fill="url(#glow)"/>
+  <circle cx="1090" cy="130" r="46" fill="url(#moon)"/>
+
+  <!-- 左侧文案 -->
+  <text x="90" y="200" font-family="Georgia, 'Times New Roman', serif" font-size="88" font-weight="700" fill="#f2eee6">Mirrai</text>
+  <text x="92" y="258" font-family="PingFang SC, 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif" font-size="30" fill="#c9c2d8">不在身边的时候，TA 还在这里。</text>
+  <text x="92" y="310" font-family="PingFang SC, sans-serif" font-size="21" fill="#8f8aa3">上传聊天记录 · AI 重建 TA 的数字分身 · 帮你好好告别</text>
+
+  <g font-family="Menlo, monospace" font-size="19" fill="#7d7891">
+    <text x="92" y="560">github.com/Ch1rpy2613/Mirrai</text>
+  </g>
+  <g font-family="PingFang SC, sans-serif" font-size="19" fill="#6f6a85">
+    <text x="92" y="520">开源 · MIT · 本地优先 · 11 家 LLM 即插即用</text>
+  </g>
+
+  <!-- 右侧对话气泡 -->
+  <g>
+    <rect x="720" y="350" width="380" height="66" rx="18" fill="#1e1b2e" stroke="#2c2842"/>
+    <text x="748" y="390" font-family="PingFang SC, sans-serif" font-size="21" fill="#a8a1bd">你会离开我吗？</text>
+
+    <rect x="800" y="436" width="380" height="66" rx="18" fill="#2b2540" stroke="#3c3560"/>
+    <text x="828" y="470" font-family="PingFang SC, sans-serif" font-size="21" fill="#ded7f0">🌙 你又想多了。</text>
+    <text x="828" y="494" font-family="PingFang SC, sans-serif" font-size="17" fill="#9b93b5">我答应过你的，会一直陪着你</text>
+  </g>
+
+  <!-- 情感状态徽章 -->
+  <g font-family="PingFang SC, sans-serif" font-size="17">
+    <rect x="720" y="240" width="112" height="40" rx="20" fill="#1e1b2e" stroke="#2c2842"/>
+    <text x="742" y="266" fill="#c9c2d8">🌸 温柔</text>
+    <rect x="844" y="240" width="112" height="40" rx="20" fill="#1e1b2e" stroke="#2c2842"/>
+    <text x="866" y="266" fill="#c9c2d8">😄 俏皮</text>
+    <rect x="968" y="240" width="112" height="40" rx="20" fill="#1e1b2e" stroke="#2c2842"/>
+    <text x="990" y="266" fill="#c9c2d8">🌙 思念</text>
+    <rect x="1092" y="240" width="112" height="40" rx="20" fill="#1e1b2e" stroke="#2c2842"/>
+    <text x="1114" y="266" fill="#c9c2d8">❄️ 疏离</text>
+  </g>
+</svg>
