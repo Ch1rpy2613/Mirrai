@@ -22,6 +22,7 @@ export type InvokeResult = string;
 
 export interface LLMProvider {
   name: string;
+  maxAttempts?: number;
   isConfigured(): boolean;
   invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string>;
 }

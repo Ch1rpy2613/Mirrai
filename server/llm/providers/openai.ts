@@ -16,6 +16,7 @@ export class OpenAIProvider implements LLMProvider {
     private baseUrl: string,
     private model: string,
     private systemMessage?: string,
+    public readonly maxAttempts = 3,
   ) {}
 
   isConfigured(): boolean {
