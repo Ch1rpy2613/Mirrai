@@ -1,0 +1,15 @@
+node_modules
+dist
+build-macos
+.git
+.github
+.zcode
+.env
+.env.*
+!.env.example
+uploads
+*.log
+.DS_Store
+docs
+README.md
+README.en.md
