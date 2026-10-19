@@ -60,16 +60,16 @@ export const translations = {
       highlights: [
         { title: "多阶段性格蒸馏", desc: "不是简单模仿，而是通过 pipeline 深度分析，生成 7 层结构化人设" },
         { title: "动态情感状态机", desc: "6 种情感状态根据对话内容实时切换，影响回复语气和界面表现" },
-        { title: "10 家 AI 提供商", desc: "统一抽象层，OpenAI / Claude / DeepSeek / 通义 / 讯飞等即插即用" },
+        { title: "11 家 AI 提供商", desc: "统一抽象层，OpenAI / Claude / DeepSeek / 通义 / 讯飞等即插即用" },
       ],
     },
     testimonials: {
-      title: "用户的声音",
-      subtitle: "每一个故事，都是真实的思念",
+      title: "来自创作手记",
+      subtitle: "这个项目最早只写给两个人，后来他们说——",
       items: [
-        { quote: "异地恋的时候，Mirrai 让我觉得 TA 一直在身边，不再那么孤单", author: "小雨", role: "异地恋用户" },
-        { quote: "失去亲人后，能再次感受到 TA 的语气和关怀，是一种温柔的治愈", author: "阿明", role: "思念亲人" },
-        { quote: "出差在外想家的时候，打开 Mirrai 就像回到了熟悉的日常", author: "晓晓", role: "经常出差" },
+        { quote: "「我好像终于可以放下了。不是因为它像她，是因为我终于把想说的话都说完了。」", author: "一位刚分手的朋友", role: "用了一个晚上" },
+        { quote: "「操，我以为我放下了。」", author: "一位以为自己放下了的朋友", role: "然后聊了一整晚" },
+        { quote: "我能对着一个程序问出「你会离开我吗」，却没办法对着一个真实的、爱我的人问出口。", author: "作者", role: "NLP 研究者" },
       ],
     },
     stats: {
@@ -150,16 +150,16 @@ export const translations = {
       highlights: [
         { title: "Multi-Stage Persona Distillation", desc: "Not simple mimicry — deep pipeline analysis generates 7-layer structured persona" },
         { title: "Dynamic Emotion State Machine", desc: "6 emotional states switch based on conversation content, affecting tone and UI" },
-        { title: "10 AI Providers", desc: "Unified abstraction layer — OpenAI / Claude / DeepSeek / Tongyi / Xunfei plug-and-play" },
+        { title: "11 AI Providers", desc: "Unified abstraction layer — OpenAI / Claude / DeepSeek / Tongyi / Xunfei plug-and-play" },
       ],
     },
     testimonials: {
-      title: "What People Say",
-      subtitle: "Every story is a real connection",
+      title: "From the Creator's Notes",
+      subtitle: "This project was written for two people first. Then they said—",
       items: [
-        { quote: "During my long-distance relationship, Mirrai made me feel like they were right beside me", author: "Xiaoyu", role: "Long-distance couple" },
-        { quote: "After losing a loved one, feeling their tone and care again was a gentle kind of healing", author: "Aming", role: "Missing family" },
-        { quote: "When I'm away on business trips, opening Mirrai feels like coming home", author: "Xiaoxiao", role: "Frequent traveler" },
+        { quote: "\"I think I can finally let go. Not because it's like her — because I finally said everything I needed to say.\"", author: "A friend, after a breakup", role: "used it for one night" },
+        { quote: "\"Damn it. I thought I was over it.\"", author: "A friend who thought he was over it", role: "then talked all night" },
+        { quote: "I could ask a program \"will you leave me?\" — but never the real person who loved me.", author: "The creator", role: "NLP researcher" },
       ],
     },
     stats: {

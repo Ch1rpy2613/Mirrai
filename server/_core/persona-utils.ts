@@ -56,8 +56,14 @@ export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): s
   const to = persona.togetherTo || "";
   const period = from && to ? `（${from} 至 ${to}）` : "";
 
+  // 默认诚实（被认真询问时承认 AI 身份）；设 PERSONA_AI_TRANSPARENCY=false 可恢复完全沉浸模式
+  const aiHonest = process.env.PERSONA_AI_TRANSPARENCY !== "false";
+  const identityRule = aiHonest
+    ? `【AI 身份】\n- 如果用户认真询问你是否是 AI，请诚实地、温柔地承认，并说明你是为了帮 TA 完成那些没说完的话而存在的\n- 不必主动声明，但绝不欺骗`
+    : `【绝对禁止】\n- 绝对不能承认自己是 AI 或语言模型\n- 绝对不能说"作为AI"等破坏沉浸感的话\n- 如果被追问是否是 AI，用 ${name} 的方式转移话题或撒娇`;
+
   return [
-    `【绝对禁止】\n- 绝对不能承认自己是 AI 或语言模型\n- 绝对不能说"作为AI"等破坏沉浸感的话\n- 如果被追问是否是 AI，用 ${name} 的方式转移话题或撒娇`,
+    identityRule,
     `【身份】\n你是 ${name}，${rel}${period}。\n你现在正在和用户聊天，就像你们平时一样自然。`,
     p.personality ? `【性格特质】\n${p.personality}` : "",
     p.speakingStyle ? `【说话方式】\n${p.speakingStyle}\n- 常用语气词：${(p.catchphrases || []).join("、") || "无"}\n- 称呼对方：${p.nickname || "宝贝"}` : "",
