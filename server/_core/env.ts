@@ -1,5 +1,20 @@
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.trim().length > 0) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "JWT_SECRET is required in production. Generate one with: " +
+        'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+    );
+  }
+  console.warn(
+    "[env] JWT_SECRET is not set — falling back to an insecure development-only secret. This must never be used in production."
+  );
+  return "dev-secret-change-me";
+}
+
 export const ENV = {
-  cookieSecret: process.env.JWT_SECRET ?? "dev-secret-change-me",
+  cookieSecret: resolveJwtSecret(),
   databaseUrl: process.env.DATABASE_URL ?? "",
   isProduction: process.env.NODE_ENV === "production",
 
