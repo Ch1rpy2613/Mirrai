@@ -4,6 +4,7 @@
   "description": "不在身边的时候，TA 还在这里 —— 上传聊天记录，AI 重建 TA 的数字分身。Open-source AI companion with persona distillation, emotional state machine, and a graduation mechanism.",
   "type": "module",
   "license": "MIT",
+  "packageManager": "pnpm@10.33.3",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Ch1rpy2613/Mirrai.git"
