@@ -8,3 +8,4 @@ drizzle/meta/
 *.tsbuildinfo
 .vite/
 build-macos/
+.zcode/
