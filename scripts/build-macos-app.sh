@@ -45,8 +45,11 @@ mkdir -p "$CONTENTS/MacOS" "$RESOURCES"
 # ─── Step 1: Build the project ───────────────────────────────────────────────
 log "Building Mirrai project..."
 cd "$PROJECT_DIR"
-npx --yes pnpm install --frozen-lockfile 2>/dev/null || npx --yes pnpm install
-npx --yes pnpm build
+# Use the pnpm version pinned in package.json "packageManager" (via corepack),
+# so lockfile overrides stay compatible across machines
+corepack enable pnpm 2>/dev/null || true
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
 
 # ─── Step 2: Download Node.js ────────────────────────────────────────────────
 log "Downloading Node.js v${NODE_VERSION} (${NODE_ARCH})..."
