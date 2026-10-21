@@ -13,7 +13,7 @@
 
 ![Mirrai landing page](docs/images/landing-hero.png)
 
-Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digital persona from real chat history — their tone, their habits, even the moments they go cold. Every byte stays on your machine, 11 LLM providers plug in out of the box, and it ships with something no other companion product has: a **graduation mechanism** — designed not to keep you, but to help you say goodbye.
+Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digital persona from real chat history — their tone, their habits, even the moments they go cold. Every byte stays on your machine, 12 LLM providers plug in out of the box, and it ships with something no other companion product has: a **graduation mechanism** — designed not to keep you, but to help you say goodbye.
 
 > ⚠️ The app UI is currently Chinese-first; full English localization is on the [roadmap](#roadmap). English-speaking users can still set it up and the landing page is bilingual.
 
@@ -24,7 +24,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 | 🧬 **Multi-stage persona distillation** | A real pipeline (intake → persona analysis → structured build → merge) produces a 7-layer persona: personality, speaking style, catchphrases, attachment style, love language, conflict style, touching moments. Not a "paste logs into a prompt" wrapper. |
 | 🎭 **Dynamic emotion state machine** | 6 emotional states (warm / playful / nostalgic / melancholic / happy / distant) drift with the conversation and change reply tone in real time. |
 | 🎓 **Graduation mechanism** | Intimacy grows through conversation. When the system detects you're at peace, it offers "graduation": an AI-written farewell letter, then the persona sleeps. Success is measured by graduation rate, not retention. |
-| 🔌 **11 LLM providers** | OpenAI, Claude, DeepSeek, Kimi, Qwen, Doubao, 302.ai, Atlas Cloud, Dify, Xunfei — and Ollama for fully local inference. |
+| 🔌 **12 LLM providers** | OpenAI, Claude, DeepSeek, Kimi, Qwen, Doubao, 302.ai, Atlas Cloud, Cheaper Inference, Dify, Xunfei — and Ollama for fully local inference. |
 | 💬 **WeChat bot** | Bind a WeChat contact to a persona via Wechaty; it replies in their voice. Shares persona and memory with the web app. (Unofficial protocol — ban risk, use a spare account.) |
 | 🔒 **Local-first** | Uploads stay in `./uploads/`. With Ollama, nothing ever leaves your machine. |
 
@@ -35,7 +35,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 | Persona built from real chat logs | ✅ multi-stage distillation | ❌ manual | ⚠️ manual prompting |
 | Emotion states drift with conversation | ✅ 6-state machine | ⚠️ limited | ⚠️ manual |
 | Fully local data | ✅ | ❌ cloud | ✅ |
-| Swappable LLM backends | ✅ 11 providers / local | ❌ locked | ✅ |
+| Swappable LLM backends | ✅ 12 providers / local | ❌ locked | ✅ |
 | Designed to help you let go | ✅ graduation | ❌ | ❌ |
 | Open source, self-hosted | ✅ MIT | ❌ | ✅ |
 
@@ -83,7 +83,7 @@ Download `Mirrai-macOS-arm64.dmg` from [Releases](https://github.com/Ch1rpy2613/
 - [x] Multi-stage persona distillation pipeline
 - [x] 6-state emotion engine + intimacy system
 - [x] Graduation mechanism (farewell letter + dormancy/awakening)
-- [x] 11 LLM providers
+- [x] 12 LLM providers
 - [x] WeChat bot integration
 - [x] Diary / memory nodes / analytics / TTS
 - [ ] SillyTavern character card (PNG v2) import/export

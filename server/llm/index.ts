@@ -11,6 +11,7 @@ const registry = new ProviderRegistry();
 
 registry.register(new OpenAIProvider("OpenAI", ENV.openaiApiKey, ENV.openaiBaseUrl, ENV.openaiModel, ENV.openaiSystemMessage || undefined));
 registry.register(new OpenAIProvider("Atlas", ENV.atlasApiKey, ENV.atlasBaseUrl, ENV.atlasModel, undefined, 1));
+registry.register(new OpenAIProvider("CheaperInference", ENV.cheaperInferenceApiKey, ENV.cheaperInferenceBaseUrl, ENV.cheaperInferenceModel));
 registry.register(new OpenAIProvider("Kimi", ENV.kimiApiKey, ENV.kimiBaseUrl, ENV.kimiModel));
 registry.register(new OpenAIProvider("Qwen", ENV.tongyiApiKey, ENV.tongyiUrl || "https://dashscope.aliyuncs.com/compatible-mode/v1", ENV.tongyiModel));
 registry.register(new OpenAIProvider("DeepSeek", ENV.deepseekApiKey, ENV.deepseekBaseUrl, ENV.deepseekModel));
