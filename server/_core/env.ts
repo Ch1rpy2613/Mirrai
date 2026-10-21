@@ -29,6 +29,10 @@ export const ENV = {
   atlasBaseUrl: process.env.ATLAS_BASE_URL ?? "https://api.atlascloud.ai/v1",
   atlasModel: process.env.ATLAS_MODEL ?? "google/gemini-3-flash-preview",
 
+  cheaperInferenceApiKey: process.env.CHEAPER_INFERENCE_API_KEY ?? "",
+  cheaperInferenceBaseUrl: process.env.CHEAPER_INFERENCE_BASE_URL ?? "https://api.cheaperinference.com/v1",
+  cheaperInferenceModel: process.env.CHEAPER_INFERENCE_MODEL ?? "gpt-5.4-mini",
+
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
