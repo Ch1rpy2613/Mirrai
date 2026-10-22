@@ -23,6 +23,8 @@ if (-not (Test-Path $DistDir)) {
 
 $TestUser = "mirraismoke"
 $TestPass = "Mirrai-Smoke-2024!"
+# The worker needs a place to write its log. C:\Users\Public always exists, and
+# the ACL is adjusted below so a standard user can write there.
 $PublicDir = Join-Path $env:PUBLIC "mirrai-smoke"
 $WorkerScript = Join-Path $PublicDir "worker.ps1"
 $WorkerLog = Join-Path $PublicDir "worker.log"
@@ -61,10 +63,19 @@ Log "PostgreSQL binaries load their DLLs."
 if (Get-LocalUser -Name $TestUser -ErrorAction SilentlyContinue) {
     Remove-LocalUser -Name $TestUser
 }
-New-Item -ItemType Directory -Force -Path $PublicDir | Out-Null
 $secure = ConvertTo-SecureString $TestPass -AsPlainText -Force
 New-LocalUser -Name $TestUser -Password $secure -PasswordNeverExpires | Out-Null
 Log "Created standard user '$TestUser'."
+
+# The runner's working directory is not readable by a standard user, and
+# C:\Users\Public is not writable by one either. Grant exactly what the
+# worker needs: read access to the bundle, and a place to write its log.
+$WorkerDir = Split-Path -Parent $WorkerLog
+New-Item -ItemType Directory -Force -Path $WorkerDir | Out-Null
+& icacls.exe $WorkerDir /grant "${TestUser}:(OI)(CI)F" | Out-Null
+& icacls.exe (Split-Path -Parent $DistDir) /grant "${TestUser}:(OI)(CI)RX" | Out-Null
+& icacls.exe $DistDir /grant "${TestUser}:(OI)(CI)RX" | Out-Null
+Log "Granted the standard user access to the bundle and the log directory."
 
 $worker = @'
 $ErrorActionPreference = "Stop"
@@ -174,7 +185,6 @@ try {
 
 Set-Content -Path $WorkerScript -Value $worker -Encoding UTF8
 Remove-Item $WorkerLog -ErrorAction SilentlyContinue
-
 $cred = New-Object System.Management.Automation.PSCredential($TestUser, $secure)
 Log "Running the bundle as '$TestUser'..."
 $proc = Start-Process -FilePath "powershell.exe" `
