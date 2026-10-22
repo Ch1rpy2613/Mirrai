@@ -222,7 +222,7 @@ export default function Upload() {
               {files?.map((f: any) => (
                 <div key={f.id} className="flex items-center gap-3 py-3 border-t border-border">
                   <span className="text-sm text-foreground/85 flex-1 truncate">{f.originalName}</span>
-                  <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+                  <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
                     {(f.fileSize / 1024).toFixed(0)} KB
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
