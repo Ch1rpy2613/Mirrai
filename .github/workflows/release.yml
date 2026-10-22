@@ -69,9 +69,6 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Build the bundle
         shell: pwsh
         run: |
@@ -90,6 +87,10 @@ jobs:
       - name: Build the installer
         shell: pwsh
         run: |
+          # Long paths are enabled on Windows 10 1607 and later by default, but
+          # the compiler itself is not long-path aware.
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force | Out-Null
           $paths = @("$env:ProgramFiles\Inno Setup*\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe")
           $iscc = Get-ChildItem -Path $paths -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $iscc) {

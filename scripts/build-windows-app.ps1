@@ -47,6 +47,13 @@ New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 Log "Building Mirrai project..."
 Push-Location $ProjectDir
 try {
+    # The hoisted linker produces a flat node_modules without pnpm's .pnpm
+    # directory. That is not just tidier: the .pnpm paths run past Windows'
+    # 260 character limit, and the installer cannot read them.
+    if (Test-Path (Join-Path $ProjectDir "node_modules")) {
+        Log "Removing the previous node_modules..."
+        Remove-Item (Join-Path $ProjectDir "node_modules") -Recurse -Force
+    }
     corepack pnpm install --frozen-lockfile --node-linker=hoisted
     # Drop packages that are no longer in the dependency tree; pnpm would
     # otherwise keep them around and they would be shipped inside the bundle.
