@@ -123,11 +123,11 @@ export default function Upload() {
         </div>
       </header>
 
-      <main className="container page-main max-w-2xl">
+      <main className="container page-main max-w-3xl">
         {/* Page Intro */}
         <div className="mb-8 animate-fade-in-up">
           <p className="kicker kicker-accent mb-3">信物</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">上传资料</h1>
+          <h1 className="page-title">上传资料</h1>
           <p className="text-muted-foreground text-sm mt-2.5 leading-relaxed">
             聊天记录、照片与片段——这些信物会成为分身认识你的方式。
           </p>
@@ -139,7 +139,7 @@ export default function Upload() {
           <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
               <div>
-                <p className="font-display text-lg font-semibold text-foreground">数字分身已准备好</p>
+                <p className="font-sans text-base font-semibold text-foreground">数字分身已准备好</p>
                 <p className="text-muted-foreground text-sm mt-1">{analysisStatus?.message}</p>
               </div>
               <Button onClick={() => navigate(`/chat/${personaId}`)}

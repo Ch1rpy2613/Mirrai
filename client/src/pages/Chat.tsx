@@ -123,7 +123,7 @@ function TTSButton({ text }: { text: string }) {
   );
 }
 
-function MessageBubble({ msg, personaName }: { msg: Message; personaName: string }) {
+function MessageBubble({ msg, personaName, showMood }: { msg: Message; personaName: string; showMood: boolean }) {
   const isUser = msg.role === "user";
   const mood = msg.emotionalState ? MOODS[msg.emotionalState] : null;
   const [imgExpanded, setImgExpanded] = useState(false);
@@ -169,22 +169,22 @@ function MessageBubble({ msg, personaName }: { msg: Message; personaName: string
       return <span>{msg.content}<span className="inline-block w-1 h-4 bg-primary/40 ml-0.5 animate-pulse" /></span>;
     }
     if (isUser) return <span>{msg.content}</span>;
-    return <Streamdown className="letter-prose text-[0.9375rem]">{msg.content}</Streamdown>;
+    return <Streamdown className="letter-prose letter-prose--chat">{msg.content}</Streamdown>;
   };
 
   return (
-    <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-5 animate-fade-in-up`}>
+    <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4 animate-fade-in-up`}>
       {!isUser && (
         <PersonaAvatar name={personaName} className="w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5" />
       )}
       <div className={`max-w-[78%] sm:max-w-[75%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
-        {!isUser && mood && (
+        {!isUser && mood && showMood && (
           <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md border ${mood.chip}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${mood.dot}`} />
             {mood.label}
           </span>
         )}
-        <div className={`px-4 py-3 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
+        <div className={`px-3.5 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
           {renderContent()}
         </div>
         {msg.createdAt && !msg.isStreaming && (
@@ -612,7 +612,7 @@ export default function Chat() {
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="container py-6 sm:py-8 max-w-2xl mx-auto">
+        <div className="container py-4 sm:py-6 max-w-2xl mx-auto">
           {messages.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" as const }}
@@ -620,7 +620,7 @@ export default function Chat() {
               <div className="mood-ring-sm inline-flex" style={moodRingStyle}>
                 <PersonaAvatar name={persona?.name || "?"} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full text-2xl sm:text-3xl" />
               </div>
-              <h2 className="font-display text-2xl sm:text-3xl font-semibold text-foreground mt-7">
+              <h2 className="page-title mt-7">
                 {persona?.name || "TA"} 在等你
               </h2>
               <p className="text-muted-foreground text-sm mt-2.5">{mood.desc}</p>
@@ -640,9 +640,27 @@ export default function Chat() {
               </button>
             </motion.div>
           )}
-          {messages.map(msg => (
-            <MessageBubble key={msg.id} msg={msg} personaName={persona?.name || "?"} />
-          ))}
+          {messages.map((msg, i) => {
+            // The mood chip is a signal, not decoration — showing it on every
+            // message turns the conversation into a wall of labels. It only
+            // appears when the mood actually shifts.
+            const prevMood = [...messages.slice(0, i)]
+              .reverse()
+              .find(m => m.role === "assistant" && m.emotionalState);
+            const showMood = Boolean(
+              msg.role === "assistant" &&
+              msg.emotionalState &&
+              msg.emotionalState !== prevMood?.emotionalState,
+            );
+            return (
+              <MessageBubble
+                key={msg.id}
+                msg={msg}
+                personaName={persona?.name || "?"}
+                showMood={showMood}
+              />
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -705,7 +723,7 @@ export default function Chat() {
               </Button>
             </div>
           )}
-          <p className="hidden sm:block text-muted-foreground/40 text-[11px] mt-2 text-center">
+          <p className="hidden sm:block text-muted-foreground/35 text-[10px] mt-1.5 text-right tracking-wide">
             Enter 发送 · Shift+Enter 换行
           </p>
         </div>
@@ -918,7 +936,9 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative surface w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in">
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10 rounded-t-lg">
-          <h3 className="font-display font-semibold text-foreground">{personaName} 的情绪报告</h3>
+          <h3 className="card-title">
+            <span className="font-sans">{personaName}</span> 的情绪报告
+          </h3>
           <div className="flex items-center gap-2">
             <div className="flex bg-muted rounded-md p-0.5">
               {[7, 30].map(d => (
@@ -935,17 +955,17 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
         <div className="p-4 space-y-6">
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-muted/40 border border-border rounded-md p-3 text-center">
-              <p className="font-display text-2xl font-semibold text-foreground">{report?.totalDays || 0}</p>
+              <p className="stat-value">{report?.totalDays || 0}</p>
               <p className="text-xs text-muted-foreground mt-0.5">聊天天数</p>
             </div>
             <div className="bg-muted/40 border border-border rounded-md p-3 text-center">
-              <p className="font-display text-2xl font-semibold text-foreground">{report?.totalMessages || 0}</p>
+              <p className="stat-value">{report?.totalMessages || 0}</p>
               <p className="text-xs text-muted-foreground mt-0.5">消息数</p>
             </div>
             <div className="bg-muted/40 border border-border rounded-md p-3 text-center flex flex-col items-center justify-center">
               {mostCommon
                 ? <span className="w-5 h-5 rounded-full mt-1" style={{ backgroundColor: mostCommon.fill }} />
-                : <p className="font-display text-2xl font-semibold text-foreground">—</p>}
+                : <p className="stat-value">—</p>}
               <p className="text-xs text-muted-foreground mt-1.5">{mostCommon?.name || "暂无数据"}</p>
             </div>
           </div>

@@ -88,7 +88,7 @@ function SliderField({ label, value, onChange, min, max, step, unit }: {
     <div className="space-y-2.5">
       <div className="flex items-center justify-between">
         <Label className="text-sm text-foreground/80">{label}</Label>
-        <span className="font-display text-sm font-semibold text-foreground">{value}{unit}</span>
+        <span className="stat-value text-sm">{value}{unit}</span>
       </div>
       <Slider value={[value]} onValueChange={v => onChange(v[0])} min={min} max={max} step={step} />
       <div className="flex justify-between text-[0.6875rem] text-muted-foreground">
@@ -178,9 +178,9 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
 
 function StatItem({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="border-t border-border pt-3 pb-1">
-      <div className="font-display text-xl font-semibold text-foreground leading-tight">{value}</div>
-      <div className="text-xs text-muted-foreground mt-1">{label}</div>
+    <div className="stat-block">
+      <div className="stat-value">{value}</div>
+      <div className="stat-label mt-1">{label}</div>
     </div>
   );
 }
@@ -229,11 +229,11 @@ function ProfileTab() {
   return (
     <div className="space-y-5">
       {/* Avatar + Basic Info */}
-      <section className="surface p-6 sm:p-7">
-        <SectionHeader note="昵称、邮箱与账户信息" title="个人资料" />
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note="昵称、邮箱与账户信息" title="账户信息" />
         <div className="flex items-start gap-5">
           <div className="w-20 h-20 rounded-lg bg-muted border border-border flex items-center justify-center flex-shrink-0">
-            <span className="font-display text-3xl font-semibold text-foreground">{(profile.name || profile.username).charAt(0).toUpperCase()}</span>
+            <span className="font-sans text-3xl font-semibold text-foreground">{(profile.name || profile.username).charAt(0).toUpperCase()}</span>
           </div>
           <div className="flex-1 min-w-0">
             {editing ? (
@@ -261,8 +261,8 @@ function ProfileTab() {
             ) : (
               <>
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <h3 className="font-display text-xl font-semibold text-foreground">{profile.name || profile.username}</h3>
-                  <StatusChip tone="primary">{profile.role}</StatusChip>
+                  <h3 className="font-sans text-lg font-semibold text-foreground">{profile.name || profile.username}</h3>
+                  {profile.role !== "user" && <StatusChip tone="primary">{profile.role}</StatusChip>}
                 </div>
                 <p className="text-sm text-muted-foreground">@{profile.username}</p>
                 {profile.email && (
@@ -290,9 +290,9 @@ function ProfileTab() {
 
       {/* Account Stats */}
       {accountStats && (
-        <section className="surface p-6 sm:p-7">
+        <section className="surface p-5 sm:p-6">
           <SectionHeader note="你的使用数据一览" title="账户统计" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-5">
+          <div className="stat-grid grid-cols-2 sm:grid-cols-3">
             <StatItem label="数字分身" value={accountStats.totalPersonas} />
             <StatItem label="总对话次数" value={accountStats.totalChats} />
             <StatItem label="总消息数" value={accountStats.totalMessages} />
@@ -304,7 +304,7 @@ function ProfileTab() {
       )}
 
       {/* Security */}
-      <section className="surface p-6 sm:p-7">
+      <section className="surface p-5 sm:p-6">
         <SectionHeader note="密码与登录方式" title="安全设置" />
         <div>
           <div className="flex items-center justify-between gap-3 py-4 border-t border-border">
@@ -416,7 +416,7 @@ function AISettingsTab() {
 
   return (
     <div className="space-y-5">
-      <section className="surface p-6 sm:p-7">
+      <section className="surface p-5 sm:p-6">
         <SectionHeader note="配置可用的模型服务" title="AI 提供商"
           action={defaultConfig.data && (
             <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -433,7 +433,7 @@ function AISettingsTab() {
         </div>
       </section>
 
-      <section className="surface p-6 sm:p-7">
+      <section className="surface p-5 sm:p-6">
         <SectionHeader note="调整生成回复的参数" title="对话参数" />
         <div className="space-y-6">
           <SliderField label="Temperature（创造性）" value={temperature} onChange={setTemperature}
@@ -493,7 +493,7 @@ function WeChatTab() {
 
   return (
     <div className="space-y-5">
-      <section className="surface p-6 sm:p-7">
+      <section className="surface p-5 sm:p-6">
         <SectionHeader note="通过微信官方 ClawBot 通道连接" title="微信连接"
           action={statusChip} />
 
@@ -625,7 +625,7 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
   }
 
   return (
-    <section className="surface p-6 sm:p-7">
+    <section className="surface p-5 sm:p-6">
       <SectionHeader note="选择在微信里默认对话的分身" title="默认分身"
         action={bindingsData.length > 0 && (
           <StatusChip tone="muted">{bindingsData.length} 个绑定</StatusChip>
@@ -727,7 +727,7 @@ function WeChatCommandsSection() {
   ];
 
   return (
-    <section className="surface p-6 sm:p-7">
+    <section className="surface p-5 sm:p-6">
       <SectionHeader note="在微信里直接发送" title="指令" />
       <div className="space-y-2.5">
         {commands.map(c => (
@@ -789,7 +789,7 @@ function DataManagementTab() {
     <div className="space-y-5">
       {/* Storage Overview */}
       {accountStats && (
-        <section className="surface p-6 sm:p-7">
+        <section className="surface p-5 sm:p-6">
           <SectionHeader note="存储空间使用情况" title="存储概览" />
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
@@ -800,18 +800,18 @@ function DataManagementTab() {
               <div className="progress-bar h-full"
                 style={{ width: `${Math.min(100, (accountStats.storageUsed / (100 * 1048576)) * 100)}%` }} />
             </div>
-            <div className="grid grid-cols-3 gap-4 mt-3">
-              <div className="border-t border-border pt-3">
-                <div className="font-display text-xl font-semibold text-foreground">{accountStats.totalPersonas}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">分身</div>
+            <div className="stat-grid grid-cols-3 mt-3">
+              <div className="stat-block">
+                <div className="stat-value">{accountStats.totalPersonas}</div>
+                <div className="stat-label mt-0.5">分身</div>
               </div>
-              <div className="border-t border-border pt-3">
-                <div className="font-display text-xl font-semibold text-foreground">{accountStats.totalMessages}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">消息</div>
+              <div className="stat-block">
+                <div className="stat-value">{accountStats.totalMessages}</div>
+                <div className="stat-label mt-0.5">消息</div>
               </div>
-              <div className="border-t border-border pt-3">
-                <div className="font-display text-xl font-semibold text-foreground">{accountStats.totalFiles}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">文件</div>
+              <div className="stat-block">
+                <div className="stat-value">{accountStats.totalFiles}</div>
+                <div className="stat-label mt-0.5">文件</div>
               </div>
             </div>
           </div>
@@ -819,7 +819,7 @@ function DataManagementTab() {
       )}
 
       {/* Export */}
-      <section className="surface p-6 sm:p-7">
+      <section className="surface p-5 sm:p-6">
         <SectionHeader note="下载你的全部数据" title="数据导出" />
         <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
           导出你的所有数据，包括个人资料、分身信息和对话记录。数据将以 JSON 格式下载。
@@ -906,19 +906,14 @@ export default function SettingsPage() {
             <ArrowLeft className="w-4 h-4" /><span className="text-sm">返回</span>
           </button>
           <div className="app-nav-divider" />
-          <div className="app-nav-title-group">
-            <div>
-              <h1 className="app-nav-title">设置</h1>
-              <p className="app-nav-subtitle">账户与偏好</p>
-            </div>
-          </div>
+          <div className="app-nav-spacer" />
         </div>
       </header>
 
-      <main className="container page-main max-w-2xl">
+      <main className="container page-main max-w-3xl">
         <div className="mb-8">
-          <p className="kicker kicker-accent mb-3">书房</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">设置</h1>
+          <p className="kicker kicker-accent mb-3">账户与偏好</p>
+          <h1 className="page-title">设置</h1>
           <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">
             账户、模型与微信——把工具放在顺手的位置。
           </p>

@@ -28,11 +28,12 @@ const EMOTION_LABELS: Record<string, string> = {
 };
 
 const TOOLTIP_STYLE = {
-  background: "var(--color-card)",
+  background: "var(--color-elevated)",
   border: "1px solid var(--color-border)",
-  borderRadius: 6,
+  borderRadius: 10,
   fontSize: 12,
   color: "var(--color-foreground)",
+  boxShadow: "var(--shadow-pop)",
 };
 
 export default function Analytics() {
@@ -64,12 +65,6 @@ export default function Analytics() {
             className="app-nav-back -ml-1" aria-label="返回">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="app-nav-title-group">
-            <div>
-              <h1 className="app-nav-title">数据看板</h1>
-              <p className="app-nav-subtitle">消息与情绪统计</p>
-            </div>
-          </div>
           <div className="app-nav-spacer" />
           <div className="flex gap-1 border-b border-border">
             {[7, 30, 90].map(d => (
@@ -84,15 +79,15 @@ export default function Analytics() {
 
       <main className="container page-main max-w-4xl space-y-6">
         <motion.div initial="hidden" animate="visible" variants={fadeUp}>
-          <p className="kicker kicker-accent mb-3">回看</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">数据看板</h1>
+          <p className="kicker kicker-accent mb-3">消息与情绪</p>
+          <h1 className="page-title">数据看板</h1>
           <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">
             消息、情绪与陪伴的痕迹，安静地记在这里。
           </p>
         </motion.div>
 
         <motion.div
-          className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"
+          className="stat-grid grid-cols-2 md:grid-cols-4"
           initial="hidden"
           animate="visible"
           variants={stagger}
@@ -104,14 +99,14 @@ export default function Analytics() {
         </motion.div>
 
         <ChartCard title="每日消息量">
-          <div className="h-52">
+          <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.messageVolume || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <CartesianGrid stroke="var(--color-border)" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="count" stroke="var(--color-chart-2)" fill="var(--color-chart-2)" fillOpacity={0.12} strokeWidth={2} />
+                <Area type="monotone" dataKey="count" stroke="var(--color-chart-2)" fill="var(--color-chart-2)" fillOpacity={0.1} strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -122,12 +117,12 @@ export default function Analytics() {
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={emotionChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <CartesianGrid stroke="var(--color-border)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
                   {Object.keys(EMOTION_COLORS).map(key => (
-                    <Area key={key} type="monotone" dataKey={key} stackId="1" stroke={EMOTION_COLORS[key]} fill={EMOTION_COLORS[key]} fillOpacity={0.12} />
+                    <Area key={key} type="monotone" dataKey={key} stackId="1" stroke={EMOTION_COLORS[key]} fill={EMOTION_COLORS[key]} fillOpacity={0.1} />
                   ))}
                 </AreaChart>
               </ResponsiveContainer>
@@ -148,7 +143,7 @@ export default function Analytics() {
                 <RadarChart data={hourlyData.filter((_, i) => i % 2 === 0)}>
                   <PolarGrid stroke="var(--color-border)" />
                   <PolarAngleAxis dataKey="hour" tick={{ fontSize: 9 }} stroke="var(--color-muted-foreground)" />
-                  <Radar dataKey="count" stroke="var(--color-chart-1)" fill="var(--color-chart-1)" fillOpacity={0.3} />
+                  <Radar dataKey="count" stroke="var(--color-chart-1)" fill="var(--color-chart-1)" fillOpacity={0.22} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
@@ -191,9 +186,9 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
       whileInView="visible"
       viewport={{ once: true, margin: "-60px" }}
       variants={fadeUp}
-      className="surface p-5 sm:p-6"
+      className="surface p-4 sm:p-5"
     >
-      <h2 className="font-display text-lg font-semibold text-foreground mb-5">{title}</h2>
+      <h2 className="section-title mb-5">{title}</h2>
       {children}
     </motion.section>
   );
@@ -201,9 +196,9 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <motion.div variants={fadeUp} className="surface p-4 sm:p-5">
-      <p className="font-display text-2xl sm:text-3xl font-semibold text-foreground leading-tight">{value}</p>
-      <p className="text-xs text-muted-foreground mt-2">{label}</p>
+    <motion.div variants={fadeUp} className="stat-block">
+      <p className="stat-value">{value}</p>
+      <p className="stat-label mt-1">{label}</p>
     </motion.div>
   );
 }

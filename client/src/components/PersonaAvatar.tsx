@@ -22,7 +22,7 @@ export function PersonaAvatar({
     <span
       aria-hidden
       className={cn(
-        "inline-flex items-center justify-center font-display font-semibold select-none leading-none",
+        "inline-flex items-center justify-center font-sans font-semibold select-none leading-none",
         TONES[idx],
         className
       )}

@@ -139,7 +139,7 @@ function StatsSection() {
               variants={fadeUp}
               className={`py-10 pr-4 ${i % 2 === 1 ? "pl-6 border-l border-border" : ""} ${i >= 2 ? "border-t border-border md:border-t-0" : ""} ${i > 0 ? "md:border-l md:border-border md:pl-10" : ""}`}
             >
-              <div className="font-display text-3xl font-semibold text-foreground mb-1">{s.value}</div>
+              <div className="stat-value">{s.value}</div>
               <div className="text-sm text-muted-foreground leading-relaxed">{s.label}</div>
             </motion.div>
           ))}
@@ -160,7 +160,7 @@ function SectionHeading({ index, title, subtitle }: { index: string; title: stri
       variants={stagger}
     >
       <motion.div variants={fadeUp} className="font-display text-sm text-cinnabar mb-3">{index}</motion.div>
-      <motion.h2 variants={fadeUp} className="font-display text-3xl sm:text-4xl font-semibold text-foreground mb-3">
+      <motion.h2 variants={fadeUp} className="page-title mb-3">
         {title}
       </motion.h2>
       <motion.p variants={fadeUp} className="text-muted-foreground max-w-md">
@@ -186,7 +186,7 @@ function StorySection() {
           variants={stagger}
         >
           <motion.div variants={fadeUp} className="font-display text-sm text-cinnabar mb-3">前序</motion.div>
-          <motion.h2 variants={fadeUp} className="font-display text-3xl sm:text-4xl font-semibold text-foreground mb-3">
+          <motion.h2 variants={fadeUp} className="page-title mb-3">
             {t.story.title}
           </motion.h2>
           <motion.p variants={fadeUp} className="text-muted-foreground mb-10">
@@ -263,7 +263,7 @@ function FeaturesSection() {
               <div className="font-display text-sm text-muted-foreground mb-3">
                 {String(i + 1).padStart(2, "0")}
               </div>
-              <h3 className="font-display text-lg font-semibold text-foreground mb-2">{item.title}</h3>
+              <h3 className="card-title mb-2">{item.title}</h3>
               <p className="text-muted-foreground leading-relaxed text-[0.9375rem]">{item.desc}</p>
             </motion.div>
           ))}
@@ -299,7 +299,7 @@ function HowItWorksSection() {
                 {String(i + 1).padStart(2, "0")}
               </div>
               <div>
-                <h3 className="font-display text-lg font-semibold text-foreground mb-1.5">{step.title}</h3>
+                <h3 className="card-title mb-1.5">{step.title}</h3>
                 <p className="text-muted-foreground leading-relaxed text-[0.9375rem]">{step.desc}</p>
               </div>
             </motion.div>
@@ -329,7 +329,7 @@ function TechSection() {
           <motion.div variants={fadeUp} className="flex flex-wrap gap-x-8 gap-y-3 mb-14 pb-8 border-b border-border">
             {t.tech.stack.map((item, i) => (
               <div key={i} className="flex items-baseline gap-2">
-                <span className="font-display font-semibold text-foreground">{item.name}</span>
+                <span className="font-sans font-semibold text-foreground">{item.name}</span>
                 <span className="text-sm text-muted-foreground">{item.desc}</span>
               </div>
             ))}
@@ -371,7 +371,7 @@ function TestimonialsSection() {
                 {item.quote}
               </blockquote>
               <figcaption className="mt-6 text-sm">
-                <span className="font-display font-semibold text-foreground">{item.author}</span>
+                <span className="font-sans font-semibold text-foreground">{item.author}</span>
                 <span className="text-muted-foreground"> · {item.role}</span>
               </figcaption>
             </motion.figure>
@@ -398,7 +398,7 @@ function CTASection() {
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          <motion.h2 variants={fadeUp} className="font-display text-3xl sm:text-5xl font-semibold text-foreground mb-5 leading-[1.25]">
+          <motion.h2 variants={fadeUp} className="page-title mb-5">
             {t.hero.tagline}
           </motion.h2>
           <motion.p variants={fadeUp} className="text-muted-foreground text-lg mb-10">

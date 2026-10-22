@@ -250,7 +250,7 @@ function SectionHeading({ kicker, title, right }: { kicker: string; title: strin
     <div className="flex items-end justify-between gap-3 mb-4">
       <div>
         <div className="kicker mb-1.5">{kicker}</div>
-        <h2 className="font-display text-xl font-semibold text-foreground leading-tight">{title}</h2>
+        <h2 className="section-title">{title}</h2>
       </div>
       {right}
     </div>
@@ -262,7 +262,7 @@ function PanelTitle({ icon: Icon, title, right }: { icon: any; title: string; ri
     <div className="flex items-center justify-between gap-2 mb-3.5">
       <div className="flex items-center gap-2">
         <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-        <h3 className="font-display text-sm font-semibold text-foreground">{title}</h3>
+        <h3 className="card-title">{title}</h3>
       </div>
       {right}
     </div>
@@ -284,10 +284,10 @@ function HeroBanner({ username, stats }: { username?: string; stats?: any }) {
   return (
     <motion.section className="mb-10" initial="hidden" animate="visible" variants={stagger}>
       <motion.p variants={fadeUp} className="kicker kicker-accent mb-3">
-        Mirrai · 纸墨书房
+        Mirrai · 记忆与告别
       </motion.p>
 
-      <motion.h1 variants={fadeUp} className="font-display text-3xl sm:text-4xl font-semibold text-foreground tracking-tight leading-tight">
+      <motion.h1 variants={fadeUp} className="page-title">
         {username ? `${username}，${greeting.text}` : greeting.text}
       </motion.h1>
       <motion.p variants={fadeUp} className="text-muted-foreground mt-2">{greeting.sub}</motion.p>
@@ -329,8 +329,8 @@ function StatCell({ value, label }: { value: string | number; label: string }) {
   const display = typeof value === "number" ? animated : value;
   return (
     <div>
-      <div className="font-display text-2xl font-semibold text-foreground leading-tight">{display}</div>
-      <div className="text-xs text-muted-foreground mt-1">{label}</div>
+      <div className="stat-value">{display}</div>
+      <div className="stat-label mt-1">{label}</div>
     </div>
   );
 }
@@ -371,7 +371,7 @@ function TodayRecommendation({ personas, onChat }: { personas: any[]; onChat: (i
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-display text-sm font-semibold text-foreground">{recommended.name}</span>
+            <span className="font-sans text-sm font-semibold text-foreground">{recommended.name}</span>
             <span className={`inline-flex items-center gap-1 text-[0.625rem] px-2 py-0.5 rounded-md border ${emotion.chip}`}>
               <EmotionIcon className="w-2.5 h-2.5" /> {emotion.label}
             </span>
@@ -426,7 +426,7 @@ function DailyMessages({ personas }: { personas: any[] }) {
                 <PersonaAvatar name={m.name} className="w-8 h-8 rounded-full text-xs" />
               </div>
               <div className="flex-1 min-w-0">
-                <span className="font-display text-xs font-semibold text-foreground">{m.name}</span>
+                <span className="font-sans text-xs font-semibold text-foreground">{m.name}</span>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{m.message}</p>
               </div>
               <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 mt-1">今天</span>
@@ -891,7 +891,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <h3 className="font-display text-base font-semibold text-foreground truncate">{persona.name}</h3>
+            <h3 className="font-sans text-base font-semibold text-foreground truncate">{persona.name}</h3>
             <span className={`inline-flex items-center gap-1 text-[0.6875rem] px-2 py-0.5 rounded-md border ${emotion.chip}`}>
               <EmotionIcon className="w-3 h-3" /> {emotion.label}
             </span>
@@ -916,11 +916,6 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
             {persona.llmProvider && (
               <span className="px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-medium">
                 {persona.llmProvider}
-              </span>
-            )}
-            {compatibility !== null && (
-              <span className="text-[10px] text-muted-foreground" title={`默契度 ${compatibility}%`}>
-                默契 {compatibility}
               </span>
             )}
           </div>
@@ -1058,7 +1053,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
             <div className="flex items-center justify-between p-5 border-b border-border/60">
               <div>
                 <div className="kicker mb-1">告别</div>
-                <h3 className="font-display text-lg font-semibold text-foreground leading-tight">{persona.name} 的告别信</h3>
+                <h3 className="card-title">{persona.name} 的告别信</h3>
               </div>
               <button onClick={() => setShowLetter(false)} className="app-nav-icon">
                 <X className="w-4 h-4" />
@@ -1067,7 +1062,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
             <div className="p-6">
               <div className="surface p-5">
                 <p className="letter-prose text-foreground/90 text-sm whitespace-pre-wrap">{persona.farewellLetter}</p>
-                <p className="text-right text-muted-foreground text-xs mt-5 font-display">—— {persona.name}</p>
+                <p className="text-right text-muted-foreground text-xs mt-5">—— {persona.name}</p>
               </div>
               {persona.graduatedAt && (
                 <p className="text-xs text-muted-foreground text-center mt-4">
@@ -1234,7 +1229,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       variants={stagger}
     >
       <motion.div variants={fadeUp} className="kicker kicker-accent mb-3">第一封信</motion.div>
-      <motion.h2 variants={fadeUp} className="font-display text-2xl sm:text-3xl font-semibold text-foreground mb-3">
+      <motion.h2 variants={fadeUp} className="page-title mb-3">
         创建你的第一个数字分身
       </motion.h2>
       <motion.p variants={fadeUp} className="text-sm text-muted-foreground mb-4 leading-relaxed">
@@ -1442,12 +1437,12 @@ export default function Lobby() {
         </div>
       </header>
 
-      <main className="container page-main max-w-3xl flex-1">
+      <main className="container page-main flex-1">
         <HeroBanner username={user?.username} stats={stats} />
 
         {stats && (stats.totalPersonas > 0 || stats.totalChats > 0) && (
           <motion.div
-            className="grid grid-cols-2 sm:grid-cols-4 mb-10 border-y border-border"
+            className="stat-grid grid-cols-2 sm:grid-cols-4 mb-10"
             initial="hidden"
             animate="visible"
             variants={stagger}
@@ -1458,7 +1453,7 @@ export default function Lobby() {
               { value: stats.todayChats as number, label: "今日对话" },
               { value: readyCount as number, label: "在线分身" },
             ].map((s, i) => (
-              <motion.div key={s.label} variants={fadeUp} className="stat-cell">
+              <motion.div key={s.label} variants={fadeUp} className="stat-block">
                 <StatCell value={s.value} label={s.label} />
               </motion.div>
             ))}
@@ -1474,8 +1469,10 @@ export default function Lobby() {
                 </p>
               </div>
             )}
-            <TodayRecommendation personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
-            <DailyMessages personas={personas as any[]} />
+            <div className="grid md:grid-cols-2 gap-x-8 gap-y-2">
+              <TodayRecommendation personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
+              <DailyMessages personas={personas as any[]} />
+            </div>
 
             <div className="mb-12">
               <SectionHeading
@@ -1540,7 +1537,7 @@ export default function Lobby() {
                 </div>
               )}
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredPersonas.map((p: any) => (
                   <PersonaCard key={p.id} persona={p}
                     onChat={() => navigate(`/chat/${p.id}`)}
@@ -1565,7 +1562,7 @@ export default function Lobby() {
 
             <section className="mt-4 pt-2">
               <SectionHeading kicker="书房" title="记录与天气" />
-              <div className="grid sm:grid-cols-2 gap-x-10">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
                 <ChatStreak />
                 <EmotionalWeather personas={personas as any[]} />
                 <ActivityHeatmap />
@@ -1586,7 +1583,7 @@ export default function Lobby() {
       </main>
 
       <footer className="border-t border-border py-6">
-        <div className="container max-w-3xl mx-auto flex items-center justify-between text-xs text-muted-foreground/60">
+        <div className="container mx-auto flex items-center justify-between text-xs text-muted-foreground/60">
           <Wordmark size="text-sm" />
           <span>让思念有回应</span>
         </div>

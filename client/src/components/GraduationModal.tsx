@@ -39,7 +39,7 @@ export default function GraduationModal({ personaId, personaName, open, onClose 
         className="relative bg-card border border-border rounded-lg w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in"
       >
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h3 className="font-display text-lg font-semibold text-foreground leading-tight">毕业时刻</h3>
+          <h3 className="card-title">毕业时刻</h3>
           <button onClick={onClose} className="app-nav-icon" aria-label="关闭">
             <X className="w-4 h-4" />
           </button>
@@ -49,7 +49,7 @@ export default function GraduationModal({ personaId, personaName, open, onClose 
           {phase === "suggest" && (
             <div className="space-y-5">
               <div>
-                <p className="font-display text-lg font-semibold text-foreground mb-2.5">
+                <p className="font-sans text-base font-semibold text-foreground mb-2.5">
                   你和 {personaName} 的关系已经达到了灵魂伴侣的境界
                 </p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -78,7 +78,7 @@ export default function GraduationModal({ personaId, personaName, open, onClose 
               </div>
               <div className="surface p-6">
                 <p className="letter-prose text-foreground/90 text-[0.9375rem] whitespace-pre-wrap">{letter}</p>
-                <p className="text-right text-muted-foreground text-xs mt-5 font-display">—— {personaName}</p>
+                <p className="text-right text-muted-foreground text-xs mt-5">—— {personaName}</p>
               </div>
               <p className="text-xs text-muted-foreground text-center leading-relaxed">
                 告别信已保存。你可以随时在分身大厅查看，也可以唤醒 {personaName}。

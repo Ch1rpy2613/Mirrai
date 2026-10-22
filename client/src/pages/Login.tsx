@@ -36,7 +36,10 @@ export default function Login() {
         return;
       }
 
-      await utils.auth.me.invalidate();
+      // invalidate() only marks the query stale — it does not refetch a
+      // query nobody is subscribed to, so the next route would still read
+      // an empty cache and render the landing page. Refetch instead.
+      await utils.auth.me.refetch();
       navigate("/");
     } catch {
       setError("网络错误，请重试");
@@ -61,7 +64,7 @@ export default function Login() {
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md animate-fade-in-up">
           <p className="kicker kicker-accent mb-3">{isRegister ? "新的开始" : "欢迎回来"}</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">
+          <h1 className="page-title">
             {isRegister ? "创建账号" : "登录以继续"}
           </h1>
           <p className="text-sm text-muted-foreground mt-2">

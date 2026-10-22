@@ -16,7 +16,7 @@ export default function NotFound() {
           404<span className="text-cinnabar">.</span>
         </div>
 
-        <h2 className="font-display text-xl font-semibold text-foreground mb-3">
+        <h2 className="page-title mb-3">
           这一页，不在这里
         </h2>
 

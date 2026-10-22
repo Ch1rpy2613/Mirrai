@@ -39,10 +39,17 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  const secure = isSecureRequest(req);
+
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    // A SameSite=None cookie must carry Secure, and browsers drop it
+    // outright when it does not. Over plain http that would leave local
+    // development unable to keep a session at all, so Lax is the honest
+    // value there; Lax still works for the first-party navigation the app
+    // relies on.
+    sameSite: secure ? "none" : "lax",
+    secure,
   };
 }

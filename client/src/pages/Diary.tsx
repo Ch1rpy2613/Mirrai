@@ -189,20 +189,14 @@ export default function Diary() {
           <button onClick={() => navigate("/")} className="app-nav-back -ml-1" aria-label="返回">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="app-nav-title-group">
-            <div>
-              <h1 className="app-nav-title">对话日记</h1>
-              <p className="app-nav-subtitle">每日回顾</p>
-            </div>
-          </div>
           <div className="app-nav-spacer" />
         </div>
       </header>
 
-      <main className="flex-1 container max-w-2xl page-main space-y-6">
+      <main className="flex-1 container max-w-3xl page-main space-y-6">
         <motion.div variants={fadeUp} initial="hidden" animate="visible">
           <p className="kicker kicker-accent mb-3">每日回顾</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">对话日记</h1>
+          <h1 className="page-title">对话日记</h1>
           <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">
             把一天的对话收成一封信，留给以后的自己。
           </p>
@@ -219,13 +213,13 @@ export default function Diary() {
         </motion.div>
 
         {!selectedPersonaId && (
-          <motion.div variants={fadeUp} initial="hidden" animate="visible" className="surface p-10 sm:p-14 text-center">
-            <p className="kicker kicker-accent mb-3">尚未开卷</p>
-            <p className="font-display text-lg font-semibold text-foreground">
+          <motion.div variants={fadeUp} initial="hidden" animate="visible" className="empty-state">
+            <p className="kicker kicker-accent">尚未开卷</p>
+            <p className="empty-state-title">
               {(personas || []).length === 0 ? "还没有分身，先去大厅创建一位" : "选择一个分身查看日记"}
             </p>
             {(personas || []).length === 0 && (
-              <Button className="mt-6" onClick={() => navigate("/")}>回到大厅</Button>
+              <Button className="mt-3" onClick={() => navigate("/")}>回到大厅</Button>
             )}
           </motion.div>
         )}
@@ -276,7 +270,7 @@ export default function Diary() {
                 className="space-y-4"
               >
                 <div className="flex items-end justify-between gap-3">
-                  <h2 className="font-display text-2xl font-semibold text-foreground">{formatDate(selectedDate)}</h2>
+                  <h2 className="section-title">{formatDate(selectedDate)}</h2>
                   {!dayEntry && (
                     <Button size="sm" onClick={() => handleGenerate(selectedDate)} disabled={generating}
                       className="gap-1.5">
@@ -295,7 +289,7 @@ export default function Diary() {
             {!selectedDate && entries && entries.length > 0 && (
               <motion.section variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="font-display text-lg font-semibold text-foreground">最近日记</h2>
+                  <h2 className="section-title">最近日记</h2>
                   <span className="kicker">近期</span>
                 </div>
                 {entries.map((entry: any) => (

@@ -4,106 +4,131 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Mirrai Design System v3 · 「纸墨书房 / Paper & Ink」
-   暖白纸与墨为底，发丝线分界，衬线当家，一点朱砂作印。
-   无发光、无渐变、无漂浮物——像印出来的东西，不像生成的东西。
+   Mirrai Design System v4 · 「夜灯 / 晨纸」
+   深色 Nocturne：暖墨蓝底、琥珀金作唯一强调色。
+   浅色 Vellum：奶油纸底、墨青作主色、砖橘作强调色。
+   两套主题共用同一组变量名，跟随系统切换。
    ═══════════════════════════════════════════════════════════════════════════ */
 
-@theme {
-  /* ── Palette · 纸（light） ── */
-  --color-background: oklch(0.960 0.013 95);
-  --color-foreground: oklch(0.30 0.012 75);
-  --color-card: oklch(0.972 0.010 95);
-  --color-card-foreground: oklch(0.30 0.012 75);
-  --color-popover: oklch(0.972 0.010 95);
-  --color-popover-foreground: oklch(0.30 0.012 75);
-  --color-primary: oklch(0.35 0.012 75);
-  --color-primary-foreground: oklch(0.955 0.012 95);
-  --color-secondary: oklch(0.925 0.010 90);
-  --color-secondary-foreground: oklch(0.35 0.012 75);
-  --color-muted: oklch(0.930 0.010 90);
-  --color-muted-foreground: oklch(0.50 0.012 75);
-  --color-accent: oklch(0.930 0.014 60);
-  --color-accent-foreground: oklch(0.35 0.012 75);
-  --color-destructive: oklch(0.52 0.17 28);
-  --color-destructive-foreground: oklch(0.955 0.012 95);
-  --color-border: oklch(0.865 0.009 88);
-  --color-input: oklch(0.850 0.009 88);
-  --color-ring: oklch(0.54 0.16 38);
-
-  /* ── 朱砂 · 印章红（全站唯一强调色，省着用） ── */
-  --color-cinnabar: oklch(0.54 0.16 38);
-
-  /* ── Chart · 墨系 ── */
-  --color-chart-1: oklch(0.40 0.015 75);
-  --color-chart-2: oklch(0.54 0.16 38);
-  --color-chart-3: oklch(0.52 0.06 120);
-  --color-chart-4: oklch(0.58 0.09 75);
-  --color-chart-5: oklch(0.46 0.03 250);
-
-  /* ── Mood · 六种情感状态（低饱和） ── */
-  --color-mood-warm: oklch(0.55 0.10 60);
-  --color-mood-playful: oklch(0.55 0.11 85);
-  --color-mood-nostalgic: oklch(0.48 0.05 240);
-  --color-mood-melancholy: oklch(0.48 0.06 290);
-  --color-mood-happy: oklch(0.50 0.09 150);
-  --color-mood-distant: oklch(0.52 0.01 90);
-
-  /* ── Radius · 方角 ── */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.625rem;
-
-  /* ── Typography ── */
-  --font-sans: "DM Sans", "Noto Sans SC", "PingFang SC", system-ui, -apple-system, sans-serif;
-  --font-display: "Noto Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
-  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
-
-  /* ── Shadows · 近乎无 ── */
-  --shadow-letter: 0 1px 0 oklch(0.30 0.012 75 / 0.03);
-  --shadow-lift: 0 2px 10px -2px oklch(0.30 0.012 75 / 0.10);
+/* ─── 自托管衬线：仅覆盖界面固定文案 ───────────────────────────────────────
+   子集由 scripts/subset-font.mjs 依据源码字面量生成。
+   用户生成内容（分身名、日记、告别信、消息）一律走无衬线栈，不会缺字。 */
+@font-face {
+  font-family: "Noto Serif SC Subset";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/noto-serif-sc-600-subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Serif SC Subset";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/noto-serif-sc-700-subset.woff2") format("woff2");
 }
 
-/* ─── Palette · 夜（dark） ────────────────────────────────────────────────── */
+@theme {
+  /* ── Palette · 晨纸 Vellum（light） ── */
+  --color-background: oklch(0.965 0.010 85);
+  --color-foreground: oklch(0.28 0.020 240);
+  --color-card: oklch(0.99 0.005 85);
+  --color-card-foreground: oklch(0.28 0.020 240);
+  --color-elevated: oklch(0.995 0.003 85);
+  --color-elevated-foreground: oklch(0.28 0.020 240);
+  --color-popover: oklch(0.99 0.005 85);
+  --color-popover-foreground: oklch(0.28 0.020 240);
+  --color-primary: oklch(0.30 0.040 240);
+  --color-primary-foreground: oklch(0.98 0.006 85);
+  --color-secondary: oklch(0.945 0.008 85);
+  --color-secondary-foreground: oklch(0.30 0.020 240);
+  --color-muted: oklch(0.945 0.008 85);
+  --color-muted-foreground: oklch(0.50 0.020 240);
+  --color-accent: oklch(0.60 0.140 42);
+  --color-accent-foreground: oklch(0.99 0.005 85);
+  --color-destructive: oklch(0.54 0.180 27);
+  --color-destructive-foreground: oklch(0.98 0.006 85);
+  --color-border: oklch(0.88 0.010 85);
+  --color-input: oklch(0.87 0.010 85);
+  --color-ring: oklch(0.60 0.140 42);
+
+  /* ── 强调色别名（砖橘）· 取代旧的 cinnabar ── */
+  --color-cinnabar: oklch(0.60 0.140 42);
+
+  /* ── Chart · 纸墨系 ── */
+  --color-chart-1: oklch(0.60 0.140 42);
+  --color-chart-2: oklch(0.34 0.045 240);
+  --color-chart-3: oklch(0.50 0.075 150);
+  --color-chart-4: oklch(0.58 0.090 70);
+  --color-chart-5: oklch(0.48 0.045 300);
+
+  /* ── Mood · 六种情感状态 ── */
+  --color-mood-warm: oklch(0.52 0.115 45);
+  --color-mood-playful: oklch(0.55 0.120 80);
+  --color-mood-nostalgic: oklch(0.47 0.060 250);
+  --color-mood-melancholy: oklch(0.46 0.065 300);
+  --color-mood-happy: oklch(0.50 0.100 150);
+  --color-mood-distant: oklch(0.50 0.010 90);
+
+  /* ── Radius · 方角偏柔 ── */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+
+  /* ── Typography ── */
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    "Noto Sans SC", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Noto Serif SC Subset", "Songti SC", "STSong", "SimSun", Georgia,
+    serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ─── Shadows · 浅色几乎不用，靠发丝线 ── */
+  --shadow-lift: 0 1px 2px oklch(0.28 0.02 240 / 0.05);
+  --shadow-pop: 0 8px 28px -8px oklch(0.28 0.02 240 / 0.18);
+}
+
+/* ─── Palette · 夜灯 Nocturne（dark） ────────────────────────────────────── */
 html.dark {
-  --color-background: oklch(0.175 0.008 80);
-  --color-foreground: oklch(0.895 0.012 90);
-  --color-card: oklch(0.215 0.008 80);
-  --color-card-foreground: oklch(0.895 0.012 90);
-  --color-popover: oklch(0.230 0.008 80);
-  --color-popover-foreground: oklch(0.895 0.012 90);
-  --color-primary: oklch(0.875 0.012 90);
-  --color-primary-foreground: oklch(0.22 0.010 75);
-  --color-secondary: oklch(0.260 0.008 80);
-  --color-secondary-foreground: oklch(0.87 0.012 90);
-  --color-muted: oklch(0.250 0.008 80);
-  --color-muted-foreground: oklch(0.63 0.010 85);
-  --color-accent: oklch(0.280 0.010 70);
-  --color-accent-foreground: oklch(0.87 0.012 90);
-  --color-destructive: oklch(0.60 0.16 28);
-  --color-destructive-foreground: oklch(0.955 0.012 95);
-  --color-border: oklch(0.315 0.008 80);
-  --color-input: oklch(0.340 0.008 80);
-  --color-ring: oklch(0.64 0.14 38);
+  --color-background: oklch(0.16 0.012 265);
+  --color-foreground: oklch(0.93 0.008 90);
+  --color-card: oklch(0.20 0.012 265);
+  --color-card-foreground: oklch(0.93 0.008 90);
+  --color-elevated: oklch(0.24 0.014 265);
+  --color-elevated-foreground: oklch(0.93 0.008 90);
+  --color-popover: oklch(0.22 0.013 265);
+  --color-popover-foreground: oklch(0.93 0.008 90);
+  --color-primary: oklch(0.93 0.008 90);
+  --color-primary-foreground: oklch(0.18 0.012 265);
+  --color-secondary: oklch(0.25 0.013 265);
+  --color-secondary-foreground: oklch(0.90 0.008 90);
+  --color-muted: oklch(0.24 0.012 265);
+  --color-muted-foreground: oklch(0.62 0.012 265);
+  --color-accent: oklch(0.76 0.130 75);
+  --color-accent-foreground: oklch(0.18 0.020 265);
+  --color-destructive: oklch(0.65 0.190 25);
+  --color-destructive-foreground: oklch(0.16 0.012 265);
+  --color-border: oklch(0.28 0.014 265);
+  --color-input: oklch(0.30 0.014 265);
+  --color-ring: oklch(0.76 0.130 75);
 
-  --color-cinnabar: oklch(0.64 0.14 38);
+  --color-cinnabar: oklch(0.76 0.130 75);
 
-  --color-chart-1: oklch(0.78 0.012 80);
-  --color-chart-2: oklch(0.68 0.14 38);
-  --color-chart-3: oklch(0.68 0.07 120);
-  --color-chart-4: oklch(0.72 0.09 75);
-  --color-chart-5: oklch(0.64 0.04 250);
+  --color-chart-1: oklch(0.76 0.130 75);
+  --color-chart-2: oklch(0.66 0.055 250);
+  --color-chart-3: oklch(0.72 0.085 150);
+  --color-chart-4: oklch(0.78 0.100 70);
+  --color-chart-5: oklch(0.64 0.055 300);
 
-  --color-mood-warm: oklch(0.72 0.09 65);
-  --color-mood-playful: oklch(0.74 0.10 85);
-  --color-mood-nostalgic: oklch(0.66 0.05 240);
-  --color-mood-melancholy: oklch(0.64 0.06 290);
-  --color-mood-happy: oklch(0.68 0.09 150);
-  --color-mood-distant: oklch(0.62 0.01 90);
+  --color-mood-warm: oklch(0.78 0.100 55);
+  --color-mood-playful: oklch(0.80 0.105 85);
+  --color-mood-nostalgic: oklch(0.72 0.055 250);
+  --color-mood-melancholy: oklch(0.70 0.060 300);
+  --color-mood-happy: oklch(0.74 0.095 150);
+  --color-mood-distant: oklch(0.66 0.012 90);
 
-  --shadow-letter: 0 1px 0 oklch(0 0 0 / 0.20);
-  --shadow-lift: 0 2px 12px -2px oklch(0 0 0 / 0.45);
+  --shadow-lift: 0 1px 0 oklch(1 0 0 / 0.05);
+  --shadow-pop: 0 12px 36px -12px oklch(0 0 0 / 0.6);
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
@@ -115,6 +140,7 @@ html.dark {
     background: var(--color-background);
     text-rendering: optimizeLegibility;
     color-scheme: light;
+    -webkit-tap-highlight-color: transparent;
   }
   html.dark {
     color-scheme: dark;
@@ -141,69 +167,174 @@ html.dark {
     min-height: 0;
   }
   .container {
-    @apply mx-auto px-4;
+    @apply mx-auto px-4 sm:px-6;
     max-width: 1120px;
   }
   ::selection {
-    background: color-mix(in oklab, var(--color-cinnabar) 22%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 24%, transparent);
+  }
+  /* 全局焦点环：所有可交互元素统一 */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 }
 
 /* ─── Scrollbar ───────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--color-muted-foreground) 32%, transparent); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--color-muted-foreground) 50%, transparent); }
-
-/* ─── Animations ──────────────────────────────────────────────────────────── */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-muted-foreground) 28%, transparent);
+  border-radius: 3px;
 }
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-@keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-@keyframes breathe {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.4); opacity: 0.6; }
-}
-@keyframes typingBounce {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-3px); }
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--color-muted-foreground) 45%, transparent);
 }
 
-.animate-fade-in-up { animation: fadeInUp 0.4s ease-out both; }
-.animate-fade-in { animation: fadeIn 0.3s ease-out both; }
-.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
-.animate-slide-in-right { animation: slideInRight 0.3s ease-out both; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   Typography scale
+   display  衬线 2rem/600    页面唯一大标题
+   title    衬线 1.25rem/600 区块标题
+   label    无衬线 0.75rem/500 标签、kicker、统计标签
+   body     无衬线 0.875rem/400
+   numeric  无衬线 tabular 1.5rem/600 统计数字
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ─── Surface · 纸面卡片（平面、发丝线、无影） ────────────────────────────── */
+.page-title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-foreground);
+}
+@media (min-width: 640px) {
+  .page-title {
+    font-size: 2.25rem;
+  }
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.stat-value {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--color-foreground);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+}
+
+/* 页面里的引文 / 书信口吻正文
+   正文一律用无衬线：这些内容来自用户（分身名、日记、告别信、消息），
+   衬线字体是子集化的，用户输入的字可能不在子集里。 */
+.letter-prose {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.85;
+  letter-spacing: 0.01em;
+  max-width: 62ch;
+  color: var(--color-foreground);
+}
+.letter-prose p + p {
+  margin-top: 1.1em;
+}
+.letter-prose strong {
+  font-weight: 600;
+}
+
+/* 聊天气泡里的正文：气泡本身已经限宽，不再套一层 62ch 的行长限制 */
+.letter-prose--chat {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  max-width: none;
+}
+.letter-prose--chat p + p {
+  margin-top: 0.8em;
+}
+
+/* Kicker · 小注（无衬线，全大写语义靠字距不靠大小写） */
+.kicker {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--color-muted-foreground);
+}
+.kicker-accent {
+  color: var(--color-accent);
+}
+
+/* 发丝线 */
+.rule {
+  height: 1px;
+  border: 0;
+  background: var(--color-border);
+}
+
+/* 强调印记 */
+.seal-dot {
+  display: inline-block;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 1px;
+  background: var(--color-accent);
+  flex-shrink: 0;
+}
+
+/* ─── Surface · 卡片 ──────────────────────────────────────────────────────── */
 .surface {
   background: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
 }
 .surface-interactive {
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 .surface-interactive:hover {
-  border-color: color-mix(in oklab, var(--color-foreground) 32%, var(--color-border));
+  border-color: color-mix(in oklab, var(--color-foreground) 26%, var(--color-border));
+  transform: translateY(-1px);
+}
+.surface-interactive:active {
+  transform: translateY(0);
+}
+/* 深色下用上边缘亮线模拟材质厚度，不用投影 */
+html.dark .surface {
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.045);
+}
+html.dark .surface-interactive:hover {
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.07);
 }
 
-/* ─── Header / Composer · 实底 + 发丝线（无玻璃模糊） ─────────────────────── */
+/* ─── Header / Composer ────────────────────────────────────────────────────── */
 .glass,
 .app-header {
   background: var(--color-background);
@@ -215,7 +346,7 @@ html.dark {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
-/* ─── App Nav · 结构 ──────────────────────────────────────────────────────── */
+/* ─── App Nav · 只留返回、品牌、动作 ─────────────────────────────────────── */
 .app-nav {
   min-height: 3.5rem;
   display: flex;
@@ -236,11 +367,11 @@ html.dark {
   flex-shrink: 0;
   color: var(--color-foreground);
 }
+/* 顶栏里的名字是上下文（分身名），不是页面标题 —— 压低视觉重量 */
 .app-nav-title {
   color: var(--color-foreground);
-  font-family: var(--font-display);
+  font-size: 0.9375rem;
   font-weight: 600;
-  font-size: 1rem;
   line-height: 1.2;
   letter-spacing: 0.01em;
 }
@@ -255,7 +386,7 @@ html.dark {
 .app-nav-actions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.125rem;
 }
 .app-nav-icon,
 .app-nav-back {
@@ -269,7 +400,7 @@ html.dark {
   border: 1px solid transparent;
   background: transparent;
   color: var(--color-muted-foreground);
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 .app-nav-icon {
   padding: 0;
@@ -281,8 +412,8 @@ html.dark {
 }
 .app-nav-icon:focus-visible,
 .app-nav-back:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 30%, transparent);
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
 }
 .app-nav-icon-active {
   color: var(--color-foreground) !important;
@@ -295,54 +426,129 @@ html.dark {
   margin: 0 0.25rem;
 }
 @media (max-width: 640px) {
-  .app-nav { min-height: 3.125rem; }
-  .app-nav-title { font-size: 0.9375rem; }
+  .app-nav {
+    min-height: 3.125rem;
+  }
 }
 
-/* ─── 朱砂印 · 全站唯一的装饰母题 ─────────────────────────────────────────── */
-.seal-dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 1px;
-  background: var(--color-cinnabar);
-  flex-shrink: 0;
+/* ─── Layout ──────────────────────────────────────────────────────────────── */
+.page-main {
+  width: 100%;
+  margin-inline: auto;
+  padding-block: 1.75rem 3rem;
+}
+@media (min-width: 640px) {
+  .page-main {
+    padding-block: 2rem 3.5rem;
+  }
 }
 
-/* ─── Kicker · 小注（衬线、不用大写英文） ─────────────────────────────────── */
-.kicker {
+/* 两栏：主内容 + 侧栏。窄屏自动塌成一栏。 */
+.page-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .page-grid {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 2rem;
+  }
+  .page-grid--single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.page-grid > * {
+  min-width: 0;
+}
+
+/* ─── Stat block · 全站统一 ──────────────────────────────────────────────── */
+.stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-block: 0.875rem;
+}
+.stat-block + .stat-block {
+  border-left: 1px solid var(--color-border);
+  padding-left: 1.25rem;
+}
+@media (max-width: 639px) {
+  .stat-block:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .stat-block:nth-child(even) {
+    border-left: 1px solid var(--color-border);
+    padding-left: 1rem;
+  }
+  .stat-block:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+/* 网格化的统计块：1px 间隙由底色透出，列数交给 Tailwind 的 grid-cols-* */
+.stat-grid {
+  display: grid;
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.stat-grid > .stat-block {
+  background: var(--color-card);
+  padding: 0.875rem 1rem;
+  border-left: 0;
+  padding-left: 1rem;
+}
+.stat-grid > .stat-block + .stat-block {
+  border-left: 0;
+}
+
+/* ─── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 220px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--color-card) 45%, transparent);
+}
+.empty-state-title {
   font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+.empty-state-hint {
   font-size: 0.8125rem;
   color: var(--color-muted-foreground);
-}
-.kicker-accent {
-  color: var(--color-cinnabar);
-}
-
-/* ─── 发丝线 ──────────────────────────────────────────────────────────────── */
-.rule {
-  height: 1px;
-  border: 0;
-  background: var(--color-border);
 }
 
 /* ─── Chat Bubbles · 书信体 ───────────────────────────────────────────────── */
 .bubble-user {
   background: var(--color-primary);
   color: var(--color-primary-foreground);
-  border-radius: 0.75rem 0.125rem 0.75rem 0.75rem;
+  border-radius: 0.75rem 0.25rem 0.75rem 0.75rem;
 }
 .bubble-ai {
   background: var(--color-card);
   border: 1px solid var(--color-border);
   color: var(--color-foreground);
-  border-radius: 0.125rem 0.75rem 0.75rem 0.75rem;
+  border-radius: 0.25rem 0.75rem 0.75rem 0.75rem;
 }
 
-/* ─── Mood Ring · 情绪头像圈（发丝线，非光晕） ────────────────────────────── */
+/* ─── Mood Ring · 情绪头像圈 ─────────────────────────────────────────────── */
 .mood-ring {
   padding: 2px;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-lg);
   border: 1.5px solid var(--mood-color, var(--color-border));
   display: inline-flex;
 }
@@ -362,32 +568,38 @@ html.dark {
   background: var(--color-muted-foreground);
   animation: typingBounce 1.4s infinite;
 }
-.typing-dot:nth-child(2) { animation-delay: 0.2s; }
-.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
 
-/* ─── Breathing Dot（录音指示） ───────────────────────────────────────────── */
+/* ─── Breathing Dot ───────────────────────────────────────────────────────── */
 .breathing-dot {
   animation: breathe 2.5s ease-in-out infinite;
 }
 
-/* ─── Shimmer（骨架屏） ───────────────────────────────────────────────────── */
+/* ─── Shimmer ─────────────────────────────────────────────────────────────── */
 .shimmer {
-  background: linear-gradient(90deg,
+  background: linear-gradient(
+    90deg,
     var(--color-muted) 25%,
-    color-mix(in oklab, var(--color-muted-foreground) 16%, var(--color-muted)) 50%,
-    var(--color-muted) 75%);
+    color-mix(in oklab, var(--color-muted-foreground) 14%, var(--color-muted)) 50%,
+    var(--color-muted) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
-/* ─── Progress Bar · 墨条 ─────────────────────────────────────────────────── */
+/* ─── Progress Bar ────────────────────────────────────────────────────────── */
 .progress-bar {
-  background: var(--color-primary);
+  background: var(--color-accent);
   border-radius: 999px;
   transition: width 0.5s ease;
 }
 
-/* ─── Activity Heatmap / Calendar ─────────────────────────────────────────── */
+/* ─── Heatmap / Calendar ──────────────────────────────────────────────────── */
 .heatmap-cell {
   border-radius: 2px;
   transition: transform 0.15s ease;
@@ -408,46 +620,98 @@ html.dark {
   display: none;
 }
 
-/* ─── Prose · 书信正文（前序/告别信/故事/日记） ───────────────────────────── */
-.letter-prose {
-  font-family: var(--font-display);
-  line-height: 1.9;
-  letter-spacing: 0.01em;
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.letter-prose p + p {
-  margin-top: 1.1em;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
-
-/* ─── Page rhythm ─────────────────────────────────────────────────────────── */
-.page-main {
-  width: 100%;
-  margin-inline: auto;
-  padding-block: 2rem 3rem;
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
-@media (min-width: 640px) {
-  .page-main {
-    padding-block: 2.5rem 4rem;
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.6;
+  }
+}
+@keyframes typingBounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-3px);
   }
 }
 
-/* ─── Stat strip · 发丝线分栏 ─────────────────────────────────────────────── */
-.stat-cell {
-  padding-block: 1.25rem;
+.animate-fade-in-up {
+  animation: fadeInUp 0.32s ease-out both;
 }
-.stat-cell + .stat-cell {
-  border-left: 1px solid var(--color-border);
-  padding-left: 1.25rem;
+.animate-fade-in {
+  animation: fadeIn 0.24s ease-out both;
 }
-@media (max-width: 639px) {
-  .stat-cell:nth-child(odd) {
-    border-left: 0;
-    padding-left: 0;
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.24s ease-out both;
+}
+
+/* ─── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
-  .stat-cell:nth-child(even) {
-    border-left: 1px solid var(--color-border);
-    padding-left: 1rem;
-  }
-  .stat-cell:nth-child(n + 3) {
-    border-top: 1px solid var(--color-border);
+  .surface-interactive:hover {
+    transform: none;
   }
 }

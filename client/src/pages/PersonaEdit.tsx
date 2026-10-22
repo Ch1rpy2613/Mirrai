@@ -145,11 +145,11 @@ export default function PersonaEdit() {
         </div>
       </header>
 
-      <main className="container page-main max-w-2xl space-y-6">
+      <main className="container page-main max-w-3xl space-y-6">
         {/* Page Intro */}
         <div className="animate-fade-in-up">
           <p className="kicker kicker-accent mb-3">档案</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">编辑分身</h1>
+          <h1 className="page-title">编辑分身</h1>
           <p className="text-muted-foreground text-sm mt-2.5 leading-relaxed">
             修改分身的基本信息与人设数据，保存后立即生效。
           </p>
@@ -159,7 +159,7 @@ export default function PersonaEdit() {
         {/* Basic Info */}
         <section className="surface p-5 sm:p-6 space-y-5 animate-fade-in-up">
           <div>
-            <h2 className="font-display text-lg font-semibold text-foreground">基本信息</h2>
+            <h2 className="section-title">基本信息</h2>
             <p className="text-muted-foreground text-sm mt-1">名字、关系与重要的日期。</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -199,7 +199,7 @@ export default function PersonaEdit() {
           <section className="surface p-5 sm:p-6 space-y-5 animate-fade-in-up">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-display text-lg font-semibold text-foreground">人设数据</h2>
+                <h2 className="section-title">人设数据</h2>
                 <p className="text-muted-foreground text-sm mt-1">AI 解析生成的人格画像，可以逐条修正。</p>
               </div>
               <Button size="sm" variant="ghost" onClick={() => setShowPrompt(!showPrompt)}
@@ -282,7 +282,7 @@ export default function PersonaEdit() {
         {persona.analysisStatus !== "ready" && (
           <div className="surface p-6 sm:p-8 text-center animate-fade-in-up">
             <p className="kicker kicker-accent mb-3">还差一点</p>
-            <p className="font-display text-lg font-semibold text-foreground mb-2">人设尚未写完</p>
+            <p className="font-sans text-base font-semibold text-foreground mb-2">人设尚未写完</p>
             <p className="text-muted-foreground text-sm leading-relaxed">先上传聊天记录，等 AI 解析完成，就可以逐条修正性格与语气。</p>
             <hr className="rule w-16 mx-auto my-6" />
             <Button size="sm" onClick={() => navigate(`/upload/${personaId}`)}>去上传素材</Button>
