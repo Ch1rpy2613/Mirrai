@@ -143,6 +143,26 @@ Log "Writing launcher and start scripts..."
 Copy-Item -Path (Join-Path $ScriptDir "windows\start.ps1") -Destination (Join-Path $DistDir "start.ps1") -Force
 Copy-Item -Path (Join-Path $ScriptDir "windows\Mirrai.cmd") -Destination (Join-Path $DistDir "Mirrai.cmd") -Force
 
+# ─── Step 5b: GUI launcher ──────────────────────────────────────────────────
+# The GUI launcher is what a person actually double-clicks. It needs the .NET
+# SDK to build, so it is skipped when that is not available - the bundle is
+# still usable through Mirrai.cmd.
+$LauncherProject = Join-Path $ScriptDir "windows\launcher\Mirrai.Launcher.csproj"
+if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+    Log "Building the GUI launcher..."
+    $LauncherOut = Join-Path $BuildDir "launcher-out"
+    & dotnet publish $LauncherProject -c Release -r win-x64 --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
+        -o $LauncherOut
+    if ($LASTEXITCODE -ne 0) { Die "The GUI launcher failed to build." }
+    Copy-Item -Path (Join-Path $LauncherOut "Mirrai.exe") -Destination (Join-Path $DistDir "Mirrai.exe") -Force
+    Log "GUI launcher ready."
+} else {
+    Log "The .NET SDK was not found, skipping the GUI launcher (Mirrai.cmd still works)."
+}
+
 $readme = @"
 Mirrai - AI Digital Persona Platform
 

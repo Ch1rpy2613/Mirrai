@@ -72,7 +72,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build the ZIP
+      - name: Build the bundle
         shell: pwsh
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -87,8 +87,16 @@ jobs:
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
           ./scripts/windows/smoke-test.ps1
 
-      - name: Attach the ZIP to the release
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = Get-ChildItem "$env:ProgramFiles(x86)\Inno Setup*\ISCC.exe" | Select-Object -First 1
+          if (-not $iscc) { throw "Inno Setup was not found." }
+          & $iscc.FullName installer\installer.iss
+
+      - name: Attach the installer to the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ inputs.tag || github.ref_name }}" build-windows/Mirrai-Windows-x64.zip --clobber
+        run: gh release upload "${{ inputs.tag || github.ref_name }}" build-windows/Mirrai-Setup-x64.exe --clobber
