@@ -99,6 +99,9 @@ $env:HOME = $workRoot
 $env:USERPROFILE = $workRoot
 $env:LOCALAPPDATA = $workRoot
 $env:APPDATA = $workRoot
+# drizzle-kit shells out to the PostgreSQL client tools when it inspects a
+# database, so they have to be reachable.
+$env:PATH = "$pgBin;$env:PATH"
 
 function Say($m) { "$((Get-Date).ToString('HH:mm:ss')) $m" | Tee-Object -FilePath $log -Append }
 
@@ -150,7 +153,9 @@ try {
     Say "pushing the schema..."
     Push-Location $appDir
     try {
-        & $nodeBin ".\node_modules\drizzle-kit\bin.cjs" push --force *>&1 | Out-File -FilePath $log -Append
+        # stdin is closed off: drizzle-kit would otherwise sit on a prompt.
+        & cmd.exe /c "`"$nodeBin`" `".\node_modules\drizzle-kit\bin.cjs`" push --force < NUL" *>&1 |
+            Out-File -FilePath $log -Append
         if ($LASTEXITCODE -ne 0) { Say "drizzle-kit push FAILED"; exit 1 }
     } finally {
         Pop-Location
@@ -204,7 +209,23 @@ $WorkRoot = Join-Path $PublicDir "work"
 New-Item -ItemType Directory -Force -Path $WorkRoot | Out-Null
 $proc = Start-Process -FilePath "powershell.exe" `
     -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$WorkerScript`"", "`"$DistDir`"", "`"$WorkerLog`"", "`"$WorkRoot`"") `
-    -Credential $cred -LoadUserProfile -Wait -PassThru -NoNewWindow
+    -Credential $cred -LoadUserProfile -PassThru -NoNewWindow
+
+# Stream the worker's log while it runs, so a hang shows up at the step that
+# caused it rather than as a silent timeout.
+$shown = 0
+while (-not $proc.HasExited) {
+    Start-Sleep -Seconds 5
+    if (Test-Path $WorkerLog) {
+        $lines = @(Get-Content $WorkerLog -ErrorAction SilentlyContinue)
+        if ($lines.Count -gt $shown) {
+            $lines[$shown..($lines.Count - 1)] | ForEach-Object { Write-Host "  $_" }
+            $shown = $lines.Count
+        }
+    }
+}
+$proc.WaitForExit()
+Write-Host ""
 
 Log "Worker output:"
 if (Test-Path $WorkerLog) { Get-Content $WorkerLog | Write-Host } else { Write-Host "  (no log written)" }
