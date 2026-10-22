@@ -25,7 +25,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 | 🎭 **Dynamic emotion state machine** | 6 emotional states (warm / playful / nostalgic / melancholic / happy / distant) drift with the conversation and change reply tone in real time. The state is inferred by the LLM reading the exchange, with a keyword heuristic as fallback. |
 | 🎓 **Graduation mechanism** | Intimacy grows through conversation. When the system detects you're at peace, it offers "graduation": an AI-written farewell letter, then the persona sleeps. Success is measured by graduation rate, not retention. |
 | 🔌 **12 LLM providers** | OpenAI, Claude, DeepSeek, Kimi, Qwen, Doubao, 302.ai, Atlas Cloud, Cheaper Inference, Dify, Xunfei — and Ollama for fully local inference. |
-| 💬 **WeChat bot** | Bind a WeChat contact to a persona via Wechaty; it replies in their voice. Shares persona and memory with the web app. (Unofficial protocol — ban risk, use a spare account.) |
+| 💬 **WeChat via official ClawBot** | Connect to WeChat through the official "ClawBot" plugin (Tencent iLink protocol) — scan a QR code, authorize, and chat with your persona in WeChat. Shares persona and memory with the web app. **No ban risk**: this is a first-party WeChat channel, not a third-party protocol. | |
 | 🔒 **Local-first** | Uploads stay in `./uploads/`. With Ollama, nothing ever leaves your machine. |
 
 ## Comparison
@@ -71,6 +71,27 @@ pnpm dev
 
 Download `Mirrai-macOS-arm64.dmg` from [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) — Node.js and PostgreSQL bundled, zero dependencies (Apple Silicon, macOS 13+).
 
+### WeChat (optional)
+
+Mirrai connects to WeChat through the official **「微信ClawBot」** plugin (Tencent iLink protocol) — no third-party protocol, so no account-ban risk.
+
+1. Update WeChat to **8.0.70+** and open 我 → 设置 → 插件. You need the 「微信ClawBot」 entry to be visible (the feature is rolling out gradually — iOS first).
+
+> ℹ️ The WeChat authorization QR code expires quickly (measured at roughly 90 seconds). Mirrai automatically issues a fresh one whenever it expires, so the code on screen stays valid for as long as the connection window is open — no need to restart.
+2. In Mirrai, go to 设置 → 微信 → 连接微信, then scan the QR code with WeChat and confirm.
+3. Pick a default persona in 设置 → 微信 → 默认分身.
+
+The channel is 1:1 private chat (an official limit: it cannot be added by other users or to groups), so the counterpart is you. You can switch personas and graduate from inside WeChat:
+
+| Command | Effect |
+|---|---|
+| `/使用 <persona name>` | Switch the active persona |
+| `/分身列表` | List available personas |
+| `/当前分身` | Show the active persona |
+| `/毕业` | Generate the farewell letter and complete graduation |
+
+Commands never consume a model call. A switch applies to the current session only; the default persona is restored after a restart.
+
 ## Ethics & boundaries
 
 - Only upload chat logs **you have the right to use**; model real people with their consent.
@@ -84,7 +105,7 @@ Download `Mirrai-macOS-arm64.dmg` from [Releases](https://github.com/Ch1rpy2613/
 - [x] 6-state emotion engine + intimacy system
 - [x] Graduation mechanism (farewell letter + dormancy/awakening)
 - [x] 12 LLM providers
-- [x] WeChat bot integration
+- [x] WeChat ClawBot channel integration
 - [x] Diary / memory nodes / analytics / TTS
 - [ ] SillyTavern character card (PNG v2) import/export
 - [ ] Full app i18n + English emotion triggers
@@ -98,7 +119,7 @@ Mirrai was written by an NLP student who was terrified of losing someone — so 
 
 ## Tech stack
 
-React 19 + TypeScript + Vite + Tailwind 4 + Radix UI on the client; Express + tRPC 11 (end-to-end type safety) + PostgreSQL/Drizzle on the server; Wechaty for WeChat; a Python skill-engine for distillation; Vitest for tests. Full architecture details in the [Chinese README](README.md#技术架构).
+React 19 + TypeScript + Vite + Tailwind 4 + Radix UI on the client; Express + tRPC 11 (end-to-end type safety) + PostgreSQL/Drizzle on the server; the official WeChat ClawBot channel (Tencent iLink protocol); a Python skill-engine for distillation; Vitest for tests. Full architecture details in the [Chinese README](README.md#技术架构).
 
 ## Contributing
 

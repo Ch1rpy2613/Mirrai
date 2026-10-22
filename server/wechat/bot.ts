@@ -1,108 +1,690 @@
-import { WechatyBuilder, ScanStatus, types } from "wechaty";
-import type { WechatyInterface } from "wechaty/impls";
-import { handleWeChatMessage } from "./message-handler";
+/**
+ * Weixin ClawBot channel client.
+ *
+ * Replaces the previous Wechaty-based implementation (which drove an
+ * unofficial protocol and carried a real account-ban risk) with the official
+ * Tencent iLink backend used by the WeChat "ClawBot" plugin.
+ *
+ * Flow:
+ *   1. `startLogin` requests a QR code; the user scans it in WeChat.
+ *   2. The server polls the QR status until it is confirmed, then stores the
+ *      bot token (encrypted) and starts the long-poll loop.
+ *   3. `monitor` long-polls for inbound messages and routes them to
+ *      Mirrai's persona engine.
+ *
+ * Only one account is supported per Mirrai user, and only one long-poll loop
+ * runs per process (the plan calls for a process-level guard so multiple
+ * instances do not poll the same account concurrently).
+ */
+import { ENV } from "../_core/env";
+import { decryptSecret, encryptSecret } from "../_core/crypto";
+import * as db from "../db";
+import {
+  DEFAULT_LONG_POLL_TIMEOUT_MS,
+  buildClientVersion,
+  classifyFetchError,
+  getUpdates,
+  notifyStart,
+  notifyStop,
+  type WeixinApiOptions,
+} from "./ilink/client";
+import {
+  DEFAULT_ILINK_BOT_TYPE,
+  FIXED_BASE_URL,
+  pollQrLogin,
+  startQrLogin,
+} from "./ilink/login";
+import { parseInboundMessage } from "./ilink/parse";
+import { sendTextMessage } from "./ilink/send";
+import { handleWeixinMessage } from "./message-handler";
 
-let bot: WechatyInterface | null = null;
-let currentQrUrl: string | null = null;
-let botStatus: "stopped" | "scanning" | "logged_in" | "error" = "stopped";
-let loggedInUser: string | null = null;
+/** Error code returned by the backend when the bot token is stale/expired. */
+export const STALE_TOKEN_ERRCODE = -14;
 
-export function getBotStatus() {
-  return { status: botStatus, qrCodeUrl: currentQrUrl, loggedInUser };
+/** How long to pause the account after a stale-token error. */
+const SESSION_PAUSE_DURATION_MS = 60 * 60 * 1000;
+
+/** Consecutive failures before backing off. */
+const MAX_CONSECUTIVE_FAILURES = 3;
+const BACKOFF_DELAY_MS = 30_000;
+const RETRY_DELAY_MS = 2_000;
+
+export type WechatBotStatus = "stopped" | "scanning" | "scaned" | "need_verifycode" | "logged_in" | "error";
+
+export type BotStatusSnapshot = {
+  status: WechatBotStatus;
+  qrCodeUrl: string | null;
+  loggedInUser: string | null;
+  lastError: string | null;
+  /** Set when the backend asked for the numeric code shown in WeChat. */
+  needsVerifyCode: boolean;
+};
+
+type LoginSession = {
+  qrcode: string;
+  baseUrl: string;
+  verifyCode?: string;
+  refreshCount: number;
+  startedAt: number;
+};
+
+/**
+ * The iLink QR code expires quickly — measured at roughly 90 seconds against
+ * the live backend, not the 5 minutes the upstream plugin assumes. The code
+ * is therefore refreshed on every expiry, without a hard limit, matching the
+ * official CLI's behaviour: as long as the user is still trying, a valid code
+ * is always on screen.
+ */
+const LOGIN_TTL_MS = 3 * 60 * 1000;
+
+// ── Per-user state ──────────────────────────────────────────────────────────
+
+/**
+ * State for one connected WeChat account.
+ *
+ * Each Mirrai user connects their own WeChat account, so the channel state
+ * must be per user rather than global — otherwise one user's login would
+ * clobber another's.
+ */
+type AccountState = {
+  monitorAbort: AbortController | null;
+  monitorPromise: Promise<void> | null;
+  loginSession: LoginSession | null;
+  loginPolling: boolean;
+  status: WechatBotStatus;
+  qrCodeUrl: string | null;
+  loggedInUser: string | null;
+  lastError: string | null;
+  needsVerifyCode: boolean;
+  pauseUntil: number;
+};
+
+const accounts = new Map<number, AccountState>();
+
+function getAccount(userId: number): AccountState {
+  let account = accounts.get(userId);
+  if (!account) {
+    account = {
+      monitorAbort: null,
+      monitorPromise: null,
+      loginSession: null,
+      loginPolling: false,
+      status: "stopped",
+      qrCodeUrl: null,
+      loggedInUser: null,
+      lastError: null,
+      needsVerifyCode: false,
+      pauseUntil: 0,
+    };
+    accounts.set(userId, account);
+  }
+  return account;
 }
 
-export interface WechatContactInfo {
-  id: string;
-  name: string;
-  alias: string | null;
+/** Resolves when a queued inbound message has been fully processed. */
+const pendingWork: Array<Promise<unknown>> = [];
+
+export function getBotStatus(userId: number): BotStatusSnapshot {
+  const account = getAccount(userId);
+  return {
+    status: account.status,
+    qrCodeUrl: account.qrCodeUrl,
+    loggedInUser: account.loggedInUser,
+    lastError: account.lastError,
+    needsVerifyCode: account.needsVerifyCode,
+  };
 }
 
-export async function listWechatContacts(): Promise<WechatContactInfo[]> {
-  if (!bot || botStatus !== "logged_in") return [];
+// ── Logging helper ─────────────────────────────────────────────────────────
+
+function log(message: string) {
+  console.log(`[WeChat] ${message}`);
+}
+
+function logError(message: string) {
+  console.error(`[WeChat] ${message}`);
+}
+
+// ── Config helpers ─────────────────────────────────────────────────────────
+
+/** Builds the API options for a given account. */
+function buildApiOptions(params: { token?: string; baseUrl?: string }): WeixinApiOptions {
+  return {
+    baseUrl: params.baseUrl || ENV.wechatIlinkBaseUrl || FIXED_BASE_URL,
+    token: params.token,
+    appId: ENV.wechatIlinkAppId,
+    clientVersion: buildClientVersion(ENV.appVersion),
+    channelVersion: ENV.appVersion,
+    botAgent: `Mirrai/${ENV.appVersion}`,
+    routeTag: ENV.wechatRouteTag,
+  };
+}
+
+/** True when the account is inside a stale-token cooldown. */
+function isSessionPaused(account: AccountState): boolean {
+  if (account.pauseUntil === 0) return false;
+  if (Date.now() >= account.pauseUntil) {
+    account.pauseUntil = 0;
+    return false;
+  }
+  return true;
+}
+
+function getRemainingPauseMs(account: AccountState): number {
+  return account.pauseUntil === 0 ? 0 : Math.max(0, account.pauseUntil - Date.now());
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(t);
+      reject(new Error("aborted"));
+    }, { once: true });
+  });
+}
+
+// ── Login flow ─────────────────────────────────────────────────────────────
+
+/**
+ * Starts a QR login: fetches a QR code and begins polling its status.
+ */
+export async function startLogin(userId: number): Promise<BotStatusSnapshot> {
+  const account = getAccount(userId);
+  // A fresh login supersedes any previous attempt.
+  account.loginSession = null;
+
+  const state = await db.getWechatBotState(userId);
+  const localTokenList: string[] = [];
+  if (state?.botTokenEnc) {
+    const token = await decryptSecret(state.botTokenEnc);
+    if (token) localTokenList.push(token);
+  }
+
+  const result = await startQrLogin({
+    baseUrl: FIXED_BASE_URL,
+    botType: ENV.wechatBotType || DEFAULT_ILINK_BOT_TYPE,
+    localTokenList,
+    apiOptions: buildApiOptions({}),
+  });
+
+  if (!result.ok || !result.qrcode) {
+    account.status = "error";
+    account.lastError = result.message;
+    await db.upsertWechatBotState(userId, { status: "error", lastError: result.message });
+    return getBotStatus(userId);
+  }
+
+  account.loginSession = {
+    qrcode: result.qrcode,
+    baseUrl: result.baseUrl,
+    refreshCount: 1,
+    startedAt: Date.now(),
+  };
+
+  account.status = "scanning";
+  account.qrCodeUrl = result.qrcodeImgContent ?? null;
+  account.lastError = null;
+  account.needsVerifyCode = false;
+  await db.upsertWechatBotState(userId, {
+    status: "scanning",
+    qrCodeUrl: account.qrCodeUrl,
+    lastError: null,
+  });
+
+  void pollLoginStatus(userId);
+  return getBotStatus(userId);
+}
+
+/**
+ * Supplies the numeric code shown in WeChat when the backend asks for it.
+ */
+export async function submitVerifyCode(userId: number, code: string): Promise<BotStatusSnapshot> {
+  const account = getAccount(userId);
+  if (!account.loginSession) {
+    account.lastError = "没有进行中的登录，请先发起连接。";
+    return getBotStatus(userId);
+  }
+  account.loginSession.verifyCode = code.trim();
+  if (!account.loginPolling) {
+    void pollLoginStatus(userId);
+  }
+  return getBotStatus(userId);
+}
+
+/** Cancels an in-progress login attempt. */
+export async function cancelLogin(userId: number): Promise<BotStatusSnapshot> {
+  const account = getAccount(userId);
+  account.loginSession = null;
+  account.status = "stopped";
+  account.qrCodeUrl = null;
+  account.needsVerifyCode = false;
+  account.lastError = null;
+  await db.upsertWechatBotState(userId, { status: "stopped", qrCodeUrl: null, lastError: null });
+  return getBotStatus(userId);
+}
+
+/**
+ * Polls the QR status until the login resolves.
+ *
+ * Each poll is a single long-poll request; the loop re-arms as needed.
+ */
+async function pollLoginStatus(userId: number): Promise<void> {
+  const account = getAccount(userId);
+  if (account.loginPolling) return;
+  account.loginPolling = true;
+
   try {
-    const contacts = await bot.Contact.findAll();
-    const list: WechatContactInfo[] = [];
-    for (const contact of contacts) {
-      if (contact.self()) continue;
-      if (contact.type() !== types.Contact.Individual) continue;
-      const name = contact.name();
-      if (!name) continue;
-      list.push({
-        id: contact.id,
-        name,
-        alias: (await contact.alias()) || null,
+    while (account.loginSession) {
+      const session = account.loginSession;
+
+      // Backstop only: `startedAt` is reset on every refresh, so this fires
+      // only if the backend stops reporting expiry. In practice the ~90s
+      // server-side expiry drives the refresh cycle.
+      if (Date.now() - session.startedAt > LOGIN_TTL_MS) {
+        account.status = "error";
+        account.lastError = "二维码已过期，请重新发起连接。";
+        await db.upsertWechatBotState(userId, { status: "error", lastError: account.lastError });
+        account.loginSession = null;
+        break;
+      }
+
+      const result = await pollQrLogin({
+        qrcode: session.qrcode,
+        baseUrl: session.baseUrl,
+        verifyCode: session.verifyCode,
+        apiOptions: buildApiOptions({}),
       });
+
+      if (result.status === "wait") {
+        // Nothing changed yet — poll again.
+        continue;
+      }
+
+      if (result.status === "scaned") {
+        // Surface the intermediate state so the UI can tell the user the code
+        // was scanned and now needs confirming in WeChat. The QR code stays
+        // visible until the login resolves.
+        if (account.status !== "scaned") {
+          account.status = "scaned";
+          await db.upsertWechatBotState(userId, { status: "scanned" });
+        }
+        continue;
+      }
+
+      if (result.status === "need_verifycode") {
+        account.status = "need_verifycode";
+        account.needsVerifyCode = true;
+        account.lastError = null;
+        await db.upsertWechatBotState(userId, { status: "need_verifycode" });
+        // The code is entered in the web UI; stop polling until it arrives.
+        account.loginPolling = false;
+        return;
+      }
+
+      if (result.status === "expired" || result.status === "verify_code_blocked") {
+        // The QR code expires quickly, so keep refreshing it for as long as
+        // the user is still trying to scan. There is no hard limit: the
+        // backend's own expiry drives the cycle, and the user can cancel.
+        const refreshed = await startQrLogin({
+          baseUrl: FIXED_BASE_URL,
+          botType: ENV.wechatBotType || DEFAULT_ILINK_BOT_TYPE,
+          apiOptions: buildApiOptions({}),
+        });
+        if (!refreshed.ok || !refreshed.qrcode) {
+          account.status = "error";
+          account.lastError = refreshed.message;
+          await db.upsertWechatBotState(userId, { status: "error", lastError: account.lastError });
+          account.loginSession = null;
+          break;
+        }
+        account.loginSession = {
+          qrcode: refreshed.qrcode,
+          baseUrl: refreshed.baseUrl,
+          refreshCount: session.refreshCount + 1,
+          startedAt: Date.now(),
+        };
+        account.status = "scanning";
+        account.qrCodeUrl = refreshed.qrcodeImgContent ?? null;
+        account.needsVerifyCode = false;
+        account.lastError = null;
+        await db.upsertWechatBotState(userId, {
+          status: "scanning",
+          qrCodeUrl: account.qrCodeUrl,
+          lastError: null,
+        });
+        continue;
+      }
+
+      if (result.status === "scaned_but_redirect") {
+        if (result.redirectHost) {
+          session.baseUrl = `https://${result.redirectHost}`;
+        }
+        continue;
+      }
+
+      if (result.status === "binded_redirect") {
+        account.status = "logged_in";
+        account.needsVerifyCode = false;
+        account.lastError = null;
+        account.qrCodeUrl = null;
+        account.loginSession = null;
+        await db.upsertWechatBotState(userId, { status: "logged_in", qrCodeUrl: null, lastError: null });
+        break;
+      }
+
+      if (result.status === "confirmed") {
+        if (!result.botToken || !result.accountId) {
+          account.status = "error";
+          account.lastError = "登录失败：服务器未返回凭据。";
+          await db.upsertWechatBotState(userId, { status: "error", lastError: account.lastError });
+          account.loginSession = null;
+          break;
+        }
+
+        const encrypted = await encryptSecret(result.botToken);
+        account.loggedInUser = result.userId ?? result.accountId;
+        account.status = "logged_in";
+        account.needsVerifyCode = false;
+        account.lastError = null;
+        account.qrCodeUrl = null;
+        account.loginSession = null;
+
+        await db.upsertWechatBotState(userId, {
+          status: "logged_in",
+          qrCodeUrl: null,
+          loggedInUser: account.loggedInUser,
+          lastError: null,
+          botTokenEnc: encrypted,
+          accountId: result.accountId,
+          baseUrl: result.baseUrl ?? null,
+          wechatUserId: result.userId ?? null,
+        });
+
+        log(`登录成功，账号 ${account.loggedInUser}`);
+        startWeChatBot(userId);
+        break;
+      }
     }
-    list.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
-    return list;
-  } catch (e) {
-    console.error("[WeChat] List contacts error:", e);
-    return [];
+  } catch (err) {
+    account.status = "error";
+    account.lastError = String(err);
+    logError(`登录轮询失败: ${String(err)}`);
+    await db.upsertWechatBotState(userId, { status: "error", lastError: account.lastError }).catch(() => {});
+  } finally {
+    account.loginPolling = false;
   }
 }
 
-export function startWeChatBot() {
-  if (bot) return;
+// ── Monitor loop ───────────────────────────────────────────────────────────
 
-  const CHROME_BIN = process.env.CHROME_BIN ? { endpoint: process.env.CHROME_BIN } : {};
+/**
+ * Starts the long-poll loop for the connected account.
+ *
+ * The guard is per user: a Mirrai user connects their own WeChat account, so
+ * two different users may each run their own loop, but the same user never
+ * ends up with two concurrent polls of one account.
+ */
+export function startWeChatBot(userId: number) {
+  const account = getAccount(userId);
+  if (account.monitorPromise) {
+    log("监控已在运行中");
+    return;
+  }
 
-  bot = WechatyBuilder.build({
-    name: "Girlfriend",
-    puppet: "wechaty-puppet-wechat4u",
-    puppetOptions: { uos: true, ...CHROME_BIN },
+  account.monitorAbort = new AbortController();
+  account.monitorPromise = runMonitor(userId, account.monitorAbort.signal).finally(() => {
+    account.monitorPromise = null;
+    account.monitorAbort = null;
   });
-
-  bot.on("scan", (qrcode: string, status: number) => {
-    if (status === ScanStatus.Waiting || status === ScanStatus.Timeout) {
-      currentQrUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrcode)}`;
-      botStatus = "scanning";
-      console.log("[WeChat] Scan QR:", currentQrUrl);
-    }
-  });
-
-  bot.on("login", (user: any) => {
-    loggedInUser = user.name();
-    botStatus = "logged_in";
-    currentQrUrl = null;
-    console.log(`[WeChat] ${loggedInUser} logged in`);
-  });
-
-  bot.on("logout", (user: any) => {
-    loggedInUser = null;
-    botStatus = "stopped";
-    console.log(`[WeChat] ${user.name()} logged out`);
-  });
-
-  bot.on("message", async (msg: any) => {
-    try {
-      await handleWeChatMessage(msg, bot!);
-    } catch (e) {
-      console.error("[WeChat] Message handler error:", e);
-    }
-  });
-
-  bot.on("error", (e: Error) => {
-    console.error("[WeChat] Bot error:", e);
-    botStatus = "error";
-  });
-
-  bot.start()
-    .then(() => console.log("[WeChat] Bot starting, waiting for scan..."))
-    .catch((e: Error) => {
-      console.error("[WeChat] Bot start failed:", e);
-      botStatus = "error";
-    });
 }
 
-export async function stopWeChatBot() {
-  if (!bot) return;
+/**
+ * Restores the long-poll loop from stored credentials, if any.
+ * Called on server start so a restart does not require re-scanning.
+ */
+export async function restoreWeChatBot(userId: number): Promise<boolean> {
+  const state = await db.getWechatBotState(userId);
+  if (!state?.botTokenEnc) return false;
+
+  const token = await decryptSecret(state.botTokenEnc);
+  if (!token) {
+    log("凭据无法解密，需要重新扫码");
+    await db.upsertWechatBotState(userId, { status: "error", lastError: "凭据已失效，请重新连接微信" });
+    return false;
+  }
+
+  const account = getAccount(userId);
+  account.status = "logged_in";
+  account.loggedInUser = state.loggedInUser;
+  account.lastError = null;
+  startWeChatBot(userId);
+  return true;
+}
+
+/** Stops the long-poll loop. */
+export async function stopWeChatBot(userId: number) {
+  const account = getAccount(userId);
+  if (account.monitorAbort) {
+    account.monitorAbort.abort();
+  }
+  // Wait for the loop to unwind so the backend is notified cleanly.
+  if (account.monitorPromise) {
+    await account.monitorPromise.catch(() => {});
+  }
+  account.monitorAbort = null;
+  account.monitorPromise = null;
+
+  account.status = "stopped";
+  account.qrCodeUrl = null;
+  account.needsVerifyCode = false;
+
+  await db.upsertWechatBotState(userId, { status: "stopped", qrCodeUrl: null, lastError: null }).catch(() => {});
+}
+
+/**
+ * The long-poll loop.
+ *
+ * On a stale-token error the account is paused for an hour, matching the
+ * upstream plugin's session guard.
+ */
+async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
+  const account = getAccount(userId);
+  const state = await db.getWechatBotState(userId);
+  if (!state?.botTokenEnc) {
+    logError("没有可用凭据，无法启动监控");
+    return;
+  }
+
+  const token = await decryptSecret(state.botTokenEnc);
+  if (!token) {
+    logError("凭据无法解密，无法启动监控");
+    await db.upsertWechatBotState(userId, { status: "error", lastError: "凭据已失效，请重新连接微信" });
+    return;
+  }
+
+  const apiOptions = buildApiOptions({ token, baseUrl: state.baseUrl ?? undefined });
+  let syncBuf = state.syncBuf ?? "";
+  let consecutiveFailures = 0;
+
+  log(`监控启动 (${apiOptions.baseUrl})`);
+
   try {
-    await bot.stop();
-  } catch (e) {
-    console.error("[WeChat] Bot stop error:", e);
+    await notifyStart(apiOptions).catch((e) => logError(`notifystart 失败: ${String(e)}`));
+  } catch {
+    // Non-blocking: the upstream also treats this as a warning.
   }
-  bot = null;
-  botStatus = "stopped";
-  currentQrUrl = null;
-  loggedInUser = null;
+
+  while (!signal.aborted) {
+    if (isSessionPaused(account)) {
+      const remaining = getRemainingPauseMs(account);
+      log(`凭据已失效，暂停 ${Math.ceil(remaining / 60_000)} 分钟`);
+      try {
+        await sleep(Math.min(remaining, 60_000), signal);
+      } catch {
+        return;
+      }
+      continue;
+    }
+
+    try {
+      const resp = await getUpdates({
+        ...apiOptions,
+        get_updates_buf: syncBuf,
+        timeoutMs: DEFAULT_LONG_POLL_TIMEOUT_MS,
+        abortSignal: signal,
+      });
+
+      const isApiError =
+        (resp.ret !== undefined && resp.ret !== 0) ||
+        (resp.errcode !== undefined && resp.errcode !== 0);
+
+      if (isApiError) {
+        if (resp.errcode === STALE_TOKEN_ERRCODE || resp.ret === STALE_TOKEN_ERRCODE) {
+          account.pauseUntil = Date.now() + SESSION_PAUSE_DURATION_MS;
+          logError("凭据已失效（errcode -14），暂停 1 小时");
+          consecutiveFailures = 0;
+          continue;
+        }
+
+        consecutiveFailures += 1;
+        logError(`getUpdates 失败: ret=${resp.ret} errcode=${resp.errcode} errmsg=${resp.errmsg ?? ""}`);
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          consecutiveFailures = 0;
+          try {
+            await sleep(BACKOFF_DELAY_MS, signal);
+          } catch {
+            return;
+          }
+        } else {
+          try {
+            await sleep(RETRY_DELAY_MS, signal);
+          } catch {
+            return;
+          }
+        }
+        continue;
+      }
+
+      consecutiveFailures = 0;
+
+      if (resp.get_updates_buf) {
+        syncBuf = resp.get_updates_buf;
+        await db.saveWechatSyncBuf(userId, syncBuf).catch((e) =>
+          logError(`同步游标保存失败: ${String(e)}`),
+        );
+      }
+
+      for (const raw of resp.msgs ?? []) {
+        const parsed = parseInboundMessage(raw);
+        if (!parsed) continue;
+
+        // De-duplicate: the same server message id must not be processed twice.
+        if (parsed.messageId && (await hasProcessedMessage(userId, parsed.messageId))) {
+          continue;
+        }
+
+        await db.touchWechatLastInbound(userId).catch(() => {});
+
+        // Process messages from the same conversation sequentially so the
+        // context window stays ordered; different conversations may interleave.
+        const work = handleWeixinMessage(userId, parsed).catch((e) =>
+          logError(`消息处理失败: ${String(e)}`),
+        );
+        pendingWork.push(work);
+        work.finally(() => {
+          const idx = pendingWork.indexOf(work);
+          if (idx >= 0) pendingWork.splice(idx, 1);
+        });
+      }
+    } catch (err) {
+      if (signal.aborted) {
+        log("监控已停止");
+        return;
+      }
+      consecutiveFailures += 1;
+      // Include the classified cause — "fetch failed" alone hides the real
+      // reason (DNS, TLS, timeout, ...).
+      const classified = classifyFetchError(err);
+      logError(
+        `getUpdates 异常: ${String(err)} | type=${classified.type} ${classified.description}` +
+          `${classified.code ? ` code=${classified.code}` : ""}`,
+      );
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        consecutiveFailures = 0;
+        try {
+          await sleep(BACKOFF_DELAY_MS, signal);
+        } catch {
+          return;
+        }
+      } else {
+        try {
+          await sleep(RETRY_DELAY_MS, signal);
+        } catch {
+          return;
+        }
+      }
+    }
+  }
+}
+
+/** Tracks processed inbound message ids to avoid duplicate replies. */
+const processedMessageIds = new Set<string>();
+const PROCESSED_ID_MAX = 5000;
+
+function processedKey(userId: number, messageId: string): string {
+  return `${userId}:${messageId}`;
+}
+
+async function hasProcessedMessage(userId: number, messageId: string): Promise<boolean> {
+  const key = processedKey(userId, messageId);
+  if (processedMessageIds.has(key)) return true;
+  if (processedMessageIds.size >= PROCESSED_ID_MAX) {
+    // Drop the oldest entry to bound memory usage.
+    const oldest = processedMessageIds.values().next().value;
+    if (oldest) processedMessageIds.delete(oldest);
+  }
+  processedMessageIds.add(key);
+  return false;
+}
+
+/** Waits for all in-flight message handling to complete. */
+export async function drainPendingWork(): Promise<void> {
+  while (pendingWork.length > 0) {
+    await Promise.allSettled([...pendingWork]);
+  }
+}
+
+/**
+ * Sends a text message to a WeChat conversation.
+ *
+ * Returns false when the message could not be delivered (missing credentials,
+ * expired token, or a backend rejection) so callers can degrade gracefully
+ * rather than throwing.
+ */
+export async function sendWeixinText(
+  userId: number,
+  to: string,
+  text: string,
+  contextToken?: string,
+): Promise<boolean> {
+  try {
+    const state = await db.getWechatBotState(userId);
+    if (!state?.botTokenEnc) {
+      logError("没有可用凭据，无法发送消息");
+      return false;
+    }
+    const token = await decryptSecret(state.botTokenEnc);
+    if (!token) {
+      logError("凭据无法解密，无法发送消息");
+      return false;
+    }
+
+    const apiOptions = buildApiOptions({ token, baseUrl: state.baseUrl ?? undefined });
+    await sendTextMessage({ to, text, contextToken, opts: apiOptions });
+    return true;
+  } catch (e) {
+    logError(`发送消息失败: ${String(e)}`);
+    return false;
+  }
 }

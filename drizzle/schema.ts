@@ -1,4 +1,5 @@
-import { boolean, integer, pgEnum, pgTable, serial, text, timestamp, varchar, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, jsonb } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const analysisStatusEnum = pgEnum("analysis_status", ["pending", "analyzing", "ready", "error"]);
@@ -12,7 +13,7 @@ export const pipelineStageEnum = pgEnum("pipeline_stage", [
   "intake", "collecting", "analyzing_persona", "analyzing_work",
   "building", "merging", "correcting", "complete", "error",
 ]);
-export const botStatusEnum = pgEnum("bot_status", ["stopped", "scanning", "logged_in", "error"]);
+export const botStatusEnum = pgEnum("bot_status", ["stopped", "scanning", "scaned", "need_verifycode", "logged_in", "error"]);
 export const messageTypeEnum = pgEnum("message_type", ["text", "voice", "image"]);
 export const memoryCategoryEnum = pgEnum("memory_category", ["milestone", "memory", "anniversary"]);
 export const graduationStatusEnum = pgEnum("graduation_status", ["suggested", "graduated", "declined"]);
@@ -102,12 +103,26 @@ export const wechatBindings = pgTable("wechat_bindings", {
   id: serial("id").primaryKey(),
   personaId: integer("personaId").notNull(),
   userId: integer("userId").notNull(),
-  wechatContactId: varchar("wechatContactId", { length: 255 }).notNull(),
+  /**
+   * The Weixin conversation counterpart id (`ilink_user_id`).
+   *
+   * In the official ClawBot model the bot is a dedicated "微信ClawBot" contact
+   * in the account owner's own WeChat, so this is the owner's own id — not a
+   * third-party friend. The row records "this WeChat account talks to this
+   * persona by default".
+   */
+  wechatUserId: varchar("wechatUserId", { length: 255 }).notNull(),
   wechatName: varchar("wechatName", { length: 255 }),
   wechatAlias: varchar("wechatAlias", { length: 255 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  // One active default persona per (user, WeChat account).
+  // Partial: inactive legacy rows may share the same counterpart id.
+  userWechatUnique: uniqueIndex("wechat_bindings_user_wechat_idx")
+    .on(table.userId, table.wechatUserId)
+    .where(sql`${table.isActive} = true`),
+}));
 
 export type WechatBinding = typeof wechatBindings.$inferSelect;
 export type InsertWechatBinding = typeof wechatBindings.$inferInsert;
@@ -153,6 +168,21 @@ export const wechatBotState = pgTable("wechat_bot_state", {
   qrCodeUrl: text("qrCodeUrl"),
   loggedInUser: varchar("loggedInUser", { length: 255 }),
   lastError: text("lastError"),
+  /**
+   * The iLink bot token, encrypted with a key derived from JWT_SECRET.
+   * Equivalent to a WeChat login session — never store this in plaintext.
+   */
+  botTokenEnc: text("botTokenEnc"),
+  /** The iLink bot account id (`ilink_bot_id`). */
+  accountId: varchar("accountId", { length: 255 }),
+  /** API base URL; may be redirected to another IDC host by the backend. */
+  baseUrl: text("baseUrl"),
+  /** The account owner's Weixin id (`ilink_user_id`). */
+  wechatUserId: varchar("wechatUserId", { length: 255 }),
+  /** `get_updates_buf` cursor — must persist or messages are lost on restart. */
+  syncBuf: text("syncBuf"),
+  /** Timestamp of the last inbound message, used for the 24h keep-alive check. */
+  lastInboundAt: timestamp("lastInboundAt"),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 

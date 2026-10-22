@@ -318,12 +318,59 @@ export async function getWechatBindingsByUserId(userId: number) {
   return db.select().from(wechatBindings).where(eq(wechatBindings.userId, userId));
 }
 
-export async function getWechatBindingByContactId(contactId: string) {
+/**
+ * Finds the default persona binding for a WeChat conversation.
+ *
+ * `wechatUserId` is the iLink conversation counterpart id — in the official
+ * ClawBot model this is the account owner's own Weixin id.
+ */
+export async function getWechatBindingByUserId(wechatUserId: string, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(wechatBindings)
-    .where(and(eq(wechatBindings.wechatContactId, contactId), eq(wechatBindings.isActive, true))).limit(1);
+    .where(and(
+      eq(wechatBindings.wechatUserId, wechatUserId),
+      eq(wechatBindings.userId, userId),
+      eq(wechatBindings.isActive, true),
+    )).limit(1);
   return result[0];
+}
+
+/**
+ * Sets the default persona for a WeChat conversation, replacing any existing
+ * binding for the same (user, wechatUserId) pair.
+ */
+export async function setWechatBindingPersona(params: {
+  userId: number;
+  wechatUserId: string;
+  personaId: number;
+  wechatName?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  const existing = await db.select().from(wechatBindings).where(and(
+    eq(wechatBindings.wechatUserId, params.wechatUserId),
+    eq(wechatBindings.userId, params.userId),
+  )).limit(1);
+
+  if (existing[0]) {
+    await db.update(wechatBindings).set({
+      personaId: params.personaId,
+      isActive: true,
+      ...(params.wechatName != null ? { wechatName: params.wechatName } : {}),
+    }).where(eq(wechatBindings.id, existing[0].id));
+    return existing[0].id;
+  }
+
+  const [result] = await db.insert(wechatBindings).values({
+    userId: params.userId,
+    wechatUserId: params.wechatUserId,
+    personaId: params.personaId,
+    wechatName: params.wechatName ?? null,
+    isActive: true,
+  }).returning({ id: wechatBindings.id });
+  return result.id;
 }
 
 export async function deleteWechatBinding(id: number, userId: number) {
@@ -417,7 +464,28 @@ export async function getWechatBotState(userId: number) {
   return result[0];
 }
 
-export async function upsertWechatBotState(userId: number, data: Partial<{ status: string; qrCodeUrl: string | null; loggedInUser: string | null; lastError: string | null }>) {
+/** Lists the ids of all users, used to restore per-user channel state on boot. */
+export async function getAllUserIds(): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ id: users.id }).from(users);
+  return rows.map((r) => r.id);
+}
+
+export type WechatBotStateUpdate = Partial<{
+  status: string;
+  qrCodeUrl: string | null;
+  loggedInUser: string | null;
+  lastError: string | null;
+  botTokenEnc: string | null;
+  accountId: string | null;
+  baseUrl: string | null;
+  wechatUserId: string | null;
+  syncBuf: string | null;
+  lastInboundAt: Date | null;
+}>;
+
+export async function upsertWechatBotState(userId: number, data: WechatBotStateUpdate) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const existing = await db.select().from(wechatBotState).where(eq(wechatBotState.userId, userId)).limit(1);
@@ -427,6 +495,28 @@ export async function upsertWechatBotState(userId: number, data: Partial<{ statu
   }
   const [result] = await db.insert(wechatBotState).values({ userId, ...data } as any).returning({ id: wechatBotState.id });
   return result.id;
+}
+
+/** Persists the long-poll cursor so restarts do not lose inbound messages. */
+export async function saveWechatSyncBuf(userId: number, syncBuf: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const existing = await db.select().from(wechatBotState).where(eq(wechatBotState.userId, userId)).limit(1);
+  if (existing[0]) {
+    await db.update(wechatBotState).set({ syncBuf }).where(eq(wechatBotState.id, existing[0].id));
+    return;
+  }
+  await db.insert(wechatBotState).values({ userId, syncBuf } as any);
+}
+
+/** Records the timestamp of the last inbound message (24h keep-alive check). */
+export async function touchWechatLastInbound(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const existing = await db.select().from(wechatBotState).where(eq(wechatBotState.userId, userId)).limit(1);
+  if (existing[0]) {
+    await db.update(wechatBotState).set({ lastInboundAt: new Date() }).where(eq(wechatBotState.id, existing[0].id));
+  }
 }
 
 // ─── Intimacy helpers ─────────────────────────────────────────────────────

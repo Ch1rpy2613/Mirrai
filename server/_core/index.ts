@@ -66,11 +66,18 @@ async function startServer() {
 
   if (ENV.wechatEnabled) {
     try {
-      const { startWeChatBot } = await import("../wechat/bot");
-      startWeChatBot();
-      console.log("[WeChat] Bot service started");
+      const { restoreWeChatBot } = await import("../wechat/bot");
+      const { getAllUserIds } = await import("../db");
+      // Restore each user's ClawBot long-poll loop from stored credentials, so
+      // a restart does not require re-scanning the QR code.
+      for (const userId of await getAllUserIds()) {
+        const restored = await restoreWeChatBot(userId);
+        if (restored) {
+          console.log(`[WeChat] Restored WeChat channel for user ${userId}`);
+        }
+      }
     } catch (e) {
-      console.warn("[WeChat] Bot failed to start:", e);
+      console.warn("[WeChat] Failed to restore WeChat channel:", e);
     }
   }
 }

@@ -457,182 +457,209 @@ function AISettingsTab() {
 
 function WeChatTab() {
   const wechatStatus = trpc.wechat.getStatus.useQuery(undefined, { refetchInterval: 3000 });
-  const startBot = trpc.wechat.start.useMutation({ onSuccess: () => toast.success("微信机器人启动中...") });
-  const stopBot = trpc.wechat.stop.useMutation({ onSuccess: () => toast.success("微信机器人已停止") });
+  const startLogin = trpc.wechat.startLogin.useMutation({
+    onSuccess: () => { toast.success("请使用微信扫描二维码"); wechatStatus.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const submitCode = trpc.wechat.submitVerifyCode.useMutation({
+    onSuccess: () => { wechatStatus.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const cancelLogin = trpc.wechat.cancelLogin.useMutation({
+    onSuccess: () => { wechatStatus.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const stopBot = trpc.wechat.stop.useMutation({
+    onSuccess: () => { toast.success("已断开微信连接"); wechatStatus.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const bot = wechatStatus.data;
+  const [verifyCode, setVerifyCode] = useState("");
+
+  const isConnected = bot?.status === "logged_in";
+  const isScanning = bot?.status === "scanning";
+  const isScanned = bot?.status === "scaned";
+  const needsCode = bot?.status === "need_verifycode";
+  const isPending = isScanning || isScanned || needsCode;
 
   const statusChip =
-    bot?.status === "logged_in" ? <StatusChip tone="success">已登录: {bot.loggedInUser}</StatusChip> :
-    bot?.status === "scanning" ? <StatusChip tone="info">等待扫码...</StatusChip> :
+    isConnected ? <StatusChip tone="success">已连接</StatusChip> :
+    isScanned ? <StatusChip tone="info">已扫码</StatusChip> :
+    isScanning ? <StatusChip tone="info">等待扫码</StatusChip> :
+    needsCode ? <StatusChip tone="info">等待验证码</StatusChip> :
     bot?.status === "error" ? <StatusChip tone="error">出错</StatusChip> :
-    <StatusChip tone="muted">未启动</StatusChip>;
+    <StatusChip tone="muted">未连接</StatusChip>;
 
   return (
     <div className="space-y-5">
       <section className="surface p-6 sm:p-7">
-        <SectionHeader note="扫码登录后自动回复消息" title="微信机器人"
+        <SectionHeader note="通过微信官方 ClawBot 通道连接" title="微信连接"
           action={statusChip} />
 
         <div className="p-4 rounded-lg bg-muted/30 border border-border">
           <div className="flex items-center gap-3 mb-2.5">
             <span className={cn(
               "seal-dot flex-shrink-0",
-              bot?.status === "logged_in" ? "!bg-chart-4" :
-              bot?.status === "scanning" ? "!bg-chart-3 animate-pulse-soft" :
+              isConnected ? "!bg-chart-4" :
+              isPending ? "!bg-chart-3 animate-pulse-soft" :
               bot?.status === "error" ? "!bg-destructive" : "!bg-muted-foreground/30"
             )} />
             <span className="text-sm text-foreground font-medium">
-              {bot?.status === "logged_in" ? "在线运行中" :
-               bot?.status === "scanning" ? "等待扫码登录" :
-               bot?.status === "error" ? "运行出错" : "未启动"}
+              {isConnected ? "已连接，微信消息会转交给分身" :
+               isScanned ? "已扫码，请在手机上确认授权" :
+               isScanning ? "等待扫码" :
+               needsCode ? "请输入微信上显示的数字" :
+               bot?.status === "error" ? "连接出错" : "未连接"}
             </span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            启动微信机器人后，绑定的分身可以通过微信自动回复消息。扫码登录你的微信账号即可开始使用。
+            使用微信官方「ClawBot」插件接入，全程不涉及第三方协议，不存在封号风险。
+            需要微信 8.0.70 或更高版本，并且「我 → 设置 → 插件」中能看到「微信 ClawBot」入口。
           </p>
         </div>
 
-        {bot?.qrCodeUrl && (
+        {bot?.qrCodeUrl && isPending && (
           <div className="mt-5 flex flex-col items-center gap-3 py-6 px-4 rounded-lg border border-border bg-card">
             <div className="bg-white p-3 rounded-lg border border-border">
               <img src={bot.qrCodeUrl} alt="WeChat QR" className="w-44 h-44" />
             </div>
-            <p className="text-xs text-muted-foreground">请使用微信扫描二维码登录</p>
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
+              {needsCode ? "已扫码，请输入手机上显示的数字以继续"
+                : isScanned ? "已扫码，请在手机上确认授权"
+                : "请使用微信扫描二维码，并在手机上确认授权"}
+            </p>
           </div>
+        )}
+
+        {needsCode && (
+          <div className="mt-4 p-4 rounded-lg border border-border space-y-3">
+            <Label className="text-xs text-muted-foreground">微信上显示的数字</Label>
+            <div className="flex gap-2">
+              <Input
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value)}
+                placeholder="例如 123456"
+                className="h-9 rounded-md text-sm"
+                inputMode="numeric"
+              />
+              <Button size="sm" className="rounded-md px-5 flex-shrink-0"
+                disabled={!verifyCode.trim() || submitCode.isPending}
+                onClick={() => submitCode.mutate({ code: verifyCode.trim() })}>
+                {submitCode.isPending ? "提交中..." : "确认"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {bot?.lastError && (
+          <p className="mt-4 text-xs text-destructive leading-relaxed">{bot.lastError}</p>
         )}
 
         <div className="flex gap-2 mt-5">
           <Button size="sm" className="rounded-md px-5"
-            onClick={() => startBot.mutate()}
-            disabled={bot?.status === "logged_in" || bot?.status === "scanning"}>
-            启动
+            onClick={() => startLogin.mutate()}
+            disabled={isConnected || isPending || startLogin.isPending}>
+            {startLogin.isPending ? "请求中..." : isConnected ? "已连接" : "连接微信"}
           </Button>
-          <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
-            onClick={() => stopBot.mutate()} disabled={bot?.status === "stopped"}>
-            停止
-          </Button>
+          {isConnected ? (
+            <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
+              onClick={() => stopBot.mutate()} disabled={stopBot.isPending}>
+              {stopBot.isPending ? "断开中..." : "断开连接"}
+            </Button>
+          ) : isPending ? (
+            <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
+              onClick={() => cancelLogin.mutate()} disabled={cancelLogin.isPending}>
+              取消
+            </Button>
+          ) : null}
         </div>
       </section>
 
-      <WeChatBindingsSection loggedIn={bot?.status === "logged_in"} />
+      <WeChatBindingsSection connected={isConnected} />
+      <WeChatCommandsSection />
     </div>
   );
 }
 
-// ─── WECHAT CONTACT BINDINGS ─────────────────────────────────────────────────
+// ─── WECHAT DEFAULT PERSONA BINDINGS ────────────────────────────────────────
 
-function WeChatBindingsSection({ loggedIn }: { loggedIn: boolean }) {
+function WeChatBindingsSection({ connected }: { connected: boolean }) {
   const bindings = trpc.wechat.listBindings.useQuery();
   const personas = trpc.persona.list.useQuery();
-  const contacts = trpc.wechat.listContacts.useQuery(undefined, { enabled: loggedIn });
 
-  const bindContact = trpc.wechat.bindContact.useMutation({
+  const setDefault = trpc.wechat.setDefaultPersona.useMutation({
     onSuccess: () => {
-      toast.success("绑定成功");
-      setSelectedContactId("");
+      toast.success("已设为默认分身");
       bindings.refetch();
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const unbindContact = trpc.wechat.unbindContact.useMutation({
+  const unbind = trpc.wechat.unbind.useMutation({
     onSuccess: () => {
       toast.success("已解除绑定");
-      setUnbindTarget(null);
       bindings.refetch();
     },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const [selectedContactId, setSelectedContactId] = useState("");
   const [selectedPersonaId, setSelectedPersonaId] = useState("");
   const [unbindTarget, setUnbindTarget] = useState<{ id: number; label: string } | null>(null);
 
   const personaNameById = new Map((personas.data ?? []).map(p => [p.id, p.name]));
-  const boundContactIds = new Set((bindings.data ?? []).map(b => b.wechatContactId));
-  const availableContacts = (contacts.data ?? []).filter(c => !boundContactIds.has(c.id));
   const readyPersonas = (personas.data ?? []).filter(p => p.analysisStatus === "ready");
+  const bindingsData = bindings.data ?? [];
 
-  function handleBind() {
-    const contact = contacts.data?.find(c => c.id === selectedContactId);
+  // The ClawBot conversation is always with the account owner, so a single
+  // binding (the default persona) is the norm.
+  const primaryBinding = bindingsData[0];
+
+  function handleSetDefault() {
     const personaId = Number(selectedPersonaId);
-    if (!contact || !personaId) return;
-    bindContact.mutate({
+    if (!personaId || !primaryBinding) return;
+    setDefault.mutate({
+      wechatUserId: primaryBinding.wechatUserId,
       personaId,
-      wechatContactId: contact.id,
-      wechatName: contact.name,
+      wechatName: primaryBinding.wechatName ?? undefined,
     });
   }
 
   return (
     <section className="surface p-6 sm:p-7">
-      <SectionHeader note="把联系人的私聊交给分身" title="联系人绑定"
-        action={bindings.data && (
-          <StatusChip tone="muted">{bindings.data.length} 个绑定</StatusChip>
+      <SectionHeader note="选择在微信里默认对话的分身" title="默认分身"
+        action={bindingsData.length > 0 && (
+          <StatusChip tone="muted">{bindingsData.length} 个绑定</StatusChip>
         )} />
 
-      {/* 现有绑定列表 */}
       {bindings.isLoading ? (
         <div className="py-6 text-center text-sm text-muted-foreground">加载中...</div>
-      ) : bindings.data && bindings.data.length > 0 ? (
-        <div className="mb-5">
-          {bindings.data.map(b => {
-            const label = b.wechatName || b.wechatContactId;
-            return (
-              <div key={b.id}
-                className="flex items-center justify-between gap-3 py-3.5 border-t border-border first:border-t-0">
-                <div className="min-w-0">
-                  <p className="text-sm text-foreground font-medium truncate">{label}</p>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    由「{personaNameById.get(b.personaId) ?? `#${b.personaId}`}」自动回复
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <StatusChip tone={b.isActive ? "success" : "muted"}>
-                    {b.isActive ? "生效中" : "已停用"}
-                  </StatusChip>
-                  <button onClick={() => setUnbindTarget({ id: b.id, label })}
-                    title="解除绑定"
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
-          暂无绑定。绑定后，该联系人的私聊消息将由对应分身自动回复。
-        </p>
-      )}
-
-      {/* 新增绑定 */}
-      {!loggedIn ? (
-        <div className="p-4 rounded-lg bg-muted/30 border border-border">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            请先在上方启动微信机器人并扫码登录，登录后即可从微信联系人中选择要绑定的对象。
-          </p>
-        </div>
-      ) : (
-        <div className="p-4 rounded-lg border border-border space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">微信联系人</Label>
-              <Select value={selectedContactId} onValueChange={setSelectedContactId}>
-                <SelectTrigger className="h-9 rounded-md text-sm w-full">
-                  <SelectValue placeholder="选择联系人" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableContacts.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}{c.alias ? `（${c.alias}）` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      ) : primaryBinding ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 py-3.5 border-b border-border">
+            <div className="min-w-0">
+              <p className="text-sm text-foreground font-medium truncate">
+                {primaryBinding.wechatName || "我的微信"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                当前由「{personaNameById.get(primaryBinding.personaId) ?? `#${primaryBinding.personaId}`}」回复
+              </p>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">回复分身</Label>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <StatusChip tone="success">生效中</StatusChip>
+              <button onClick={() => setUnbindTarget({
+                id: primaryBinding.id,
+                label: primaryBinding.wechatName || "我的微信",
+              })}
+                title="解除绑定"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">改为默认回复的分身</Label>
+            <div className="flex gap-2">
               <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
                 <SelectTrigger className="h-9 rounded-md text-sm w-full">
                   <SelectValue placeholder="选择分身" />
@@ -643,35 +670,26 @@ function WeChatBindingsSection({ loggedIn }: { loggedIn: boolean }) {
                   ))}
                 </SelectContent>
               </Select>
+              <Button size="sm" className="rounded-md px-4 flex-shrink-0"
+                disabled={!selectedPersonaId || setDefault.isPending || readyPersonas.length === 0}
+                onClick={handleSetDefault}>
+                {setDefault.isPending ? "保存中..." : "保存"}
+              </Button>
             </div>
+            {readyPersonas.length === 0 && (
+              <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
+                暂无已完成性格分析的分身，请先创建并完成分身分析。
+              </p>
+            )}
           </div>
-
-          {contacts.data && availableContacts.length === 0 && (
-            <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
-              {(contacts.data.length === 0
-                ? "暂未获取到联系人列表，联系人同步可能需要片刻。"
-                : "所有联系人都已绑定。")}
-              <button onClick={() => contacts.refetch()}
-                className="inline-flex items-center gap-1 text-primary hover:text-primary/80 ml-1">
-                <RefreshCw className="w-3 h-3" />刷新
-              </button>
-            </p>
-          )}
-          {readyPersonas.length === 0 && (
-            <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
-              暂无已完成性格分析的分身，请先创建并完成分身分析。
-            </p>
-          )}
-
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <p className="text-[0.6875rem] text-muted-foreground">仅私聊消息会触发分身回复，群聊不受影响。</p>
-            <Button size="sm" className="rounded-md px-4 flex-shrink-0"
-              disabled={!selectedContactId || !selectedPersonaId || bindContact.isPending}
-              onClick={handleBind}>
-              <Plus className="w-3.5 h-3.5" />
-              {bindContact.isPending ? "绑定中..." : "新增绑定"}
-            </Button>
-          </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-lg bg-muted/30 border border-border">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {connected
+              ? "还没有设置默认分身。连接成功后回到这里，选择一个分身作为微信里的默认对话对象。"
+              : "请先在上方连接微信，连接成功后即可选择默认分身。"}
+          </p>
         </div>
       )}
 
@@ -682,18 +700,48 @@ function WeChatBindingsSection({ loggedIn }: { loggedIn: boolean }) {
             <DialogTitle className="font-display text-foreground">解除绑定</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground py-2 leading-relaxed">
-            解除后，{unbindTarget?.label} 的私聊消息将不再由分身自动回复。可以随时重新绑定。
+            解除后，微信消息将不再转交给任何分身。可以随时重新设置。
           </p>
           <DialogFooter>
             <Button variant="ghost" className="rounded-md" onClick={() => setUnbindTarget(null)}>取消</Button>
             <Button variant="destructive" className="rounded-md px-5"
-              disabled={unbindContact.isPending}
-              onClick={() => unbindTarget && unbindContact.mutate({ id: unbindTarget.id })}>
-              {unbindContact.isPending ? "解除中..." : "确认解除"}
+              disabled={unbind.isPending}
+              onClick={() => unbindTarget && unbind.mutate({ id: unbindTarget.id })}>
+              {unbind.isPending ? "解除中..." : "确认解除"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </section>
+  );
+}
+
+// ─── WECHAT COMMANDS HELP ───────────────────────────────────────────────────
+
+function WeChatCommandsSection() {
+  const commands = [
+    { cmd: "/使用 <分身名>", desc: "切换当前对话的分身" },
+    { cmd: "/分身列表", desc: "查看所有可用分身" },
+    { cmd: "/当前分身", desc: "查看正在对话的分身" },
+    { cmd: "/毕业", desc: "生成告别信并完成毕业" },
+  ];
+
+  return (
+    <section className="surface p-6 sm:p-7">
+      <SectionHeader note="在微信里直接发送" title="指令" />
+      <div className="space-y-2.5">
+        {commands.map(c => (
+          <div key={c.cmd} className="flex items-baseline gap-3">
+            <code className="text-xs font-mono text-foreground bg-muted/50 px-2 py-1 rounded flex-shrink-0">
+              {c.cmd}
+            </code>
+            <span className="text-xs text-muted-foreground">{c.desc}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-[0.6875rem] text-muted-foreground leading-relaxed">
+        指令不会消耗模型调用。切换只在当前会话内生效，重启后回到默认分身。
+      </p>
     </section>
   );
 }

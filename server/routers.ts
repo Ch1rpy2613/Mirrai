@@ -13,7 +13,7 @@ import {
   getPersonasWithStats, getUserStats, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId,
   createMessage, getMessagesByPersonaId, clearMessagesByPersonaId, searchMessages,
-  createWechatBinding, getWechatBindingsByUserId, deleteWechatBinding,
+  createWechatBinding, getWechatBindingsByUserId, deleteWechatBinding, setWechatBindingPersona,
   getSkillJobById, getLlmConfigsByUserId, upsertLlmConfig, setDefaultLlmConfig, getDefaultLlmConfig,
   updateUserProfile, updateUserPassword, deleteUserAccount, getAccountStats, exportUserData,
   getUserById,
@@ -26,7 +26,8 @@ import {
   getExportData, getRecentEmotionTrend, getMessageCountInRange, setGraduationStatus,
 } from "./db";
 import { nanoid } from "nanoid";
-import { getBotStatus, startWeChatBot, stopWeChatBot, listWechatContacts } from "./wechat/bot";
+import { getBotStatus, startWeChatBot, stopWeChatBot, startLogin, submitVerifyCode, cancelLogin } from "./wechat/bot";
+import { clearAllActivePersonas } from "./wechat/commands";
 import { runSkillPipeline } from "./skill-engine/pipeline";
 import { getEmotionalStateDesc, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
 import { inferEmotionalState } from "./_core/emotion";
@@ -560,46 +561,66 @@ export const appRouter = router({
   }),
 
   wechat: router({
-    getStatus: protectedProcedure.query(() => getBotStatus()),
+    getStatus: protectedProcedure.query(({ ctx }) => getBotStatus(ctx.user.id)),
 
-    start: protectedProcedure.mutation(() => {
-      startWeChatBot();
+    /**
+     * Starts the QR-code login flow for the official WeChat ClawBot channel.
+     * The user scans the returned code in WeChat to authorize the connection.
+     */
+    startLogin: protectedProcedure.mutation(async ({ ctx }) => {
+      const status = await startLogin(ctx.user.id);
+      return status;
+    }),
+
+    /** Supplies the numeric code WeChat displays when the backend asks for it. */
+    submitVerifyCode: protectedProcedure
+      .input(z.object({ code: z.string().min(1).max(20) }))
+      .mutation(async ({ ctx, input }) => {
+        const status = await submitVerifyCode(ctx.user.id, input.code);
+        return status;
+      }),
+
+    cancelLogin: protectedProcedure.mutation(async ({ ctx }) => {
+      const status = await cancelLogin(ctx.user.id);
+      return status;
+    }),
+
+    /** Disconnects the channel. */
+    stop: protectedProcedure.mutation(async ({ ctx }) => {
+      await stopWeChatBot(ctx.user.id);
+      clearAllActivePersonas();
       return { success: true };
     }),
 
-    stop: protectedProcedure.mutation(async () => {
-      await stopWeChatBot();
-      return { success: true };
-    }),
+    listBindings: protectedProcedure.query(async ({ ctx }) =>
+      getWechatBindingsByUserId(ctx.user.id)
+    ),
 
-    listContacts: protectedProcedure.query(() => listWechatContacts()),
-
-    bindContact: protectedProcedure
+    /** Sets the default persona for a WeChat conversation. */
+    setDefaultPersona: protectedProcedure
       .input(z.object({
+        wechatUserId: z.string().min(1),
         personaId: z.number(),
-        wechatContactId: z.string().min(1),
         wechatName: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const id = await createWechatBinding({
-          personaId: input.personaId,
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const id = await setWechatBindingPersona({
           userId: ctx.user.id,
-          wechatContactId: input.wechatContactId,
+          wechatUserId: input.wechatUserId,
+          personaId: input.personaId,
           wechatName: input.wechatName ?? null,
         });
         return { id };
       }),
 
-    unbindContact: protectedProcedure
+    unbind: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         await deleteWechatBinding(input.id, ctx.user.id);
         return { success: true };
       }),
-
-    listBindings: protectedProcedure.query(async ({ ctx }) =>
-      getWechatBindingsByUserId(ctx.user.id)
-    ),
   }),
 
   skillEngine: router({

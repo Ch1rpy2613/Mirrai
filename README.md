@@ -91,9 +91,26 @@
 
 OpenAI 兼容协议共用一个适配器，通过 `baseUrl` / `model` 区分，零代码接入新服务。配合 Ollama 可实现完全本地推理，数据不出机器。
 
-### 5. 微信机器人 — 数字分身走出浏览器
+### 5. 微信官方 ClawBot 通道 — 数字分身走出浏览器
 
-集成 Wechaty 框架，扫码登录后，将微信联系人绑定到对应的数字分身，自动用 TA 的语气回复。Web 端和微信端共享同一套人设和记忆。⚠️ 使用非官方协议存在封号风险，详见[注意事项](#注意事项)。
+接入微信官方「ClawBot」插件（腾讯 iLink 协议），扫码授权后即可在微信里与分身对话。Web 端和微信端共享同一套人设和记忆。
+
+**零封号风险**：这是微信官方支持的接入方式，不使用任何第三方协议。相比早期基于 Wechaty 非官方协议的方案，风险从「可能封号」变为「官方通道」。
+
+> ⚠️ 需要微信 **8.0.70+**，且「我 → 设置 → 插件」中能看到「微信 ClawBot」入口。该功能正在灰度放量（iOS 优先，安卓与桌面端逐步开放），看不到入口说明暂未覆盖到你。
+
+> ℹ️ 微信的授权二维码有效期很短（实测约 90 秒）。Mirrai 会在过期时自动换一张新码，只要连接窗口还开着就会持续刷新，不用手动重来。
+
+微信侧为 1:1 私聊（官方限制：不能被他人添加、不能进群），聊天对象是你自己。在微信里可以直接发送指令：
+
+| 指令 | 作用 |
+|---|---|
+| `/使用 <分身名>` | 切换当前对话的分身 |
+| `/分身列表` | 查看所有可用分身 |
+| `/当前分身` | 查看正在对话的分身 |
+| `/毕业` | 生成告别信并完成毕业 |
+
+默认分身在网页端设置，指令切换只在当前会话内生效。
 
 ### 6. 全链路类型安全
 
@@ -224,8 +241,8 @@ Mirrai 出自一个 NLP 专业学生的手——他害怕失去身边的人，�
 │     │          │              │              │           │
 │  ┌──▼───┐  ┌──▼──────┐  ┌───▼────┐  ┌──────▼────┐     │
 │  │ DB   │  │ LLM     │  │ WeChat │  │ Skill     │     │
-│  │Drizzle│  │ Service │  │ Bot    │  │ Engine    │     │
-│  │ PG   │  │ 12 提供商│  │Wechaty │  │ Pipeline  │     │
+│  │Drizzle│  │ Service │  │ClawBot │  │ Engine    │     │
+│  │ PG   │  │ 12 提供商│  │ iLink  │  │ Pipeline  │     │
 │  └──────┘  └─────────┘  └────────┘  └───────────┘     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -242,7 +259,7 @@ Mirrai 出自一个 NLP 专业学生的手——他害怕失去身边的人，�
 | 服务端 | Express | 4.21 |
 | 数据库 | PostgreSQL + Drizzle ORM | 0.44 |
 | 认证 | JWT (jose) + scrypt | 6.1 |
-| 微信 | Wechaty + puppet-wechat4u | 1.20 |
+| 微信 | 微信官方 ClawBot（腾讯 iLink 协议） | — |
 | 测试 | Vitest | 2.1 |
 
 ### 数据库设计
@@ -252,8 +269,8 @@ users              -- 用户账户 (JWT 认证, SHA256 密码哈希)
 personas           -- 数字分身 (人设数据 JSON, 情感状态, 亲密度, 场景绑定, 毕业状态/告别信)
 persona_files      -- 上传素材 (聊天记录/照片/视频, 提取文本)
 messages           -- 对话记录 (web/wechat 渠道标记, 文本/图片/语音, 情感状态快照)
-wechat_bindings    -- 微信联系人 ↔ 分身绑定
-wechat_bot_state   -- 机器人状态 (二维码/登录状态)
+wechat_bindings    -- 微信账号 ↔ 默认分身绑定
+wechat_bot_state   -- 通道状态 (二维码/登录状态/iLink 凭据/长轮询游标)
 skill_jobs         -- 性格蒸馏 pipeline 任务跟踪
 llm_configs        -- 每用户 LLM 提供商配置
 memories           -- 关系记忆节点 (里程碑/记忆/纪念日)
@@ -312,12 +329,17 @@ scenes             -- 对话场景模板 (内置 + 自定义, 含开场白)
 | `DOUBAO_API_KEY` / `DOUBAO_BASE_URL` / `DOUBAO_MODEL` | 豆包配置 |
 | `_302AI_API_KEY` | 302.ai API Key |
 
-### 微信机器人（可选）
+### 微信 ClawBot 通道（可选）
 
-| 变量 | 说明 |
-|------|------|
-| `WECHAT_ENABLED` | 是否启用 (`true` / `false`) |
-| `WECHAT_PUPPET` | Puppet 类型 (默认 `wechaty-puppet-wechat4u`) |
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `WECHAT_ENABLED` | 是否启用 (`true` / `false`) | `false` |
+| `WECHAT_BOT_TYPE` | 扫码登录使用的 bot_type | `3` |
+| `WECHAT_ILINK_BASE_URL` | 腾讯 iLink API 地址 | `https://ilinkai.weixin.qq.com` |
+| `WECHAT_ILINK_CDN_URL` | 腾讯 iLink CDN 地址 | `https://novac2c.cdn.weixin.qq.com/c2c` |
+| `WECHAT_ILINK_APP_ID` | iLink 应用标识 | `bot` |
+| `WECHAT_ROUTE_TAG` | 可选的部署路由标签 | 空 |
+| `APP_VERSION` | 应用版本号，作为 `channel_version` 上报 | `1.0.0` |
 
 ### 其他
 
@@ -351,7 +373,7 @@ Mirrai/
 │   ├── routers.ts                   # 全部 tRPC 路由
 │   ├── db.ts                        # 数据库 CRUD
 │   ├── llm/                         # LLM 抽象层 (providers/ + 注册表 + 重试策略)
-│   ├── wechat/                      # Wechaty 生命周期 · 消息路由 · 分身桥接
+│   ├── wechat/                      # ClawBot 通道 · iLink 协议 · 消息路由 · 分身桥接 · 指令
 │   └── skill-engine/                # 多阶段蒸馏 pipeline (Python 子进程)
 │
 ├── drizzle/                         # Schema (12 张表) + 关系定义
@@ -438,8 +460,9 @@ Mirrai/
 
 | 端点 | 类型 | 说明 |
 |------|------|------|
-| `wechat.getStatus` / `wechat.start` / `wechat.stop` | Query/Mutation | 机器人状态与生命周期 |
-| `wechat.bindContact` / `wechat.unbindContact` / `wechat.listBindings` | Mutation/Query | 联系人绑定管理 |
+| `wechat.getStatus` / `wechat.startLogin` / `wechat.stop` | Query/Mutation | 通道状态与生命周期 |
+| `wechat.submitVerifyCode` / `wechat.cancelLogin` | Mutation | 扫码登录与验证码确认 |
+| `wechat.setDefaultPersona` / `wechat.unbind` / `wechat.listBindings` | Mutation/Query | 默认分身绑定管理 |
 | `llmConfig.list` / `llmConfig.getDefault` / `llmConfig.listProviders` | Query | LLM 配置查询 |
 | `llmConfig.upsert` / `llmConfig.setDefault` / `llmConfig.updateExtraConfig` | Mutation | LLM 配置管理 |
 | `analytics.overview` | Query | 综合分析 (消息量/情感时线/热力图/时段分布) |
@@ -486,7 +509,7 @@ pnpm db:push      # 生成并执行数据库迁移
 - **原材料质量决定分身质量** — 聊天记录越多越好，建议至少 100 条消息
 - **所有数据本地存储** — 文件保存在 `./uploads/`，不上传第三方
 - **AI 回复质量取决于 LLM** — 推荐使用 GPT-4o 或 Claude 获得最佳效果
-- **微信机器人风险自担** — 基于非官方协议（wechat4u），存在被微信封号的可能，建议使用小号，并知悉 [issue #1](https://github.com/Ch1rpy2613/Mirrai/issues/1) 中的相关讨论
+- **微信使用官方 ClawBot 通道** — 接入微信官方「ClawBot」插件（腾讯 iLink 协议），不涉及第三方协议，无封号风险。但需要微信 8.0.70+ 且「我 → 设置 → 插件」中能看到「微信 ClawBot」入口（该功能正在灰度放量，尚未覆盖到所有用户）
 - **这是一个帮你「好好告别」的工具** — 不是让你永远沉浸其中的工具
 
 ## License

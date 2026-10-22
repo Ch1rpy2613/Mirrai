@@ -101,8 +101,6 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
-    "wechaty": "^1.20.2",
-    "wechaty-puppet-wechat4u": "^1.14.14",
     "wouter": "^3.3.5",
     "ws": "^8.16.0",
     "zod": "^4.1.12"

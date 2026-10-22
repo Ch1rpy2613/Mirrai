@@ -70,7 +70,15 @@ export const ENV = {
   _302aiApiKey: process.env._302AI_API_KEY ?? "",
 
   wechatEnabled: process.env.WECHAT_ENABLED === "true",
-  wechatPuppet: process.env.WECHAT_PUPPET ?? "wechaty-puppet-wechat4u",
+  // 微信官方 ClawBot 通道（腾讯 iLink 协议）
+  wechatBotType: process.env.WECHAT_BOT_TYPE ?? "3",
+  wechatIlinkBaseUrl: process.env.WECHAT_ILINK_BASE_URL ?? "https://ilinkai.weixin.qq.com",
+  wechatIlinkCdnUrl: process.env.WECHAT_ILINK_CDN_URL ?? "https://novac2c.cdn.weixin.qq.com/c2c",
+  wechatIlinkAppId: process.env.WECHAT_ILINK_APP_ID ?? "bot",
+  wechatRouteTag: process.env.WECHAT_ROUTE_TAG ?? "",
+
+  /** Application version, reported to the iLink backend as channel_version. */
+  appVersion: process.env.APP_VERSION ?? "1.0.0",
 
   pythonPath: process.env.PYTHON_PATH ?? "python3",
   skillEngineDir: process.env.SKILL_ENGINE_DIR ?? "./skill-engine",
