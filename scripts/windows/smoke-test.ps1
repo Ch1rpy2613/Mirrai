@@ -151,12 +151,24 @@ try {
     $appDir = Join-Path $dist "app"
 
     # Same order as the shipped start script: the hand-written WeChat
-    # migration first, then drizzle-kit push to create or align the schema.
-    Say "applying the WeChat migration..."
-    $migration = Join-Path $appDir "drizzle\0002_wechat_clawbot_channel.sql"
-    if (Test-Path $migration) {
-        & (Join-Path $pgBin "psql.exe") -h localhost -p $port -U mirrai -d mirrai `
-            --single-transaction -v ON_ERROR_STOP=1 -f $migration *>&1 | Out-File -FilePath $log -Append
+    # migration first when the table is already there, then drizzle-kit push
+    # to create or align the schema.
+    Say "checking for an existing bindings table..."
+    $hasBindings = & (Join-Path $pgBin "psql.exe") -h localhost -p $port -U mirrai -d mirrai `
+        -tAc "SELECT to_regclass('public.wechat_bindings') IS NOT NULL;" 2>$null
+    if ("$hasBindings".Trim() -eq "t") {
+        Say "applying the WeChat migration..."
+        $migration = Join-Path $appDir "drizzle\0002_wechat_clawbot_channel.sql"
+        if (Test-Path $migration) {
+            try {
+                & (Join-Path $pgBin "psql.exe") -h localhost -p $port -U mirrai -d mirrai `
+                    --single-transaction -v ON_ERROR_STOP=1 -f $migration *>&1 | Out-File -FilePath $log -Append
+            } catch {
+                Say "migration note: $($_.Exception.Message)"
+            }
+        }
+    } else {
+        Say "no bindings table yet, the schema will be created below"
     }
 
     Say "pushing the schema..."

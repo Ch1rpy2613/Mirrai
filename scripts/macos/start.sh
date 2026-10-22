@@ -152,14 +152,22 @@ fi
 
 # ─── Database migration ─────────────────────────────────────────────────────
 # The WeChat channel changed the meaning of the binding table, so the
-# hand-written migration runs first. It is idempotent, and on a fresh
-# database it simply fails because the table is not there yet.
+# hand-written migration runs first - but only when the table is already
+# there. On a fresh database there is nothing to rename yet, and push below
+# creates the final schema in one go.
 log "Applying the WeChat channel migration..."
-MIGRATION="$APP_DIR/drizzle/0002_wechat_clawbot_channel.sql"
-if [ -f "$MIGRATION" ]; then
-  "$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" \
-    --single-transaction -v ON_ERROR_STOP=1 -f "$MIGRATION" 2>&1 | tee -a "$LOGS/migrate.log" || \
-    log "Migration note: the schema was not there yet, it will be created below."
+HAS_BINDINGS=$("$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" \
+  -tAc "SELECT to_regclass('public.wechat_bindings') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')
+
+if [ "$HAS_BINDINGS" = "t" ]; then
+  MIGRATION="$APP_DIR/drizzle/0002_wechat_clawbot_channel.sql"
+  if [ -f "$MIGRATION" ]; then
+    "$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" \
+      --single-transaction -v ON_ERROR_STOP=1 -f "$MIGRATION" 2>&1 | tee -a "$LOGS/migrate.log" || \
+      log "Migration note (may be OK)"
+  fi
+else
+  log "No existing bindings table, the schema will be created below."
 fi
 
 # `drizzle-kit push` compares schema.ts against the live database and applies

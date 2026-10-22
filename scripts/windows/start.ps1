@@ -172,17 +172,25 @@ listen_addresses = 'localhost'
 
     # ─── Database migration ─────────────────────────────────────────────────
     # The WeChat channel changed the meaning of the binding table, so the
-    # hand-written migration runs first. It is idempotent, and on a fresh
-    # database it simply fails because the table is not there yet.
+    # hand-written migration runs first - but only when the table is already
+    # there. On a fresh database there is nothing to rename yet, and push
+    # below creates the final schema in one go.
     Log "Applying the WeChat channel migration..."
-    $migration = Join-Path $AppDir "drizzle\0002_wechat_clawbot_channel.sql"
-    if (Test-Path $migration) {
-        & (Join-Path $PgDir "bin\psql.exe") -h localhost -p $PgPort -U $PgUser -d $DbName `
-            --single-transaction -v ON_ERROR_STOP=1 -f $migration *>&1 |
-            Tee-Object -FilePath (Join-Path $Logs "migrate.log")
-        if ($LASTEXITCODE -ne 0) {
-            Log "Migration note: the schema was not there yet, it will be created below."
+    $hasBindings = & (Join-Path $PgDir "bin\psql.exe") -h localhost -p $PgPort -U $PgUser -d $DbName `
+        -tAc "SELECT to_regclass('public.wechat_bindings') IS NOT NULL;" 2>$null
+    if ("$hasBindings".Trim() -eq "t") {
+        $migration = Join-Path $AppDir "drizzle\0002_wechat_clawbot_channel.sql"
+        if (Test-Path $migration) {
+            try {
+                & (Join-Path $PgDir "bin\psql.exe") -h localhost -p $PgPort -U $PgUser -d $DbName `
+                    --single-transaction -v ON_ERROR_STOP=1 -f $migration 2>&1 |
+                    Tee-Object -FilePath (Join-Path $Logs "migrate.log")
+            } catch {
+                Log "Migration note: $($_.Exception.Message)"
+            }
         }
+    } else {
+        Log "No existing bindings table, the schema will be created below."
     }
 
     # `drizzle-kit push` compares schema.ts against the live database and
