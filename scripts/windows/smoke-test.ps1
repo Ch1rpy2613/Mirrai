@@ -63,7 +63,7 @@ if (Get-LocalUser -Name $TestUser -ErrorAction SilentlyContinue) {
 }
 New-Item -ItemType Directory -Force -Path $PublicDir | Out-Null
 $secure = ConvertTo-SecureString $TestPass -AsPlainText -Force
-New-LocalUser -Name $TestUser -Password $secure -PasswordNeverExpires -NoNewCustomProperties | Out-Null
+New-LocalUser -Name $TestUser -Password $secure -PasswordNeverExpires | Out-Null
 Log "Created standard user '$TestUser'."
 
 $worker = @'
@@ -113,14 +113,31 @@ try {
     $env:UPLOAD_DIR = $uploads
 
     $appDir = Join-Path $dist "app"
-    Say "drizzle-kit migrate..."
+
+    # Same order as the shipped start script: the hand-written WeChat
+    # migration first, then drizzle-kit push to create or align the schema.
+    Say "applying the WeChat migration..."
+    $migration = Join-Path $appDir "drizzle\0002_wechat_clawbot_channel.sql"
+    if (Test-Path $migration) {
+        & (Join-Path $pgBin "psql.exe") -h localhost -p $port -U mirrai -d mirrai `
+            --single-transaction -v ON_ERROR_STOP=1 -f $migration *>&1 | Out-File -FilePath $log -Append
+    }
+
+    Say "pushing the schema..."
     Push-Location $appDir
     try {
-        & $nodeBin ".\node_modules\drizzle-kit\bin.cjs" migrate *>&1 | Out-File -FilePath $log -Append
+        & $nodeBin ".\node_modules\drizzle-kit\bin.cjs" push --force *>&1 | Out-File -FilePath $log -Append
+        if ($LASTEXITCODE -ne 0) { Say "drizzle-kit push FAILED"; exit 1 }
     } finally {
         Pop-Location
     }
-    Say "migrations done."
+    Say "schema synchronised."
+
+    Say "checking the tables..."
+    $tables = & (Join-Path $pgBin "psql.exe") -h localhost -p $port -U mirrai -d mirrai `
+        -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';"
+    Say "the database has $tables tables in the public schema."
+    if ([int]$tables -lt 10) { Say "expected at least 10 tables"; exit 1 }
 
     Say "starting the server..."
     Push-Location $appDir
@@ -128,12 +145,18 @@ try {
     Pop-Location
 
     $up = $false
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 40; $i++) {
         try {
-            Invoke-WebRequest -Uri "http://localhost:3111/" -UseBasicParsing -TimeoutSec 2 | Out-Null
-            $up = $true
-            break
-        } catch { Start-Sleep -Seconds 1 }
+            $resp = Invoke-WebRequest -Uri "http://localhost:3111/" -UseBasicParsing -TimeoutSec 2
+            if ($resp.StatusCode -lt 500) { $up = $true; break }
+        } catch {
+            # A 4xx still means the server is listening; only a connection
+            # error means it is not up yet.
+            $code = $null
+            if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+            if ($code -and $code -lt 500) { $up = $true; break }
+        }
+        Start-Sleep -Seconds 1
     }
     if (-not $up) { Say "the server did not answer on port 3111"; exit 1 }
     Say "the server answered on http://localhost:3111"

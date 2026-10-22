@@ -162,12 +162,30 @@ listen_addresses = 'localhost'
     }
 
     # ─── Database migration ─────────────────────────────────────────────────
-    Log "Running database migrations..."
+    # The WeChat channel changed the meaning of the binding table, so the
+    # hand-written migration runs first. It is idempotent, and on a fresh
+    # database it simply fails because the table is not there yet.
+    Log "Applying the WeChat channel migration..."
+    $migration = Join-Path $AppDir "drizzle\0002_wechat_clawbot_channel.sql"
+    if (Test-Path $migration) {
+        & (Join-Path $PgDir "bin\psql.exe") -h localhost -p $PgPort -U $PgUser -d $DbName `
+            --single-transaction -v ON_ERROR_STOP=1 -f $migration *>&1 |
+            Tee-Object -FilePath (Join-Path $Logs "migrate.log")
+        if ($LASTEXITCODE -ne 0) {
+            Log "Migration note: the schema was not there yet, it will be created below."
+        }
+    }
+
+    # `drizzle-kit push` compares schema.ts against the live database and
+    # applies the difference. Unlike `migrate` it does not need a migration
+    # journal, which is not shipped with the app.
+    Log "Synchronizing the database schema..."
     Push-Location $AppDir
     try {
-        & $NodeBin ".\node_modules\drizzle-kit\bin.cjs" migrate 2>&1 | Tee-Object -FilePath (Join-Path $Logs "migrate.log")
+        & $NodeBin ".\node_modules\drizzle-kit\bin.cjs" push --force 2>&1 |
+            Tee-Object -FilePath (Join-Path $Logs "migrate.log")
     } catch {
-        Log "Migration note: $($_.Exception.Message)"
+        Log "Schema sync note: $($_.Exception.Message)"
     }
     Pop-Location
 

@@ -151,9 +151,24 @@ if [ -z "${JWT_SECRET:-}" ]; then
 fi
 
 # ─── Database migration ─────────────────────────────────────────────────────
-log "Running database migrations..."
+# The WeChat channel changed the meaning of the binding table, so the
+# hand-written migration runs first. It is idempotent, and on a fresh
+# database it simply fails because the table is not there yet.
+log "Applying the WeChat channel migration..."
+MIGRATION="$APP_DIR/drizzle/0002_wechat_clawbot_channel.sql"
+if [ -f "$MIGRATION" ]; then
+  "$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" \
+    --single-transaction -v ON_ERROR_STOP=1 -f "$MIGRATION" 2>&1 | tee -a "$LOGS/migrate.log" || \
+    log "Migration note: the schema was not there yet, it will be created below."
+fi
+
+# `drizzle-kit push` compares schema.ts against the live database and applies
+# the difference. Unlike `migrate` it does not need a migration journal, which
+# is not shipped with the app.
+log "Synchronizing the database schema..."
 cd "$APP_DIR"
-"$NODE_BIN" ./node_modules/drizzle-kit/bin.cjs migrate 2>&1 | tee -a "$LOGS/migrate.log" || log "Migration note (may be OK)"
+"$NODE_BIN" ./node_modules/drizzle-kit/bin.cjs push --force 2>&1 | tee -a "$LOGS/migrate.log" || \
+  log "Schema sync note (may be OK)"
 
 # ─── Create .env template for user ──────────────────────────────────────────
 if [ ! -f "$ENV_FILE" ]; then
