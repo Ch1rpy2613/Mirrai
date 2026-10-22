@@ -81,16 +81,29 @@ $worker = @'
 $ErrorActionPreference = "Stop"
 $dist = $args[0]
 $log = $args[1]
+$workRoot = $args[2]
 $nodeBin = Join-Path $dist "node\node.exe"
 $pgBin = Join-Path $dist "pgsql\bin"
-$pgData = Join-Path $env:TEMP "mirrai-smoke-pgdata"
-$uploads = Join-Path $env:TEMP "mirrai-smoke-uploads"
-$pgLog = Join-Path $env:TEMP "mirrai-smoke-pg.log"
+$pgData = Join-Path $workRoot "pgdata"
+$uploads = Join-Path $workRoot "uploads"
+$pgLog = Join-Path $workRoot "pg.log"
 $port = 55433
+
+# A process started with -Credential gets a fresh environment that may point
+# at a profile the account cannot write to. Point everything at the directory
+# that was granted access, because both initdb and Node need a writable home.
+$env:TEMP = $workRoot
+$env:TMP = $workRoot
+$env:TMPDIR = $workRoot
+$env:HOME = $workRoot
+$env:USERPROFILE = $workRoot
+$env:LOCALAPPDATA = $workRoot
+$env:APPDATA = $workRoot
 
 function Say($m) { "$((Get-Date).ToString('HH:mm:ss')) $m" | Tee-Object -FilePath $log -Append }
 
 try {
+    Say "working in $workRoot"
     Remove-Item $pgData -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $pgData, $uploads | Out-Null
 
@@ -187,8 +200,10 @@ Set-Content -Path $WorkerScript -Value $worker -Encoding UTF8
 Remove-Item $WorkerLog -ErrorAction SilentlyContinue
 $cred = New-Object System.Management.Automation.PSCredential($TestUser, $secure)
 Log "Running the bundle as '$TestUser'..."
+$WorkRoot = Join-Path $PublicDir "work"
+New-Item -ItemType Directory -Force -Path $WorkRoot | Out-Null
 $proc = Start-Process -FilePath "powershell.exe" `
-    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$WorkerScript`"", "`"$DistDir`"", "`"$WorkerLog`"") `
+    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$WorkerScript`"", "`"$DistDir`"", "`"$WorkerLog`"", "`"$WorkRoot`"") `
     -Credential $cred -LoadUserProfile -Wait -PassThru -NoNewWindow
 
 Log "Worker output:"
