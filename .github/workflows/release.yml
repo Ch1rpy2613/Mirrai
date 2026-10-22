@@ -1,0 +1,38 @@
+name: Release
+
+# Tagging a version builds the macOS app and attaches the DMG to the release.
+# The build itself is the same script the maintainer runs locally, so the
+# artifact is reproducible from the tagged commit.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  macos-app:
+    name: Build macOS app
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install PostgreSQL 16
+        run: brew install postgresql@16 || brew list postgresql@16
+
+      - name: Build the DMG
+        run: bash scripts/build-macos-app.sh
+
+      - name: Attach the DMG to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" build-macos/Mirrai-macOS-arm64.dmg --clobber
