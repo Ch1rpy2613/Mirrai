@@ -91,7 +91,13 @@ listen_addresses = 'localhost'
 
     if (-not (Test-Path (Join-Path $PgData "postmaster.pid"))) {
         Log "Starting PostgreSQL on port $PgPort..."
-        & (Join-Path $PgDir "bin\pg_ctl.exe") -D $PgData -l $PgLog start 2>&1 | Out-Null
+        # Not `... | Out-Null`: the server inherits the pipe's write end and
+        # the pipeline would never see EOF, which hangs the whole script.
+        Start-Process -FilePath (Join-Path $PgDir "bin\pg_ctl.exe") `
+            -ArgumentList @("-D", $PgData, "-l", $PgLog, "start") `
+            -Wait -NoNewWindow `
+            -RedirectStandardOutput (Join-Path $Logs "pgctl.out") `
+            -RedirectStandardError (Join-Path $Logs "pgctl.err") | Out-Null
 
         $ready = $false
         for ($i = 0; $i -lt 30; $i++) {
