@@ -60,8 +60,16 @@ try {
         }
     }
     corepack pnpm install --frozen-lockfile --node-linker=hoisted
+    Log "node-linker in effect: $(corepack pnpm config get node-linker)"
+    # With the hoisted linker the top level is a plain npm-style tree and
+    # .pnpm is only the store it was built from. Its paths are the long ones
+    # that Windows refuses to open, and nothing refers to them afterwards.
     if (Test-Path (Join-Path $ProjectDir "node_modules\.pnpm")) {
-        Die "pnpm kept the .pnpm layout; the installer cannot read those paths."
+        Log "Removing the pnpm virtual store..."
+        cmd /c rmdir /s /q node_modules\.pnpm 2>&1 | Out-Null
+        if (Test-Path (Join-Path $ProjectDir "node_modules\.pnpm")) {
+            Remove-Item (Join-Path $ProjectDir "node_modules\.pnpm") -Recurse -Force
+        }
     }
     # Drop packages that are no longer in the dependency tree; pnpm would
     # otherwise keep them around and they would be shipped inside the bundle.
