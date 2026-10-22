@@ -31,66 +31,55 @@ import { runSkillPipeline } from "./skill-engine/pipeline";
 import { getEmotionalStateDesc, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
 import { inferEmotionalState } from "./_core/emotion";
 import { hashPassword, verifyPassword } from "./_core/password";
+import { extractJsonArray, extractJsonObject } from "./_core/json";
 
-async function analyzeAndBuildPersona(
-  personaId: number,
-  userId: number,
-  name: string,
-  files: Array<{ fileType: string; fileUrl: string; extractedText?: string }>
-): Promise<void> {
-  await updatePersona(personaId, userId, { analysisStatus: "analyzing", analysisProgress: 10, analysisMessage: "正在读取文件内容..." });
-
-  const chatContents: string[] = [];
-  const imageUrls: string[] = [];
-
-  for (const file of files) {
-    if (file.fileType === "chat_txt" || file.fileType === "chat_csv") {
-      if (file.extractedText) chatContents.push(file.extractedText);
-    } else if (file.fileType === "image") {
-      imageUrls.push(file.fileUrl);
-    }
-  }
-
-  await updatePersona(personaId, userId, { analysisProgress: 30, analysisMessage: "AI 正在分析聊天记录..." });
-
-  const chatSample = chatContents.join("\n\n---\n\n").slice(0, 8000);
-  let personaData: any = {};
+/**
+ * Collects the uploaded material for a persona and kicks off the distillation
+ * pipeline. Both `persona.triggerAnalysis` and `skillEngine.startPipeline`
+ * route through here so there is a single persona-building path.
+ */
+async function startPersonaDistillation(params: {
+  personaId: number;
+  userId: number;
+  name: string;
+  characterFamily: "colleague" | "relationship" | "celebrity";
+}): Promise<void> {
+  const { personaId, userId, name, characterFamily } = params;
 
   try {
-    const response = await llmService.invoke({
-      messages: [
-        { role: "system", content: "你是专业的人物性格分析师。请只返回 JSON，不要有其他文字。" },
-        { role: "user", content: `请根据以下聊天记录，分析"${name}"的人物画像。\n\n聊天记录：\n${chatSample || "（无聊天记录，请根据名字生成温柔的默认人设）"}\n\n请返回JSON格式，包含以下字段：personality, speakingStyle, catchphrases(数组), nickname, memories, attachmentStyle, loveLanguage, conflictStyle, touchingMoments, summary` },
-      ],
+    const files = await getFilesByPersonaId(personaId);
+    const chatContent = files
+      .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
+      .map((f) => f.extractedMemory || "")
+      .join("\n\n---\n\n");
+    const imageUrls = files
+      .filter((f) => f.fileType === "image")
+      .map((f) => f.fileUrl)
+      .filter(Boolean);
+
+    await updatePersona(personaId, userId, {
+      analysisStatus: "analyzing",
+      analysisProgress: 5,
+      analysisMessage: "启动性格蒸馏引擎...",
     });
-    const replyText = response;
-    if (replyText) {
-      const jsonMatch = replyText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) personaData = JSON.parse(jsonMatch[0]);
-    }
+
+    await runSkillPipeline({
+      personaId,
+      userId,
+      characterFamily,
+      name,
+      chatContent,
+      imageUrls,
+    });
   } catch (e) {
-    console.error("[Persona Analysis] LLM error:", e);
-    personaData = { personality: `${name}是一个温柔体贴的人。`, speakingStyle: "说话温柔，喜欢用可爱的语气词", catchphrases: ["嗯嗯","好呀","哈哈"], nickname: "宝贝", memories: "我们一起走过了很多美好的时光", attachmentStyle: "安全型", loveLanguage: "精心时刻", conflictStyle: "会先冷静，然后主动和好", touchingMoments: "对方记住了自己说过的小细节", summary: `${name}是一个温暖、真诚的人` };
+    // The persona must never be left stuck in "pending" — the upload page
+    // only surfaces progress for "analyzing" and errors for "error".
+    console.error("[Persona] Distillation failed to start:", e);
+    await updatePersona(personaId, userId, {
+      analysisStatus: "error",
+      analysisMessage: "解析失败，请重试",
+    }).catch(() => {});
   }
-
-  await updatePersona(personaId, userId, { analysisProgress: 70, analysisMessage: "正在分析图片内容..." });
-
-  if (imageUrls.length > 0) {
-    try {
-      const imgResponse = await llmService.invoke({
-        messages: [{
-          role: "user",
-          content: `这些是我和${name}的照片。请描述照片中体现的情感氛围和能反映${name}性格特质的细节。用中文，2-3句话。`,
-        }],
-      });
-      const imgMemory = imgResponse;
-      if (imgMemory) {
-        personaData.memories = (personaData.memories || "") + "\n\n【照片记忆】" + imgMemory;
-      }
-    } catch (e) { console.error("[Image Analysis] error:", e); }
-  }
-
-  await updatePersona(personaId, userId, { personaData, analysisStatus: "ready", analysisProgress: 100, analysisMessage: `${name} 的数字分身已准备好，可以开始对话了` });
 }
 
 export const appRouter = router({
@@ -244,15 +233,16 @@ export const appRouter = router({
       }),
 
     triggerAnalysis: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number(), characterFamily: z.enum(["colleague", "relationship", "celebrity"]).default("relationship") }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const files = await getFilesByPersonaId(input.id);
-        analyzeAndBuildPersona(input.id, ctx.user.id, persona.name, files.map((f) => ({ fileType: f.fileType, fileUrl: f.fileUrl, extractedText: f.extractedMemory || undefined }))).catch(async (e) => {
-          console.error("[triggerAnalysis] error:", e);
-          await updatePersona(input.id, ctx.user.id, { analysisStatus: "error", analysisMessage: "解析失败，请重试" });
-        });
+        startPersonaDistillation({
+          personaId: input.id,
+          userId: ctx.user.id,
+          name: persona.name,
+          characterFamily: input.characterFamily,
+        }).catch((e) => console.error("[triggerAnalysis] error:", e));
         return { success: true };
       }),
 
@@ -608,25 +598,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const files = await getFilesByPersonaId(input.personaId);
-        const chatContent = files
-          .filter(f => f.fileType === "chat_txt" || f.fileType === "chat_csv")
-          .map(f => f.extractedMemory || "")
-          .join("\n\n---\n\n");
 
-        await updatePersona(input.personaId, ctx.user.id, {
-          analysisStatus: "analyzing",
-          analysisProgress: 5,
-          analysisMessage: "启动性格蒸馏引擎...",
-        });
-
-        runSkillPipeline({
+        startPersonaDistillation({
           personaId: input.personaId,
           userId: ctx.user.id,
-          characterFamily: input.characterFamily,
           name: persona.name,
-          chatContent,
-        }).catch(e => console.error("[SkillEngine] Pipeline error:", e));
+          characterFamily: input.characterFamily,
+        }).catch((e) => console.error("[SkillEngine] Pipeline error:", e));
 
         return { success: true };
       }),
@@ -731,15 +709,20 @@ export const appRouter = router({
 
         const extracted: Array<{ title: string; description?: string; category?: string; date?: string }> = [];
         try {
-          const match = (response || "").match(/\[[\s\S]*\]/);
-          if (match) {
-            const arr = JSON.parse(match[0]);
-            for (const item of arr.slice(0, 5)) {
+          const arr = extractJsonArray(response);
+          if (arr) {
+            for (const raw of arr.slice(0, 5)) {
+              const item = (raw ?? {}) as {
+                title?: string;
+                description?: string;
+                category?: string;
+                date?: string;
+              };
               const id = await createMemory({
                 personaId: input.personaId, userId: ctx.user.id,
                 title: item.title || "记忆",
                 description: item.description,
-                category: (["milestone", "memory", "anniversary"].includes(item.category) ? item.category : "memory") as any,
+                category: (["milestone", "memory", "anniversary"].includes(item.category as string) ? item.category : "memory") as any,
                 date: item.date,
               });
               extracted.push({ ...item, title: item.title || "记忆" });
@@ -809,11 +792,13 @@ export const appRouter = router({
             { role: "user", content: chatText.slice(0, 6000) },
           ],
         });
-        let parsed: any = {};
-        try {
-          const match = (response || "").match(/\{[\s\S]*\}/);
-          if (match) parsed = JSON.parse(match[0]);
-        } catch {}
+        const parsed = (extractJsonObject(response) ?? {}) as {
+          summary?: string;
+          highlights?: string[];
+          emotionalArc?: Record<string, string>;
+          quotes?: string[];
+          reflection?: string | null;
+        };
         const id = await createDiaryEntry({
           personaId: input.personaId, userId: ctx.user.id, date,
           summary: parsed.summary || "今天和TA聊了天",
