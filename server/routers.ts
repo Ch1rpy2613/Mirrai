@@ -86,7 +86,20 @@ export const appRouter = router({
   system: systemRouter,
 
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
+    // Never return the raw user row: it carries `passwordHash` and `openId`.
+    me: publicProcedure.query(({ ctx }) => {
+      if (!ctx.user) return null;
+      return {
+        id: ctx.user.id,
+        username: ctx.user.username,
+        name: ctx.user.name,
+        email: ctx.user.email,
+        role: ctx.user.role,
+        loginMethod: ctx.user.loginMethod,
+        createdAt: ctx.user.createdAt,
+        lastSignedIn: ctx.user.lastSignedIn,
+      };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
