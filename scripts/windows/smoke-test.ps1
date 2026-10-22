@@ -214,6 +214,8 @@ $proc = Start-Process -FilePath "powershell.exe" `
 # Stream the worker's log while it runs, so a hang shows up at the step that
 # caused it rather than as a silent timeout.
 $shown = 0
+$deadline = (Get-Date).AddMinutes(6)
+$timedOut = $false
 while (-not $proc.HasExited) {
     Start-Sleep -Seconds 5
     if (Test-Path $WorkerLog) {
@@ -223,8 +225,14 @@ while (-not $proc.HasExited) {
             $shown = $lines.Count
         }
     }
+    if ((Get-Date) -gt $deadline) {
+        $timedOut = $true
+        Write-Host "The worker did not finish in time; stopping it."
+        try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        break
+    }
 }
-$proc.WaitForExit()
+if (-not $timedOut) { $proc.WaitForExit() }
 Write-Host ""
 
 Log "Worker output:"
@@ -232,6 +240,9 @@ if (Test-Path $WorkerLog) { Get-Content $WorkerLog | Write-Host } else { Write-H
 
 Remove-LocalUser -Name $TestUser -ErrorAction SilentlyContinue
 
+if ($timedOut) {
+    Die "The smoke test timed out after 6 minutes."
+}
 if ($proc.ExitCode -ne 0) {
     Die "The smoke test failed (exit code $($proc.ExitCode))."
 }
