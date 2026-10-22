@@ -49,6 +49,10 @@ cd "$PROJECT_DIR"
 # so lockfile overrides stay compatible across machines
 corepack enable pnpm 2>/dev/null || true
 corepack pnpm install --frozen-lockfile
+# Drop packages that are no longer in the dependency tree. pnpm keeps them in
+# .pnpm/, and a stale copy of an uninstalled dependency (wechaty and its
+# transitive deps, for example) would otherwise be shipped inside the app.
+corepack pnpm prune
 corepack pnpm build
 
 # ─── Step 2: Download Node.js ────────────────────────────────────────────────
@@ -190,8 +194,14 @@ cp "$PROJECT_DIR/drizzle.config.ts" "$APP_DEST/"
 
 # Copy node_modules (full — the esbuild bundle uses --packages=external
 # so runtime imports like vite, drizzle-kit etc. must be resolvable)
+# pnpm's layout is symlink-based, so tar is used instead of cp: it preserves
+# the links and keeps the .pnpm store in place. The IDE settings that some
+# packages ship (.vscode, .idea) are excluded — they are never needed at
+# runtime and some of them are not copyable.
 log "Copying node_modules (this may take a moment)..."
-cp -R "$PROJECT_DIR/node_modules" "$APP_DEST/"
+tar -cf - -C "$PROJECT_DIR" \
+    --exclude='.vscode' --exclude='.idea' \
+    node_modules | tar -xf - -C "$APP_DEST"
 
 # ─── Step 5: Info.plist ──────────────────────────────────────────────────────
 log "Writing Info.plist..."
