@@ -73,11 +73,11 @@ Download `Mirrai-macOS-arm64.dmg` from [Releases](https://github.com/Ch1rpy2613/
 
 ### Windows one-click
 
-Download `Mirrai-Windows-x64.zip` from [Releases](https://github.com/Ch1rpy2613/Mirrai/releases), unpack it anywhere, and double-click `Mirrai.cmd` — Node.js and PostgreSQL are bundled, so there is no database to install, no administrator rights needed, and nothing is written to the registry (Windows x64).
+Download `Mirrai-Setup-x64.exe` from [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) and run the installer — Node.js and PostgreSQL are bundled, so there is no database to install, no administrator rights needed, and nothing is written to the registry (Windows x64).
 
-The first launch initialises the database and opens your browser. Data lives in `%APPDATA%\Mirrai`, so uninstalling means deleting that folder and the program.
+After the install, start Mirrai from the Start menu (or the desktop). A window with a **progress bar** shows what is happening — "initialising the database", "synchronising the schema", "starting the server", "ready" — so the first launch, which does take a minute or two, never looks like it has hung. Data lives in `%APPDATA%\Mirrai`; uninstalling goes through "Apps & features".
 
-> PostgreSQL refuses to run under an Administrator account on Windows. If you started `Mirrai.cmd` from an elevated prompt, run it as a normal user instead.
+> PostgreSQL refuses to run under an Administrator account on Windows. If you started it from an elevated prompt, run it as a normal user instead.
 
 ### WeChat (optional)
 

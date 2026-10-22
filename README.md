@@ -182,13 +182,13 @@ pnpm build && pnpm start
 
 ### 方式四：Windows 一键安装
 
-从 [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) 下载 `Mirrai-Windows-x64.zip`，解压到任意目录，双击 `Mirrai.cmd` 即可。内置 Node.js 和 PostgreSQL —— 不用装数据库、不用管理员权限、不写注册表（Windows x64）。
+从 [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) 下载 `Mirrai-Setup-x64.exe`，双击安装即可。内置 Node.js 和 PostgreSQL —— 不用装数据库、不用管理员权限、不写注册表（Windows x64）。
 
-首次启动会初始化数据库并自动打开浏览器。数据放在 `%APPDATA%\Mirrai`，卸载就是删掉那个目录加上程序本身。
+装完后在开始菜单（或桌面）双击 `Mirrai` 启动。启动时会弹一个**带进度条的窗口**，实时显示「正在初始化数据库 → 正在同步表结构 → 正在启动服务 → 已就绪」，首次启动要一两分钟，所以不会看着像卡死了。数据放在 `%APPDATA%\Mirrai`，卸载走「应用和功能」。
 
-> PostgreSQL 拒绝在 Windows 上以管理员身份运行。如果你用提权的命令提示符启动 `Mirrai.cmd`，换回普通用户即可。
+> PostgreSQL 拒绝在 Windows 上以管理员身份运行。如果你是用提权的命令提示符启动的，换回普通用户即可。
 
-如需自行构建：`powershell -ExecutionPolicy Bypass -File scripts\build-windows-app.ps1`。
+如需自行构建：`powershell -ExecutionPolicy Bypass -File scripts\build-windows-app.ps1`（生成安装包还需要 Inno Setup）。
 
 ## 伦理与边界
 
