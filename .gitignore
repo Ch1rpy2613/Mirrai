@@ -9,3 +9,7 @@ drizzle/meta/
 .vite/
 build-macos/
 .zcode/
+.live-test/
+.live-wechat-state.json
+live-wechat-qr.png
+live-wechat-qr-url.txt
