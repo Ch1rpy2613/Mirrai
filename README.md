@@ -188,7 +188,7 @@ pnpm build && pnpm start
 
 > PostgreSQL 拒绝在 Windows 上以管理员身份运行。如果你是用提权的命令提示符启动的，换回普通用户即可。
 
-如需自行构建：`powershell -ExecutionPolicy Bypass -File scripts\build-windows-app.ps1`（生成安装包还需要 Inno Setup）。
+如需自行构建：`powershell -ExecutionPolicy Bypass -File scripts\build-windows-app.ps1`（生成安装包还需要 Inno Setup），详见 [docs/windows-build-guide.md](docs/windows-build-guide.md)。
 
 ## 伦理与边界
 

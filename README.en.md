@@ -79,6 +79,8 @@ After the install, start Mirrai from the Start menu (or the desktop). A window w
 
 > PostgreSQL refuses to run under an Administrator account on Windows. If you started it from an elevated prompt, run it as a normal user instead.
 
+To build it yourself: `powershell -ExecutionPolicy Bypass -File scripts\build-windows-app.ps1` (Inno Setup is needed for the installer) — see [docs/windows-build-guide.md](docs/windows-build-guide.md).
+
 ### WeChat (optional)
 
 Mirrai connects to WeChat through the official **「微信ClawBot」** plugin (Tencent iLink protocol) — no third-party protocol, so no account-ban risk.
