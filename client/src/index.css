@@ -10,22 +10,16 @@
    两套主题共用同一组变量名，跟随系统切换。
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ─── 自托管衬线：仅覆盖界面固定文案 ───────────────────────────────────────
-   子集由 scripts/subset-font.mjs 依据源码字面量生成。
-   用户生成内容（分身名、日记、告别信、消息）一律走无衬线栈，不会缺字。 */
+/* ─── 自托管字体：MiSans ───────────────────────────────────────────────────
+   子集由 scripts/subset-misans.py 依据源码字面量生成：只裁字符集，字形轮廓
+   未作任何改动，wght 轴与全部 OpenType feature 均完整保留。
+   MiSans 由小米发布，可免费商用与嵌入（不可单独售卖字体文件本身）。 */
 @font-face {
-  font-family: "Noto Serif SC Subset";
+  font-family: "MiSans";
   font-style: normal;
-  font-weight: 600;
+  font-weight: 150 700;
   font-display: swap;
-  src: url("/fonts/noto-serif-sc-600-subset.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Noto Serif SC Subset";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/fonts/noto-serif-sc-700-subset.woff2") format("woff2");
+  src: url("/fonts/MiSans-subset.woff2") format("woff2");
 }
 
 @theme {
@@ -76,12 +70,15 @@
   --radius-lg: 0.625rem;
   --radius-xl: 0.875rem;
 
-  /* ── Typography ── */
-  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
-    "Noto Sans SC", "Segoe UI", system-ui, sans-serif;
-  --font-display: "Noto Serif SC Subset", "Songti SC", "STSong", "SimSun", Georgia,
-    serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* ── Typography · 全站 MiSans ── */
+  --font-sans: "MiSans", -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", system-ui, sans-serif;
+  /* 标题与正文同族，靠字重与字号拉开层级 */
+  --font-display: "MiSans", -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", system-ui, sans-serif;
+  /* MiSans 没有等宽变体，代码块仍需系统等宽字体保持对齐 */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
 
   /* ─── Shadows · 浅色几乎不用，靠发丝线 ── */
   --shadow-lift: 0 1px 2px oklch(0.28 0.02 240 / 0.05);
@@ -149,6 +146,9 @@ html.dark {
     @apply bg-background text-foreground font-sans antialiased;
     min-height: 100vh;
     min-height: 100dvh;
+    /* MiSans: 等宽数字，统计、时间、日期里的数字才能对齐 */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
   }
   button,
   input,
@@ -244,6 +244,8 @@ html.dark {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: var(--color-foreground);
+  /* SS04 汉字等高数字：数字和汉字一样高，统计行才不显得跳 */
+  font-feature-settings: "tnum" 1, "ss04" 1;
 }
 
 .stat-label {
@@ -255,7 +257,7 @@ html.dark {
 
 /* 页面里的引文 / 书信口吻正文
    正文一律用无衬线：这些内容来自用户（分身名、日记、告别信、消息），
-   衬线字体是子集化的，用户输入的字可能不在子集里。 */
+   字体是子集化的，用户输入的字可能不在子集里。 */
 .letter-prose {
   font-family: var(--font-sans);
   font-size: 0.9375rem;
@@ -279,6 +281,46 @@ html.dark {
 }
 .letter-prose--chat p + p {
   margin-top: 0.8em;
+}
+
+/* ─── MiSans OpenType features ───────────────────────────────────────────
+   字体子集保留了全部 26 个 GSUB feature 与 kern，按需开启：
+
+   tnum  等宽数字 —— 全局开启，统计、日期、时间里的数字才能对齐
+   ss04  汉字等高数字 —— 数字和汉字一样高，统计行才不显得跳
+   ss01  数字专用标点 —— 数字周边的标点换成专用形态
+   ss02  单位小上标 / ss03 单位小下标
+   ss07  西文式标点 / ss08 拨号盘符号 / ss09 小字面数字
+   frac  分数（1/2 → ½）—— 用于成就进度一类的比值
+   sups  数字上标（1 → ¹）· case 大写形态数字 · vert 竖排标点
+   ------------------------------------------------------------------ */
+.num-frac {
+  font-feature-settings: "tnum" 1, "frac" 1;
+}
+.num-sups {
+  font-feature-settings: "sups" 1;
+}
+.num-case {
+  font-feature-settings: "case" 1;
+}
+.num-unit-sup {
+  font-feature-settings: "ss02" 1;
+}
+.num-unit-sub {
+  font-feature-settings: "ss03" 1;
+}
+.num-western-punct {
+  font-feature-settings: "ss07" 1;
+}
+.num-dial {
+  font-feature-settings: "ss08" 1;
+}
+.num-small-cap {
+  font-feature-settings: "ss09" 1;
+}
+.text-vert {
+  writing-mode: vertical-rl;
+  font-feature-settings: "vert" 1, "vrt2" 1;
 }
 
 /* Kicker · 小注（无衬线，全大写语义靠字距不靠大小写） */

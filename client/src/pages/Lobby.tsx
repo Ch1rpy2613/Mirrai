@@ -559,7 +559,7 @@ function AchievementBadges({ stats }: { stats: any }) {
       <PanelTitle
         icon={Trophy}
         title="成就徽章"
-        right={<span className="text-[10px] text-muted-foreground">{unlocked.length}/{ACHIEVEMENTS.length} 已解锁</span>}
+        right={<span className="num-frac text-[10px] text-muted-foreground">{unlocked.length}/{ACHIEVEMENTS.length} 已解锁</span>}
       />
       <div className="flex gap-2 flex-wrap">
         {unlocked.map((a, i) => {
