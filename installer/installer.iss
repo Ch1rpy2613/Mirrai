@@ -33,6 +33,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=mirrai.ico
 LicenseFile=..\LICENSE
 SetupLogging=yes
 CloseApplications=yes
