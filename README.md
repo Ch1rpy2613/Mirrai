@@ -107,7 +107,7 @@ Drizzle Schema → DB Helpers → tRPC Router → React Query Hook → UI 组件
 | 能力 | Mirrai | Character.AI / Linky | SillyTavern |
 |------|--------|---------------------|-------------|
 | 基于真实聊天记录构建人格 | ✅ 多阶段蒸馏 | ❌ 手工填写人设 | ⚠️ 手工调 prompt |
-| 情感状态随对话动态漂移 | ✅ 6 态状态机 | ⚠️ 有限 | ⚠️ 手动管理 |
+| 情感状态随对话动态漂移 | ✅ 6 态状态机（LLM 判定） | ⚠️ 有限 | ⚠️ 手动管理 |
 | 数据完全本地 | ✅ | ❌ 云端 | ✅ |
 | LLM 后端自由切换 | ✅ 12 家 / 本地 | ❌ 平台绑定 | ✅ |
 | 微信接入 | ✅ | ❌ | ❌ |
@@ -327,6 +327,8 @@ scenes             -- 对话场景模板 (内置 + 自定义, 含开场白)
 | `PYTHON_PATH` | Python 路径 | `python3` |
 | `SKILL_ENGINE_DIR` | 蒸馏引擎目录 | `./skill-engine` |
 | `PORT` | 服务端口 | `3000` |
+| `EMOTION_ENGINE` | 情绪判定引擎：`llm`（模型阅读对话判断）/ `heuristic`（纯关键词规则，零额外调用） | `llm` |
+| `PERSONA_AI_TRANSPARENCY` | AI 身份透明：`true`= 被认真询问时承认是 AI；`false` = 完全沉浸模式 | `true` |
 
 ## 项目结构
 

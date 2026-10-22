@@ -20,6 +20,9 @@ export const ENV = {
 
   defaultLlmProvider: process.env.DEFAULT_LLM_PROVIDER ?? "openai",
 
+  // 情绪判定引擎：llm（默认，由模型阅读对话判断）/ heuristic（纯关键词规则，零额外调用）
+  emotionEngine: (process.env.EMOTION_ENGINE ?? "llm") as "llm" | "heuristic",
+
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
   openaiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
   openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o",

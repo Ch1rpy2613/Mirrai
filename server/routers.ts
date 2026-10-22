@@ -28,7 +28,8 @@ import {
 import { nanoid } from "nanoid";
 import { getBotStatus, startWeChatBot, stopWeChatBot, listWechatContacts } from "./wechat/bot";
 import { runSkillPipeline } from "./skill-engine/pipeline";
-import { getEmotionalStateDesc, computeEmotionalState, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
+import { getEmotionalStateDesc, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
+import { inferEmotionalState } from "./_core/emotion";
 import { hashPassword, verifyPassword } from "./_core/password";
 
 async function analyzeAndBuildPersona(
@@ -378,7 +379,13 @@ export const appRouter = router({
           options: { provider, temperature: extra.temperature, maxTokens: extra.maxTokens },
         });
         const replyText = response || "（沉默）";
-        const newEmotionalState = computeEmotionalState(input.message, replyText, persona.emotionalState);
+        const emotion = await inferEmotionalState({
+          userMessage: input.message,
+          assistantReply: replyText,
+          currentState: persona.emotionalState,
+          provider,
+        });
+        const newEmotionalState = emotion.state;
 
         await createMessage({ personaId: input.personaId, userId: ctx.user.id, role: "assistant", content: replyText, emotionalState: newEmotionalState });
         await updatePersona(input.personaId, ctx.user.id, { chatCount: (persona.chatCount || 0) + 1, lastChatAt: new Date(), emotionalState: newEmotionalState as any });
@@ -447,7 +454,13 @@ export const appRouter = router({
         const provider = (persona as any).llmProvider || undefined;
         const response = await llmService.invoke({ messages: llmMessages, options: { provider, temperature: extra.temperature, maxTokens: extra.maxTokens } });
         const replyText = response || "（沉默）";
-        const newEmotionalState = computeEmotionalState("[图片]", replyText, persona.emotionalState);
+        const emotion = await inferEmotionalState({
+          userMessage: "[图片]",
+          assistantReply: replyText,
+          currentState: persona.emotionalState,
+          provider,
+        });
+        const newEmotionalState = emotion.state;
 
         await createMessage({ personaId: input.personaId, userId: ctx.user.id, role: "assistant", content: replyText, emotionalState: newEmotionalState });
         await updatePersona(input.personaId, ctx.user.id, { chatCount: (persona.chatCount || 0) + 1, lastChatAt: new Date(), emotionalState: newEmotionalState as any });
@@ -486,7 +499,13 @@ export const appRouter = router({
         const provider = (persona as any).llmProvider || undefined;
         const response = await llmService.invoke({ messages: llmMessages, options: { provider, temperature: extra.temperature, maxTokens: extra.maxTokens } });
         const replyText = response || "（沉默）";
-        const newEmotionalState = computeEmotionalState(transcription, replyText, persona.emotionalState);
+        const emotion = await inferEmotionalState({
+          userMessage: transcription,
+          assistantReply: replyText,
+          currentState: persona.emotionalState,
+          provider,
+        });
+        const newEmotionalState = emotion.state;
 
         await createMessage({ personaId: input.personaId, userId: ctx.user.id, role: "assistant", content: replyText, emotionalState: newEmotionalState });
         await updatePersona(input.personaId, ctx.user.id, { chatCount: (persona.chatCount || 0) + 1, lastChatAt: new Date(), emotionalState: newEmotionalState as any });

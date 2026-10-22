@@ -22,7 +22,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 | | |
 |---|---|
 | 🧬 **Multi-stage persona distillation** | A real pipeline (intake → persona analysis → structured build → merge) produces a 7-layer persona: personality, speaking style, catchphrases, attachment style, love language, conflict style, touching moments. Not a "paste logs into a prompt" wrapper. |
-| 🎭 **Dynamic emotion state machine** | 6 emotional states (warm / playful / nostalgic / melancholic / happy / distant) drift with the conversation and change reply tone in real time. |
+| 🎭 **Dynamic emotion state machine** | 6 emotional states (warm / playful / nostalgic / melancholic / happy / distant) drift with the conversation and change reply tone in real time. The state is inferred by the LLM reading the exchange, with a keyword heuristic as fallback. |
 | 🎓 **Graduation mechanism** | Intimacy grows through conversation. When the system detects you're at peace, it offers "graduation": an AI-written farewell letter, then the persona sleeps. Success is measured by graduation rate, not retention. |
 | 🔌 **12 LLM providers** | OpenAI, Claude, DeepSeek, Kimi, Qwen, Doubao, 302.ai, Atlas Cloud, Cheaper Inference, Dify, Xunfei — and Ollama for fully local inference. |
 | 💬 **WeChat bot** | Bind a WeChat contact to a persona via Wechaty; it replies in their voice. Shares persona and memory with the web app. (Unofficial protocol — ban risk, use a spare account.) |

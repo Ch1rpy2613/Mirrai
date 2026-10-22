@@ -1,6 +1,7 @@
 import { llmService } from "../llm";
 import * as db from "../db";
-import { getEmotionalStateDesc, computeEmotionalState, buildSystemPrompt } from "../_core/persona-utils";
+import { getEmotionalStateDesc, buildSystemPrompt } from "../_core/persona-utils";
+import { inferEmotionalState } from "../_core/emotion";
 
 export async function handlePersonaChat(
   contactId: string,
@@ -25,6 +26,7 @@ export async function handlePersonaChat(
   const history = await db.getMessagesByPersonaId(binding.personaId, 20);
   const systemPrompt = buildSystemPrompt(persona);
 
+  const provider = (persona as any).llmProvider || undefined;
   const replyText = await llmService.invoke({
     messages: [
       { role: "system", content: systemPrompt },
@@ -33,9 +35,16 @@ export async function handlePersonaChat(
         content: m.content,
       })),
     ],
+    options: { provider },
   }) || "（沉默）";
 
-  const newState = computeEmotionalState(messageText, replyText, persona.emotionalState);
+  const emotion = await inferEmotionalState({
+    userMessage: messageText,
+    assistantReply: replyText,
+    currentState: persona.emotionalState,
+    provider,
+  });
+  const newState = emotion.state;
 
   await db.createMessage({
     personaId: binding.personaId,
