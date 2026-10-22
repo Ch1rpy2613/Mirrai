@@ -1,0 +1,170 @@
+# ─── Mirrai Windows smoke test ───────────────────────────────────────────────
+# Verifies that the built bundle actually runs: the PostgreSQL binaries load
+# their DLLs, the database can be initialised and started, and the server
+# answers on HTTP.
+#
+# PostgreSQL refuses to run under an Administrator account on Windows, so the
+# database part is executed as a freshly created standard user. That is also
+# exactly the situation a person unpacking the ZIP is in.
+#
+# Usage (from the repository root, after the build):
+#   powershell -ExecutionPolicy Bypass -File scripts\windows\smoke-test.ps1
+
+$ErrorActionPreference = "Stop"
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ProjectDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
+$DistDir = Join-Path $ProjectDir "build-windows\Mirrai-Windows-x64"
+
+if (-not (Test-Path $DistDir)) {
+    Write-Host "ERROR: $DistDir not found. Run scripts\build-windows-app.ps1 first." -ForegroundColor Red
+    exit 1
+}
+
+$TestUser = "mirraismoke"
+$TestPass = "Mirrai-Smoke-2024!"
+$PublicDir = Join-Path $env:PUBLIC "mirrai-smoke"
+$WorkerScript = Join-Path $PublicDir "worker.ps1"
+$WorkerLog = Join-Path $PublicDir "worker.log"
+
+function Log($msg) { Write-Host "==> $msg" }
+function Die($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
+
+# ─── 1. The launch script must at least parse ────────────────────────────────
+Log "Parsing start.ps1..."
+try {
+    $null = [ScriptBlock]::Create((Get-Content (Join-Path $DistDir "start.ps1") -Raw))
+} catch {
+    Die "start.ps1 does not parse: $($_.Exception.Message)"
+}
+Log "start.ps1 parses."
+
+# ─── 2. The binaries must load ───────────────────────────────────────────────
+$NodeBin = Join-Path $DistDir "node\node.exe"
+$PgBin = Join-Path $DistDir "pgsql\bin"
+
+Log "Checking the bundled Node.js..."
+$nodeVersion = & $NodeBin --version
+if ($LASTEXITCODE -ne 0) { Die "node.exe failed to run." }
+Log "node.exe $nodeVersion"
+
+Log "Checking the bundled PostgreSQL..."
+foreach ($exe in @("postgres.exe", "initdb.exe", "pg_ctl.exe", "psql.exe", "createdb.exe")) {
+    $path = Join-Path $PgBin $exe
+    if (-not (Test-Path $path)) { Die "$exe is missing from the bundle." }
+    $out = & $path --version 2>&1
+    if ($LASTEXITCODE -ne 0) { Die "$exe failed to run: $out" }
+}
+Log "PostgreSQL binaries load their DLLs."
+
+# ─── 3. Run the database and the server as a standard user ───────────────────
+if (Get-LocalUser -Name $TestUser -ErrorAction SilentlyContinue) {
+    Remove-LocalUser -Name $TestUser
+}
+New-Item -ItemType Directory -Force -Path $PublicDir | Out-Null
+$secure = ConvertTo-SecureString $TestPass -AsPlainText -Force
+New-LocalUser -Name $TestUser -Password $secure -PasswordNeverExpires -NoNewCustomProperties | Out-Null
+Log "Created standard user '$TestUser'."
+
+$worker = @'
+$ErrorActionPreference = "Stop"
+$dist = $args[0]
+$log = $args[1]
+$nodeBin = Join-Path $dist "node\node.exe"
+$pgBin = Join-Path $dist "pgsql\bin"
+$pgData = Join-Path $env:TEMP "mirrai-smoke-pgdata"
+$uploads = Join-Path $env:TEMP "mirrai-smoke-uploads"
+$pgLog = Join-Path $env:TEMP "mirrai-smoke-pg.log"
+$port = 55433
+
+function Say($m) { "$((Get-Date).ToString('HH:mm:ss')) $m" | Tee-Object -FilePath $log -Append }
+
+try {
+    Remove-Item $pgData -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $pgData, $uploads | Out-Null
+
+    Say "initdb..."
+    & (Join-Path $pgBin "initdb.exe") -D $pgData -U mirrai -A trust --encoding=UTF8 --locale=C *>&1 |
+        Out-File -FilePath $log -Append
+    if ($LASTEXITCODE -ne 0) { Say "initdb FAILED"; exit 1 }
+    Say "initdb OK"
+
+    Add-Content -Path (Join-Path $pgData "postgresql.conf") -Value "port = $port`nlisten_addresses = 'localhost'"
+
+    Say "pg_ctl start..."
+    & (Join-Path $pgBin "pg_ctl.exe") -D $pgData -l $pgLog start *>&1 | Out-File -FilePath $log -Append
+    $ready = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        & (Join-Path $pgBin "pg_isready.exe") -h localhost -p $port -q 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $ready) { Say "pg_ctl start FAILED"; exit 1 }
+    Say "PostgreSQL is up."
+
+    Say "createdb..."
+    & (Join-Path $pgBin "createdb.exe") -h localhost -p $port -U mirrai mirrai *>&1 | Out-File -FilePath $log -Append
+    if ($LASTEXITCODE -ne 0) { Say "createdb FAILED"; exit 1 }
+
+    $env:DATABASE_URL = "postgresql://mirrai@localhost:$port/mirrai"
+    $env:NODE_ENV = "production"
+    $env:PORT = 3111
+    $env:JWT_SECRET = "smoke-test-secret-not-for-production-use-0123456789"
+    $env:UPLOAD_DIR = $uploads
+
+    $appDir = Join-Path $dist "app"
+    Say "drizzle-kit migrate..."
+    Push-Location $appDir
+    try {
+        & $nodeBin ".\node_modules\drizzle-kit\bin.cjs" migrate *>&1 | Out-File -FilePath $log -Append
+    } finally {
+        Pop-Location
+    }
+    Say "migrations done."
+
+    Say "starting the server..."
+    Push-Location $appDir
+    $server = Start-Process -FilePath $nodeBin -ArgumentList "dist\index.js" -WorkingDirectory $appDir -PassThru -NoNewWindow
+    Pop-Location
+
+    $up = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            Invoke-WebRequest -Uri "http://localhost:3111/" -UseBasicParsing -TimeoutSec 2 | Out-Null
+            $up = $true
+            break
+        } catch { Start-Sleep -Seconds 1 }
+    }
+    if (-not $up) { Say "the server did not answer on port 3111"; exit 1 }
+    Say "the server answered on http://localhost:3111"
+
+    Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+    & (Join-Path $pgBin "pg_ctl.exe") -D $pgData -m fast stop 2>&1 | Out-File -FilePath $log -Append
+
+    Say "ALL CHECKS PASSED"
+    exit 0
+} catch {
+    Say "EXCEPTION: $($_.Exception.Message)"
+    exit 1
+}
+'@
+
+Set-Content -Path $WorkerScript -Value $worker -Encoding UTF8
+Remove-Item $WorkerLog -ErrorAction SilentlyContinue
+
+$cred = New-Object System.Management.Automation.PSCredential($TestUser, $secure)
+Log "Running the bundle as '$TestUser'..."
+$proc = Start-Process -FilePath "powershell.exe" `
+    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$WorkerScript`"", "`"$DistDir`"", "`"$WorkerLog`"") `
+    -Credential $cred -LoadUserProfile -Wait -PassThru -NoNewWindow
+
+Log "Worker output:"
+if (Test-Path $WorkerLog) { Get-Content $WorkerLog | Write-Host } else { Write-Host "  (no log written)" }
+
+Remove-LocalUser -Name $TestUser -ErrorAction SilentlyContinue
+
+if ($proc.ExitCode -ne 0) {
+    Die "The smoke test failed (exit code $($proc.ExitCode))."
+}
+Log "The bundle works: the database initialises, the server starts and answers."
+exit 0

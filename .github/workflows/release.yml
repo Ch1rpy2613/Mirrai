@@ -78,6 +78,12 @@ jobs:
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
           ./scripts/build-windows-app.ps1
 
+      - name: Smoke test the bundle
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+          ./scripts/windows/smoke-test.ps1
+
       - name: Attach the ZIP to the release
         shell: pwsh
         env:
