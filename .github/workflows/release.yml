@@ -90,10 +90,15 @@ jobs:
       - name: Build the installer
         shell: pwsh
         run: |
-          choco install innosetup -y --no-progress
-          $iscc = Get-ChildItem "$env:ProgramFiles(x86)\Inno Setup*\ISCC.exe" | Select-Object -First 1
+          $paths = @("$env:ProgramFiles\Inno Setup*\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe")
+          $iscc = Get-ChildItem -Path $paths -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = Get-ChildItem -Path $paths -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
           if (-not $iscc) { throw "Inno Setup was not found." }
           & $iscc.FullName installer\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
 
       - name: Attach the installer to the release
         shell: pwsh

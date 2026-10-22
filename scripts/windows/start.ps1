@@ -9,6 +9,10 @@
 
 $ErrorActionPreference = "Stop"
 
+# The GUI launcher reads this output as UTF-8, but PowerShell 5.1 would
+# otherwise write it in the system's legacy code page.
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+
 $Res     = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $NodeBin = Join-Path $Res "node\node.exe"
 $PgDir   = Join-Path $Res "pgsql"
