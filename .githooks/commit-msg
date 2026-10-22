@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Rejects commit messages that contain a "Co-Authored-By" trailer.
+#
+# This repository does not use co-author trailers: every commit is authored by
+# the person who wrote the code, and no AI assistant is credited as a co-author.
+#
+# Install with:
+#   git config core.hooksPath .githooks
+#
+# (or copy this file to .git/hooks/commit-msg and make it executable)
+
+msg_file="$1"
+msg=$(cat "$msg_file")
+
+if printf '%s' "$msg" | grep -qiE '^[[:space:]]*Co-Authored-By:'; then
+    echo "✗ 提交被拒绝：这个仓库不使用 Co-Authored-By trailer。" >&2
+    echo "  请删除该行后重新提交。作者信息只保留提交人本人。" >&2
+    exit 1
+fi
+
+exit 0

@@ -35,6 +35,17 @@ pnpm dev
 - 新增 LLM 提供商优先复用 `OpenAIProvider`（OpenAI 兼容协议）
 - 涉及情感状态的改动请同步更新 `computeEmotionalState()` 和前端 UI 配置
 
+### 提交信息
+
+- **不要添加 `Co-Authored-By` trailer。** 本仓库的每个提交只署名提交人本人，不把 AI 助手列为共同作者。仓库内置了 `commit-msg` 钩子来强制这条规则，带该 trailer 的提交会被拒绝。
+
+  克隆后启用钩子：
+
+  ```bash
+  git config core.hooksPath .githooks
+  ```
+
+
 ## 提交 Issue
 
 - 🐛 Bug 报告请使用 [Bug 模板](.github/ISSUE_TEMPLATE/bug_report.md)，附上复现步骤和日志
