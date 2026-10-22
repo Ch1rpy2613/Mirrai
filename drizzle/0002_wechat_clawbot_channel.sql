@@ -18,7 +18,23 @@ ALTER TYPE "public"."bot_status" ADD VALUE IF NOT EXISTS 'need_verifycode';
 ALTER TYPE "public"."bot_status" ADD VALUE IF NOT EXISTS 'scaned';
 
 -- ── wechat_bindings: semantic reversal ─────────────────────────────────────
-ALTER TABLE "wechat_bindings" RENAME COLUMN "wechatContactId" TO "wechatUserId";
+-- The rename is conditional on purpose. A fresh install bootstraps the final
+-- schema in one shot (`drizzle-kit generate` emits a full dump when no journal
+-- is present), so "wechatContactId" does not exist there and the statement has
+-- to be a no-op. On an existing install the column is still there and gets
+-- renamed. Every statement in this file is therefore safe to run twice.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'wechat_bindings'
+      AND column_name = 'wechatContactId'
+  ) THEN
+    ALTER TABLE "wechat_bindings" RENAME COLUMN "wechatContactId" TO "wechatUserId";
+  END IF;
+END $$;
 
 -- Legacy rows pointed at third-party friends, which no longer has a meaning
 -- under the ClawBot model (the counterpart is always the account owner).
