@@ -7,6 +7,7 @@ import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
 import { getSessionCookieOptions } from "./cookies";
+import { hashPassword, needsRehash, verifyPassword } from "./password";
 
 export type SessionPayload = {
   userId: number;
@@ -85,10 +86,7 @@ export function registerAuthRoutes(app: Express) {
         return;
       }
 
-      const { createHash, randomBytes } = await import("crypto");
-      const salt = randomBytes(16).toString("hex");
-      const hash = createHash("sha256").update(password + salt).digest("hex");
-      const passwordHash = `${salt}:${hash}`;
+      const passwordHash = await hashPassword(password);
 
       const userId = await db.createUser({
         username,
@@ -120,13 +118,19 @@ export function registerAuthRoutes(app: Express) {
         return;
       }
 
-      const { createHash } = await import("crypto");
-      const [salt, storedHash] = user.passwordHash.split(":");
-      const inputHash = createHash("sha256").update(password + salt).digest("hex");
-
-      if (inputHash !== storedHash) {
+      const valid = await verifyPassword(password, user.passwordHash);
+      if (!valid) {
         res.status(401).json({ error: "invalid credentials" });
         return;
+      }
+
+      // Transparent upgrade: legacy SHA256 hashes are re-hashed with scrypt on login.
+      if (needsRehash(user.passwordHash)) {
+        try {
+          await db.updateUserPassword(user.id, await hashPassword(password));
+        } catch (e) {
+          console.warn("[Auth] Failed to upgrade password hash:", e);
+        }
       }
 
       await db.updateUserLastSignedIn(user.id);

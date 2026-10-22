@@ -29,6 +29,7 @@ import { nanoid } from "nanoid";
 import { getBotStatus, startWeChatBot, stopWeChatBot, listWechatContacts } from "./wechat/bot";
 import { runSkillPipeline } from "./skill-engine/pipeline";
 import { getEmotionalStateDesc, computeEmotionalState, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
+import { hashPassword, verifyPassword } from "./_core/password";
 
 async function analyzeAndBuildPersona(
   personaId: number,
@@ -131,14 +132,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const user = await getUserById(ctx.user.id);
         if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST", message: "无法修改密码" });
-        const { createHash } = await import("crypto");
-        const [salt, storedHash] = user.passwordHash.split(":");
-        const inputHash = createHash("sha256").update(input.currentPassword + salt).digest("hex");
-        if (inputHash !== storedHash) throw new TRPCError({ code: "UNAUTHORIZED", message: "当前密码错误" });
-        const { randomBytes } = await import("crypto");
-        const newSalt = randomBytes(16).toString("hex");
-        const newHash = createHash("sha256").update(input.newPassword + newSalt).digest("hex");
-        await updateUserPassword(ctx.user.id, `${newSalt}:${newHash}`);
+        const valid = await verifyPassword(input.currentPassword, user.passwordHash);
+        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "当前密码错误" });
+        await updateUserPassword(ctx.user.id, await hashPassword(input.newPassword));
         return { success: true };
       }),
 
@@ -154,10 +150,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const user = await getUserById(ctx.user.id);
         if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST" });
-        const { createHash } = await import("crypto");
-        const [salt, storedHash] = user.passwordHash.split(":");
-        const inputHash = createHash("sha256").update(input.confirmPassword + salt).digest("hex");
-        if (inputHash !== storedHash) throw new TRPCError({ code: "UNAUTHORIZED", message: "密码错误" });
+        const valid = await verifyPassword(input.confirmPassword, user.passwordHash);
+        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "密码错误" });
         await deleteUserAccount(ctx.user.id);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

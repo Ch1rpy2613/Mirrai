@@ -241,7 +241,7 @@ Mirrai 出自一个 NLP 专业学生的手——他害怕失去身边的人，�
 | API 层 | tRPC (端到端类型安全) | 11.6 |
 | 服务端 | Express | 4.21 |
 | 数据库 | PostgreSQL + Drizzle ORM | 0.44 |
-| 认证 | JWT (jose) + SHA256 | 6.1 |
+| 认证 | JWT (jose) + scrypt | 6.1 |
 | 微信 | Wechaty + puppet-wechat4u | 1.20 |
 | 测试 | Vitest | 2.1 |
 
