@@ -10,7 +10,19 @@
 #define MyAppPublisher "Ch1rpy2613"
 #define MyAppURL "https://github.com/Ch1rpy2613/Mirrai"
 #define MyAppExeName "Mirrai.exe"
-#define MyAppBundle "..\build-windows\Mirrai-Windows-x64"
+
+; The build passes these in as absolute paths. A relative path that climbs out
+; of the script directory ends up in the middle of every file name the
+; compiler touches, which Windows refuses to open once it gets long.
+#ifndef MyAppBundle
+  #define MyAppBundle "..\build-windows\Mirrai-Windows-x64"
+#endif
+#ifndef MyAppOutputDir
+  #define MyAppOutputDir "..\build-windows"
+#endif
+#ifndef MyAppLicense
+  #define MyAppLicense "..\LICENSE"
+#endif
 
 [Setup]
 AppId={{A3F7C2E1-9B4D-4C6A-A1E3-5D8B7F2C9E04}
@@ -23,7 +35,7 @@ AppSupportURL={#MyAppURL}/issues
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=..\build-windows
+OutputDir={#MyAppOutputDir}
 OutputBaseFilename=Mirrai-Setup-x64
 Compression=lzma2/max
 SolidCompression=yes
@@ -34,7 +46,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=mirrai.ico
-LicenseFile=..\LICENSE
+LicenseFile={#MyAppLicense}
 SetupLogging=yes
 CloseApplications=yes
 RestartApplications=no

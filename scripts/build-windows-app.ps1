@@ -48,13 +48,21 @@ Log "Building Mirrai project..."
 Push-Location $ProjectDir
 try {
     # The hoisted linker produces a flat node_modules without pnpm's .pnpm
-    # directory. That is not just tidier: the .pnpm paths run past Windows'
-    # 260 character limit, and the installer cannot read them.
+    # directory. That is not just tidier: the .pnpm paths run past the limit
+    # that Windows APIs accept, and the installer cannot read them.
     if (Test-Path (Join-Path $ProjectDir "node_modules")) {
         Log "Removing the previous node_modules..."
-        Remove-Item (Join-Path $ProjectDir "node_modules") -Recurse -Force
+        # rmdir handles the junctions and read-only files that Remove-Item
+        # leaves behind, and pnpm will not rearrange an existing tree.
+        cmd /c rmdir /s /q node_modules 2>&1 | Out-Null
+        if (Test-Path (Join-Path $ProjectDir "node_modules")) {
+            Remove-Item (Join-Path $ProjectDir "node_modules") -Recurse -Force
+        }
     }
     corepack pnpm install --frozen-lockfile --node-linker=hoisted
+    if (Test-Path (Join-Path $ProjectDir "node_modules\.pnpm")) {
+        Die "pnpm kept the .pnpm layout; the installer cannot read those paths."
+    }
     # Drop packages that are no longer in the dependency tree; pnpm would
     # otherwise keep them around and they would be shipped inside the bundle.
     corepack pnpm prune

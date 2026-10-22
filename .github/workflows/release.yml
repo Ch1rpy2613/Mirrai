@@ -98,7 +98,12 @@ jobs:
             $iscc = Get-ChildItem -Path $paths -ErrorAction SilentlyContinue | Select-Object -First 1
           }
           if (-not $iscc) { throw "Inno Setup was not found." }
-          & $iscc.FullName installer\installer.iss
+          # Absolute paths, so that no ".." ends up in the middle of the file
+          # names the compiler opens.
+          & $iscc.FullName installer\installer.iss `
+            "/DMyAppBundle=$($PWD.Path)\build-windows\Mirrai-Windows-x64" `
+            "/DMyAppOutputDir=$($PWD.Path)\build-windows" `
+            "/DMyAppLicense=$($PWD.Path)\LICENSE"
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
 
       - name: Attach the installer to the release
