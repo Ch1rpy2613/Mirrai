@@ -1,15 +1,31 @@
 name: Release
 
-# Tagging a version builds the macOS app and attaches the DMG to the release.
-# The build itself is the same script the maintainer runs locally, so the
-# artifact is reproducible from the tagged commit.
+# Tagging a version builds the desktop bundles and attaches them to the
+# release. The build itself is the same script the maintainer runs locally,
+# so the artifacts are reproducible from the tagged commit.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to attach the build to'
+        required: true
+        default: 'v1.1.0'
+      platform:
+        description: 'Which build to run'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - macos
+          - windows
 
 jobs:
   macos-app:
     name: Build macOS app
+    if: github.event_name == 'push' || inputs.platform == 'both' || inputs.platform == 'macos'
     runs-on: macos-14
     permissions:
       contents: write
@@ -35,4 +51,35 @@ jobs:
       - name: Attach the DMG to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" build-macos/Mirrai-macOS-arm64.dmg --clobber
+        run: gh release upload "${{ inputs.tag || github.ref_name }}" build-macos/Mirrai-macOS-arm64.dmg --clobber
+
+  windows-app:
+    name: Build Windows app
+    if: github.event_name == 'push' || inputs.platform == 'both' || inputs.platform == 'windows'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the ZIP
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+          ./scripts/build-windows-app.ps1
+
+      - name: Attach the ZIP to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ inputs.tag || github.ref_name }}" build-windows/Mirrai-Windows-x64.zip --clobber
