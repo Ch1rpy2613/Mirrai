@@ -91,16 +91,19 @@ listen_addresses = 'localhost'
 
     if (-not (Test-Path (Join-Path $PgData "postmaster.pid"))) {
         Log "Starting PostgreSQL on port $PgPort..."
-        # Not `... | Out-Null`: the server inherits the pipe's write end and
-        # the pipeline would never see EOF, which hangs the whole script.
+        # Two traps here. The server inherits the write end of a pipe, so a
+        # pipeline would never see EOF. And -Wait waits for the whole process
+        # tree, which includes the long-lived server. So: give pg_ctl its own
+        # output files, do not wait, and let pg_isready below decide when the
+        # database is up.
         Start-Process -FilePath (Join-Path $PgDir "bin\pg_ctl.exe") `
             -ArgumentList @("-D", $PgData, "-l", $PgLog, "start") `
-            -Wait -NoNewWindow `
+            -NoNewWindow `
             -RedirectStandardOutput (Join-Path $Logs "pgctl.out") `
             -RedirectStandardError (Join-Path $Logs "pgctl.err") | Out-Null
 
         $ready = $false
-        for ($i = 0; $i -lt 30; $i++) {
+        for ($i = 0; $i -lt 60; $i++) {
             & (Join-Path $PgDir "bin\pg_isready.exe") -h localhost -p $PgPort -q 2>&1 | Out-Null
             if ($LASTEXITCODE -eq 0) { $ready = $true; break }
             Start-Sleep -Seconds 1

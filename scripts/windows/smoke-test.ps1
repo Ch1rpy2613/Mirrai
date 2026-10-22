@@ -119,16 +119,18 @@ try {
     Add-Content -Path (Join-Path $pgData "postgresql.conf") -Value "port = $port`nlisten_addresses = 'localhost'"
 
     Say "pg_ctl start..."
-    # The server inherits the pipe's write end, so a pipeline would never see
-    # EOF. Give pg_ctl its own files instead.
+    # The server inherits the write end of a pipe, so a pipeline would never
+    # see EOF, and -Wait would block on the whole process tree including the
+    # long-lived server. Give pg_ctl its own files and let pg_isready below
+    # decide when the database is up.
     Start-Process -FilePath (Join-Path $pgBin "pg_ctl.exe") `
         -ArgumentList @("-D", $pgData, "-l", $pgLog, "start") `
-        -Wait -NoNewWindow `
+        -NoNewWindow `
         -RedirectStandardOutput (Join-Path $workRoot "pgctl.out") `
         -RedirectStandardError (Join-Path $workRoot "pgctl.err") | Out-Null
-    Say "pg_ctl returned."
+    Say "pg_ctl launched."
     $ready = $false
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 60; $i++) {
         & (Join-Path $pgBin "pg_isready.exe") -h localhost -p $port -q 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) { $ready = $true; break }
         Start-Sleep -Seconds 1
