@@ -45,6 +45,8 @@ pnpm dev
   git config core.hooksPath .githooks
   ```
 
+- **Squash 合并时记得关掉 "Include contributors"。** GitHub 的 "Squash and merge" 默认勾选该选项，会自动在提交信息末尾追加 `Co-authored-by: <用户名>` 行，和上面的规则冲突。合并前取消勾选，或合并后手动删掉那一行。
+
 
 ## 提交 Issue
 
