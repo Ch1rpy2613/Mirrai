@@ -6,8 +6,16 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
+
+# The presets live one directory up. The tool is executed as a script
+# (``tools/research/quality_check.py``), so the tools directory has to be on
+# the import path explicitly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from skill_presets import get_quality_thresholds  # noqa: E402
 
 
 GENERIC_URL_PATHS = {
@@ -171,9 +179,15 @@ def evaluate_skill_text(
         **DEFAULT_RESEARCH_METRICS,
         **(research_metrics or {}),
     }
+    # The thresholds live on the research-profile presets so the gate and the
+    # prompt presets can never disagree about what "good enough" means.
+    thresholds = get_quality_thresholds(profile)
     strict = profile == "budget-unfriendly"
     checks = {
-        "mental_models": bullet_count >= 3 and bool(re.search(r"mental model|心智模型", text, re.IGNORECASE)),
+        "mental_models": (
+            bullet_count >= thresholds["min_mental_models"]
+            and bool(re.search(r"mental model|心智模型", text, re.IGNORECASE))
+        ),
         "limitations": bool(re.search(r"limitations|boundary|局限|边界", text, re.IGNORECASE)),
         "expression_dna": bool(re.search(r"expression DNA|表达 DNA|sentence rhythm|metaphor", text, re.IGNORECASE)),
         "honest_boundaries": bool(re.search(r"honest boundar|诚实边界|what .* does not know", text, re.IGNORECASE)),
@@ -184,11 +198,14 @@ def evaluate_skill_text(
         "agentic_protocol": (
             bool(re.search(r"agentic protocol|research dimensions|step 1.*classify|分析协议", text, re.IGNORECASE))
         ) if strict else True,
-        "source_grounding": len(grounded_urls) >= (4 if strict else 2),
-        "copyright_safety": is_copyright_safe_text(text) and metrics["long_quote_lines"] == 0,
+        "source_grounding": len(grounded_urls) >= thresholds["min_skill_grounded_urls"],
+        "copyright_safety": (
+            is_copyright_safe_text(text)
+            and metrics["long_quote_lines"] <= thresholds["max_long_quote_lines"]
+        ),
         "source_hierarchy": (
-            metrics["weighted_source_primary_ratio"] >= 50
-            or metrics["high_tier_sources"] >= 3
+            metrics["weighted_source_primary_ratio"] >= thresholds["min_weighted_primary_ratio"]
+            or metrics["high_tier_sources"] >= thresholds["min_high_tier_sources"]
         ) if strict else True,
         "review_chain": (
             metrics["research_audit_present"]
@@ -198,17 +215,17 @@ def evaluate_skill_text(
             and metrics["validation_review_pass"]
         ) if strict else True,
         "validation_depth": (
-            metrics["known_answer_questions"] >= 2
-            and metrics["edge_case_markers"] >= 1
+            metrics["known_answer_questions"] >= thresholds["min_known_answer_questions"]
+            and metrics["edge_case_markers"] >= thresholds["min_edge_case_markers"]
         ) if strict else True,
         "research_depth": (
-            metrics["files_scanned"] >= 6
-            and metrics["unique_urls"] >= 8
-            and metrics["primary_source_markers"] >= 3
-            and metrics["source_metadata_blocks"] >= 6
-            and metrics["contradiction_bullets"] >= 6
-            and metrics["inference_bullets"] >= 6
-            and metrics["track_coverage_count"] >= 6
+            metrics["files_scanned"] >= thresholds["min_raw_notes"]
+            and metrics["unique_urls"] >= thresholds["min_grounded_urls"]
+            and metrics["primary_source_markers"] >= thresholds["min_primary_markers"]
+            and metrics["source_metadata_blocks"] >= thresholds["min_source_metadata_blocks"]
+            and metrics["contradiction_bullets"] >= thresholds["min_contradiction_bullets"]
+            and metrics["inference_bullets"] >= thresholds["min_inference_bullets"]
+            and metrics["track_coverage_count"] >= thresholds["min_track_coverage"]
         ) if strict else True,
     }
     return {
@@ -217,6 +234,7 @@ def evaluate_skill_text(
         "bullet_count": bullet_count,
         "grounded_url_count": len(grounded_urls),
         "profile": profile,
+        "thresholds": thresholds,
         "research_metrics": metrics,
     }
 

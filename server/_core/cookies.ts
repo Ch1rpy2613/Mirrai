@@ -1,4 +1,5 @@
 import type { CookieOptions, Request } from "express";
+import { ENV } from "./env";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -41,15 +42,23 @@ export function getSessionCookieOptions(
 
   const secure = isSecureRequest(req);
 
+  // "lax" is the default: it stops a cross-site form post from carrying the
+  // session cookie, which is what makes a CSRF attack possible in the first
+  // place. "none" is only used when the operator explicitly asks for it — it
+  // requires HTTPS, and it is only safe together with the Origin check in
+  // `csrf.ts`.
+  const requested = ENV.cookieSameSite;
+  const sameSite: CookieOptions["sameSite"] =
+    requested === "none" && secure
+      ? "none"
+      : requested === "strict" && secure
+        ? "strict"
+        : "lax";
+
   return {
     httpOnly: true,
     path: "/",
-    // A SameSite=None cookie must carry Secure, and browsers drop it
-    // outright when it does not. Over plain http that would leave local
-    // development unable to keep a session at all, so Lax is the honest
-    // value there; Lax still works for the first-party navigation the app
-    // relies on.
-    sameSite: secure ? "none" : "lax",
+    sameSite,
     secure,
   };
 }

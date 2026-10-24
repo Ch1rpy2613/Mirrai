@@ -15,6 +15,8 @@ const Diary = lazy(() => import("./pages/Diary"));
 const PersonaEdit = lazy(() => import("./pages/PersonaEdit"));
 const Upload = lazy(() => import("./pages/Upload"));
 const Chat = lazy(() => import("./pages/Chat"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Questionnaire = lazy(() => import("./pages/Questionnaire"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 function Router() {
@@ -22,6 +24,8 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <Switch>
         <Route path="/" component={HomePage} />
+        <Route path="/onboarding" component={Onboarding} />
+        <Route path="/persona/new/questionnaire" component={Questionnaire} />
         <Route path="/login" component={Login} />
         <Route path="/settings" component={Settings} />
         <Route path="/analytics" component={Analytics} />

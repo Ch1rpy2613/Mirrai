@@ -109,6 +109,16 @@ Commands never consume a model call. A switch applies to the current session onl
 - **AI transparency**: by default, a persona admits it's an AI when asked in earnest (set `PERSONA_AI_TRANSPARENCY=false` for full immersion mode).
 - **Not a substitute for professional help**. If you're struggling, please talk to a professional.
 
+### Known limitation: the rate limiter is per-process
+
+Request rate limiting (`server/_core/rate-limit.ts`) uses in-memory token buckets. That is
+enough for a single self-hosted instance, but with **multiple instances each process keeps
+its own counters** — so the effective limit grows with the number of instances.
+
+The limiter is an interface (`RateLimiter`), so a shared store (Redis, say) can replace it.
+That means a new external dependency, which is beyond this project's default dependency
+set and needs an explicit decision first.
+
 ## Roadmap
 
 - [x] Multi-stage persona distillation pipeline

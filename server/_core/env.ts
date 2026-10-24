@@ -1,3 +1,7 @@
+import { existsSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
 function resolveJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (secret && secret.trim().length > 0) return secret;
@@ -11,6 +15,45 @@ function resolveJwtSecret(): string {
     "[env] JWT_SECRET is not set — falling back to an insecure development-only secret. This must never be used in production."
   );
   return "dev-secret-change-me";
+}
+
+function parseOriginList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      try {
+        return new URL(entry).origin;
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Resolves the skill-engine directory.
+ *
+ * The configured path is relative to the server's working directory, which is
+ * correct for source runs but breaks when the server is started from another
+ * directory (packaged desktop builds, systemd units). Falling back to the
+ * package root keeps the Python bridge working in both cases.
+ */
+function resolveSkillEngineDir(): string {
+  const configured = process.env.SKILL_ENGINE_DIR ?? "./skill-engine";
+  if (path.isAbsolute(configured)) return configured;
+
+  const fromCwd = path.resolve(process.cwd(), configured);
+  if (existsSync(fromCwd)) return fromCwd;
+
+  // dist/index.js -> package root is two levels up; server/_core/env.ts -> three.
+  const packageRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+  const fromPackage = path.resolve(packageRoot, configured);
+  if (existsSync(fromPackage)) return fromPackage;
+
+  return fromCwd;
 }
 
 export const ENV = {
@@ -81,7 +124,45 @@ export const ENV = {
   appVersion: process.env.APP_VERSION ?? "1.0.0",
 
   pythonPath: process.env.PYTHON_PATH ?? "python3",
-  skillEngineDir: process.env.SKILL_ENGINE_DIR ?? "./skill-engine",
+  skillEngineDir: resolveSkillEngineDir(),
 
   uploadDir: process.env.UPLOAD_DIR ?? "./uploads",
+
+  /**
+   * Extra origins allowed to make mutating requests. The app's own origin is
+   * always allowed; this list exists for deployments that intentionally embed
+   * Mirrai from another host.
+   */
+  allowedOrigins: parseOriginList(process.env.ALLOWED_ORIGINS),
+
+  /**
+   * Cookie SameSite policy. "lax" by default so a cross-site form post cannot
+   * carry the session. "none" is only honoured when explicitly requested — it
+   * requires HTTPS and is only safe together with the Origin check.
+   */
+  cookieSameSite: (process.env.COOKIE_SAMESITE ?? "lax").toLowerCase() as
+    | "lax"
+    | "none"
+    | "strict",
+
+  /**
+   * Whether to create a local admin account when the database has no users.
+   * "auto" keeps the single-user desktop experience zero-config; "manual"
+   * requires the operator to register through the UI.
+   */
+  bootstrapAdmin: (process.env.MIRRAI_BOOTSTRAP_ADMIN ?? "auto").toLowerCase() as
+    | "auto"
+    | "manual",
+
+  /**
+   * Where the first-run admin credentials are written. Defaults to a file next
+   * to the uploads directory.
+   */
+  dataRoot: process.env.MIRRAI_DATA_ROOT ?? "",
+
+  /** Optional override for the crisis-support resource list. */
+  safetyResourcesFile: process.env.SAFETY_RESOURCES_FILE ?? "",
+
+  /** Quiet hours for proactive reminders, as "HH:MM-HH:MM". */
+  reminderQuietHours: process.env.REMINDER_QUIET_HOURS ?? "23:00-08:00",
 };

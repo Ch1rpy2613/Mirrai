@@ -7,15 +7,69 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useLocale } from "@/contexts/LocaleContext";
 
 const ALL_ACCEPT = ".txt,.csv,image/*,video/*";
 
-const TIPS = [
-  "微信聊天记录：在微信 → 聊天详情 → 导出聊天记录 → 保存为 txt",
-  "聊天记录越多，AI 分析越准确（建议至少 100 条消息）",
-  "可以同时上传多种类型的文件，AI 会综合分析",
-  "所有文件仅用于构建分身，不会被分享给任何第三方",
-];
+/** The agent hosts a generated skill package can be installed into. */
+const SKILL_HOSTS = ["claude-code", "openclaw", "codex", "hermes"] as const;
+
+/**
+ * What the research audit could not find.
+ *
+ * The celebrity research flow grades its own evidence. When the material is
+ * thin, the audit records the gaps — missing sources, unresolved
+ * contradictions — and the persona is built from what there is. Showing
+ * those gaps is the difference between "the model was wrong" and "you did
+ * not give it enough to work with".
+ */
+function ResearchGaps({ personaId }: { personaId: number }) {
+  const { t } = useLocale();
+  const { data: profile } = trpc.skillEngine.getResearchProfile.useQuery(
+    { personaId },
+    { enabled: personaId > 0 },
+  );
+
+  if (!profile) return null;
+
+  const audit = (profile.audit ?? {}) as any;
+  const gaps: string[] = Array.isArray(audit.evidence_gaps) ? audit.evidence_gaps : [];
+  const contradictions: string[] = Array.isArray(audit.unresolved_contradictions)
+    ? audit.unresolved_contradictions
+    : [];
+
+  if (gaps.length === 0 && contradictions.length === 0) return null;
+
+  return (
+    <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
+      <p className="text-sm text-foreground mb-2">{t("research.gapsTitle")}</p>
+      {gaps.length > 0 && (
+        <div className="mb-2">
+          <p className="text-xs text-muted-foreground mb-1">
+            {t("research.missingSources", { count: gaps.length })}
+          </p>
+          <ul className="space-y-1">
+            {gaps.map((gap, i) => (
+              <li key={i} className="text-xs text-muted-foreground leading-relaxed">· {gap}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {contradictions.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-1">
+            {t("research.contradictions", { count: contradictions.length })}
+          </p>
+          <ul className="space-y-1">
+            {contradictions.map((item, i) => (
+              <li key={i} className="text-xs text-muted-foreground leading-relaxed">· {item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function detectFileType(file: File): "chat_txt" | "chat_csv" | "image" | "video" {
   const ext = file.name.split(".").pop()?.toLowerCase();
@@ -45,6 +99,7 @@ export default function Upload() {
   const personaId = parseInt(params.id || "0");
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
+  const { t } = useLocale();
 
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, "uploading" | "done" | "error">>({});
   const [dragOver, setDragOver] = useState(false);
@@ -56,22 +111,53 @@ export default function Upload() {
   const { data: files, refetch: refetchFiles } = trpc.file.list.useQuery(
     { personaId }, { enabled: isAuthenticated && personaId > 0 }
   );
+  // Material pulled in by a collector is just as usable as an uploaded file.
+  // A persona whose only material came from a collector must still be
+  // distillable from here.
+  const { data: collected } = trpc.collector.preview.useQuery(
+    { personaId, limit: 1 },
+    { enabled: isAuthenticated && personaId > 0 },
+  );
   const { data: analysisStatus, refetch: refetchStatus } = trpc.persona.getAnalysisStatus.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && personaId > 0,
       refetchInterval: (query) => query.state.data?.status === "analyzing" ? 1500 : false }
   );
 
+  // The persona carries the id of the distillation job, which knows the real
+  // pipeline stage — "正在分析人物性格" is a summary, the job knows whether it
+  // is researching, auditing or building.
+  const jobId = persona?.skillJobId ?? null;
+  const { data: jobStatus } = trpc.skillEngine.getJobStatus.useQuery(
+    { jobId: jobId ?? 0 },
+    {
+      enabled: isAuthenticated && jobId !== null,
+      refetchInterval: (query) => {
+        const stage = query.state.data?.pipelineStage;
+        return stage === "complete" || stage === "error" ? false : 1500;
+      },
+    }
+  );
+
+  /* The skill package the distillation run produced can be installed into
+     the supported agent hosts. */
+  const exportSkillMutation = trpc.skillEngine.exportSkill.useMutation({
+    onSuccess: (result: any) => {
+      toast.success(t("skillExport.exported", { path: result?.installPath ?? "" }));
+    },
+    onError: (e: any) => toast.error(t("skillExport.failed", { message: e.message })),
+  });
+
   useEffect(() => {
     if (analysisStatus?.status === "ready") refetchPersona();
   }, [analysisStatus?.status]);
 
   const uploadMutation = trpc.file.upload.useMutation({
-    onError: (e) => toast.error("上传失败：" + e.message),
+    onError: (e) => toast.error(t("upload.uploadError", { message: e.message })),
   });
   const triggerMutation = trpc.persona.triggerAnalysis.useMutation({
-    onSuccess: () => { toast.success("AI 解析已开始"); refetchStatus(); },
-    onError: (e) => toast.error("解析失败：" + e.message),
+    onSuccess: () => { toast.success(t("upload.analysisStarted")); refetchStatus(); },
+    onError: (e) => toast.error(t("upload.analysisFailed", { message: e.message })),
   });
 
   const handleFiles = useCallback(async (fileList: FileList) => {
@@ -86,13 +172,13 @@ export default function Upload() {
           fileSize: file.size, fileContent: content, mimeType: getMimeType(file, fileType),
         });
         setUploadingFiles(prev => ({ ...prev, [key]: "done" }));
-        toast.success(`${file.name} 上传成功`);
+        toast.success(t("upload.uploadSuccess", { name: file.name }));
         refetchFiles();
       } catch {
         setUploadingFiles(prev => ({ ...prev, [key]: "error" }));
       }
     }
-  }, [personaId, uploadMutation, refetchFiles]);
+  }, [personaId, uploadMutation, refetchFiles, t]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -102,6 +188,8 @@ export default function Upload() {
   const isAnalyzing = analysisStatus?.status === "analyzing";
   const isReady = analysisStatus?.status === "ready";
   const hasFiles = (files?.length || 0) > 0;
+  const hasCollected = (collected?.total || 0) > 0;
+  const hasMaterial = hasFiles || hasCollected;
   const filesLoading = isAuthenticated && personaId > 0 && files === undefined;
   const pendingUploads = Object.entries(uploadingFiles).filter(([, s]) => s !== "done");
 
@@ -111,12 +199,12 @@ export default function Upload() {
         <div className="container app-nav">
           <button onClick={() => navigate("/")}
             className="app-nav-back -ml-1 gap-1">
-            <ArrowLeft className="w-4 h-4" /><span className="text-sm">返回</span>
+            <ArrowLeft className="w-4 h-4" /><span className="text-sm">{t("common.back")}</span>
           </button>
           <div className="app-nav-divider" />
           <div className="app-nav-title-group">
             <div>
-              <p className="kicker">上传资料</p>
+              <p className="kicker">{t("upload.materials")}</p>
               <p className="app-nav-title">{persona?.name || "..."}</p>
             </div>
           </div>
@@ -126,10 +214,10 @@ export default function Upload() {
       <main className="container page-main max-w-3xl">
         {/* Page Intro */}
         <div className="mb-8 animate-fade-in-up">
-          <p className="kicker kicker-accent mb-3">信物</p>
-          <h1 className="page-title">上传资料</h1>
+          <p className="kicker kicker-accent mb-3">{t("upload.kicker")}</p>
+          <h1 className="page-title">{t("upload.materials")}</h1>
           <p className="text-muted-foreground text-sm mt-2.5 leading-relaxed">
-            聊天记录、照片与片段——这些信物会成为分身认识你的方式。
+            {t("upload.intro")}
           </p>
           <hr className="rule w-16 mt-6" />
         </div>
@@ -139,14 +227,37 @@ export default function Upload() {
           <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
               <div>
-                <p className="font-sans text-base font-semibold text-foreground">数字分身已准备好</p>
-                <p className="text-muted-foreground text-sm mt-1">{analysisStatus?.message}</p>
+                <p className="font-sans text-base font-semibold text-foreground">{t("upload.ready")}</p>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {jobStatus?.stageMessage || analysisStatus?.message}
+                </p>
               </div>
               <Button onClick={() => navigate(`/chat/${personaId}`)}
                 className="rounded-md px-6 self-start sm:self-auto">
-                开始对话 <ChevronRight className="w-4 h-4" />
+                {t("upload.startChat")} <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
+            {/* The distillation run also produces a skill package, which can
+                be installed into the supported agent hosts. */}
+            {jobId && jobStatus?.generatedSkillPath && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-2">{t("skillExport.title")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {SKILL_HOSTS.map((host) => (
+                    <Button
+                      key={host}
+                      size="sm"
+                      variant="outline"
+                      disabled={exportSkillMutation.isPending}
+                      onClick={() => exportSkillMutation.mutate({ jobId, host })}
+                      className="rounded-md text-xs"
+                    >
+                      {t(`skillExport.hosts.${host}`)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -155,13 +266,13 @@ export default function Upload() {
           <div className="surface p-6 sm:p-8 mb-6 animate-fade-in-up">
             <div className="flex items-center gap-2.5 mb-6">
               <Loader2 className="w-3.5 h-3.5 text-cinnabar animate-spin" />
-              <p className="kicker kicker-accent">解析中</p>
+              <p className="kicker kicker-accent">{t("upload.analyzingKicker")}</p>
             </div>
             <div className="flex items-end justify-between gap-4 mb-4">
               <div className="font-display text-5xl sm:text-6xl font-semibold text-foreground leading-none">
                 {analysisStatus?.progress || 0}<span className="text-2xl sm:text-3xl">%</span>
               </div>
-              <p className="text-sm text-muted-foreground text-right pb-1">AI 正在解析中...</p>
+              <p className="text-sm text-muted-foreground text-right pb-1">{t("upload.analyzingNow")}</p>
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3.5">
               <div className="progress-bar h-full" style={{ width: `${analysisStatus?.progress || 0}%` }} />
@@ -178,16 +289,21 @@ export default function Upload() {
         {!isReady && !isAnalyzing && analysisStatus?.status === "error" && (
           <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
             <p className="text-sm text-destructive leading-relaxed">
-              {analysisStatus?.message || "解析失败，请重试"}
+              {analysisStatus?.message || t("upload.failedRetry")}
             </p>
           </div>
         )}
+
+        {/* Research gaps. The audit stage records what it could not find, so
+            the user learns what is missing instead of seeing a bare
+            failure. */}
+        <ResearchGaps personaId={personaId} />
 
         {/* Drop Zone */}
         <div
           role="button"
           tabIndex={0}
-          aria-label="上传文件：拖拽文件到这里，或按回车选择文件"
+          aria-label={t("upload.dropLabel")}
           className={`rounded-lg border border-dashed p-10 sm:p-14 mb-6 text-center cursor-pointer transition-colors animate-fade-in-up outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
             dragOver
               ? "border-foreground/50 bg-muted/40"
@@ -204,19 +320,29 @@ export default function Upload() {
           }}
         >
           <p className="font-display text-lg sm:text-xl font-semibold text-foreground mb-2">
-            拖拽文件到这里，或点击选择
+            {t("upload.dropTitle")}
           </p>
-          <p className="text-muted-foreground text-sm">支持 .txt、.csv、图片、视频</p>
+          <p className="text-muted-foreground text-sm">{t("upload.formatsHint")}</p>
           <input ref={fileInputRef} type="file" accept={ALL_ACCEPT}
             multiple className="hidden" onChange={e => e.target.files && handleFiles(e.target.files)} />
+        </div>
+
+        {/* No chat logs? The questionnaire builds a persona without them. */}
+        <div className="text-center mb-6 animate-fade-in-up">
+          <button
+            onClick={() => navigate("/persona/new/questionnaire")}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
+          >
+            {t("upload.noChatLogs")}
+          </button>
         </div>
 
         {/* Uploaded Files */}
         {(hasFiles || pendingUploads.length > 0 || filesLoading) && (
           <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
             <div className="flex items-baseline justify-between mb-2">
-              <h2 className="font-display text-base font-semibold text-foreground">已上传文件</h2>
-              <span className="kicker">{files?.length ?? 0} 个文件</span>
+              <h2 className="font-display text-base font-semibold text-foreground">{t("upload.uploadedFiles")}</h2>
+              <span className="kicker">{t("upload.fileCount", { count: files?.length ?? 0 })}</span>
             </div>
             <div>
               {files?.map((f: any) => (
@@ -226,7 +352,7 @@ export default function Upload() {
                     {(f.fileSize / 1024).toFixed(0)} KB
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-                    <Check className="w-3 h-3" />已上传
+                    <Check className="w-3 h-3" />{t("upload.uploaded")}
                   </span>
                 </div>
               ))}
@@ -237,10 +363,10 @@ export default function Upload() {
                   </span>
                   {status === "uploading" ? (
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
-                      <Loader2 className="w-3 h-3 animate-spin" />上传中
+                      <Loader2 className="w-3 h-3 animate-spin" />{t("upload.uploading")}
                     </span>
                   ) : (
-                    <span className="text-xs text-destructive flex-shrink-0">上传失败</span>
+                    <span className="text-xs text-destructive flex-shrink-0">{t("upload.uploadFailed")}</span>
                   )}
                 </div>
               ))}
@@ -255,24 +381,24 @@ export default function Upload() {
         )}
 
         {/* Trigger Analysis */}
-        {hasFiles && !isAnalyzing && !isReady && (
+        {hasMaterial && !isAnalyzing && !isReady && (
           <Button className="w-full h-12 rounded-md text-base font-semibold animate-fade-in-up"
             onClick={() => triggerMutation.mutate({ id: personaId })} disabled={triggerMutation.isPending}>
             {triggerMutation.isPending
-              ? <><Loader2 className="w-5 h-5 animate-spin" />启动中...</>
-              : <>开始 AI 解析，生成数字分身</>}
+              ? <><Loader2 className="w-5 h-5 animate-spin" />{t("upload.starting")}</>
+              : <>{t("upload.startAnalysis")}</>}
           </Button>
         )}
 
         {/* Tips */}
         <div className="surface p-5 sm:p-6 mt-6 animate-fade-in-up">
           <div className="flex items-baseline justify-between mb-4">
-            <h2 className="font-display text-base font-semibold text-foreground">上传建议</h2>
-            <span className="kicker">提示</span>
+            <h2 className="font-display text-base font-semibold text-foreground">{t("upload.tipsTitle")}</h2>
+            <span className="kicker">{t("upload.tipsKicker")}</span>
           </div>
           <ul className="space-y-2.5">
-            {TIPS.map(tip => (
-              <li key={tip} className="flex items-start gap-2.5 text-sm text-muted-foreground leading-relaxed">
+            {Array.from(t("upload.tips")).map((tip, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground leading-relaxed">
                 <span className="w-1 h-1 bg-foreground/30 mt-[0.55rem] flex-shrink-0" />
                 {tip}
               </li>

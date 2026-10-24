@@ -10,17 +10,103 @@
 用法：
     python email_parser.py --file emails.eml --target "zhangsan@company.com" --output output.txt
     python email_parser.py --file inbox.mbox --target "张三" --output output.txt
+
+    # 统一 JSON 出口（服务端只解析这一种格式）
+    python email_parser.py --file emails.eml --target "zhangsan@company.com" --format json
 """
 
 import email
 import email.policy
+import json
 import mailbox
 import re
 import sys
 import argparse
 from pathlib import Path
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
+
+
+# ─── 统一输出协议 ─────────────────────────────────────────────────────────────
+#
+# 采集器对外只有两种输出：
+#   * 默认（text）：保持历史的 Markdown 报告，逐字节不变；
+#   * --format json：stdout 上唯一一个归一化 JSON 对象。
+#
+# 进度行走 stderr（而不是 stdout），这样 stdout 只承载载荷：默认模式的输出
+# 不会被进度行污染，JSON 模式下的 stdout 也保证是一个可整体解析的 JSON。
+
+PROGRESS_PREFIX = "[PROGRESS]"
+
+SOURCE_NAME = "email"
+
+
+def report_progress(fraction: float) -> None:
+    """把进度写进 stderr，格式为 `[PROGRESS] 0.42`。
+
+    服务端 `server/collectors/runner.ts` 会把这个协议换算成 0..100 的整数。
+    """
+    value = float(fraction)
+    if value < 0.0:
+        value = 0.0
+    elif value > 1.0:
+        value = 1.0
+    print(f"{PROGRESS_PREFIX} {value:.2f}", file=sys.stderr, flush=True)
+
+
+def to_iso_timestamp(value: str) -> str:
+    """把邮件头里的日期转成 ISO 8601；无法解析时原样返回。"""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return raw
+    if parsed is None:
+        return raw
+    try:
+        return parsed.isoformat()
+    except (TypeError, ValueError):
+        return raw
+
+
+def to_json_messages(emails: list[dict], source: str = SOURCE_NAME) -> list[dict]:
+    """把邮件转成统一 JSON 的消息列表。
+
+    邮件只保留目标人发出的，所以角色恒为 assistant；正文是「主题 + 正文」。
+    """
+    messages: list[dict] = []
+    for mail in emails:
+        subject = (mail.get("subject") or "").strip()
+        body = (mail.get("body") or "").strip()
+        if subject and body:
+            content = f"{subject}\n{body}"
+        else:
+            content = subject or body
+        if not content:
+            continue
+        messages.append({
+            "role": "assistant",
+            "content": content,
+            "timestamp": to_iso_timestamp(mail.get("date", "")),
+            "source": source,
+        })
+    return messages
+
+
+def build_json_payload(messages: list[dict], source: str = SOURCE_NAME, truncated: bool = False) -> dict:
+    """构造跨采集器统一的 JSON 载荷。"""
+    return {
+        "messages": messages,
+        "meta": {"total": len(messages), "source": source, "truncated": truncated},
+    }
+
+
+def print_json_payload(payload: dict) -> None:
+    """在 stdout 上打印唯一一个归一化 JSON 对象。"""
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
 class HTMLTextExtractor(HTMLParser):
@@ -49,15 +135,23 @@ class HTMLTextExtractor(HTMLParser):
         return re.sub(r"\n{3,}", "\n\n", "".join(self.result)).strip()
 
 
-def decode_mime_str(s: str) -> str:
-    """解码 MIME 编码的邮件头字段"""
+def decode_mime_str(s) -> str:
+    """解码 MIME 编码的邮件头字段
+
+    `s` 可以是字符串，也可以是 `email.header.Header` 对象。后者必须原样
+    传进来：先 `str()` 会让 Header 用伪字符集 "unknown-8bit" 解码，把每一个
+    非 ASCII 字符变成 U+FFFD，中文主题就变成了乱码。
+    """
     if not s:
         return ""
     parts = decode_header(s)
     result = []
     for part, charset in parts:
         if isinstance(part, bytes):
-            charset = charset or "utf-8"
+            # "unknown-8bit" 是邮件头解析器给出的占位字符集，它并不是真实
+            # 的编码。这种情况下字节几乎总是 UTF-8。
+            if not charset or charset.lower() in ("unknown-8bit", "unknown-8bit-ext"):
+                charset = "utf-8"
             try:
                 result.append(part.decode(charset, errors="replace"))
             except Exception:
@@ -116,7 +210,7 @@ def extract_email_body(msg) -> str:
     return body.strip()
 
 
-def is_from_target(from_field: str, target: str) -> bool:
+def is_from_target(from_field, target: str) -> bool:
     """判断邮件是否来自目标人"""
     from_str = decode_mime_str(from_field).lower()
     target_lower = target.lower()
@@ -128,11 +222,11 @@ def parse_eml_file(file_path: str, target: str) -> list[dict]:
     with open(file_path, "rb") as f:
         msg = email.message_from_binary_file(f, policy=email.policy.default)
 
-    from_field = str(msg.get("From", ""))
+    from_field = msg.get("From", "")
     if not is_from_target(from_field, target):
         return []
 
-    subject = decode_mime_str(str(msg.get("Subject", "")))
+    subject = decode_mime_str(msg.get("Subject", ""))
     date = str(msg.get("Date", ""))
     body = extract_email_body(msg)
 
@@ -153,11 +247,11 @@ def parse_mbox_file(file_path: str, target: str) -> list[dict]:
     mbox = mailbox.mbox(file_path)
 
     for msg in mbox:
-        from_field = str(msg.get("From", ""))
+        from_field = msg.get("From", "")
         if not is_from_target(from_field, target):
             continue
 
-        subject = decode_mime_str(str(msg.get("Subject", "")))
+        subject = decode_mime_str(msg.get("Subject", ""))
         date = str(msg.get("Date", ""))
         body = extract_email_body(msg)
 
@@ -303,6 +397,12 @@ def main():
     parser.add_argument("--file", required=True, help="输入文件路径（.eml / .mbox / .txt）")
     parser.add_argument("--target", required=True, help="目标人物（邮箱地址或姓名）")
     parser.add_argument("--output", default=None, help="输出文件路径（默认打印到 stdout）")
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="输出格式：text（默认，Markdown 报告）/ json（统一 JSON，供服务端解析）",
+    )
 
     args = parser.parse_args()
 
@@ -312,6 +412,8 @@ def main():
         sys.exit(1)
 
     suffix = file_path.suffix.lower()
+
+    report_progress(0.1)
 
     if suffix == ".eml":
         emails = parse_eml_file(str(file_path), args.target)
@@ -324,7 +426,21 @@ def main():
         print(f"警告：未找到来自 '{args.target}' 的邮件", file=sys.stderr)
         print("提示：请检查目标名称/邮箱是否与文件中的 From 字段一致", file=sys.stderr)
 
+    report_progress(0.5)
+
     classified = classify_emails(emails)
+
+    report_progress(0.8)
+
+    if args.format == "json":
+        payload = build_json_payload(to_json_messages(emails))
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        print_json_payload(payload)
+        report_progress(1.0)
+        return
+
     output = format_output(args.target, classified)
 
     if args.output:
@@ -333,6 +449,8 @@ def main():
         print(f"已输出到 {args.output}，共 {len(emails)} 封邮件")
     else:
         print(output)
+
+    report_progress(1.0)
 
 
 if __name__ == "__main__":

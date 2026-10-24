@@ -1,0 +1,73 @@
+/**
+ * Access control for the uploads directory.
+ *
+ * Uploaded material — chat logs, photos, voice notes, synthesised speech —
+ * is private to the user who uploaded it. Serving the directory statically
+ * made all of it reachable by anyone who knew (or guessed) a URL.
+ *
+ * The layout encodes the owner in the path:
+ *   personas/<userId>/<personaId>/<file>
+ *   chat/<userId>/<personaId>/<file>
+ *   tts/<userId>/<hash>.mp3
+ *   tts/legacy/<hash>.mp3     (pre-scoped files, kept for old history)
+ */
+import type { Request, Response, NextFunction } from "express";
+import { authenticateRequest } from "./auth";
+
+/** Prefixes whose second path segment is the owning user's id. */
+const USER_SCOPED = new Set(["personas", "chat", "tts"]);
+
+/**
+ * Decides whether a storage key belongs to a user.
+ */
+export function isOwnedByUser(relKey: string, userId: number): boolean {
+  const parts = relKey.replace(/^\/+/, "").split("/");
+  if (parts.length < 2) return false;
+
+  const [scope, owner] = parts;
+
+  if (scope === "tts") {
+    // Files written before TTS output was scoped per user.
+    if (owner === "legacy") return true;
+    return owner === String(userId);
+  }
+
+  if (USER_SCOPED.has(scope)) {
+    return owner === String(userId);
+  }
+
+  return false;
+}
+
+/**
+ * Express middleware guarding `/uploads`.
+ */
+export function uploadsAuthGuard(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  // A malformed percent-escape makes `decodeURIComponent` throw. That must
+  // not become a 500 — the path is simply not a key we know.
+  let relKey: string;
+  try {
+    relKey = decodeURIComponent(req.path.replace(/^\/+/, ""));
+  } catch {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  authenticateRequest(req)
+    .then((user) => {
+      if (!isOwnedByUser(relKey, user.id)) {
+        // 404 rather than 403: a stranger should not learn that the file
+        // exists.
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      next();
+    })
+    .catch(() => {
+      res.status(401).json({ error: "Authentication required" });
+    });
+}

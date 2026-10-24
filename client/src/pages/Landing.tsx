@@ -34,24 +34,24 @@ function LandingNav() {
         <div className="app-nav-spacer" />
         <div className="app-nav-actions">
           {toggleTheme && (
-            <button onClick={toggleTheme} className="app-nav-icon" aria-label="切换主题">
+            <button onClick={toggleTheme} className="app-nav-icon" aria-label={t("landing.nav.toggleTheme")}>
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
           )}
           <button
             onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
             className="app-nav-back gap-1.5 text-sm"
-            aria-label={t.nav.language}
+            aria-label={t("landing.nav.language")}
           >
             <Globe className="w-4 h-4" />
-            <span className="hidden sm:inline">{t.nav.language}</span>
+            <span className="hidden sm:inline">{t("landing.nav.language")}</span>
           </button>
           <div className="app-nav-divider" />
           <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="text-sm">
-            {t.nav.login}
+            {t("landing.nav.login")}
           </Button>
           <Button size="sm" onClick={() => navigate("/login")} className="hidden sm:inline-flex text-sm rounded-md px-4">
-            {t.nav.register}
+            {t("landing.nav.register")}
           </Button>
         </div>
       </div>
@@ -75,25 +75,25 @@ function HeroSection() {
       >
         <div className="max-w-3xl">
           <motion.p variants={fadeUp} className="kicker kicker-accent mb-8">
-            情感记忆操作系统
+            {t("landing.brand.kicker")}
           </motion.p>
 
           <motion.h1
             variants={fadeUp}
             className="font-display text-5xl sm:text-6xl lg:text-7xl font-semibold text-foreground leading-[1.2] mb-8"
           >
-            {t.hero.tagline}
+            {t("landing.hero.tagline")}
           </motion.h1>
 
           <motion.p variants={fadeUp} className="text-lg text-muted-foreground max-w-xl mb-4 leading-relaxed">
-            {t.hero.subtitle}
+            {t("landing.hero.subtitle")}
           </motion.p>
 
           <motion.div variants={fadeUp} className="rule w-16 my-10" />
 
           <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-3">
             <Button size="lg" onClick={() => navigate("/login")} className="rounded-md px-8 h-11 text-[0.9375rem] gap-2">
-              {t.hero.cta}
+              {t("landing.hero.cta")}
               <ArrowRight className="w-4 h-4" />
             </Button>
             <Button
@@ -102,7 +102,7 @@ function HeroSection() {
               onClick={() => document.getElementById("story")?.scrollIntoView({ behavior: "smooth" })}
               className="rounded-md px-8 h-11 text-[0.9375rem] gap-2 bg-transparent"
             >
-              {t.hero.ctaSecondary}
+              {t("landing.hero.ctaSecondary")}
             </Button>
           </motion.div>
         </div>
@@ -133,7 +133,7 @@ function StatsSection() {
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {t.stats.items.map((s, i) => (
+          {t("landing.stats.items").map((s, i) => (
             <motion.div
               key={s.value}
               variants={fadeUp}
@@ -185,17 +185,17 @@ function StorySection() {
           viewport={{ once: true, margin: "-100px" }}
           variants={stagger}
         >
-          <motion.div variants={fadeUp} className="font-display text-sm text-cinnabar mb-3">前序</motion.div>
+          <motion.div variants={fadeUp} className="font-display text-sm text-cinnabar mb-3">{t("landing.story.prelude")}</motion.div>
           <motion.h2 variants={fadeUp} className="page-title mb-3">
-            {t.story.title}
+            {t("landing.story.title")}
           </motion.h2>
           <motion.p variants={fadeUp} className="text-muted-foreground mb-10">
-            {t.story.subtitle}
+            {t("landing.story.subtitle")}
           </motion.p>
 
           <motion.blockquote variants={fadeUp} className="border-l-2 border-cinnabar/50 pl-6 sm:pl-8">
             <p className="letter-prose text-lg sm:text-xl text-foreground/90">
-              {t.story.quote}
+              {t("landing.story.quote")}
             </p>
           </motion.blockquote>
 
@@ -209,13 +209,13 @@ function StorySection() {
                 className="overflow-hidden"
               >
                 <div className="letter-prose text-foreground/80 mt-10">
-                  {t.story.body.map((p, i) => (
+                  {t("landing.story.body").map((p, i) => (
                     <p key={i}>{p}</p>
                   ))}
                   <hr className="rule my-10" />
-                  <p className="text-lg text-foreground">{t.story.closing}</p>
+                  <p className="text-lg text-foreground">{t("landing.story.closing")}</p>
                   <p className="text-sm font-sans text-muted-foreground text-right">
-                    {t.story.signature}
+                    {t("landing.story.signature")}
                   </p>
                 </div>
               </motion.div>
@@ -228,7 +228,7 @@ function StorySection() {
               onClick={() => setExpanded(!expanded)}
               className="gap-1.5 px-0 text-cinnabar hover:text-cinnabar hover:bg-transparent"
             >
-              {expanded ? t.story.collapse : t.story.readMore}
+              {expanded ? t("landing.story.collapse") : t("landing.story.readMore")}
               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>
           </motion.div>
@@ -245,7 +245,7 @@ function FeaturesSection() {
   return (
     <section id="features" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <SectionHeading index="01" title={t.features.title} subtitle={t.features.subtitle} />
+        <SectionHeading index="01" title={t("landing.features.title")} subtitle={t("landing.features.subtitle")} />
 
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-0 max-w-6xl"
@@ -254,7 +254,7 @@ function FeaturesSection() {
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {t.features.items.map((item, i) => (
+          {t("landing.features.items").map((item, i) => (
             <motion.div
               key={i}
               variants={fadeUp}
@@ -280,7 +280,7 @@ function HowItWorksSection() {
   return (
     <section id="how-it-works" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <SectionHeading index="02" title={t.howItWorks.title} subtitle={t.howItWorks.subtitle} />
+        <SectionHeading index="02" title={t("landing.howItWorks.title")} subtitle={t("landing.howItWorks.subtitle")} />
 
         <motion.div
           className="max-w-3xl"
@@ -289,7 +289,7 @@ function HowItWorksSection() {
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {t.howItWorks.steps.map((step, i) => (
+          {t("landing.howItWorks.steps").map((step, i) => (
             <motion.div
               key={i}
               variants={fadeUp}
@@ -317,7 +317,7 @@ function TechSection() {
   return (
     <section id="tech" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <SectionHeading index="03" title={t.tech.title} subtitle={t.tech.subtitle} />
+        <SectionHeading index="03" title={t("landing.tech.title")} subtitle={t("landing.tech.subtitle")} />
 
         <motion.div
           className="max-w-4xl"
@@ -327,7 +327,7 @@ function TechSection() {
           variants={stagger}
         >
           <motion.div variants={fadeUp} className="flex flex-wrap gap-x-8 gap-y-3 mb-14 pb-8 border-b border-border">
-            {t.tech.stack.map((item, i) => (
+            {t("landing.tech.stack").map((item, i) => (
               <div key={i} className="flex items-baseline gap-2">
                 <span className="font-sans font-semibold text-foreground">{item.name}</span>
                 <span className="text-sm text-muted-foreground">{item.desc}</span>
@@ -336,7 +336,7 @@ function TechSection() {
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-8">
-            {t.tech.highlights.map((item, i) => (
+            {t("landing.tech.highlights").map((item, i) => (
               <motion.div key={i} variants={fadeUp}>
                 <h3 className="font-display text-base font-semibold text-foreground mb-2">{item.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
@@ -356,7 +356,7 @@ function TestimonialsSection() {
   return (
     <section id="testimonials" className="py-24 sm:py-28 border-t border-border">
       <div className="container">
-        <SectionHeading index="04" title={t.testimonials.title} subtitle={t.testimonials.subtitle} />
+        <SectionHeading index="04" title={t("landing.testimonials.title")} subtitle={t("landing.testimonials.subtitle")} />
 
         <motion.div
           className="grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-10 max-w-6xl"
@@ -365,7 +365,7 @@ function TestimonialsSection() {
           viewport={{ once: true, margin: "-80px" }}
           variants={stagger}
         >
-          {t.testimonials.items.map((item, i) => (
+          {t("landing.testimonials.items").map((item, i) => (
             <motion.figure key={i} variants={fadeUp} className="border-t border-border pt-7 flex flex-col">
               <blockquote className="letter-prose text-[0.9375rem] text-foreground/90 flex-1">
                 {item.quote}
@@ -399,14 +399,14 @@ function CTASection() {
           variants={stagger}
         >
           <motion.h2 variants={fadeUp} className="page-title mb-5">
-            {t.hero.tagline}
+            {t("landing.hero.tagline")}
           </motion.h2>
           <motion.p variants={fadeUp} className="text-muted-foreground text-lg mb-10">
-            {t.hero.subtitle}
+            {t("landing.hero.subtitle")}
           </motion.p>
           <motion.div variants={fadeUp}>
             <Button size="lg" onClick={() => navigate("/login")} className="rounded-md px-10 h-11 text-[0.9375rem] gap-2">
-              {t.hero.cta}
+              {t("landing.hero.cta")}
               <ArrowRight className="w-4 h-4" />
             </Button>
           </motion.div>
@@ -427,22 +427,22 @@ function LandingFooter() {
         <div className="flex flex-col md:flex-row justify-between gap-10">
           <div>
             <Wordmark size="text-lg" />
-            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mt-3">{t.footer.tagline}</p>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mt-3">{t("landing.footer.tagline")}</p>
           </div>
 
           <div className="flex gap-16 sm:gap-20">
             <div>
-              <h4 className="text-sm font-medium text-foreground mb-4">{t.footer.product}</h4>
+              <h4 className="text-sm font-medium text-foreground mb-4">{t("landing.footer.product")}</h4>
               <ul className="space-y-2.5 text-sm text-muted-foreground">
-                <li><a href="#features" className="hover:text-foreground transition-colors">{t.footer.features}</a></li>
-                <li><a href="#how-it-works" className="hover:text-foreground transition-colors">{t.footer.how}</a></li>
-                <li><a href="#tech" className="hover:text-foreground transition-colors">{t.footer.tech}</a></li>
+                <li><a href="#features" className="hover:text-foreground transition-colors">{t("landing.footer.features")}</a></li>
+                <li><a href="#how-it-works" className="hover:text-foreground transition-colors">{t("landing.footer.how")}</a></li>
+                <li><a href="#tech" className="hover:text-foreground transition-colors">{t("landing.footer.tech")}</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-foreground mb-4">{t.footer.company}</h4>
+              <h4 className="text-sm font-medium text-foreground mb-4">{t("landing.footer.company")}</h4>
               <ul className="space-y-2.5 text-sm text-muted-foreground">
-                <li><a href="#story" className="hover:text-foreground transition-colors">{t.footer.about}</a></li>
+                <li><a href="#story" className="hover:text-foreground transition-colors">{t("landing.footer.about")}</a></li>
               </ul>
             </div>
           </div>
@@ -450,7 +450,7 @@ function LandingFooter() {
 
         <hr className="rule mt-12 mb-6" />
         <div className="text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} {t.footer.copyright}
+          &copy; {new Date().getFullYear()} {t("landing.footer.copyright")}
         </div>
       </div>
     </footer>

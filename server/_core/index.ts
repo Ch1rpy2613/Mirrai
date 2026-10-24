@@ -9,6 +9,11 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
+import { csrfGuard } from "./csrf";
+import { uploadsAuthGuard } from "./uploads";
+import { registerChatStreamRoute } from "../chat/stream-route";
+import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
+import { migrateLegacyTTSFiles } from "./tts";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -34,8 +39,12 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+  // Uploads are private to their owner — see `uploadsAuthGuard`.
   const uploadsPath = path.resolve(ENV.uploadDir);
-  app.use("/uploads", express.static(uploadsPath));
+  app.use("/uploads", uploadsAuthGuard, express.static(uploadsPath));
+
+  // Reject mutating requests that come from another origin.
+  app.use("/api", csrfGuard);
 
   registerAuthRoutes(app);
 
@@ -46,6 +55,10 @@ async function startServer() {
       createContext,
     })
   );
+
+  // The token-by-token chat endpoint. tRPC has no streaming support, so it
+  // lives as a plain SSE route.
+  registerChatStreamRoute(app);
 
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
@@ -64,21 +77,50 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
   });
 
-  if (ENV.wechatEnabled) {
-    try {
-      const { restoreWeChatBot } = await import("../wechat/bot");
-      const { getAllUserIds } = await import("../db");
-      // Restore each user's ClawBot long-poll loop from stored credentials, so
-      // a restart does not require re-scanning the QR code.
-      for (const userId of await getAllUserIds()) {
-        const restored = await restoreWeChatBot(userId);
-        if (restored) {
-          console.log(`[WeChat] Restored WeChat channel for user ${userId}`);
-        }
-      }
-    } catch (e) {
-      console.warn("[WeChat] Failed to restore WeChat channel:", e);
+  // Move pre-scoped TTS files out of the shared folder.
+  await migrateLegacyTTSFiles().catch((e) =>
+    console.warn("[TTS] Legacy audio migration failed:", e),
+  );
+
+  // Create the first administrator on an empty instance.
+  await bootstrapAdminAccount().catch((e) =>
+    console.error("[Bootstrap] First-run setup failed:", e),
+  );
+
+  // Collection jobs: mirror every state change into the database, and mark
+  // the ones that were still running when the process stopped.
+  try {
+    const { onJobUpdate } = await import("../collectors/jobs");
+    const { persistCollectorJob, markInterruptedCollectorJobs } =
+      await import("../collectors/db-store");
+    onJobUpdate((job) => {
+      void persistCollectorJob(job);
+    });
+    const interrupted = await markInterruptedCollectorJobs();
+    if (interrupted > 0) {
+      console.log(`[Collectors] Marked ${interrupted} interrupted collection job(s)`);
     }
+  } catch (e) {
+    console.warn("[Collectors] Failed to start the job store:", e);
+  }
+
+  // Proactive reminders — anniversaries and the like.
+  try {
+    const { startScheduler } = await import("../scheduler");
+    startScheduler();
+  } catch (e) {
+    console.warn("[Scheduler] Failed to start:", e);
+  }
+
+  // Restore the channels that were connected before the last restart — the
+  // WeChat ClawBot long-poll loop and the Feishu long connection both keep
+  // their state in the database, so a restart does not need a fresh scan.
+  try {
+    const { getAllUserIds } = await import("../db");
+    const { restoreChannels } = await import("../channels");
+    await restoreChannels(await getAllUserIds());
+  } catch (e) {
+    console.warn("[Channels] Failed to restore channels:", e);
   }
 }
 

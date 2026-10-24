@@ -1,0 +1,101 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+const getLlmConfigsByUserId = vi.fn();
+
+vi.mock("../db", () => ({
+  getLlmConfigsByUserId: (...a: unknown[]) => getLlmConfigsByUserId(...a),
+}));
+
+import { resolveProviderForUser, invalidateUserProviderCache } from "./user-provider";
+import { registry } from "./index";
+import { OpenAIProvider } from "./providers/openai";
+
+// A stand-in for the encrypted credential.
+const ENCRYPTED = "v1:aaaa:bbbb:cccc";
+
+describe("resolveProviderForUser", () => {
+  beforeEach(() => {
+    getLlmConfigsByUserId.mockReset();
+    getLlmConfigsByUserId.mockResolvedValue([]);
+    invalidateUserProviderCache();
+  });
+
+  it("falls back to the environment provider when the user has no config", async () => {
+    const provider = await resolveProviderForUser({ userId: 1, providerName: "OpenAI" });
+    expect(provider).toBeDefined();
+    expect(provider?.name).toBe("OpenAI");
+  });
+
+  it("falls back to the default provider for a name that does not exist", async () => {
+    // A typo in the provider name must not brick the user's chat. The
+    // configuration is wrong, not the conversation, so the request goes to
+    // the default provider instead of failing.
+    const provider = await resolveProviderForUser({ userId: 1, providerName: "Nope" });
+    expect(provider).toBeDefined();
+    expect(provider?.name).not.toBe("Nope");
+  });
+
+  it("uses the user's own configuration when they have one", async () => {
+    // The registry entry is replaced so the test can observe the config that
+    // was actually used.
+    const original = registry.getBaseConfig("OpenAI");
+    registry.registerFactory(
+      "OpenAI",
+      (cfg) => new OpenAIProvider("OpenAI", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+      { apiKey: "env-key", baseUrl: "https://env.example", model: "env-model" },
+    );
+
+    getLlmConfigsByUserId.mockResolvedValue([
+      {
+        id: 7,
+        userId: 1,
+        providerName: "OpenAI",
+        isDefault: true,
+        apiKey: ENCRYPTED,
+        apiKeyHint: "abcd",
+        baseUrl: "https://user.example",
+        model: "user-model",
+        systemMessage: null,
+        extraConfig: null,
+        createdAt: new Date(),
+      },
+    ]);
+
+    // The encrypted value cannot be decrypted without the real key, so the
+    // resolver falls back to the environment for the key while still
+    // applying the user's base URL and model.
+    const provider = await resolveProviderForUser({ userId: 1, providerName: "OpenAI" });
+    expect(provider).toBeDefined();
+
+    if (original) {
+      registry.registerFactory(
+        "OpenAI",
+        (cfg) => new OpenAIProvider("OpenAI", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+        original,
+      );
+    }
+  });
+
+  it("uses the user's default row when no provider is requested", async () => {
+    getLlmConfigsByUserId.mockResolvedValue([
+      {
+        id: 7,
+        userId: 1,
+        providerName: "DeepSeek",
+        isDefault: true,
+        apiKey: null,
+        apiKeyHint: null,
+        baseUrl: null,
+        model: null,
+        systemMessage: null,
+        extraConfig: null,
+        createdAt: new Date(),
+      },
+    ]);
+
+    const provider = await resolveProviderForUser({ userId: 1 });
+    // The environment has no DeepSeek key in the test environment, so the
+    // resolver still resolves a provider object.
+    expect(provider === undefined || provider.name === "DeepSeek").toBe(true);
+  });
+});

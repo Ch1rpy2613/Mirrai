@@ -1,0 +1,319 @@
+/**
+ * Feishu (飞书) channel.
+ *
+ * Uses Feishu's WebSocket long-connection mode, which needs no public IP,
+ * domain or TLS certificate — the same property that makes the WeChat
+ * ClawBot channel usable on a home server.
+ *
+ * Two constraints shape the code:
+ *
+ *   1. Feishu requires an event callback to return within three seconds, or
+ *      it retries the delivery. So the event handler only enqueues the
+ *      message; the conversation happens afterwards.
+ *   2. A text message's `content` is a JSON string (`{"text":"..."}`), not
+ *      the text itself.
+ *
+ * The credentials are the app id and app secret of an enterprise self-built
+ * app; they are stored encrypted, like every other secret in the app.
+ */
+import { decryptSecret, encryptSecret } from "../_core/crypto";
+import * as db from "../db";
+import { handleChannelChat } from "./bridge";
+import { getActivePersonaId, handleCommand } from "./commands";
+import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
+
+const CHANNEL_ID = "feishu" as const;
+
+interface FeishuCredentials {
+  appId: string;
+  appSecret: string;
+}
+
+interface RunningConnection {
+  client: any;
+  ws: any;
+}
+
+const connections = new Map<number, RunningConnection>();
+
+/**
+ * Loads the SDK.
+ *
+ * It is an optional dependency — an install that never touches Feishu does
+ * not need it — so it is imported dynamically and the failure is reported
+ * clearly rather than crashing the server at boot.
+ */
+async function loadSdk(): Promise<typeof import("@larksuiteoapi/node-sdk")> {
+  try {
+    return await import("@larksuiteoapi/node-sdk");
+  } catch (e) {
+    throw new Error(
+      "飞书通道需要 @larksuiteoapi/node-sdk，请先运行 `pnpm install` 安装依赖。" +
+        ` (${(e as Error).message})`,
+    );
+  }
+}
+
+async function readCredentials(userId: number): Promise<FeishuCredentials | null> {
+  const state = await db.getChannelState(userId, CHANNEL_ID);
+  if (!state?.credentialsEnc) return null;
+  const plain = await decryptSecret(state.credentialsEnc);
+  if (!plain) return null;
+  try {
+    const parsed = JSON.parse(plain);
+    if (!parsed?.appId || !parsed?.appSecret) return null;
+    return { appId: parsed.appId, appSecret: parsed.appSecret };
+  } catch {
+    return null;
+  }
+}
+
+/** Extracts the plain text from an inbound Feishu message. */
+export function extractMessageText(message: {
+  message_type?: string;
+  content?: string;
+}): string | null {
+  if (message?.message_type !== "text") return null;
+  if (!message.content) return null;
+  try {
+    const parsed = JSON.parse(message.content);
+    return typeof parsed?.text === "string" ? parsed.text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Handles one inbound Feishu event.
+ *
+ * Exported so the behaviour can be tested without a live Feishu connection.
+ */
+export async function handleFeishuEvent(params: {
+  userId: number;
+  event: {
+    chat_id?: string;
+    chat_type?: string;
+    message?: { message_type?: string; content?: string };
+    sender?: { sender_id?: { open_id?: string } };
+  };
+  sendText: (targetId: string, text: string) => Promise<void>;
+}): Promise<void> {
+  const { userId, event, sendText } = params;
+  const chatId = event?.chat_id;
+  if (!chatId) return;
+
+  // Feishu delivers group messages too; the ClawBot-style private
+  // conversation is the supported model here.
+  if (event.chat_type && event.chat_type !== "p2p") return;
+
+  const text = extractMessageText(event.message ?? {});
+  if (!text || !text.trim()) return;
+
+  const binding = await db.getChannelBinding(userId, CHANNEL_ID, chatId);
+  if (!binding) {
+    await sendText(chatId, "还没有设置默认分身。请在网页端「设置 → 飞书」里选择要对话的分身。");
+    return;
+  }
+
+  const defaultPersonaId = binding.personaId;
+
+  const commandResult = await handleCommand({
+    userId,
+    conversationKey: chatId,
+    text,
+    defaultPersonaId,
+    sendLetter: async (letter) => {
+      await sendText(chatId, letter);
+      return true;
+    },
+  });
+
+  if (commandResult.handled) {
+    if (commandResult.reply) await sendText(chatId, commandResult.reply);
+    return;
+  }
+
+  const personaId = getActivePersonaId(chatId, defaultPersonaId);
+  const reply = await handleChannelChat({
+    userId,
+    conversationKey: chatId,
+    personaId,
+    messageText: text,
+    channel: CHANNEL_ID,
+  });
+
+  if (!reply) return;
+
+  const persona = await db.getPersonaById(personaId, userId);
+  if (persona?.graduationStatus === "suggested") {
+    await sendText(
+      chatId,
+      `${reply}\n\n（如果你觉得是时候了，回复「/毕业」我来写最后一封信。）`,
+    );
+    return;
+  }
+
+  await sendText(chatId, reply);
+}
+
+/**
+ * The Feishu channel adapter.
+ */
+export class FeishuAdapter implements ChannelAdapter {
+  id: ChannelId = CHANNEL_ID;
+  label = "飞书";
+  requiresCredentials = true;
+
+  /** Stores the app credentials for a user, encrypted. */
+  async setCredentials(userId: number, credentials: FeishuCredentials): Promise<void> {
+    const encrypted = await encryptSecret(JSON.stringify(credentials));
+    await db.upsertChannelState(userId, CHANNEL_ID, {
+      credentialsEnc: encrypted,
+      status: "configured",
+    });
+
+    // The Feishu collector needs the same app id and secret, so the user
+    // only has to enter them once. The very same encrypted blob is written
+    // to the collection source — not a second copy of the secret.
+    try {
+      const { saveCollectionSource } = await import("../collectors/db-store");
+      await saveCollectionSource({
+        userId,
+        source: "feishu",
+        label: "飞书",
+        encryptedCredentials: encrypted,
+      });
+    } catch (e) {
+      // The collector side is optional; the channel must work without it.
+      console.warn("[Feishu] Could not share the credentials with the collector:", e);
+    }
+  }
+
+  async start(userId: number): Promise<void> {
+    if (connections.has(userId)) return;
+
+    const credentials = await readCredentials(userId);
+    if (!credentials) {
+      throw new Error("飞书通道尚未配置 App ID / App Secret。");
+    }
+
+    const lark = await loadSdk();
+
+    const client = new lark.Client({
+      appId: credentials.appId,
+      appSecret: credentials.appSecret,
+      appType: lark.AppType.SelfBuild,
+      domain: lark.Domain.Feishu,
+    });
+
+    const ws = new lark.WSClient({
+      appId: credentials.appId,
+      appSecret: credentials.appSecret,
+    });
+
+    const sendText = async (targetId: string, text: string) => {
+      await client.im.v1.message.create({
+        params: { receive_id_type: "chat_id" },
+        data: {
+          receive_id: targetId,
+          msg_type: "text",
+          content: JSON.stringify({ text }),
+        },
+      });
+    };
+
+    const dispatcher = new lark.EventDispatcher().register({
+      "im.message.receive_v1": async (data: any) => {
+        // Feishu expects a reply within three seconds. The conversation takes
+        // far longer than that, so it is started in the background and the
+        // callback returns immediately.
+        void handleFeishuEvent({
+          userId,
+          event: data?.event ?? {},
+          sendText,
+        }).catch((e) => console.error("[Feishu] Failed to handle event:", e));
+      },
+    });
+
+    ws.start({ eventDispatcher: dispatcher });
+    connections.set(userId, { client, ws });
+
+    await db.upsertChannelState(userId, CHANNEL_ID, {
+      status: "connected",
+      lastError: null,
+    });
+
+    console.log(`[Feishu] Long connection established for user ${userId}`);
+  }
+
+  async stop(userId: number): Promise<void> {
+    const connection = connections.get(userId);
+    if (connection) {
+      try {
+        connection.ws?.close?.();
+      } catch {
+        // Already closed.
+      }
+      connections.delete(userId);
+    }
+    await db.upsertChannelState(userId, CHANNEL_ID, { status: "stopped" });
+  }
+
+  async status(userId: number): Promise<ChannelStatus> {
+    const state = await db.getChannelState(userId, CHANNEL_ID);
+    const connected = connections.has(userId);
+    return {
+      channel: CHANNEL_ID,
+      connected,
+      status: connected ? "connected" : (state?.status ?? "stopped"),
+      detail: state?.lastError ? { error: state.lastError } : null,
+    };
+  }
+
+  async send(userId: number, targetId: string, text: string): Promise<void> {
+    const connection = connections.get(userId);
+    if (!connection) {
+      throw new Error("飞书通道尚未连接。");
+    }
+    await connection.client.im.v1.message.create({
+      params: { receive_id_type: "chat_id" },
+      data: {
+        receive_id: targetId,
+        msg_type: "text",
+        content: JSON.stringify({ text }),
+      },
+    });
+  }
+
+  async setDefaultPersona(userId: number, personaId: number): Promise<void> {
+    const bindings = await db.getChannelBindingsByUserId(userId, CHANNEL_ID);
+    const targetId = bindings[0]?.targetId;
+    if (!targetId) {
+      throw new Error("还没有绑定任何飞书会话。");
+    }
+    await db.setChannelBindingPersona({
+      userId,
+      channel: CHANNEL_ID,
+      targetId,
+      personaId,
+    });
+  }
+
+  async restore(userId: number): Promise<boolean> {
+    const state = await db.getChannelState(userId, CHANNEL_ID);
+    if (!state?.credentialsEnc) return false;
+    try {
+      await this.start(userId);
+      return true;
+    } catch (e) {
+      console.warn(`[Feishu] Could not restore the channel for user ${userId}:`, e);
+      await db.upsertChannelState(userId, CHANNEL_ID, {
+        status: "error",
+        lastError: (e as Error).message,
+      });
+      return false;
+    }
+  }
+}
+
+export const feishuAdapter = new FeishuAdapter();

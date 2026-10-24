@@ -13,6 +13,17 @@ export class XunfeiProvider implements LLMProvider {
     private modelVersion: string,
   ) {}
 
+  /**
+   * The Spark WebSocket endpoint answers with text only and does not accept
+   * image parts.
+   */
+  capabilities = {
+    streaming: true,
+    vision: false,
+    tools: false,
+    jsonMode: false,
+  };
+
   isConfigured(): boolean {
     return !!this.appId && !!this.apiKey && !!this.apiSecret;
   }
@@ -37,42 +48,106 @@ export class XunfeiProvider implements LLMProvider {
     return `wss://${host}${path}?authorization=${authorization}&date=${encodeURIComponent(date)}&host=${host}`;
   }
 
-  async invoke(messages: LLMMessage[], _options?: LLMOptions): Promise<string> {
+  async invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string> {
+    let result = "";
+    for await (const chunk of this.stream(messages, options)) {
+      result += chunk.text;
+    }
+    return result;
+  }
+
+  /**
+   * The Spark endpoint already streams over its WebSocket; this exposes those
+   * frames as an async iterable instead of accumulating them into one string.
+   */
+  async *stream(messages: LLMMessage[], options?: LLMOptions): AsyncGenerator<{ text: string }> {
     const wsUrl = this.generateWsUrl();
     const domain = this.getModelDomain();
 
-    return new Promise((resolve, reject) => {
-      const socket = new WebSocket(wsUrl);
-      let result = "";
+    const queue: Array<{ text: string } | { error: Error } | { done: true }> = [];
+    let notify: (() => void) | null = null;
+    const wake = () => {
+      notify?.();
+      notify = null;
+    };
 
-      socket.on("open", () => {
-        socket.send(JSON.stringify({
-          header: { app_id: this.appId, uid: "girlfriend" },
-          parameter: { chat: { domain, temperature: 0.8, max_tokens: 2048 } },
-          payload: {
-            message: {
-              text: messages.map(m => ({ role: m.role, content: getTextContent(m.content) })),
-            },
+    const socket = new WebSocket(wsUrl);
+    let closed = false;
+
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      try {
+        socket.close();
+      } catch {
+        // Already closing.
+      }
+    };
+
+    socket.on("open", () => {
+      socket.send(JSON.stringify({
+        header: { app_id: this.appId, uid: "girlfriend" },
+        parameter: { chat: { domain, temperature: 0.8, max_tokens: 2048 } },
+        payload: {
+          message: {
+            text: messages.map(m => ({ role: m.role, content: getTextContent(m.content) })),
           },
-        }));
-      });
+        },
+      }));
+    });
 
-      socket.on("message", (raw) => {
+    socket.on("message", (raw) => {
+      try {
         const data = JSON.parse(raw.toString());
         if (data.header.code !== 0) {
-          socket.close();
-          reject(new Error(`[Xunfei] code ${data.header.code}: ${data.header.message}`));
+          queue.push({ error: new Error(`[Xunfei] code ${data.header.code}: ${data.header.message}`) });
+          wake();
+          cleanup();
           return;
         }
         const text = data.payload?.choices?.text?.[0]?.content ?? "";
-        result += text;
+        if (text) queue.push({ text });
         if (data.header.status === 2) {
-          setTimeout(() => socket.close(), 200);
+          queue.push({ done: true });
+          wake();
+          setTimeout(cleanup, 200);
         }
-      });
-
-      socket.on("close", () => resolve(result));
-      socket.on("error", (e) => reject(new Error(`[Xunfei] ws error: ${e.message}`)));
+      } catch (e) {
+        queue.push({ error: e instanceof Error ? e : new Error(String(e)) });
+        wake();
+        cleanup();
+      }
     });
+
+    socket.on("close", () => {
+      queue.push({ done: true });
+      wake();
+    });
+
+    socket.on("error", (e) => {
+      queue.push({ error: new Error(`[Xunfei] ws error: ${e.message}`) });
+      wake();
+      cleanup();
+    });
+
+    // Honour cancellation: close the socket so the upstream stops billing.
+    options?.signal?.addEventListener("abort", cleanup);
+
+    try {
+      while (true) {
+        if (queue.length === 0) {
+          await new Promise<void>(resolve => {
+            notify = resolve;
+          });
+          continue;
+        }
+        const item = queue.shift()!;
+        if ("done" in item) return;
+        if ("error" in item) throw item.error;
+        yield item;
+      }
+    } finally {
+      cleanup();
+    }
   }
 }

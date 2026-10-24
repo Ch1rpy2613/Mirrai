@@ -27,3 +27,58 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  schema:
+    name: Schema check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mirrai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mirrai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `drizzle-kit push` is used rather than `generate && migrate`: the
+      # migration journal lives in `drizzle/meta/`, which is gitignored, so
+      # `migrate` cannot work on a fresh checkout.
+      - name: Apply schema
+        run: pnpm exec drizzle-kit push --force
+
+      - name: Verify the schema is in sync
+        run: |
+          output="$(pnpm exec drizzle-kit push 2>&1)"
+          echo "$output"
+          if echo "$output" | grep -qiE "no changes|up to date|already in sync|nothing to migrate"; then
+            echo "schema.ts matches the database"
+          else
+            echo "::error::drizzle/schema.ts does not match the database state"
+            exit 1
+          fi
+
+      # The hand-written migrations must be idempotent — re-running them
+      # against an already-migrated database has to be a no-op.
+      - name: Verify the SQL migrations are idempotent
+        run: |
+          pnpm db:migrate
+          pnpm db:migrate

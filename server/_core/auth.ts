@@ -8,10 +8,13 @@ import * as db from "../db";
 import { ENV } from "./env";
 import { getSessionCookieOptions } from "./cookies";
 import { hashPassword, needsRehash, verifyPassword } from "./password";
+import { RATE_LIMITS, getClientIp, rateLimiter } from "./rate-limit";
 
 export type SessionPayload = {
   userId: number;
   name: string;
+  /** The user's token version at the time the token was minted. */
+  tokenVersion: number;
 };
 
 function getSessionSecret() {
@@ -23,13 +26,27 @@ function parseCookies(cookieHeader: string | undefined): Map<string, string> {
   return new Map(Object.entries(parseCookieHeader(cookieHeader)));
 }
 
+/**
+ * Rejects the request when the auth endpoint is being called too often.
+ * Returns true when the request was rejected (and the response was sent).
+ */
+function rejectIfRateLimited(req: Request, res: Response): boolean {
+  const key = getClientIp(req);
+  const result = rateLimiter.check(key, RATE_LIMITS.auth);
+  if (result.allowed) return false;
+  res.setHeader("Retry-After", Math.ceil(result.retryAfterMs / 1000));
+  res.status(429).json({ error: "Too many attempts, please try again later" });
+  return true;
+}
+
 export async function createSessionToken(
   userId: number,
-  name: string
+  name: string,
+  tokenVersion = 0,
 ): Promise<string> {
   const secret = getSessionSecret();
   const expiresAt = Math.floor((Date.now() + ONE_YEAR_MS) / 1000);
-  return new SignJWT({ userId, name })
+  return new SignJWT({ userId, name, tv: tokenVersion })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setExpirationTime(expiresAt)
     .sign(secret);
@@ -44,9 +61,13 @@ export async function verifySession(
     const { payload } = await jwtVerify(cookieValue, secret, {
       algorithms: ["HS256"],
     });
-    const { userId, name } = payload as Record<string, unknown>;
+    const { userId, name, tv } = payload as Record<string, unknown>;
     if (typeof userId !== "number" || typeof name !== "string") return null;
-    return { userId, name };
+    return {
+      userId,
+      name,
+      tokenVersion: typeof tv === "number" ? tv : 0,
+    };
   } catch {
     return null;
   }
@@ -60,11 +81,19 @@ export async function authenticateRequest(req: Request): Promise<User> {
 
   const user = await db.getUserById(session.userId);
   if (!user) throw ForbiddenError("User not found");
+
+  // A logout or a password change bumps the token version, which retires
+  // every token that was minted before that point.
+  if ((user.tokenVersion ?? 0) !== session.tokenVersion) {
+    throw ForbiddenError("Session has been revoked");
+  }
   return user;
 }
 
 export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/register", async (req: Request, res: Response) => {
+    if (rejectIfRateLimited(req, res)) return;
+
     const { username, password } = req.body;
     if (!username || !password || typeof username !== "string" || typeof password !== "string") {
       res.status(400).json({ error: "username and password are required" });
@@ -94,7 +123,7 @@ export function registerAuthRoutes(app: Express) {
         name: username,
       });
 
-      const token = await createSessionToken(userId, username);
+      const token = await createSessionToken(userId, username, 0);
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
       res.json({ success: true, userId });
@@ -105,6 +134,8 @@ export function registerAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
+    if (rejectIfRateLimited(req, res)) return;
+
     const { username, password } = req.body;
     if (!username || !password) {
       res.status(400).json({ error: "username and password are required" });
@@ -135,7 +166,11 @@ export function registerAuthRoutes(app: Express) {
 
       await db.updateUserLastSignedIn(user.id);
 
-      const token = await createSessionToken(user.id, user.name || username);
+      const token = await createSessionToken(
+        user.id,
+        user.name || username,
+        user.tokenVersion ?? 0,
+      );
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
       res.json({ success: true, userId: user.id });

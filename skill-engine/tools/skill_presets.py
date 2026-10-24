@@ -9,6 +9,7 @@ and rendering defaults should be used for a given distillation target.
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 
 COMMON_KNOWLEDGE_DIRS = [
@@ -18,6 +19,85 @@ COMMON_KNOWLEDGE_DIRS = [
 ]
 
 DEFAULT_RESEARCH_PROFILE = "budget-friendly"
+
+# Every quality threshold the Python gate enforces is declared on the research
+# profile presets below. The keys are listed here so a missing threshold is a
+# loud error instead of a silently skipped check.
+#
+# The values themselves live in `prompts/registry.json` — the single source
+# of truth that the TypeScript side reads as well — so the gate, the presets
+# and the server can never disagree about what "good enough" means.
+QUALITY_THRESHOLD_KEYS = (
+    "min_raw_notes",
+    "min_grounded_urls",
+    "min_primary_markers",
+    "min_source_metadata_blocks",
+    "min_contradiction_bullets",
+    "min_inference_bullets",
+    "min_track_coverage",
+    "max_long_quote_lines",
+    "min_skill_grounded_urls",
+    "min_mental_models",
+    "min_known_answer_questions",
+    "min_edge_case_markers",
+    "min_weighted_primary_ratio",
+    "min_high_tier_sources",
+)
+
+
+REGISTRY_PATH = Path(__file__).resolve().parent.parent / "prompts" / "registry.json"
+
+
+def load_prompt_registry() -> dict:
+    """Reads prompts/registry.json — the single source of truth for prompts."""
+    try:
+        with open(REGISTRY_PATH, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return {}
+
+
+def load_quality_thresholds() -> dict:
+    """Reads the quality thresholds of every profile from the registry.
+
+    Returns `{profile: {threshold: value}}` with the values normalised to
+    integers. A profile that is missing from the registry is skipped — the
+    caller decides whether that is an error.
+    """
+    section = load_prompt_registry().get("qualityThresholds", {})
+    if not isinstance(section, dict):
+        return {}
+
+    thresholds: dict = {}
+    for profile, values in section.items():
+        if not isinstance(values, dict):
+            continue
+        thresholds[str(profile).strip().lower()] = {
+            key: int(values.get(key, 0)) for key in QUALITY_THRESHOLD_KEYS
+        }
+    return thresholds
+
+
+def build_prompt_bundle(family: str, profile: str | None = None, include_preset: bool = True) -> dict:
+    """
+    Builds a prompt bundle from the registry.
+
+    The registry stores paths relative to skill-engine/prompts/; a bundle
+    stores them relative to skill-engine/, so "prompts/" is prepended.
+    """
+    registry = load_prompt_registry()
+    entry = registry.get("families", {}).get(family, {})
+    stages = dict(entry.get("stages", {}))
+
+    if profile:
+        stages.update(entry.get("profiles", {}).get(profile, {}).get("stages", {}))
+
+    bundle = {}
+    if include_preset:
+        bundle["preset"] = f"dot.{family}.v1"
+    for stage, relative in stages.items():
+        bundle[stage] = f"prompts/{relative}"
+    return bundle
 
 
 CHARACTER_PRESETS = {
@@ -34,16 +114,7 @@ CHARACTER_PRESETS = {
         "command_aliases": ["/create-colleague", "/create-skill"],
         "knowledge_dirs": COMMON_KNOWLEDGE_DIRS,
         "storage_root": "skills/colleague",
-        "prompt_bundle": {
-            "preset": "dot.colleague.v1",
-            "intake": "prompts/intake.md",
-            "work_analyzer": "prompts/work_analyzer.md",
-            "persona_analyzer": "prompts/persona_analyzer.md",
-            "work_builder": "prompts/work_builder.md",
-            "persona_builder": "prompts/persona_builder.md",
-            "merger": "prompts/merger.md",
-            "correction_handler": "prompts/correction_handler.md",
-        },
+        "prompt_bundle": build_prompt_bundle("colleague"),
         "legacy_storage_root": "colleagues",
         "skill_name_prefix": "colleague",
         "legacy_type": "colleague",
@@ -61,16 +132,7 @@ CHARACTER_PRESETS = {
         "command_aliases": ["/create-ex", "/create-skill"],
         "knowledge_dirs": COMMON_KNOWLEDGE_DIRS,
         "storage_root": "skills/relationship",
-        "prompt_bundle": {
-            "preset": "dot.relationship.v1",
-            "intake": "prompts/relationship/intake.md",
-            "work_analyzer": "prompts/work_analyzer.md",
-            "persona_analyzer": "prompts/relationship/persona_analyzer.md",
-            "work_builder": "prompts/work_builder.md",
-            "persona_builder": "prompts/relationship/persona_builder.md",
-            "merger": "prompts/relationship/merger.md",
-            "correction_handler": "prompts/correction_handler.md",
-        },
+        "prompt_bundle": build_prompt_bundle("relationship"),
         "legacy_storage_root": "skills/relationship",
         "skill_name_prefix": "relationship",
         "legacy_type": "relationship",
@@ -94,59 +156,28 @@ CHARACTER_PRESETS = {
             "subtitles",
         ],
         "storage_root": "skills/celebrity",
-        "prompt_bundle": {
-            "preset": "dot.celebrity.v1",
-            "intake": "prompts/celebrity/intake.md",
-            "research": "prompts/celebrity/research.md",
-            "work_analyzer": "prompts/work_analyzer.md",
-            "persona_analyzer": "prompts/celebrity/persona_analyzer.md",
-            "work_builder": "prompts/work_builder.md",
-            "persona_builder": "prompts/celebrity/persona_builder.md",
-            "merger": "prompts/celebrity/merger.md",
-            "correction_handler": "prompts/correction_handler.md",
-        },
+        "prompt_bundle": build_prompt_bundle("celebrity"),
         "default_research_profile": DEFAULT_RESEARCH_PROFILE,
         "research_profiles": {
             "budget-friendly": {
                 "name": "budget-friendly",
                 "display_name": "Budget Friendly",
                 "description": "Lean public-source distillation with compact review and lightweight validation.",
-                "prompt_bundle": {
-                    "research": "prompts/celebrity/research.md",
-                    "persona_analyzer": "prompts/celebrity/persona_analyzer.md",
-                    "persona_builder": "prompts/celebrity/persona_builder.md",
-                },
+                "prompt_bundle": build_prompt_bundle("celebrity", "budget-friendly", include_preset=False),
                 "references": [],
                 "merge_strategy": "compact",
                 "quality_profile": "budget-friendly",
-                "min_raw_notes": 3,
-                "min_grounded_urls": 2,
-                "min_primary_markers": 0,
             },
             "budget-unfriendly": {
                 "name": "budget-unfriendly",
                 "display_name": "Budget Unfriendly",
                 "description": "Deep six-track research with evidence grading, synthesis review, and stricter validation.",
-                "prompt_bundle": {
-                    "research": "prompts/celebrity/budget_unfriendly/research.md",
-                    "audit": "prompts/celebrity/budget_unfriendly/audit.md",
-                    "synthesis": "prompts/celebrity/budget_unfriendly/synthesis.md",
-                    "validation": "prompts/celebrity/budget_unfriendly/validation.md",
-                    "persona_analyzer": "prompts/celebrity/budget_unfriendly/persona_analyzer.md",
-                    "persona_builder": "prompts/celebrity/budget_unfriendly/persona_builder.md",
-                },
+                "prompt_bundle": build_prompt_bundle("celebrity", "budget-unfriendly", include_preset=False),
                 "references": [
                     "references/celebrity_budget_unfriendly_framework.md",
-                    "references/celebrity_budget_unfriendly_template.md",
                 ],
                 "merge_strategy": "deep",
                 "quality_profile": "budget-unfriendly",
-                "min_raw_notes": 6,
-                "min_grounded_urls": 8,
-                "min_primary_markers": 3,
-                "min_source_metadata_blocks": 6,
-                "min_contradiction_bullets": 6,
-                "min_inference_bullets": 6,
                 "required_review_files": [
                     "research_audit.md",
                     "synthesis.md",
@@ -165,6 +196,26 @@ CHARACTER_PRESETS = {
         "legacy_type": "celebrity",
     },
 }
+
+
+def _apply_registry_thresholds(presets: dict) -> None:
+    """Fills the `min_*` thresholds of the presets from the registry.
+
+    The values are declared once, in `prompts/registry.json`; the presets
+    expose them so `get_research_profile_preset()` keeps its shape.
+    """
+    thresholds = load_quality_thresholds()
+    if not thresholds:
+        return
+    for preset in presets.values():
+        for profile in preset.get("research_profiles", {}).values():
+            key = str(profile.get("quality_profile") or profile.get("name", "")).strip().lower()
+            values = thresholds.get(key)
+            if values:
+                profile.update(values)
+
+
+_apply_registry_thresholds(CHARACTER_PRESETS)
 
 
 CHARACTER_ALIASES = {
@@ -225,8 +276,45 @@ def get_research_profile_preset(character: str | None, research_profile: str | N
             "min_raw_notes": 0,
             "min_grounded_urls": 0,
             "min_primary_markers": 0,
+            "min_source_metadata_blocks": 0,
+            "min_contradiction_bullets": 0,
+            "min_inference_bullets": 0,
+            "min_track_coverage": 0,
+            "max_long_quote_lines": 0,
+            "min_skill_grounded_urls": 0,
+            "min_mental_models": 0,
+            "min_known_answer_questions": 0,
+            "min_edge_case_markers": 0,
+            "min_weighted_primary_ratio": 0,
+            "min_high_tier_sources": 0,
         }
     return profiles[normalize_research_profile(character, research_profile)]
+
+
+def get_quality_thresholds(quality_profile: str | None) -> dict:
+    """Return the quality thresholds declared for a quality profile.
+
+    The values come from `prompts/registry.json` — the single source of truth
+    that the TypeScript side reads as well — so `tools/research/quality_check.py`
+    and the server can never drift apart. Raises ValueError when the profile
+    is unknown — a silent fallback would turn every check into a no-op.
+    """
+    wanted = (quality_profile or DEFAULT_RESEARCH_PROFILE).strip().lower()
+    thresholds = load_quality_thresholds()
+
+    if wanted in thresholds:
+        return thresholds[wanted]
+
+    # The registry is keyed by the profile name; fall back to the preset that
+    # declares the quality profile.
+    for preset in CHARACTER_PRESETS.values():
+        for profile in preset.get("research_profiles", {}).values():
+            if profile.get("quality_profile") == wanted:
+                key = str(profile.get("name", wanted)).strip().lower()
+                if key in thresholds:
+                    return thresholds[key]
+
+    raise ValueError(f"unknown quality profile: {wanted}")
 
 
 def normalize_skill_type(skill_type: str | None) -> str:

@@ -45,6 +45,84 @@ except ImportError:
 CONFIG_PATH = Path.home() / ".colleague-skill" / "dingtalk_config.json"
 API_BASE = "https://api.dingtalk.com"
 
+SOURCE_NAME = "dingtalk"
+
+
+# ─── 统一输出协议 ─────────────────────────────────────────────────────────────
+#
+# 采集器对外只有两种输出：
+#   * 默认（text）：保持历史的 Markdown 报告，逐字节不变；
+#   * --format json：stdout 上唯一一个归一化 JSON 对象。
+#
+# 进度行走 stderr（而不是 stdout），这样 stdout 只承载载荷：默认模式的输出
+# 不会被进度行污染，JSON 模式下的 stdout 也保证是一个可整体解析的 JSON。
+
+PROGRESS_PREFIX = "[PROGRESS]"
+
+
+def report_progress(fraction: float) -> None:
+    """把进度写进 stderr，格式为 `[PROGRESS] 0.42`。
+
+    服务端 `server/collectors/runner.ts` 会把这个协议换算成 0..100 的整数。
+    """
+    value = float(fraction)
+    if value < 0.0:
+        value = 0.0
+    elif value > 1.0:
+        value = 1.0
+    print(f"{PROGRESS_PREFIX} {value:.2f}", file=sys.stderr, flush=True)
+
+
+def to_iso_timestamp(value: str) -> str:
+    """把采集到的时间转成 ISO 8601；无法解析时原样返回。"""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M"):
+        try:
+            return datetime.strptime(raw, fmt).isoformat()
+        except ValueError:
+            continue
+    return raw
+
+
+def to_json_messages(records: list, source: str = SOURCE_NAME) -> list:
+    """把消息记录转成统一 JSON 的消息列表。
+
+    钉钉采集只保留目标人发出的消息，所以角色恒为 assistant。
+    """
+    messages: list = []
+    seen = set()
+    for record in records:
+        content = (record.get("content") or "").strip()
+        if not content:
+            continue
+        timestamp = to_iso_timestamp(record.get("time", ""))
+        key = (timestamp, content)
+        if key in seen:
+            continue
+        seen.add(key)
+        messages.append({
+            "role": "assistant",
+            "content": content,
+            "timestamp": timestamp,
+            "source": source,
+        })
+    return messages
+
+
+def build_json_payload(messages: list, source: str = SOURCE_NAME, truncated: bool = False) -> dict:
+    """构造跨采集器统一的 JSON 载荷。"""
+    return {
+        "messages": messages,
+        "meta": {"total": len(messages), "source": source, "truncated": truncated},
+    }
+
+
+def print_json_payload(payload: dict) -> None:
+    """在 stdout 上打印唯一一个归一化 JSON 对象。"""
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
+
 
 # ─── 配置 ────────────────────────────────────────────────────────────────────
 
@@ -498,21 +576,27 @@ def collect_messages_browser(
     msg_limit: int,
     chrome_profile: Optional[str],
     headless: bool,
-) -> str:
-    """通过 Playwright 浏览器抓取钉钉网页版消息记录"""
+) -> tuple:
+    """通过 Playwright 浏览器抓取钉钉网页版消息记录
+
+    返回 (Markdown 报告, 消息记录)。报告和统一 JSON 都从同一份记录生成。
+    """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         return (
             "# 消息记录\n\n"
             "⚠️  未安装 Playwright，无法采集消息记录。\n"
-            "请运行：pip3 install playwright && playwright install chromium\n"
+            "请运行：pip3 install playwright && playwright install chromium\n",
+            [],
         )
 
     import re
 
     profile = chrome_profile or get_default_chrome_profile()
     print(f"  启动浏览器抓取钉钉消息（{'无头' if headless else '有界面'}）...", file=sys.stderr)
+
+    report_progress(0.1)
 
     messages = []
 
@@ -526,7 +610,7 @@ def collect_messages_browser(
                 viewport={"width": 1280, "height": 900},
             )
         except Exception as e:
-            return f"# 消息记录\n\n⚠️  无法启动浏览器：{e}\n"
+            return f"# 消息记录\n\n⚠️  无法启动浏览器：{e}\n", []
 
         page = ctx.new_page()
 
@@ -540,7 +624,8 @@ def collect_messages_browser(
                 ctx.close()
                 return (
                     "# 消息记录\n\n"
-                    "⚠️  检测到未登录。请用 --show-browser 参数重新运行，在弹出窗口中登录钉钉。\n"
+                    "⚠️  检测到未登录。请用 --show-browser 参数重新运行，在弹出窗口中登录钉钉。\n",
+                    [],
                 )
             print("  请在浏览器中登录钉钉，登录完成后按回车继续...", file=sys.stderr)
             input()
@@ -583,11 +668,12 @@ def collect_messages_browser(
 
         # 向上滚动加载历史消息
         print("  加载历史消息 ...", file=sys.stderr)
-        for _ in range(15):
+        for index in range(15):
             page.keyboard.press("Control+Home")
             time.sleep(1)
             page.evaluate("window.scrollTo(0, 0)")
             time.sleep(0.8)
+            report_progress(0.1 + 0.5 * (index + 1) / 15)
 
         time.sleep(2)
 
@@ -639,8 +725,11 @@ def collect_messages_browser(
             "# 消息记录\n\n"
             f"⚠️  未能自动提取 {name} 的消息。\n"
             "可能原因：钉钉网页版 DOM 结构变化，或未找到对话。\n"
-            "建议手动截图聊天记录后上传。\n"
+            "建议手动截图聊天记录后上传。\n",
+            [],
         )
+
+    report_progress(0.7)
 
     long_msgs = [m for m in messages if len(m.get("content", "")) > 50]
     short_msgs = [m for m in messages if len(m.get("content", "")) <= 50]
@@ -664,7 +753,9 @@ def collect_messages_browser(
     for m in short_msgs[:300]:
         lines.append(f"[{m.get('time', '')}] {m.get('content', '')}")
 
-    return "\n".join(lines)
+    report_progress(0.9)
+
+    return "\n".join(lines), messages
 
 
 # ─── 主流程 ───────────────────────────────────────────────────────────────────
@@ -678,6 +769,7 @@ def collect_all(
     chrome_profile: Optional[str],
     headless: bool,
     config: dict,
+    output_format: str = "text",
 ) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     results = {}
@@ -719,15 +811,19 @@ def collect_all(
         print(f"\n📨 采集消息记录（浏览器方案，上限 {msg_limit} 条）...", file=sys.stderr)
         print(f"  ℹ️  钉钉 API 不支持历史消息拉取，自动切换浏览器方案", file=sys.stderr)
         try:
-            msg_content = collect_messages_browser(name, msg_limit, chrome_profile, headless)
+            msg_content, records = collect_messages_browser(name, msg_limit, chrome_profile, headless)
             msg_path = output_dir / "messages.txt"
             msg_path.write_text(msg_content, encoding="utf-8")
             results["messages"] = str(msg_path)
             print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
+            if output_format == "json":
+                print_json_payload(build_json_payload(to_json_messages(records)))
         except Exception as e:
             print(f"  ⚠️  消息采集失败：{e}", file=sys.stderr)
     else:
         print(f"\n📨 跳过消息采集（--skip-messages）", file=sys.stderr)
+        if output_format == "json":
+            print_json_payload(build_json_payload([]))
 
     # 写摘要
     summary = {
@@ -758,6 +854,12 @@ def main() -> None:
     parser.add_argument("--skip-messages", action="store_true", help="跳过消息记录采集")
     parser.add_argument("--chrome-profile", default=None, help="Chrome Profile 路径")
     parser.add_argument("--show-browser", action="store_true", help="显示浏览器窗口（调试/首次登录）")
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="输出格式：text（默认，Markdown 报告）/ json（统一 JSON，供服务端解析）",
+    )
 
     args = parser.parse_args()
 
@@ -780,6 +882,7 @@ def main() -> None:
         chrome_profile=args.chrome_profile,
         headless=not args.show_browser,
         config=config,
+        output_format=args.format,
     )
 
 

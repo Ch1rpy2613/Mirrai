@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { ENV } from "./_core/env";
+import { resolveUploadPath } from "./_core/filename";
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) {
@@ -14,7 +15,8 @@ export async function storagePut(
   _contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
   const key = relKey.replace(/^\/+/, "");
-  const filePath = path.resolve(ENV.uploadDir, key);
+  // Rejects any key that would escape the uploads directory.
+  const filePath = resolveUploadPath(ENV.uploadDir, key);
   ensureDir(path.dirname(filePath));
 
   const buffer = typeof data === "string" ? Buffer.from(data) : data;
@@ -28,5 +30,19 @@ export async function storageGet(
   relKey: string
 ): Promise<{ key: string; url: string }> {
   const key = relKey.replace(/^\/+/, "");
+  // Validates the key even though nothing is read from disk here.
+  resolveUploadPath(ENV.uploadDir, key);
   return { key, url: `/uploads/${key}` };
+}
+
+/**
+ * Resolves an upload URL to an absolute path on disk, or null when the path
+ * is not inside the uploads directory.
+ */
+export function resolveStoredPath(relKey: string): string | null {
+  try {
+    return resolveUploadPath(ENV.uploadDir, relKey.replace(/^\/+/, ""));
+  } catch {
+    return null;
+  }
 }

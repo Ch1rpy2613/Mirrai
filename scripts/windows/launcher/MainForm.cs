@@ -47,6 +47,7 @@ internal sealed class MainForm : Form
         ("Synchronizing the database schema", 78, "正在同步表结构…"),
         ("Created config at", 85, "已生成配置文件"),
         ("Starting Mirrai server", 90, "正在启动服务…"),
+        ("Administrator account created", 95, "管理员账号已生成，见日志"),
         ("Mirrai is running at", 100, "已就绪，正在打开浏览器…"),
     };
 

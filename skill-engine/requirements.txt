@@ -13,3 +13,10 @@ slack-sdk>=3.27.0
 # Optional: Word/Excel parsing (convert to PDF/CSV first if unavailable)
 python-docx>=1.1.0
 openpyxl>=3.1.0
+
+# Optional: the celebrity research tools (tools/research/) need a downloader
+# and a speech-to-text engine. They are not required by the distillation
+# pipeline itself — only by the research flow — so they live in a separate
+# extras file rather than slowing down every install:
+#
+#   pip install -r skill-engine/requirements-research.txt

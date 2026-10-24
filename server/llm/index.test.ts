@@ -9,6 +9,12 @@ describe("LLMService retry policy", () => {
     const provider: LLMProvider = {
       name: "Atlas",
       maxAttempts: 1,
+      capabilities: {
+        streaming: false,
+        vision: false,
+        tools: false,
+        jsonMode: false,
+      },
       isConfigured: () => true,
       invoke,
     };

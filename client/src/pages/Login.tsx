@@ -6,9 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Wordmark } from "@/components/Wordmark";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft } from "lucide-react";
+import { useLocale } from "@/contexts/LocaleContext";
 
 export default function Login() {
   const [, navigate] = useLocation();
+  const { t } = useLocale();
   const utils = trpc.useUtils();
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState("");
@@ -32,7 +34,7 @@ export default function Login() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "操作失败");
+        setError(data.error || t("auth.failed"));
         return;
       }
 
@@ -42,7 +44,7 @@ export default function Login() {
       await utils.auth.me.refetch();
       navigate("/");
     } catch {
-      setError("网络错误，请重试");
+      setError(t("auth.networkError"));
     } finally {
       setLoading(false);
     }
@@ -52,9 +54,9 @@ export default function Login() {
     <div className="min-h-dvh bg-background flex flex-col">
       <header className="app-header">
         <div className="container app-nav">
-          <button onClick={() => navigate("/")} className="app-nav-back -ml-1 gap-1" aria-label="返回首页">
+          <button onClick={() => navigate("/")} className="app-nav-back -ml-1 gap-1" aria-label={t("auth.backHome")}>
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm hidden sm:inline">返回</span>
+            <span className="text-sm hidden sm:inline">{t("common.back")}</span>
           </button>
           <div className="app-nav-spacer" />
           <Wordmark />
@@ -63,24 +65,24 @@ export default function Login() {
 
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md animate-fade-in-up">
-          <p className="kicker kicker-accent mb-3">{isRegister ? "新的开始" : "欢迎回来"}</p>
+          <p className="kicker kicker-accent mb-3">{isRegister ? t("auth.newStart") : t("auth.loginTitle")}</p>
           <h1 className="page-title">
-            {isRegister ? "创建账号" : "登录以继续"}
+            {isRegister ? t("auth.registerTitle") : t("auth.loginToContinue")}
           </h1>
           <p className="text-sm text-muted-foreground mt-2">
-            {isRegister ? "把一段关系，安放在这里。" : "你的分身还在书房里等你。"}
+            {isRegister ? t("auth.registerTagline") : t("auth.loginTagline")}
           </p>
 
           <hr className="rule my-8" />
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="username" className="kicker">用户名</Label>
+              <Label htmlFor="username" className="kicker">{t("auth.username")}</Label>
               <Input
                 id="username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="输入用户名"
+                placeholder={t("auth.usernamePlaceholder")}
                 className="h-11"
                 required
                 minLength={2}
@@ -89,13 +91,13 @@ export default function Login() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="kicker">密码</Label>
+              <Label htmlFor="password" className="kicker">{t("auth.password")}</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="输入密码"
+                placeholder={t("auth.passwordPlaceholder")}
                 className="h-11"
                 required
                 minLength={6}
@@ -112,23 +114,23 @@ export default function Login() {
               disabled={loading}
               className="w-full h-11 text-[0.9375rem]"
             >
-              {loading ? "处理中..." : isRegister ? "注册" : "登录"}
+              {loading ? t("auth.processing") : isRegister ? t("auth.register") : t("auth.login")}
             </Button>
           </form>
 
           <p className="text-muted-foreground text-sm mt-7">
-            {isRegister ? "已有账号？" : "没有账号？"}
+            {isRegister ? t("auth.haveAccount") : t("auth.needAccount")}
             <button
               type="button"
               onClick={() => { setIsRegister(!isRegister); setError(""); }}
               className="text-cinnabar hover:opacity-80 ml-1 font-medium transition-opacity"
             >
-              {isRegister ? "去登录" : "注册"}
+              {isRegister ? t("auth.switchToLogin") : t("auth.register")}
             </button>
           </p>
 
           <p className="text-center text-xs text-muted-foreground/80 mt-12">
-            每一段记忆，都值得被妥善安放
+            {t("auth.footer")}
           </p>
         </div>
       </main>

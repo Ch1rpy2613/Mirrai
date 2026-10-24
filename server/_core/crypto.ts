@@ -57,6 +57,20 @@ export async function encryptSecret(plaintext: string): Promise<string> {
 }
 
 /**
+ * Decrypts a credential that may or may not have been encrypted.
+ *
+ * Values written before encryption was introduced are stored in plaintext, so
+ * a value that does not carry the `v1:` marker is returned unchanged.
+ */
+export async function decryptIfEncrypted(
+  payload: string | null | undefined,
+): Promise<string | null> {
+  if (!payload) return null;
+  if (!payload.startsWith(`${PREFIX}:`)) return payload;
+  return await decryptSecret(payload);
+}
+
+/**
  * Decrypts a credential produced by `encryptSecret`.
  * Returns null when the payload is malformed or the key does not match —
  * callers treat that as "credentials need to be re-established".

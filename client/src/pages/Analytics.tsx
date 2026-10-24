@@ -8,6 +8,8 @@ import {
   AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { useLocale } from "@/contexts/LocaleContext";
+import { EMOTIONS, EMOTION_KEYS, emotionColor } from "@/lib/emotions";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -16,15 +18,6 @@ const fadeUp = {
 
 const stagger = {
   visible: { transition: { staggerChildren: 0.08 } },
-};
-
-/* 情绪色：取自设计系统 mood tokens，与日记页的情绪 chip 呼应 */
-const EMOTION_COLORS: Record<string, string> = {
-  warm: "var(--color-mood-warm)", playful: "var(--color-mood-playful)", nostalgic: "var(--color-mood-nostalgic)",
-  melancholy: "var(--color-mood-melancholy)", happy: "var(--color-mood-happy)", distant: "var(--color-mood-distant)",
-};
-const EMOTION_LABELS: Record<string, string> = {
-  warm: "温柔", playful: "俏皮", nostalgic: "思念", melancholy: "忧郁", happy: "开心", distant: "疏离",
 };
 
 const TOOLTIP_STYLE = {
@@ -39,6 +32,7 @@ const TOOLTIP_STYLE = {
 export default function Analytics() {
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
+  const { t } = useLocale();
   const [days, setDays] = useState(30);
 
   const { data } = trpc.analytics.overview.useQuery({ days }, { enabled: isAuthenticated });
@@ -62,7 +56,7 @@ export default function Analytics() {
       <header className="sticky top-0 z-40 app-header">
         <div className="container app-nav">
           <button onClick={() => navigate("/")}
-            className="app-nav-back -ml-1" aria-label="返回">
+            className="app-nav-back -ml-1" aria-label={t("analytics.back")}>
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="app-nav-spacer" />
@@ -70,7 +64,7 @@ export default function Analytics() {
             {[7, 30, 90].map(d => (
               <button key={d} onClick={() => setDays(d)}
                 className={`text-xs px-3 py-2 -mb-px border-b-2 transition-colors ${days === d ? "border-cinnabar text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                {d}天
+                {t("analytics.days", { count: d })}
               </button>
             ))}
           </div>
@@ -79,10 +73,10 @@ export default function Analytics() {
 
       <main className="container page-main max-w-4xl space-y-6">
         <motion.div initial="hidden" animate="visible" variants={fadeUp}>
-          <p className="kicker kicker-accent mb-3">消息与情绪</p>
-          <h1 className="page-title">数据看板</h1>
+          <p className="kicker kicker-accent mb-3">{t("analytics.kicker")}</p>
+          <h1 className="page-title">{t("analytics.pageTitle")}</h1>
           <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">
-            消息、情绪与陪伴的痕迹，安静地记在这里。
+            {t("analytics.intro")}
           </p>
         </motion.div>
 
@@ -92,13 +86,13 @@ export default function Analytics() {
           animate="visible"
           variants={stagger}
         >
-          <StatCard label="总消息" value={stats.totalMessages} />
-          <StatCard label="活跃天数" value={stats.activeDays} />
-          <StatCard label="最长连续" value={`${stats.longestStreak}天`} />
-          <StatCard label="日均消息" value={stats.avgPerDay} />
+          <StatCard label={t("analytics.totalMessages")} value={stats.totalMessages} />
+          <StatCard label={t("analytics.activeDays")} value={stats.activeDays} />
+          <StatCard label={t("analytics.longestStreak")} value={t("analytics.streakDays", { count: stats.longestStreak })} />
+          <StatCard label={t("analytics.avgMessages")} value={stats.avgPerDay} />
         </motion.div>
 
-        <ChartCard title="每日消息量">
+        <ChartCard title={t("analytics.dailyMessages")}>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.messageVolume || []}>
@@ -113,7 +107,7 @@ export default function Analytics() {
         </ChartCard>
 
         <div className="grid md:grid-cols-2 gap-6">
-          <ChartCard title="情绪分布趋势">
+          <ChartCard title={t("analytics.emotionTrend")}>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={emotionChartData}>
@@ -121,23 +115,23 @@ export default function Analytics() {
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  {Object.keys(EMOTION_COLORS).map(key => (
-                    <Area key={key} type="monotone" dataKey={key} stackId="1" stroke={EMOTION_COLORS[key]} fill={EMOTION_COLORS[key]} fillOpacity={0.1} />
+                  {EMOTION_KEYS.map(key => (
+                    <Area key={key} type="monotone" dataKey={key} stackId="1" stroke={emotionColor(key)} fill={emotionColor(key)} fillOpacity={0.1} />
                   ))}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-4 pt-4 border-t border-border/50">
-              {Object.entries(EMOTION_LABELS).map(([key, label]) => (
+              {EMOTION_KEYS.map((key) => (
                 <span key={key} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="w-1.5 h-1.5" style={{ background: EMOTION_COLORS[key] }} />
-                  {label}
+                  <span className="w-1.5 h-1.5" style={{ background: emotionColor(key) }} />
+                  {t(EMOTIONS[key].labelKey)}
                 </span>
               ))}
             </div>
           </ChartCard>
 
-          <ChartCard title="聊天时段分布">
+          <ChartCard title={t("analytics.hourlyDistribution")}>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={hourlyData.filter((_, i) => i % 2 === 0)}>
@@ -150,10 +144,10 @@ export default function Analytics() {
           </ChartCard>
         </div>
 
-        <ChartCard title="分身互动排名">
+        <ChartCard title={t("analytics.personaRanking")}>
           {(data?.personaEngagement || []).length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-sm text-muted-foreground">暂无数据</p>
+              <p className="text-sm text-muted-foreground">{t("analytics.noData")}</p>
             </div>
           ) : (
             <div className="space-y-3">

@@ -34,6 +34,7 @@ vi.mock("./db", () => ({
   setDefaultLlmConfig: vi.fn(),
   getWechatBotState: vi.fn(),
   upsertWechatBotState: vi.fn(),
+  bumpUserTokenVersion: vi.fn(),
 }));
 
 function makeCtx(userId = 1): TrpcContext {
@@ -47,6 +48,7 @@ function makeCtx(userId = 1): TrpcContext {
       name: "Test User",
       loginMethod: "local",
       role: "user",
+      tokenVersion: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),

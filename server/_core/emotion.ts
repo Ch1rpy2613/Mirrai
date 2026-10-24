@@ -11,6 +11,7 @@ import { llmService } from "../llm";
 import { extractJsonObject } from "./json";
 import { computeEmotionalState } from "./persona-utils";
 import { ENV } from "./env";
+import type { LLMProvider } from "../llm/types";
 
 export const EMOTIONAL_STATES = [
   "warm",
@@ -45,6 +46,24 @@ const SYSTEM_PROMPT = `你是一个情感状态分类器。阅读一段对话，
 
 只返回 JSON，不要任何其他文字：{"state":"<六个状态之一>","reason":"<15字以内理由>"}`;
 
+const SYSTEM_PROMPT_EN = `You are an emotional state classifier. Read a conversation and decide which of the six states the persona is in.
+
+The six states:
+- warm: relaxed, affectionate, responsive (the default tone)
+- playful: joking, lively, a little spoiled
+- nostalgic: thinking back, reminded of the past, mentioning memories
+- melancholy: low, sad, vulnerable
+- happy: clearly happy, excited, cheerful
+- distant: aloof, perfunctory, distracted, ending the topic
+
+Guidelines:
+1. Judge primarily by the persona's (assistant) tone, not by what the user said.
+2. Consider the emotional direction of the whole exchange, not a single word.
+3. If there is no clear signal, keep the current state.
+4. Distinguish near neighbours: nostalgic is not melancholy, cheerful is not playful, curt is not sad.
+
+Return JSON only: {"state":"<one of the six states>","reason":"<15 words or fewer>"}`;
+
 export interface EmotionInferenceResult {
   state: EmotionalState;
   source: "llm" | "heuristic";
@@ -55,16 +74,27 @@ export interface EmotionInferenceResult {
  * Infers the persona's emotional state after an exchange.
  *
  * `provider` selects which configured LLM to use; when omitted the registry
- * default (or first configured provider) is used.
+ * default (or first configured provider) is used. `providerInstance` is the
+ * already-resolved provider — pass it when the caller has one, so the
+ * classifier runs on the same credentials as the rest of the conversation
+ * instead of silently falling back to the environment key.
  */
 export async function inferEmotionalState(params: {
   userMessage: string;
   assistantReply: string;
   currentState: string;
   provider?: string;
+  providerInstance?: LLMProvider;
+  locale?: "zh" | "en";
 }): Promise<EmotionInferenceResult> {
+  const locale = params.locale ?? "zh";
   const useHeuristic = (): EmotionInferenceResult => ({
-    state: computeEmotionalState(params.userMessage, params.assistantReply, params.currentState) as EmotionalState,
+    state: computeEmotionalState(
+      params.userMessage,
+      params.assistantReply,
+      params.currentState,
+      locale,
+    ) as EmotionalState,
     source: "heuristic",
   });
 
@@ -74,20 +104,26 @@ export async function inferEmotionalState(params: {
   }
 
   try {
-    const response = await llmService.invoke({
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `当前状态：${params.currentState || "warm"}
+    const messages = [
+      { role: "system" as const, content: locale === "en" ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT },
+      {
+        role: "user" as const,
+        content:
+          locale === "en"
+            ? `Current state: ${params.currentState || "warm"}\n\nUser: ${params.userMessage}\n\nPersona: ${params.assistantReply}`
+            : `当前状态：${params.currentState || "warm"}\n\n用户：${params.userMessage}\n\n分身：${params.assistantReply}`,
+      },
+    ];
 
-用户：${params.userMessage}
-
-分身：${params.assistantReply}`,
-        },
-      ],
-      options: { provider: params.provider, temperature: 0, maxTokens: 200 },
-    });
+    const response = params.providerInstance
+      ? await llmService.invokeWithProvider(params.providerInstance, {
+          messages,
+          options: { provider: params.provider, temperature: 0, maxTokens: 200 },
+        })
+      : await llmService.invoke({
+          messages,
+          options: { provider: params.provider, temperature: 0, maxTokens: 200 },
+        });
 
     const parsed = extractJsonObject(response);
     const state = parsed?.state;

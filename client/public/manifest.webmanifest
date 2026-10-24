@@ -1,0 +1,47 @@
+{
+  "name": "Mirrai",
+  "short_name": "Mirrai",
+  "description": "上传聊天记录，AI 重建 TA 的数字分身。不在身边的时候，TA 还在这里。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#2A1F4E",
+  "theme_color": "#6E5AC8",
+  "lang": "zh-CN",
+  "categories": ["lifestyle", "social"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "大厅",
+      "short_name": "大厅",
+      "url": "/",
+      "description": "管理你的数字分身"
+    },
+    {
+      "name": "对话日记",
+      "short_name": "日记",
+      "url": "/diary",
+      "description": "回看 AI 生成的对话日记"
+    }
+  ]
+}

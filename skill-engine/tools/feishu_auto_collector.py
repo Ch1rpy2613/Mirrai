@@ -59,6 +59,86 @@ except ImportError:
 CONFIG_PATH = Path.home() / ".colleague-skill" / "feishu_config.json"
 BASE_URL = "https://open.feishu.cn/open-apis"
 
+SOURCE_NAME = "feishu"
+
+
+# ─── 统一输出协议 ─────────────────────────────────────────────────────────────
+#
+# 采集器对外只有两种输出：
+#   * 默认（text）：保持历史的 Markdown 报告，逐字节不变；
+#   * --format json：stdout 上唯一一个归一化 JSON 对象。
+#
+# 进度行走 stderr（而不是 stdout），这样 stdout 只承载载荷：默认模式的输出
+# 不会被进度行污染，JSON 模式下的 stdout 也保证是一个可整体解析的 JSON。
+
+PROGRESS_PREFIX = "[PROGRESS]"
+
+
+def report_progress(fraction: float) -> None:
+    """把进度写进 stderr，格式为 `[PROGRESS] 0.42`。
+
+    服务端 `server/collectors/runner.ts` 会把这个协议换算成 0..100 的整数。
+    """
+    value = float(fraction)
+    if value < 0.0:
+        value = 0.0
+    elif value > 1.0:
+        value = 1.0
+    print(f"{PROGRESS_PREFIX} {value:.2f}", file=sys.stderr, flush=True)
+
+
+def to_iso_timestamp(value: str) -> str:
+    """把采集到的时间转成 ISO 8601；无法解析时原样返回。"""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(raw, fmt).isoformat()
+        except ValueError:
+            continue
+    return raw
+
+
+def to_json_messages(records: list, source: str = SOURCE_NAME) -> list:
+    """把消息记录转成统一 JSON 的消息列表。
+
+    目标本人的消息是 `assistant`，私聊里对方的消息是 `user`；同一条消息
+    只出现一次（私聊消息也会出现在群聊分段里，按内容去重）。
+    """
+    messages: list = []
+    seen = set()
+    for record in records:
+        content = (record.get("content") or "").strip()
+        if not content:
+            continue
+        role = "assistant" if record.get("is_target", True) else "user"
+        timestamp = to_iso_timestamp(record.get("time", ""))
+        key = (role, timestamp, content)
+        if key in seen:
+            continue
+        seen.add(key)
+        messages.append({
+            "role": role,
+            "content": content,
+            "timestamp": timestamp,
+            "source": source,
+        })
+    return messages
+
+
+def build_json_payload(messages: list, source: str = SOURCE_NAME, truncated: bool = False) -> dict:
+    """构造跨采集器统一的 JSON 载荷。"""
+    return {
+        "messages": messages,
+        "meta": {"total": len(messages), "source": source, "truncated": truncated},
+    }
+
+
+def print_json_payload(payload: dict) -> None:
+    """在 stdout 上打印唯一一个归一化 JSON 对象。"""
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
+
 
 # ─── 配置 ────────────────────────────────────────────────────────────────────
 
@@ -563,17 +643,23 @@ def fetch_p2p_messages(
     return messages[:limit]
 
 
-def collect_messages(
+def collect_message_records(
     user: dict,
     msg_limit: int,
     config: dict,
-) -> str:
-    """采集目标用户的所有消息记录（群聊 + 私聊）"""
+) -> tuple:
+    """采集目标用户的所有消息记录（群聊 + 私聊）
+
+    返回 (消息记录列表, 来源说明列表)。报告文本和统一 JSON 都从这份记录
+    生成，两种输出永远描述同一批消息。
+    """
     user_open_id = user.get("open_id") or user.get("user_id", "")
     name = user.get("name", "")
 
     all_messages = []
     chat_sources = []
+
+    report_progress(0.05)
 
     # ── 私聊采集（需要 user_access_token + p2p_chat_id）──
     p2p_chat_id = config.get("p2p_chat_id", "")
@@ -587,6 +673,7 @@ def collect_messages(
         all_messages.extend(p2p_msgs)
         chat_sources.append(f"私聊（{len(p2p_msgs)} 条）")
         print(f"    获取 {len(p2p_msgs)} 条私聊消息", file=sys.stderr)
+        report_progress(0.15)
     elif user_token and not p2p_chat_id:
         print(f"  ⚠️  有 user_access_token 但未配置 p2p_chat_id，跳过私聊采集", file=sys.stderr)
         print(f"     请在配置中添加 p2p_chat_id（通过发送消息 API 返回值获取）", file=sys.stderr)
@@ -597,7 +684,7 @@ def collect_messages(
         chats = get_chats_with_user(user_open_id, config)
         if chats:
             per_chat_limit = max(100, remaining // len(chats))
-            for chat in chats:
+            for index, chat in enumerate(chats):
                 chat_id = chat.get("chat_id")
                 chat_name = chat.get("name", chat_id)
                 print(f"  拉取「{chat_name}」消息 ...", file=sys.stderr)
@@ -608,6 +695,15 @@ def collect_messages(
                 all_messages.extend(msgs)
                 chat_sources.append(f"{chat_name}（{len(msgs)} 条）")
                 print(f"    获取 {len(msgs)} 条", file=sys.stderr)
+                report_progress(0.15 + 0.7 * (index + 1) / len(chats))
+
+    report_progress(0.9)
+    return all_messages, chat_sources
+
+
+def format_message_report(records: list, chat_sources: list, name: str) -> str:
+    """把消息记录格式化成 Markdown 报告（历史输出格式，逐字保留）。"""
+    all_messages = records
 
     if not all_messages:
         tips = f"# 消息记录\n\n未找到 {name} 的消息记录。\n\n"
@@ -658,6 +754,16 @@ def collect_messages(
             lines.append(f"[{m.get('time', '')}] {who} {m['content']}")
 
     return "\n".join(lines)
+
+
+def collect_messages(
+    user: dict,
+    msg_limit: int,
+    config: dict,
+) -> str:
+    """采集目标用户的所有消息记录（群聊 + 私聊）"""
+    records, chat_sources = collect_message_records(user, msg_limit, config)
+    return format_message_report(records, chat_sources, user.get("name", ""))
 
 
 # ─── 文档采集 ─────────────────────────────────────────────────────────────────
@@ -834,6 +940,7 @@ def collect_all(
     msg_limit: int,
     doc_limit: int,
     config: dict,
+    output_format: str = "text",
 ) -> dict:
     """采集某同事的所有可用数据，输出到 output_dir"""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -849,12 +956,16 @@ def collect_all(
 
     # Step 2: 采集消息记录
     print(f"\n📨 采集消息记录（上限 {msg_limit} 条）...", file=sys.stderr)
+    records: list = []
     try:
-        msg_content = collect_messages(user, msg_limit, config)
+        records, chat_sources = collect_message_records(user, msg_limit, config)
+        msg_content = format_message_report(records, chat_sources, user.get("name", name))
         msg_path = output_dir / "messages.txt"
         msg_path.write_text(msg_content, encoding="utf-8")
         results["messages"] = str(msg_path)
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
+        if output_format == "json":
+            print_json_payload(build_json_payload(to_json_messages(records)))
     except Exception as e:
         print(f"  ⚠️  消息采集失败：{e}", file=sys.stderr)
 
@@ -897,6 +1008,12 @@ def main() -> None:
     parser.add_argument("--user-token", metavar="TOKEN", help="直接指定 user_access_token（覆盖配置文件）")
     parser.add_argument("--p2p-chat-id", metavar="CHAT_ID", help="私聊会话 ID（覆盖配置文件）")
     parser.add_argument("--open-id", metavar="OPEN_ID", help="直接指定目标用户的 open_id（跳过用户搜索）")
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="输出格式：text（默认，Markdown 报告）/ json（统一 JSON，供服务端解析）",
+    )
 
     args = parser.parse_args()
 
@@ -938,10 +1055,14 @@ def main() -> None:
 
         # 只采集消息
         print(f"📨 采集消息记录（上限 {args.msg_limit} 条）...", file=sys.stderr)
-        msg_content = collect_messages(user, args.msg_limit, config)
+        records, chat_sources = collect_message_records(user, args.msg_limit, config)
+        msg_content = format_message_report(records, chat_sources, user.get("name", ""))
         msg_path = output_dir / "messages.txt"
         msg_path.write_text(msg_content, encoding="utf-8")
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
+        if args.format == "json":
+            print_json_payload(build_json_payload(to_json_messages(records)))
+        report_progress(1.0)
         return
 
     collect_all(
@@ -950,6 +1071,7 @@ def main() -> None:
         msg_limit=args.msg_limit,
         doc_limit=args.doc_limit,
         config=config,
+        output_format=args.format,
     )
 
 

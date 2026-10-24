@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 uploads/
+# The distillation pipeline writes its generated skill packages here.
+skill-engine/skills/
 *.log
 .DS_Store
 drizzle/meta/
@@ -13,3 +15,5 @@ build-macos/
 .live-wechat-state.json
 live-wechat-qr.png
 live-wechat-qr-url.txt
+__pycache__/
+*.py[cod]

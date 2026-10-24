@@ -1,30 +1,56 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
-import { type Locale, translations } from "@/lib/i18n";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  translate,
+  LOCALE_NAMES,
+  zh,
+  type Locale,
+  type TranslationKey,
+  type TranslationParams,
+  type ValueAt,
+} from "@/i18n";
+
+export type { Locale, TranslationKey, TranslationParams };
 
 type LocaleContextType = {
   locale: Locale;
   setLocale: (l: Locale) => void;
-  t: (typeof translations)[Locale];
+  /** Translates a dotted key, with optional `{{name}}` placeholders. */
+  t: <K extends TranslationKey>(
+    key: K,
+    params?: TranslationParams,
+  ) => ValueAt<typeof zh, K>;
+  /** The locale's own name, for the switcher. */
+  localeName: string;
 };
 
 const LocaleContext = createContext<LocaleContextType | undefined>(undefined);
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>(() => {
+  const [locale, setLocaleState] = useState<Locale>(() => {
     if (typeof window === "undefined") return "zh";
     return (localStorage.getItem("mirrai-locale") as Locale) || "zh";
   });
 
-  const handleSetLocale = (l: Locale) => {
-    setLocale(l);
+  const setLocale = (l: Locale) => {
+    setLocaleState(l);
     localStorage.setItem("mirrai-locale", l);
+    // The document language should follow the interface language.
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
+    }
   };
 
-  return (
-    <LocaleContext.Provider value={{ locale, setLocale: handleSetLocale, t: translations[locale] }}>
-      {children}
-    </LocaleContext.Provider>
+  const value = useMemo<LocaleContextType>(
+    () => ({
+      locale,
+      setLocale,
+      t: (key, params) => translate(locale, key, params),
+      localeName: LOCALE_NAMES[locale],
+    }),
+    [locale],
   );
+
+  return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 
 export function useLocale() {

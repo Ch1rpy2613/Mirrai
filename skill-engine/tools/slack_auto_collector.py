@@ -68,6 +68,84 @@ RETRY_MAX_WAIT = 60.0     # 最长等待秒数
 DEFAULT_MSG_LIMIT = 1000
 DEFAULT_CHANNEL_LIMIT = 50  # 最多检查的频道数
 
+SOURCE_NAME = "slack"
+
+
+# ─── 统一输出协议 ─────────────────────────────────────────────────────────────
+#
+# 采集器对外只有两种输出：
+#   * 默认（text）：保持历史的 Markdown 报告，逐字节不变；
+#   * --format json：stdout 上唯一一个归一化 JSON 对象。
+#
+# 进度行走 stderr（而不是 stdout），这样 stdout 只承载载荷：默认模式的输出
+# 不会被进度行污染，JSON 模式下的 stdout 也保证是一个可整体解析的 JSON。
+
+PROGRESS_PREFIX = "[PROGRESS]"
+
+
+def report_progress(fraction: float) -> None:
+    """把进度写进 stderr，格式为 `[PROGRESS] 0.42`。
+
+    服务端 `server/collectors/runner.ts` 会把这个协议换算成 0..100 的整数。
+    """
+    value = float(fraction)
+    if value < 0.0:
+        value = 0.0
+    elif value > 1.0:
+        value = 1.0
+    print(f"{PROGRESS_PREFIX} {value:.2f}", file=sys.stderr, flush=True)
+
+
+def to_iso_timestamp(value: str) -> str:
+    """把采集到的时间转成 ISO 8601；无法解析时原样返回。"""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(raw, fmt).isoformat()
+        except ValueError:
+            continue
+    return raw
+
+
+def to_json_messages(records: list, source: str = SOURCE_NAME) -> list:
+    """把消息记录转成统一 JSON 的消息列表。
+
+    Slack 采集只保留目标用户发出的消息，所以角色恒为 assistant。
+    """
+    messages: list = []
+    seen = set()
+    for record in records:
+        content = (record.get("content") or "").strip()
+        if not content:
+            continue
+        timestamp = to_iso_timestamp(record.get("time", ""))
+        key = (timestamp, content)
+        if key in seen:
+            continue
+        seen.add(key)
+        messages.append({
+            "role": "assistant",
+            "content": content,
+            "timestamp": timestamp,
+            "source": source,
+        })
+    return messages
+
+
+def build_json_payload(messages: list, source: str = SOURCE_NAME, truncated: bool = False) -> dict:
+    """构造跨采集器统一的 JSON 载荷。"""
+    return {
+        "messages": messages,
+        "meta": {"total": len(messages), "source": source, "truncated": truncated},
+    }
+
+
+def print_json_payload(payload: dict) -> None:
+    """在 stdout 上打印唯一一个归一化 JSON 对象。"""
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
+
 
 # ─── 错误类型 ──────────────────────────────────────────────────────────────────
 
@@ -494,8 +572,11 @@ def collect_messages(
     channels: list,
     msg_limit: int,
     client: RateLimitedClient,
-) -> str:
-    """从所有频道采集目标用户消息，返回格式化文本"""
+) -> tuple:
+    """从所有频道采集目标用户消息，返回 (Markdown 报告, 消息记录)
+
+    报告和统一 JSON 都从同一份记录生成，两种输出永远描述同一批消息。
+    """
     user_id = user["id"]
     name = user.get("profile", {}).get("real_name") or user.get("name", user_id)
 
@@ -503,13 +584,16 @@ def collect_messages(
         return (
             f"# 消息记录\n\n"
             f"未找到与 {name} 共同的频道。\n"
-            f"请确认 Bot 已被添加到相关频道（/invite @bot）\n"
+            f"请确认 Bot 已被添加到相关频道（/invite @bot）\n",
+            [],
         )
 
     all_messages: list = []
     per_channel_limit = max(100, msg_limit // len(channels))
 
-    for ch in channels:
+    report_progress(0.1)
+
+    for index, ch in enumerate(channels):
         ch_id = ch.get("id", "")
         ch_name = ch.get("name", ch_id)
         print(f"  拉取 #{ch_name} 的消息 ...", file=sys.stderr)
@@ -519,6 +603,9 @@ def collect_messages(
         )
         all_messages.extend(msgs)
         print(f"    获取 {len(msgs)} 条", file=sys.stderr)
+        report_progress(0.1 + 0.7 * (index + 1) / len(channels))
+
+    report_progress(0.9)
 
     # 按权重分类
     thread_msgs = [m for m in all_messages if m["is_thread_starter"]]
@@ -565,7 +652,7 @@ def collect_messages(
     for m in short_msgs[:300]:
         lines.append(f"[{m['time']}] {m['content']}")
 
-    return "\n".join(lines)
+    return "\n".join(lines), all_messages
 
 
 def collect_all(
@@ -574,6 +661,7 @@ def collect_all(
     msg_limit: int,
     channel_limit: int,
     config: dict,
+    output_format: str = "text",
 ) -> dict:
     """采集某同事的所有 Slack 数据，输出到 output_dir"""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -614,11 +702,13 @@ def collect_all(
     # Step 3: 采集消息
     print(f"\n📨 采集消息记录（上限 {msg_limit} 条）...", file=sys.stderr)
     try:
-        msg_content = collect_messages(user, channels, msg_limit, client)
+        msg_content, records = collect_messages(user, channels, msg_limit, client)
         msg_path = output_dir / "messages.txt"
         msg_path.write_text(msg_content, encoding="utf-8")
         results["messages"] = str(msg_path)
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
+        if output_format == "json":
+            print_json_payload(build_json_payload(to_json_messages(records)))
     except SlackCollectorError as e:
         print(f"  ❌ {e}", file=sys.stderr)
         sys.exit(1)
@@ -681,6 +771,12 @@ def main() -> None:
         default=DEFAULT_CHANNEL_LIMIT,
         help=f"最多检查频道数（默认 {DEFAULT_CHANNEL_LIMIT}）",
     )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="输出格式：text（默认，Markdown 报告）/ json（统一 JSON，供服务端解析）",
+    )
 
     args = parser.parse_args()
 
@@ -706,6 +802,7 @@ def main() -> None:
             msg_limit=args.msg_limit,
             channel_limit=args.channel_limit,
             config=config,
+            output_format=args.format,
         )
     except SlackCollectorError as e:
         print(f"\n❌ 采集失败：{e}", file=sys.stderr)

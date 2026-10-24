@@ -178,6 +178,13 @@ cd "$APP_DIR"
 "$NODE_BIN" ./node_modules/drizzle-kit/bin.cjs push --force 2>&1 | tee -a "$LOGS/migrate.log" || \
   log "Schema sync note (may be OK)"
 
+# `push` only creates the tables — it does not run the hand-written data
+# migrations (for example mapping the old Chinese intimacy levels onto the new
+# keys). Those are idempotent SQL files, applied in order.
+log "Applying data migrations..."
+"$NODE_BIN" scripts/migrate.mjs 2>&1 | tee -a "$LOGS/migrate.log" || \
+  log "Data migration note (may be OK)"
+
 # ─── Create .env template for user ──────────────────────────────────────────
 if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" << 'ENVEOF'
@@ -216,6 +223,23 @@ done
 open "http://localhost:${PORT}"
 
 echo ""
+
+# On a fresh install the server creates a local administrator and writes the
+# credentials here. Show them — otherwise the operator cannot sign in.
+CRED_FILE="$DATA_ROOT/first-run-credentials.txt"
+for i in $(seq 1 10); do
+  [ -f "$CRED_FILE" ] && break
+  sleep 1
+done
+if [ -f "$CRED_FILE" ]; then
+  log "Administrator account created / 管理员账号已生成:"
+  echo ""
+  cat "$CRED_FILE"
+  echo ""
+  log "Please change this password after signing in. / 请登录后尽快修改密码。"
+  echo ""
+fi
+
 log "Mirrai is running at http://localhost:${PORT}"
 log "Config: $ENV_FILE"
 echo ""

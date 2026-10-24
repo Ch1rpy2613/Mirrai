@@ -22,6 +22,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     name: "Sample User",
     loginMethod: "local",
     role: "user",
+    tokenVersion: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -56,7 +57,10 @@ describe("auth.logout", () => {
     expect(clearedCookies[0]?.options).toMatchObject({
       maxAge: -1,
       secure: true,
-      sameSite: "none",
+      // "lax" is the default: a cross-site form post must not be able to
+      // carry the session cookie. "none" is only used when the operator
+      // opts in explicitly via COOKIE_SAMESITE.
+      sameSite: "lax",
       httpOnly: true,
       path: "/",
     });

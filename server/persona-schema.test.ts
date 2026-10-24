@@ -16,7 +16,11 @@ describe("normalizePersonaData", () => {
       summary: "温暖真诚",
     };
     const result = normalizePersonaData(raw, { name: "小A" });
-    expect(result).toEqual(raw);
+    expect(result).toEqual({
+      ...raw,
+      realismLevel: 70,
+      relationshipPhase: "initial",
+    });
   });
 
   it("splits a delimited catchphrases string into an array", () => {
@@ -79,9 +83,55 @@ describe("normalizePersonaData", () => {
       "memories",
       "nickname",
       "personality",
+      "realismLevel",
+      "relationshipPhase",
       "speakingStyle",
       "summary",
       "touchingMoments",
     ]);
+  });
+
+  it("keeps data stored before the quality fields existed working", () => {
+    // The fields were added after the first release: old personas have none of
+    // them, and they must not need a migration.
+    const old = {
+      personality: "温柔但有边界",
+      speakingStyle: "短句",
+      catchphrases: ["嗯嗯"],
+      nickname: "宝贝",
+      memories: "一起看过海",
+      attachmentStyle: "安全型",
+      loveLanguage: "精心时刻",
+      conflictStyle: "先冷静再和好",
+      touchingMoments: "记得小细节",
+      summary: "温暖真诚",
+    };
+
+    const result = normalizePersonaData(old, { name: "小A" });
+
+    expect(result.realismLevel).toBe(70);
+    expect(result.relationshipPhase).toBe("initial");
+    // The old fields are untouched.
+    expect(result.personality).toBe(old.personality);
+    expect(result.catchphrases).toEqual(old.catchphrases);
+  });
+
+  it("keeps an explicit realism level and relationship phase", () => {
+    const result = normalizePersonaData(
+      { realismLevel: 30, relationshipPhase: "closing" },
+      { name: "小A" },
+    );
+    expect(result.realismLevel).toBe(30);
+    expect(result.relationshipPhase).toBe("closing");
+  });
+
+  it("clamps an out-of-range realism level", () => {
+    expect(normalizePersonaData({ realismLevel: 400 }, { name: "小A" }).realismLevel).toBe(100);
+    expect(normalizePersonaData({ realismLevel: -20 }, { name: "小A" }).realismLevel).toBe(0);
+  });
+
+  it("falls back to the default phase for an unknown one", () => {
+    const result = normalizePersonaData({ relationshipPhase: "whatever" }, { name: "小A" });
+    expect(result.relationshipPhase).toBe("initial");
   });
 });

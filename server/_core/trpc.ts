@@ -2,6 +2,7 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import { rateLimiter, resolveRateLimitKey, type RateLimitRule } from "./rate-limit";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -43,3 +44,24 @@ export const adminProcedure = t.procedure.use(
     });
   }),
 );
+
+/**
+ * Restricts how often a procedure may be called.
+ *
+ * The bucket is keyed by the authenticated user when one is available, and
+ * by client IP otherwise — so the limit cannot be side-stepped by signing in
+ * as somebody else, nor by logging out.
+ */
+export function rateLimit(rule: RateLimitRule) {
+  return t.middleware(async opts => {
+      const key = resolveRateLimitKey(opts.ctx.req, rule, opts.ctx.user?.id);
+      const result = rateLimiter.check(key, rule);
+      if (!result.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "请求过于频繁，请稍后再试",
+        });
+      }
+      return opts.next();
+  });
+}

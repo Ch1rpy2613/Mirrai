@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "description": "Prompt 单一事实来源：family（可选 profile）+ stage -> 相对 skill-engine/prompts/ 的文件路径。root 为 fallback 层，保留根目录通用提示词。",
+  "qualityThresholds": {
+    "budget-friendly": {
+      "min_raw_notes": 3,
+      "min_grounded_urls": 2,
+      "min_primary_markers": 0,
+      "min_source_metadata_blocks": 0,
+      "min_contradiction_bullets": 0,
+      "min_inference_bullets": 0,
+      "min_track_coverage": 3,
+      "max_long_quote_lines": 0,
+      "min_skill_grounded_urls": 2,
+      "min_mental_models": 3,
+      "min_known_answer_questions": 0,
+      "min_edge_case_markers": 0,
+      "min_weighted_primary_ratio": 0,
+      "min_high_tier_sources": 0
+    },
+    "budget-unfriendly": {
+      "min_raw_notes": 6,
+      "min_grounded_urls": 8,
+      "min_primary_markers": 3,
+      "min_source_metadata_blocks": 6,
+      "min_contradiction_bullets": 6,
+      "min_inference_bullets": 6,
+      "min_track_coverage": 6,
+      "max_long_quote_lines": 0,
+      "min_skill_grounded_urls": 4,
+      "min_mental_models": 3,
+      "min_known_answer_questions": 2,
+      "min_edge_case_markers": 1,
+      "min_weighted_primary_ratio": 50,
+      "min_high_tier_sources": 3
+    }
+  },
+  "families": {
+    "colleague": {
+      "description": "同事：职场同事的人格 + 工作能力双维度",
+      "stages": {
+        "intake": "colleague/intake.md",
+        "persona_analyzer": "colleague/persona_analyzer.md",
+        "persona_builder": "colleague/persona_builder.md",
+        "work_analyzer": "colleague/work_analyzer.md",
+        "work_builder": "colleague/work_builder.md",
+        "merger": "colleague/merger.md",
+        "correction_handler": "correction_handler.md",
+        "structurer": "structurer.md"
+      }
+    },
+    "relationship": {
+      "description": "亲密关系：情感关系人格 + 工作能力双维度",
+      "stages": {
+        "intake": "relationship/intake.md",
+        "persona_analyzer": "relationship/persona_analyzer.md",
+        "persona_builder": "relationship/persona_builder.md",
+        "work_analyzer": "work_analyzer.md",
+        "work_builder": "work_builder.md",
+        "merger": "relationship/merger.md",
+        "correction_handler": "correction_handler.md",
+        "structurer": "structurer.md"
+      }
+    },
+    "celebrity": {
+      "description": "公众人物：公开研究 + 认知人格 + 专业能力维度",
+      "stages": {
+        "intake": "celebrity/intake.md",
+        "research": "celebrity/research.md",
+        "persona_analyzer": "celebrity/persona_analyzer.md",
+        "persona_builder": "celebrity/persona_builder.md",
+        "work_analyzer": "celebrity/work_analyzer.md",
+        "work_builder": "celebrity/work_builder.md",
+        "merger": "celebrity/merger.md",
+        "correction_handler": "correction_handler.md",
+        "structurer": "structurer.md"
+      },
+      "profiles": {
+        "budget-friendly": {
+          "description": "精简公开源蒸馏：三轨最低、合并综述、轻量验证",
+          "stages": {
+            "research": "celebrity/research.md",
+            "persona_analyzer": "celebrity/persona_analyzer.md",
+            "persona_builder": "celebrity/persona_builder.md"
+          }
+        },
+        "budget-unfriendly": {
+          "description": "深度六轨研究：证据分级、审计、综合、严格验证",
+          "stages": {
+            "research": "celebrity/budget_unfriendly/research.md",
+            "audit": "celebrity/budget_unfriendly/audit.md",
+            "synthesis": "celebrity/budget_unfriendly/synthesis.md",
+            "validation": "celebrity/budget_unfriendly/validation.md",
+            "persona_analyzer": "celebrity/budget_unfriendly/persona_analyzer.md",
+            "persona_builder": "celebrity/budget_unfriendly/persona_builder.md"
+          }
+        }
+      }
+    },
+    "root": {
+      "description": "根目录 fallback 层：未被 family 覆盖的阶段从这里取，与 loadPrompt 的根目录回退行为一致",
+      "stages": {
+        "intake": "intake.md",
+        "persona_analyzer": "persona_analyzer.md",
+        "persona_builder": "persona_builder.md",
+        "work_analyzer": "work_analyzer.md",
+        "work_builder": "work_builder.md",
+        "merger": "merger.md",
+        "correction_handler": "correction_handler.md",
+        "structurer": "structurer.md"
+      }
+    }
+  }
+}

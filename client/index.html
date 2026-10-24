@@ -2,9 +2,18 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+    <!-- `maximum-scale=1` blocks pinch-zoom, which is an accessibility problem
+         on a phone; the viewport stays responsive without it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f3eee3" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="上传聊天记录，AI 重建 TA 的数字分身。不在身边的时候，TA 还在这里。" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Mirrai" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <title>Mirrai</title>
     <link
       rel="preload"

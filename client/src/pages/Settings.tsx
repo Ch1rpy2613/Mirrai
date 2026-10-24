@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode, type ChangeEvent } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -19,17 +20,23 @@ import {
   ArrowLeft, ChevronDown, ChevronUp, Check,
   Mail, Calendar, Clock, Pencil,
   Eye, EyeOff, Plus, RefreshCw, Download, Trash2,
+  MonitorDown, Plug, Unplug, Upload, FileJson, Package,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isInstallAvailable, onInstallAvailabilityChange, promptInstall } from "@/lib/pwa";
 import PageLoader from "@/components/PageLoader";
+import { useLocale } from "@/contexts/LocaleContext";
 
 // ─── TAB CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: "profile", label: "个人资料" },
-  { key: "ai", label: "AI 设置" },
-  { key: "wechat", label: "微信" },
-  { key: "data", label: "数据管理" },
+  { key: "profile", labelKey: "settings.tabs.profile" },
+  { key: "ai", labelKey: "settings.tabs.aiSettings" },
+  { key: "wechat", labelKey: "settings.tabs.wechat" },
+  { key: "channels", labelKey: "settings.tabs.channels" },
+  { key: "sources", labelKey: "settings.tabs.sources" },
+  { key: "templates", labelKey: "settings.tabs.templates" },
+  { key: "data", labelKey: "settings.tabs.data" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -106,6 +113,7 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
   onSave: (data: { providerName: string; apiKey?: string; baseUrl?: string; model?: string }) => void;
   onSetDefault: () => void;
 }) {
+  const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -127,15 +135,15 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
         className="w-full flex items-center justify-between gap-3 p-3.5 hover:bg-muted/30 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm text-foreground font-medium truncate">{provider.name}</span>
-          {isDefault && <StatusChip tone="primary">默认</StatusChip>}
+          {isDefault && <StatusChip tone="primary">{t("settings.ai.default")}</StatusChip>}
           <StatusChip tone={provider.configured ? "success" : "muted"}>
-            {provider.configured ? "已配置" : "未配置"}
+            {provider.configured ? t("settings.ai.hasKey") : t("settings.ai.noKey")}
           </StatusChip>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {!isDefault && (
             <button type="button" onClick={e => { e.stopPropagation(); onSetDefault(); }}
-              className="text-xs text-primary hover:text-primary/80 px-1">设为默认</button>
+              className="text-xs text-primary hover:text-primary/80 px-1">{t("settings.ai.setDefault")}</button>
           )}
           {expanded
             ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
@@ -145,7 +153,7 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
       {expanded && (
         <div className="p-3.5 pt-3 space-y-3 border-t border-border">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">API Key</Label>
+            <Label className="text-xs text-muted-foreground">{t("settings.ai.apiKey")}</Label>
             <Input value={apiKey} onChange={e => setApiKey(e.target.value)}
               placeholder="sk-..." type="password" className="h-9 rounded-md text-sm" />
           </div>
@@ -156,7 +164,7 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
                 placeholder="https://api.openai.com/v1" className="h-9 rounded-md text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Model</Label>
+              <Label className="text-xs text-muted-foreground">{t("settings.ai.model")}</Label>
               <Input value={model} onChange={e => setModel(e.target.value)}
                 placeholder="gpt-4o" className="h-9 rounded-md text-sm" />
             </div>
@@ -166,7 +174,7 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
               onSave({ providerName: provider.name, apiKey: apiKey || undefined, baseUrl: baseUrl || undefined, model: model || undefined });
               setExpanded(false);
             }}>
-            <Check className="w-3.5 h-3.5" />保存
+            <Check className="w-3.5 h-3.5" />{t("common.save")}
           </Button>
         </div>
       )}
@@ -188,14 +196,15 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
 // ─── PROFILE TAB ─────────────────────────────────────────────────────────────
 
 function ProfileTab() {
+  const { t, locale } = useLocale();
   const { data: profile, refetch } = trpc.user.getProfile.useQuery();
   const { data: accountStats } = trpc.user.getAccountStats.useQuery();
   const updateProfile = trpc.user.updateProfile.useMutation({
-    onSuccess: () => { toast.success("资料已更新"); refetch(); setEditing(false); },
+    onSuccess: () => { toast.success(t("settings.profile.updated")); refetch(); setEditing(false); },
     onError: (e: any) => toast.error(e.message),
   });
   const changePassword = trpc.user.changePassword.useMutation({
-    onSuccess: () => { toast.success("密码已修改"); setShowPasswordDialog(false); setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); },
+    onSuccess: () => { toast.success(t("settings.profile.passwordChanged")); setShowPasswordDialog(false); setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -216,7 +225,7 @@ function ProfileTab() {
     }
   }, [profile]);
 
-  if (!profile) return <div className="py-10 text-center text-sm text-muted-foreground">加载中...</div>;
+  if (!profile) return <div className="py-10 text-center text-sm text-muted-foreground">{t("common.loading")}</div>;
 
   const memberDays = Math.max(1, Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86400000));
 
@@ -230,7 +239,7 @@ function ProfileTab() {
     <div className="space-y-5">
       {/* Avatar + Basic Info */}
       <section className="surface p-5 sm:p-6">
-        <SectionHeader note="昵称、邮箱与账户信息" title="账户信息" />
+        <SectionHeader note={t("settings.profile.accountNote")} title={t("settings.profile.accountTitle")} />
         <div className="flex items-start gap-5">
           <div className="w-20 h-20 rounded-lg bg-muted border border-border flex items-center justify-center flex-shrink-0">
             <span className="font-sans text-3xl font-semibold text-foreground">{(profile.name || profile.username).charAt(0).toUpperCase()}</span>
@@ -239,12 +248,12 @@ function ProfileTab() {
             {editing ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">昵称</Label>
+                  <Label className="text-xs text-muted-foreground">{t("settings.profile.name")}</Label>
                   <Input value={editName} onChange={e => setEditName(e.target.value)}
                     className="h-9 rounded-md text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">邮箱</Label>
+                  <Label className="text-xs text-muted-foreground">{t("settings.profile.email")}</Label>
                   <Input value={editEmail} onChange={e => setEditEmail(e.target.value)}
                     type="email" placeholder="your@email.com"
                     className="h-9 rounded-md text-sm" />
@@ -253,9 +262,9 @@ function ProfileTab() {
                   <Button size="sm" className="rounded-md px-5"
                     onClick={() => updateProfile.mutate({ name: editName.trim() || undefined, email: editEmail.trim() || undefined })}
                     disabled={updateProfile.isPending}>
-                    {updateProfile.isPending ? "保存中..." : "保存"}
+                    {updateProfile.isPending ? t("common.saving") : t("common.save")}
                   </Button>
-                  <Button size="sm" variant="ghost" className="rounded-md" onClick={() => setEditing(false)}>取消</Button>
+                  <Button size="sm" variant="ghost" className="rounded-md" onClick={() => setEditing(false)}>{t("common.cancel")}</Button>
                 </div>
               </div>
             ) : (
@@ -272,15 +281,15 @@ function ProfileTab() {
                 )}
                 <div className="flex items-center gap-4 flex-wrap mt-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> 加入 {memberDays} 天
+                    <Calendar className="w-3 h-3" /> {t("settings.profile.joined", { count: memberDays })}
                   </span>
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> 上次登录 {new Date(profile.lastSignedIn).toLocaleDateString("zh-CN")}
+                    <Clock className="w-3 h-3" /> {t("settings.profile.lastLogin", { date: new Date(profile.lastSignedIn).toLocaleDateString(locale) })}
                   </span>
                 </div>
                 <Button size="sm" variant="ghost" className="mt-3 -ml-2 text-xs text-primary hover:text-primary/80 rounded-md h-7 px-3"
                   onClick={() => setEditing(true)}>
-                  <Pencil className="w-3 h-3" /> 编辑资料
+                  <Pencil className="w-3 h-3" /> {t("settings.profile.edit")}
                 </Button>
               </>
             )}
@@ -291,35 +300,35 @@ function ProfileTab() {
       {/* Account Stats */}
       {accountStats && (
         <section className="surface p-5 sm:p-6">
-          <SectionHeader note="你的使用数据一览" title="账户统计" />
+          <SectionHeader note={t("settings.profile.statsNote")} title={t("settings.profile.statsTitle")} />
           <div className="stat-grid grid-cols-2 sm:grid-cols-3">
-            <StatItem label="数字分身" value={accountStats.totalPersonas} />
-            <StatItem label="总对话次数" value={accountStats.totalChats} />
-            <StatItem label="总消息数" value={accountStats.totalMessages} />
-            <StatItem label="上传文件" value={accountStats.totalFiles} />
-            <StatItem label="存储空间" value={formatBytes(accountStats.storageUsed)} />
-            <StatItem label="使用天数" value={memberDays} />
+            <StatItem label={t("settings.profile.statPersonas")} value={accountStats.totalPersonas} />
+            <StatItem label={t("settings.profile.statChats")} value={accountStats.totalChats} />
+            <StatItem label={t("settings.profile.statMessages")} value={accountStats.totalMessages} />
+            <StatItem label={t("settings.profile.statFiles")} value={accountStats.totalFiles} />
+            <StatItem label={t("settings.profile.statStorage")} value={formatBytes(accountStats.storageUsed)} />
+            <StatItem label={t("settings.profile.statDays")} value={memberDays} />
           </div>
         </section>
       )}
 
       {/* Security */}
       <section className="surface p-5 sm:p-6">
-        <SectionHeader note="密码与登录方式" title="安全设置" />
+        <SectionHeader note={t("settings.profile.securityNote")} title={t("settings.profile.securityTitle")} />
         <div>
           <div className="flex items-center justify-between gap-3 py-4 border-t border-border">
             <div className="min-w-0">
-              <p className="text-sm text-foreground">登录密码</p>
-              <p className="text-xs text-muted-foreground mt-0.5">定期修改密码以保护账户安全</p>
+              <p className="text-sm text-foreground">{t("settings.profile.loginPassword")}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("settings.profile.passwordHint")}</p>
             </div>
             <Button size="sm" variant="outline" className="rounded-md text-xs flex-shrink-0 bg-transparent"
               onClick={() => setShowPasswordDialog(true)}>
-              修改密码
+              {t("settings.profile.changePassword")}
             </Button>
           </div>
           {profile.loginMethod && (
             <div className="py-4 border-t border-border">
-              <p className="text-sm text-foreground">登录方式</p>
+              <p className="text-sm text-foreground">{t("settings.profile.loginMethod")}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{profile.loginMethod}</p>
             </div>
           )}
@@ -330,54 +339,54 @@ function ProfileTab() {
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="bg-card border-border rounded-lg max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-display text-foreground">修改密码</DialogTitle>
+            <DialogTitle className="font-display text-foreground">{t("settings.profile.changePassword")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">当前密码</Label>
+              <Label className="text-sm text-foreground/80">{t("settings.profile.currentPassword")}</Label>
               <div className="relative">
                 <Input value={currentPwd} onChange={e => setCurrentPwd(e.target.value)}
-                  type={showCurrentPwd ? "text" : "password"} placeholder="输入当前密码"
+                  type={showCurrentPwd ? "text" : "password"} placeholder={t("settings.profile.currentPasswordPlaceholder")}
                   className="h-10 rounded-md pr-10" />
                 <button type="button" onClick={() => setShowCurrentPwd(!showCurrentPwd)}
-                  aria-label={showCurrentPwd ? "隐藏密码" : "显示密码"}
+                  aria-label={showCurrentPwd ? t("settings.profile.hidePassword") : t("settings.profile.showPassword")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showCurrentPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">新密码</Label>
+              <Label className="text-sm text-foreground/80">{t("settings.profile.newPassword")}</Label>
               <div className="relative">
                 <Input value={newPwd} onChange={e => setNewPwd(e.target.value)}
-                  type={showNewPwd ? "text" : "password"} placeholder="至少 6 位"
+                  type={showNewPwd ? "text" : "password"} placeholder={t("settings.profile.newPasswordPlaceholder")}
                   className="h-10 rounded-md pr-10" />
                 <button type="button" onClick={() => setShowNewPwd(!showNewPwd)}
-                  aria-label={showNewPwd ? "隐藏密码" : "显示密码"}
+                  aria-label={showNewPwd ? t("settings.profile.hidePassword") : t("settings.profile.showPassword")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
               {newPwd && newPwd.length < 6 && (
-                <p className="text-xs text-destructive">密码至少需要 6 个字符</p>
+                <p className="text-xs text-destructive">{t("settings.profile.passwordTooShort")}</p>
               )}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">确认新密码</Label>
+              <Label className="text-sm text-foreground/80">{t("settings.profile.confirmPassword")}</Label>
               <Input value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
-                type="password" placeholder="再次输入新密码"
+                type="password" placeholder={t("settings.profile.confirmPasswordPlaceholder")}
                 className="h-10 rounded-md" />
               {confirmPwd && confirmPwd !== newPwd && (
-                <p className="text-xs text-destructive">两次输入的密码不一致</p>
+                <p className="text-xs text-destructive">{t("settings.profile.passwordMismatch")}</p>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowPasswordDialog(false)} className="rounded-md">取消</Button>
+            <Button variant="ghost" onClick={() => setShowPasswordDialog(false)} className="rounded-md">{t("common.cancel")}</Button>
             <Button className="rounded-md px-5"
               disabled={!currentPwd || newPwd.length < 6 || newPwd !== confirmPwd || changePassword.isPending}
               onClick={() => changePassword.mutate({ currentPassword: currentPwd, newPassword: newPwd })}>
-              {changePassword.isPending ? "修改中..." : "确认修改"}
+              {changePassword.isPending ? t("settings.profile.changing") : t("settings.profile.confirmChange")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -389,16 +398,17 @@ function ProfileTab() {
 // ─── AI SETTINGS TAB ─────────────────────────────────────────────────────────
 
 function AISettingsTab() {
+  const { t } = useLocale();
   const providers = trpc.llmConfig.listProviders.useQuery();
   const defaultConfig = trpc.llmConfig.getDefault.useQuery();
   const upsertConfig = trpc.llmConfig.upsert.useMutation({
-    onSuccess: () => { toast.success("配置已保存"); providers.refetch(); },
+    onSuccess: () => { toast.success(t("settings.ai.configSaved")); providers.refetch(); },
   });
   const setDefault = trpc.llmConfig.setDefault.useMutation({
-    onSuccess: () => { toast.success("默认提供商已更新"); defaultConfig.refetch(); },
+    onSuccess: () => { toast.success(t("settings.ai.defaultUpdated")); defaultConfig.refetch(); },
   });
   const updateExtra = trpc.llmConfig.updateExtraConfig.useMutation({
-    onSuccess: () => { toast.success("对话参数已保存"); defaultConfig.refetch(); },
+    onSuccess: () => { toast.success(t("settings.ai.paramsSaved")); defaultConfig.refetch(); },
   });
 
   const [temperature, setTemperature] = useState(0.7);
@@ -417,10 +427,10 @@ function AISettingsTab() {
   return (
     <div className="space-y-5">
       <section className="surface p-5 sm:p-6">
-        <SectionHeader note="配置可用的模型服务" title="AI 提供商"
+        <SectionHeader note={t("settings.ai.note")} title={t("settings.ai.title")}
           action={defaultConfig.data && (
             <span className="text-xs text-muted-foreground whitespace-nowrap">
-              当前默认: <span className="text-foreground font-medium">{defaultConfig.data.providerName}</span>
+              {t("settings.ai.currentDefaultLead")} <span className="text-foreground font-medium">{defaultConfig.data.providerName}</span>
             </span>
           )} />
         <div className="space-y-2.5">
@@ -434,18 +444,18 @@ function AISettingsTab() {
       </section>
 
       <section className="surface p-5 sm:p-6">
-        <SectionHeader note="调整生成回复的参数" title="对话参数" />
+        <SectionHeader note={t("settings.ai.paramsNote")} title={t("settings.ai.paramsTitle")} />
         <div className="space-y-6">
-          <SliderField label="Temperature（创造性）" value={temperature} onChange={setTemperature}
+          <SliderField label={t("settings.ai.temperatureLabel")} value={temperature} onChange={setTemperature}
             min={0} max={2} step={0.1} />
-          <SliderField label="Max Tokens（最大回复长度）" value={maxTokens} onChange={setMaxTokens}
+          <SliderField label={t("settings.ai.maxTokensLabel")} value={maxTokens} onChange={setMaxTokens}
             min={256} max={8192} step={256} />
-          <SliderField label="上下文消息数" value={contextLimit} onChange={setContextLimit}
-            min={5} max={50} step={5} unit=" 条" />
+          <SliderField label={t("settings.ai.contextLabel")} value={contextLimit} onChange={setContextLimit}
+            min={5} max={50} step={5} unit={t("settings.ai.contextUnit")} />
           <Button size="sm" className="rounded-md px-5"
             onClick={() => updateExtra.mutate({ extraConfig: { temperature, maxTokens, contextLimit } })}
             disabled={updateExtra.isPending}>
-            {updateExtra.isPending ? "保存中..." : "保存参数"}
+            {updateExtra.isPending ? t("common.saving") : t("settings.ai.saveParams")}
           </Button>
         </div>
       </section>
@@ -456,9 +466,10 @@ function AISettingsTab() {
 // ─── WECHAT TAB ──────────────────────────────────────────────────────────────
 
 function WeChatTab() {
+  const { t } = useLocale();
   const wechatStatus = trpc.wechat.getStatus.useQuery(undefined, { refetchInterval: 3000 });
   const startLogin = trpc.wechat.startLogin.useMutation({
-    onSuccess: () => { toast.success("请使用微信扫描二维码"); wechatStatus.refetch(); },
+    onSuccess: () => { toast.success(t("settings.wechat.scan")); wechatStatus.refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
   const submitCode = trpc.wechat.submitVerifyCode.useMutation({
@@ -470,7 +481,7 @@ function WeChatTab() {
     onError: (e: any) => toast.error(e.message),
   });
   const stopBot = trpc.wechat.stop.useMutation({
-    onSuccess: () => { toast.success("已断开微信连接"); wechatStatus.refetch(); },
+    onSuccess: () => { toast.success(t("settings.wechat.disconnected")); wechatStatus.refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -484,17 +495,17 @@ function WeChatTab() {
   const isPending = isScanning || isScanned || needsCode;
 
   const statusChip =
-    isConnected ? <StatusChip tone="success">已连接</StatusChip> :
-    isScanned ? <StatusChip tone="info">已扫码</StatusChip> :
-    isScanning ? <StatusChip tone="info">等待扫码</StatusChip> :
-    needsCode ? <StatusChip tone="info">等待验证码</StatusChip> :
-    bot?.status === "error" ? <StatusChip tone="error">出错</StatusChip> :
-    <StatusChip tone="muted">未连接</StatusChip>;
+    isConnected ? <StatusChip tone="success">{t("settings.wechat.connected")}</StatusChip> :
+    isScanned ? <StatusChip tone="info">{t("settings.wechat.scanned")}</StatusChip> :
+    isScanning ? <StatusChip tone="info">{t("settings.wechat.waitingScan")}</StatusChip> :
+    needsCode ? <StatusChip tone="info">{t("settings.wechat.waitingCode")}</StatusChip> :
+    bot?.status === "error" ? <StatusChip tone="error">{t("settings.wechat.error")}</StatusChip> :
+    <StatusChip tone="muted">{t("settings.wechat.notConnected")}</StatusChip>;
 
   return (
     <div className="space-y-5">
       <section className="surface p-5 sm:p-6">
-        <SectionHeader note="通过微信官方 ClawBot 通道连接" title="微信连接"
+        <SectionHeader note={t("settings.wechat.note")} title={t("settings.wechat.title")}
           action={statusChip} />
 
         <div className="p-4 rounded-lg bg-muted/30 border border-border">
@@ -506,16 +517,15 @@ function WeChatTab() {
               bot?.status === "error" ? "!bg-destructive" : "!bg-muted-foreground/30"
             )} />
             <span className="text-sm text-foreground font-medium">
-              {isConnected ? "已连接，微信消息会转交给分身" :
-               isScanned ? "已扫码，请在手机上确认授权" :
-               isScanning ? "等待扫码" :
-               needsCode ? "请输入微信上显示的数字" :
-               bot?.status === "error" ? "连接出错" : "未连接"}
+              {isConnected ? t("settings.wechat.connectedHint") :
+               isScanned ? t("settings.wechat.scannedHint") :
+               isScanning ? t("settings.wechat.waitingScan") :
+               needsCode ? t("settings.wechat.codeHint") :
+               bot?.status === "error" ? t("settings.wechat.errorHint") : t("settings.wechat.notConnected")}
             </span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            使用微信官方「ClawBot」插件接入，全程不涉及第三方协议，不存在封号风险。
-            需要微信 8.0.70 或更高版本，并且「我 → 设置 → 插件」中能看到「微信 ClawBot」入口。
+            {t("settings.wechat.description")}
           </p>
         </div>
 
@@ -525,28 +535,28 @@ function WeChatTab() {
               <img src={bot.qrCodeUrl} alt="WeChat QR" className="w-44 h-44" />
             </div>
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
-              {needsCode ? "已扫码，请输入手机上显示的数字以继续"
-                : isScanned ? "已扫码，请在手机上确认授权"
-                : "请使用微信扫描二维码，并在手机上确认授权"}
+              {needsCode ? t("settings.wechat.codeScanned")
+                : isScanned ? t("settings.wechat.scannedHint")
+                : t("settings.wechat.codePrompt")}
             </p>
           </div>
         )}
 
         {needsCode && (
           <div className="mt-4 p-4 rounded-lg border border-border space-y-3">
-            <Label className="text-xs text-muted-foreground">微信上显示的数字</Label>
+            <Label className="text-xs text-muted-foreground">{t("settings.wechat.codeLabel")}</Label>
             <div className="flex gap-2">
               <Input
                 value={verifyCode}
                 onChange={(e) => setVerifyCode(e.target.value)}
-                placeholder="例如 123456"
+                placeholder={t("settings.wechat.codePlaceholder")}
                 className="h-9 rounded-md text-sm"
                 inputMode="numeric"
               />
               <Button size="sm" className="rounded-md px-5 flex-shrink-0"
                 disabled={!verifyCode.trim() || submitCode.isPending}
                 onClick={() => submitCode.mutate({ code: verifyCode.trim() })}>
-                {submitCode.isPending ? "提交中..." : "确认"}
+                {submitCode.isPending ? t("settings.wechat.submitting") : t("settings.wechat.submit")}
               </Button>
             </div>
           </div>
@@ -560,17 +570,17 @@ function WeChatTab() {
           <Button size="sm" className="rounded-md px-5"
             onClick={() => startLogin.mutate()}
             disabled={isConnected || isPending || startLogin.isPending}>
-            {startLogin.isPending ? "请求中..." : isConnected ? "已连接" : "连接微信"}
+            {startLogin.isPending ? t("settings.wechat.requesting") : isConnected ? t("settings.wechat.connected") : t("settings.wechat.connect")}
           </Button>
           {isConnected ? (
             <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
               onClick={() => stopBot.mutate()} disabled={stopBot.isPending}>
-              {stopBot.isPending ? "断开中..." : "断开连接"}
+              {stopBot.isPending ? t("settings.wechat.disconnecting") : t("settings.wechat.disconnect")}
             </Button>
           ) : isPending ? (
             <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
               onClick={() => cancelLogin.mutate()} disabled={cancelLogin.isPending}>
-              取消
+              {t("common.cancel")}
             </Button>
           ) : null}
         </div>
@@ -585,19 +595,20 @@ function WeChatTab() {
 // ─── WECHAT DEFAULT PERSONA BINDINGS ────────────────────────────────────────
 
 function WeChatBindingsSection({ connected }: { connected: boolean }) {
+  const { t } = useLocale();
   const bindings = trpc.wechat.listBindings.useQuery();
   const personas = trpc.persona.list.useQuery();
 
   const setDefault = trpc.wechat.setDefaultPersona.useMutation({
     onSuccess: () => {
-      toast.success("已设为默认分身");
+      toast.success(t("settings.wechat.setDefaultPersona"));
       bindings.refetch();
     },
     onError: (e: any) => toast.error(e.message),
   });
   const unbind = trpc.wechat.unbind.useMutation({
     onSuccess: () => {
-      toast.success("已解除绑定");
+      toast.success(t("settings.wechat.unbound"));
       bindings.refetch();
     },
     onError: (e: any) => toast.error(e.message),
@@ -626,31 +637,31 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
 
   return (
     <section className="surface p-5 sm:p-6">
-      <SectionHeader note="选择在微信里默认对话的分身" title="默认分身"
+      <SectionHeader note={t("settings.wechat.bindingNote")} title={t("settings.wechat.bindingTitle")}
         action={bindingsData.length > 0 && (
-          <StatusChip tone="muted">{bindingsData.length} 个绑定</StatusChip>
+          <StatusChip tone="muted">{t("settings.wechat.bindingCount", { count: bindingsData.length })}</StatusChip>
         )} />
 
       {bindings.isLoading ? (
-        <div className="py-6 text-center text-sm text-muted-foreground">加载中...</div>
+        <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
       ) : primaryBinding ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 py-3.5 border-b border-border">
             <div className="min-w-0">
               <p className="text-sm text-foreground font-medium truncate">
-                {primaryBinding.wechatName || "我的微信"}
+                {primaryBinding.wechatName || t("settings.wechat.myWechat")}
               </p>
               <p className="text-xs text-muted-foreground truncate mt-0.5">
-                当前由「{personaNameById.get(primaryBinding.personaId) ?? `#${primaryBinding.personaId}`}」回复
+                {t("settings.wechat.replyingWith", { name: personaNameById.get(primaryBinding.personaId) ?? `#${primaryBinding.personaId}` })}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <StatusChip tone="success">生效中</StatusChip>
+              <StatusChip tone="success">{t("settings.wechat.active")}</StatusChip>
               <button onClick={() => setUnbindTarget({
                 id: primaryBinding.id,
-                label: primaryBinding.wechatName || "我的微信",
+                label: primaryBinding.wechatName || t("settings.wechat.myWechat"),
               })}
-                title="解除绑定"
+                title={t("settings.wechat.unbind")}
                 className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -658,11 +669,11 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">改为默认回复的分身</Label>
+            <Label className="text-xs text-muted-foreground">{t("settings.wechat.replyPersona")}</Label>
             <div className="flex gap-2">
               <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
                 <SelectTrigger className="h-9 rounded-md text-sm w-full">
-                  <SelectValue placeholder="选择分身" />
+                  <SelectValue placeholder={t("settings.wechat.selectPersona")} />
                 </SelectTrigger>
                 <SelectContent>
                   {readyPersonas.map(p => (
@@ -673,12 +684,12 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
               <Button size="sm" className="rounded-md px-4 flex-shrink-0"
                 disabled={!selectedPersonaId || setDefault.isPending || readyPersonas.length === 0}
                 onClick={handleSetDefault}>
-                {setDefault.isPending ? "保存中..." : "保存"}
+                {setDefault.isPending ? t("common.saving") : t("common.save")}
               </Button>
             </div>
             {readyPersonas.length === 0 && (
               <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
-                暂无已完成性格分析的分身，请先创建并完成分身分析。
+                {t("settings.wechat.noAnalyzed")}
               </p>
             )}
           </div>
@@ -686,9 +697,7 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
       ) : (
         <div className="p-4 rounded-lg bg-muted/30 border border-border">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            {connected
-              ? "还没有设置默认分身。连接成功后回到这里，选择一个分身作为微信里的默认对话对象。"
-              : "请先在上方连接微信，连接成功后即可选择默认分身。"}
+            {connected ? t("settings.wechat.noDefault") : t("settings.wechat.connectFirst")}
           </p>
         </div>
       )}
@@ -697,17 +706,17 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
       <Dialog open={!!unbindTarget} onOpenChange={open => !open && setUnbindTarget(null)}>
         <DialogContent className="bg-card border-border rounded-lg max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-display text-foreground">解除绑定</DialogTitle>
+            <DialogTitle className="font-display text-foreground">{t("settings.wechat.unbind")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground py-2 leading-relaxed">
-            解除后，微信消息将不再转交给任何分身。可以随时重新设置。
+            {t("settings.wechat.unbindBody")}
           </p>
           <DialogFooter>
-            <Button variant="ghost" className="rounded-md" onClick={() => setUnbindTarget(null)}>取消</Button>
+            <Button variant="ghost" className="rounded-md" onClick={() => setUnbindTarget(null)}>{t("common.cancel")}</Button>
             <Button variant="destructive" className="rounded-md px-5"
               disabled={unbind.isPending}
               onClick={() => unbindTarget && unbind.mutate({ id: unbindTarget.id })}>
-              {unbind.isPending ? "解除中..." : "确认解除"}
+              {unbind.isPending ? t("settings.wechat.unbinding") : t("settings.wechat.confirmUnbind")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -719,28 +728,26 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
 // ─── WECHAT COMMANDS HELP ───────────────────────────────────────────────────
 
 function WeChatCommandsSection() {
-  const commands = [
-    { cmd: "/使用 <分身名>", desc: "切换当前对话的分身" },
-    { cmd: "/分身列表", desc: "查看所有可用分身" },
-    { cmd: "/当前分身", desc: "查看正在对话的分身" },
-    { cmd: "/毕业", desc: "生成告别信并完成毕业" },
-  ];
+  const { t } = useLocale();
+  /* The commands themselves are the protocol — the server matches them verbatim. */
+  const commands = ["/使用 <分身名>", "/分身列表", "/当前分身", "/毕业"];
+  const descs = Array.from(t("settings.wechat.commandDescs"));
 
   return (
     <section className="surface p-5 sm:p-6">
-      <SectionHeader note="在微信里直接发送" title="指令" />
+      <SectionHeader note={t("settings.wechat.commandsNote")} title={t("settings.wechat.commandsTitle")} />
       <div className="space-y-2.5">
-        {commands.map(c => (
-          <div key={c.cmd} className="flex items-baseline gap-3">
+        {commands.map((c, i) => (
+          <div key={c} className="flex items-baseline gap-3">
             <code className="text-xs font-mono text-foreground bg-muted/50 px-2 py-1 rounded flex-shrink-0">
-              {c.cmd}
+              {c}
             </code>
-            <span className="text-xs text-muted-foreground">{c.desc}</span>
+            <span className="text-xs text-muted-foreground">{descs[i]}</span>
           </div>
         ))}
       </div>
       <p className="mt-4 text-[0.6875rem] text-muted-foreground leading-relaxed">
-        指令不会消耗模型调用。切换只在当前会话内生效，重启后回到默认分身。
+        {t("settings.wechat.commandsHint")}
       </p>
     </section>
   );
@@ -751,6 +758,7 @@ function WeChatCommandsSection() {
 function DataManagementTab() {
   const [, navigate] = useLocation();
   const { logout } = useAuth();
+  const { t } = useLocale();
   const { data: accountStats } = trpc.user.getAccountStats.useQuery();
   const exportData = trpc.user.exportData.useMutation({
     onSuccess: (data) => {
@@ -762,9 +770,9 @@ function DataManagementTab() {
       a.download = `mirrai-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("数据导出成功");
+      toast.success(t("settings.data.exportSuccess"));
     },
-    onError: (e: any) => toast.error("导出失败：" + e.message),
+    onError: (e: any) => toast.error(t("settings.data.exportFailed", { message: e.message })),
   });
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -772,7 +780,7 @@ function DataManagementTab() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const deleteAccount = trpc.user.deleteAccount.useMutation({
     onSuccess: () => {
-      toast.success("账户已删除");
+      toast.success(t("settings.data.accountDeleted"));
       logout();
       navigate(getLoginUrl());
     },
@@ -790,10 +798,10 @@ function DataManagementTab() {
       {/* Storage Overview */}
       {accountStats && (
         <section className="surface p-5 sm:p-6">
-          <SectionHeader note="存储空间使用情况" title="存储概览" />
+          <SectionHeader note={t("settings.data.storageNote")} title={t("settings.data.storageTitle")} />
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">已用空间</span>
+              <span className="text-muted-foreground">{t("settings.data.used")}</span>
               <span className="font-medium text-foreground">{formatBytes(accountStats.storageUsed)}</span>
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -803,15 +811,15 @@ function DataManagementTab() {
             <div className="stat-grid grid-cols-3 mt-3">
               <div className="stat-block">
                 <div className="stat-value">{accountStats.totalPersonas}</div>
-                <div className="stat-label mt-0.5">分身</div>
+                <div className="stat-label mt-0.5">{t("settings.data.statPersonas")}</div>
               </div>
               <div className="stat-block">
                 <div className="stat-value">{accountStats.totalMessages}</div>
-                <div className="stat-label mt-0.5">消息</div>
+                <div className="stat-label mt-0.5">{t("settings.data.statMessages")}</div>
               </div>
               <div className="stat-block">
                 <div className="stat-value">{accountStats.totalFiles}</div>
-                <div className="stat-label mt-0.5">文件</div>
+                <div className="stat-label mt-0.5">{t("settings.data.statFiles")}</div>
               </div>
             </div>
           </div>
@@ -820,29 +828,32 @@ function DataManagementTab() {
 
       {/* Export */}
       <section className="surface p-5 sm:p-6">
-        <SectionHeader note="下载你的全部数据" title="数据导出" />
+        <SectionHeader note={t("settings.data.exportNote")} title={t("settings.data.exportTitle")} />
         <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
-          导出你的所有数据，包括个人资料、分身信息和对话记录。数据将以 JSON 格式下载。
+          {t("settings.data.exportDescription")}
         </p>
         <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
           onClick={() => exportData.mutate()}
           disabled={exportData.isPending}>
           <Download className="w-3.5 h-3.5" />
-          {exportData.isPending ? "导出中..." : "导出全部数据"}
+          {exportData.isPending ? t("settings.data.exporting") : t("settings.data.exportAll")}
         </Button>
       </section>
 
+      {/* Install */}
+      <InstallAppSection />
+
       {/* Danger Zone */}
       <section className="rounded-lg border border-destructive/30 bg-card p-6 sm:p-7">
-        <SectionHeader note="不可撤销的操作" title="危险操作" danger />
+        <SectionHeader note={t("settings.data.dangerNote")} title={t("settings.data.dangerTitle")} danger />
         <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/15">
-          <p className="text-sm text-foreground font-medium mb-1">删除账户</p>
+          <p className="text-sm text-foreground font-medium mb-1">{t("settings.data.deleteTitle")}</p>
           <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-            永久删除你的账户和所有相关数据，包括所有分身、对话记录和上传文件。此操作不可撤销。
+            {t("settings.data.deleteDescription")}
           </p>
           <Button size="sm" variant="destructive" className="rounded-md px-5"
             onClick={() => setShowDeleteDialog(true)}>
-            <Trash2 className="w-3.5 h-3.5" /> 删除账户
+            <Trash2 className="w-3.5 h-3.5" /> {t("settings.data.deleteTitle")}
           </Button>
         </div>
       </section>
@@ -851,35 +862,39 @@ function DataManagementTab() {
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="bg-card border-border rounded-lg max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-display text-destructive">确认删除账户</DialogTitle>
+            <DialogTitle className="font-display text-destructive">{t("settings.data.confirmTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/15">
               <p className="text-xs text-destructive leading-relaxed">
-                此操作将永久删除你的账户及所有数据，包括 {accountStats?.totalPersonas || 0} 个分身、
-                {accountStats?.totalMessages || 0} 条消息和 {accountStats?.totalFiles || 0} 个文件。
-                此操作不可撤销。
+                {t("settings.data.confirmBody", {
+                  personas: accountStats?.totalPersonas || 0,
+                  messages: accountStats?.totalMessages || 0,
+                  files: accountStats?.totalFiles || 0,
+                })}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">输入密码确认</Label>
+              <Label className="text-sm text-foreground/80">{t("settings.data.passwordLabel")}</Label>
               <Input value={deletePassword} onChange={e => setDeletePassword(e.target.value)}
-                type="password" placeholder="输入你的登录密码"
+                type="password" placeholder={t("settings.data.passwordPlaceholder")}
                 className="h-10 rounded-md" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">输入 "删除我的账户" 确认</Label>
+              <Label className="text-sm text-foreground/80">
+                {t("settings.data.phraseLabel", { phrase: t("settings.data.phrase") })}
+              </Label>
               <Input value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
-                placeholder="删除我的账户"
+                placeholder={t("settings.data.phrase")}
                 className="h-10 rounded-md" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)} className="rounded-md">取消</Button>
+            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)} className="rounded-md">{t("common.cancel")}</Button>
             <Button variant="destructive" className="rounded-md px-5"
-              disabled={!deletePassword || deleteConfirmText !== "删除我的账户" || deleteAccount.isPending}
+              disabled={!deletePassword || deleteConfirmText !== t("settings.data.phrase") || deleteAccount.isPending}
               onClick={() => deleteAccount.mutate({ confirmPassword: deletePassword })}>
-              {deleteAccount.isPending ? "删除中..." : "永久删除"}
+              {deleteAccount.isPending ? t("common.deleting") : t("settings.data.permanent")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -888,11 +903,880 @@ function DataManagementTab() {
   );
 }
 
+// ─── CHANNELS TAB ────────────────────────────────────────────────────────────
+
+const CHANNEL_STATUS_LABELS: Record<string, "settings.channels.status.connected" | "settings.channels.status.configured" | "settings.channels.status.stopped" | "settings.channels.status.error" | "settings.channels.status.scanning" | "settings.channels.status.scaned" | "settings.channels.status.needVerifycode"> = {
+  connected: "settings.channels.status.connected",
+  logged_in: "settings.channels.status.connected",
+  configured: "settings.channels.status.configured",
+  stopped: "settings.channels.status.stopped",
+  error: "settings.channels.status.error",
+  scanning: "settings.channels.status.scanning",
+  scaned: "settings.channels.status.scaned",
+  need_verifycode: "settings.channels.status.needVerifycode",
+};
+
+function ChannelStatusChip({ connected, status }: { connected: boolean; status: string }) {
+  const { t } = useLocale();
+  const tone: ChipTone = connected
+    ? "success"
+    : status === "error" ? "error"
+    : status === "stopped" ? "muted"
+    : "info";
+  const labelKey = CHANNEL_STATUS_LABELS[status];
+  return <StatusChip tone={tone}>{labelKey ? t(labelKey) : status}</StatusChip>;
+}
+
+function ChannelsTab({ onOpenTab }: { onOpenTab: (key: TabKey) => void }) {
+  const { t } = useLocale();
+  const channels = trpc.channel.list.useQuery();
+
+  return (
+    <div className="space-y-5">
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("settings.channels.overviewNote")} title={t("settings.channels.overviewTitle")} />
+        {channels.isLoading ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : (
+          <div>
+            {(channels.data ?? []).map(channel => (
+              <div key={channel.id}
+                className="flex items-center justify-between gap-3 py-3.5 border-b border-border last:border-b-0">
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground font-medium truncate">{channel.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {channel.requiresCredentials ? t("settings.channels.needsCredentials") : t("settings.channels.scanAuth")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <ChannelStatusChip connected={channel.connected} status={channel.status} />
+                  {channel.id === "wechat" && (
+                    <Button size="sm" variant="ghost" className="rounded-md text-xs h-7 px-3"
+                      onClick={() => onOpenTab("wechat")}>
+                      {t("settings.channels.goToSettings")}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <FeishuSection />
+    </div>
+  );
+}
+
+// ─── FEISHU CHANNEL ──────────────────────────────────────────────────────────
+
+function FeishuSection() {
+  const { t } = useLocale();
+  const status = trpc.channel.getStatus.useQuery({ channel: "feishu" });
+  const setCredentials = trpc.channel.setCredentials.useMutation({
+    onSuccess: () => { toast.success(t("settings.channels.credentialsSaved")); status.refetch(); setAppSecret(""); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const startChannel = trpc.channel.start.useMutation({
+    onSuccess: () => { toast.success(t("settings.channels.feishu.connected")); status.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const stopChannel = trpc.channel.stop.useMutation({
+    onSuccess: () => { toast.success(t("settings.channels.feishu.disconnected")); status.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const [appId, setAppId] = useState("");
+  const [appSecret, setAppSecret] = useState("");
+
+  const connected = status.data?.connected === true;
+  const lastError = (status.data?.detail as { error?: string } | null | undefined)?.error;
+  const canSave = appId.trim().length > 0 && appSecret.trim().length > 0 && !setCredentials.isPending;
+
+  return (
+    <section className="surface p-5 sm:p-6">
+      <SectionHeader note={t("settings.channels.feishu.note")} title={t("settings.channels.feishu.title")}
+        action={<ChannelStatusChip connected={connected} status={status.data?.status ?? "stopped"} />} />
+
+      <div className="p-4 rounded-lg bg-muted/30 border border-border">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {t("settings.channels.feishu.introLead")}
+          <span className="text-foreground font-medium">{t("settings.channels.feishu.introEmphasis")}</span>
+          {t("settings.channels.feishu.introTail")}
+        </p>
+        <ul className="mt-2.5 space-y-1.5 text-xs text-muted-foreground leading-relaxed list-disc pl-4">
+          <li>
+            {t("settings.channels.feishu.reqEnterpriseLead")}
+            <span className="text-foreground font-medium">{t("settings.channels.feishu.reqEnterpriseEmphasis")}</span>
+            {t("settings.channels.feishu.reqEnterpriseTail")}
+          </li>
+          <li>
+            {t("settings.channels.feishu.reqPublishLead")}
+            <span className="text-foreground font-medium">{t("settings.channels.feishu.reqPublishEmphasis")}</span>
+            {t("settings.channels.feishu.reqPublishTail")}
+          </li>
+          <li>
+            {t("settings.channels.feishu.reqEventsLead")}
+            <span className="text-foreground font-medium">{t("settings.channels.feishu.reqEventsEmphasis")}</span>
+            {t("settings.channels.feishu.reqEventsTail")}
+            <code className="font-mono text-foreground bg-muted/60 px-1 py-0.5 rounded">im.message.receive_v1</code>
+            {t("settings.channels.feishu.reqEventsEnd")}
+          </li>
+          <li>
+            {t("settings.channels.feishu.reqPermissionsLead")}
+            <code className="font-mono text-foreground bg-muted/60 px-1 py-0.5 rounded">im:message</code>
+            {t("settings.channels.feishu.reqPermissionsSeparator")}
+            <code className="font-mono text-foreground bg-muted/60 px-1 py-0.5 rounded">im:message:readonly</code>
+            {t("settings.channels.feishu.reqPermissionsSeparator")}
+            <code className="font-mono text-foreground bg-muted/60 px-1 py-0.5 rounded">im:message.p2p_msg:readonly</code>
+            {t("settings.channels.feishu.reqPermissionsSeparator")}
+            <code className="font-mono text-foreground bg-muted/60 px-1 py-0.5 rounded">im:message.group_at_msg:readonly</code>
+            {t("settings.channels.feishu.reqPermissionsSeparator")}
+            <code className="font-mono text-foreground bg-muted/60 px-1 py-0.5 rounded">im:message:send_as_bot</code>
+            {t("settings.channels.feishu.reqPermissionsEnd")}
+          </li>
+          <li>
+            {t("settings.channels.feishu.reqEncryptionLead")}
+            <span className="text-foreground font-medium">{t("settings.channels.feishu.reqEncryptionEmphasis")}</span>
+            {t("settings.channels.feishu.reqEncryptionTail")}
+          </li>
+        </ul>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">{t("settings.channels.appId")}</Label>
+          <Input value={appId} onChange={e => setAppId(e.target.value)}
+            placeholder="cli_xxxxxxxxxxxx" className="h-9 rounded-md text-sm" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">{t("settings.channels.appSecret")}</Label>
+          <Input value={appSecret} onChange={e => setAppSecret(e.target.value)}
+            type="password" placeholder="••••••••" className="h-9 rounded-md text-sm" />
+        </div>
+      </div>
+
+      {lastError && (
+        <p className="mt-4 text-xs text-destructive leading-relaxed">{lastError}</p>
+      )}
+
+      <div className="flex gap-2 mt-5">
+        <Button size="sm" className="rounded-md px-5" disabled={!canSave}
+          onClick={() => setCredentials.mutate({
+            channel: "feishu",
+            appId: appId.trim(),
+            appSecret: appSecret.trim(),
+          })}>
+          {setCredentials.isPending ? t("common.saving") : t("settings.channels.saveCredentials")}
+        </Button>
+        {connected ? (
+          <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
+            onClick={() => stopChannel.mutate({ channel: "feishu" })} disabled={stopChannel.isPending}>
+            <Unplug className="w-3.5 h-3.5" />
+            {stopChannel.isPending ? t("settings.channels.feishu.disconnecting") : t("settings.channels.disconnect")}
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
+            onClick={() => startChannel.mutate({ channel: "feishu" })} disabled={startChannel.isPending}>
+            <Plug className="w-3.5 h-3.5" />
+            {startChannel.isPending ? t("settings.channels.feishu.connecting") : t("settings.channels.feishu.connect")}
+          </Button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── DATA SOURCES TAB ────────────────────────────────────────────────────────
+
+type CollectorSourceId = "feishu" | "dingtalk" | "slack" | "email" | "wechat_export";
+
+const COLLECTOR_STATUS_LABELS: Record<string, "settings.sources.jobStatus.queued" | "settings.sources.jobStatus.running" | "settings.sources.jobStatus.completed" | "settings.sources.jobStatus.failed" | "settings.sources.jobStatus.interrupted"> = {
+  queued: "settings.sources.jobStatus.queued",
+  running: "settings.sources.jobStatus.running",
+  completed: "settings.sources.jobStatus.completed",
+  failed: "settings.sources.jobStatus.failed",
+  interrupted: "settings.sources.jobStatus.interrupted",
+};
+
+function DataSourcesTab() {
+  const { t, locale } = useLocale();
+  const sources = trpc.collector.listSources.useQuery();
+  const personas = trpc.persona.list.useQuery();
+  const jobs = trpc.collector.listJobs.useQuery(undefined, {
+    refetchInterval: query => {
+      const list = query.state.data;
+      return list?.some(job => job.status === "queued" || job.status === "running") ? 1500 : false;
+    },
+  });
+  const authorizedSources = trpc.collector.listAuthorizedSources.useQuery();
+  const startJob = trpc.collector.start.useMutation({
+    onSuccess: () => { toast.success(t("settings.sources.jobQueued")); jobs.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const [sourceId, setSourceId] = useState<CollectorSourceId | "">("");
+  const [personaId, setPersonaId] = useState("");
+  const [target, setTarget] = useState("");
+  const [limit, setLimit] = useState("");
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
+  /**
+   * Which kind of persona the collected material is distilled into.
+   *
+   * The family decides which prompts run: a colleague has a work dimension,
+   * a public figure has a research flow, a relationship has neither.
+   */
+  const [characterFamily, setCharacterFamily] = useState<
+    "relationship" | "colleague" | "celebrity"
+  >("relationship");
+  const [researchProfile, setResearchProfile] = useState<
+    "budget-friendly" | "budget-unfriendly"
+  >("budget-unfriendly");
+
+  const startPipeline = trpc.skillEngine.startPipeline.useMutation({
+    onSuccess: () => {
+      toast.success(t("settings.sources.importStarted"));
+      jobs.refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const authorizeSource = trpc.collector.authorizeSource.useMutation({
+    onSuccess: () => {
+      toast.success(t("settings.sources.authorized"));
+      authorizedSources.refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const sourceList = sources.data ?? [];
+  const sourceLabelById = new Map(sourceList.map(s => [s.id, s.label]));
+  const selectedSource = sourceList.find(s => s.id === sourceId);
+  const credentialKeys = selectedSource?.credentialKeys ?? [];
+  const allCredentialsFilled =
+    credentialKeys.length > 0 && credentialKeys.every(key => (credentials[key] ?? "").trim().length > 0);
+  const personaList = personas.data ?? [];
+
+  function handleStart() {
+    if (!sourceId || !personaId) return;
+    const parsedLimit = limit.trim() ? Number(limit) : undefined;
+    startJob.mutate({
+      source: sourceId,
+      personaId: Number(personaId),
+      target: target.trim() || undefined,
+      limit: parsedLimit && Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("settings.sources.availableNote")} title={t("settings.sources.availableTitle")} />
+        {sources.isLoading ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : (
+          <div className="space-y-2.5">
+            {sourceList.map(source => (
+              <div key={source.id} className="surface p-3.5 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground font-medium">{source.label}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    {source.requiresBrowser
+                      ? t("settings.sources.needsBrowserLong")
+                      : t("settings.sources.noBrowser")}
+                  </p>
+                </div>
+                {source.requiresBrowser && <StatusChip tone="muted">{t("settings.sources.needsBrowserChip")}</StatusChip>}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("settings.sources.startNote")} title={t("settings.sources.startTitle")} />
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("settings.sources.sourceLabel")}</Label>
+            <Select value={sourceId} onValueChange={v => setSourceId(v as CollectorSourceId)}>
+              <SelectTrigger className="h-9 rounded-md text-sm w-full">
+                <SelectValue placeholder={t("settings.sources.selectPlatform")} />
+              </SelectTrigger>
+              <SelectContent>
+                {sourceList.map(source => (
+                  <SelectItem key={source.id} value={source.id}>{source.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedSource?.requiresBrowser && (
+              <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
+                {t("settings.sources.browserWarning")}
+              </p>
+            )}
+          </div>
+
+          {/* Authorisation. The credentials are sent once and stored
+              encrypted — the platform never sees them again. */}
+          {credentialKeys.length > 0 && (
+            <div className="space-y-2.5 p-3.5 rounded-md border border-border bg-muted/20">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t("settings.sources.authorizeNote")}
+              </p>
+              {credentialKeys.map(key => (
+                <div key={key} className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    {t(`settings.sources.credentialLabels.${key}` as any)}
+                  </Label>
+                  <Input
+                    type={key.toLowerCase().includes("secret") || key.toLowerCase().includes("token") ? "password" : "text"}
+                    value={credentials[key] ?? ""}
+                    onChange={e => setCredentials(prev => ({ ...prev, [key]: e.target.value }))}
+                    placeholder={t("settings.sources.credentialPlaceholder")}
+                    className="h-9 rounded-md text-sm"
+                  />
+                </div>
+              ))}
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-md px-5"
+                disabled={authorizeSource.isPending || !allCredentialsFilled}
+                onClick={() => authorizeSource.mutate({ source: sourceId as CollectorSourceId, credentials })}
+              >
+                {authorizeSource.isPending ? t("settings.sources.authorizing") : t("settings.sources.authorize")}
+              </Button>
+              {(authorizedSources.data ?? []).some(s => s.source === sourceId) && (
+                <p className="text-xs text-primary">{t("settings.sources.authorized")}</p>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("settings.sources.personaLabel")}</Label>
+            <Select value={personaId} onValueChange={setPersonaId}>
+              <SelectTrigger className="h-9 rounded-md text-sm w-full">
+                <SelectValue placeholder={t("settings.sources.selectPersona")} />
+              </SelectTrigger>
+              <SelectContent>
+                {personaList.map(persona => (
+                  <SelectItem key={persona.id} value={String(persona.id)}>{persona.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {personaList.length === 0 && (
+              <p className="text-[0.6875rem] text-muted-foreground">{t("settings.sources.noPersona")}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("settings.sources.targetLabel")}</Label>
+              <Input value={target} onChange={e => setTarget(e.target.value)}
+                placeholder={t("settings.sources.targetPlaceholder")} className="h-9 rounded-md text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("settings.sources.limitLabel")}</Label>
+              <Input value={limit} onChange={e => setLimit(e.target.value)}
+                placeholder={t("settings.sources.limitPlaceholder")} className="h-9 rounded-md text-sm" inputMode="numeric" />
+            </div>
+          </div>
+
+          <Button size="sm" className="rounded-md px-5"
+            disabled={!sourceId || !personaId || startJob.isPending}
+            onClick={handleStart}>
+            {startJob.isPending ? t("settings.sources.submitting") : t("settings.sources.start")}
+          </Button>
+        </div>
+      </section>
+
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("settings.sources.jobsNote")} title={t("settings.sources.jobsTitle")} />
+        {jobs.isLoading ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : (jobs.data ?? []).length === 0 ? (
+          <p className="text-xs text-muted-foreground">{t("settings.sources.noJobs")}</p>
+        ) : (
+          <div className="space-y-2.5">
+            {(jobs.data ?? []).map(job => (
+              <div key={job.id} className="surface p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-foreground font-medium truncate">
+                      {sourceLabelById.get(job.source) ?? job.source}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {job.startedAt ? new Date(job.startedAt).toLocaleString(locale) : t("settings.sources.notStarted")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <StatusChip tone={
+                      job.status === "completed" ? "success"
+                      : job.status === "failed" ? "error"
+                      : job.status === "interrupted" ? "muted"
+                      : "info"
+                    }>
+                      {COLLECTOR_STATUS_LABELS[job.status] ? t(COLLECTOR_STATUS_LABELS[job.status]) : job.status}
+                    </StatusChip>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{t("settings.sources.messageCount", { count: job.messageCount })}</span>
+                  </div>
+                </div>
+
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="progress-bar h-full" style={{ width: `${Math.min(100, Math.max(0, job.progress))}%` }} />
+                </div>
+
+                {job.error && (
+                  <p className="text-xs text-destructive leading-relaxed">{job.error}</p>
+                )}
+
+                <button type="button"
+                  onClick={() => setSelectedJobId(job.id === selectedJobId ? null : job.id)}
+                  className="text-xs text-primary hover:text-primary/80 px-0">
+                  {job.id === selectedJobId ? t("settings.sources.collapse") : t("settings.sources.expand")}
+                </button>
+
+                {job.id === selectedJobId && <CollectorJobDetail jobId={job.id} />}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Preview, and the step that hands the material to the model. */}
+      {personaId && (
+        <section className="surface p-5 sm:p-6">
+          <SectionHeader note={t("settings.sources.previewNote")} title={t("settings.sources.previewTitle")} />
+          <CollectorPreview personaId={Number(personaId)} />
+
+          {/* 「导入到分身」— the last step of the flow. The collected rows
+              become the material the persona is distilled from. */}
+          <div className="mt-4 pt-4 border-t border-border space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("settings.sources.familyLabel")}</Label>
+              <Select
+                value={characterFamily}
+                onValueChange={v => setCharacterFamily(v as typeof characterFamily)}
+              >
+                <SelectTrigger className="h-9 rounded-md text-sm w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="relationship">{t("settings.sources.family.relationship")}</SelectItem>
+                  <SelectItem value="colleague">{t("settings.sources.family.colleague")}</SelectItem>
+                  <SelectItem value="celebrity">{t("settings.sources.family.celebrity")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {characterFamily === "celebrity" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">{t("settings.sources.researchProfileLabel")}</Label>
+                <Select
+                  value={researchProfile}
+                  onValueChange={v => setResearchProfile(v as typeof researchProfile)}
+                >
+                  <SelectTrigger className="h-9 rounded-md text-sm w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="budget-friendly">{t("settings.sources.researchProfile.budget-friendly")}</SelectItem>
+                    <SelectItem value="budget-unfriendly">{t("settings.sources.researchProfile.budget-unfriendly")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <Button
+              size="sm"
+              className="rounded-md px-5"
+              disabled={startPipeline.isPending}
+              onClick={() =>
+                startPipeline.mutate({
+                  personaId: Number(personaId),
+                  characterFamily,
+                  ...(characterFamily === "celebrity" ? { researchProfile } : {}),
+                })
+              }
+            >
+              {startPipeline.isPending
+                ? t("settings.sources.importing")
+                : t("settings.sources.importToPersona")}
+            </Button>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function CollectorPreview({ personaId }: { personaId: number }) {
+  const { t, locale } = useLocale();
+  const { data, isLoading } = trpc.collector.preview.useQuery(
+    { personaId, limit: 30 },
+    { enabled: Number.isFinite(personaId) && personaId > 0 },
+  );
+
+  if (isLoading) {
+    return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
+  }
+  if (!data || data.total === 0) {
+    return <p className="text-xs text-muted-foreground">{t("settings.sources.previewEmpty")}</p>;
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-xs text-muted-foreground">
+        {t("settings.sources.previewTotal", { count: data.total })}
+      </p>
+      <div className="space-y-1.5 max-h-80 overflow-y-auto">
+        {data.messages.map(message => (
+          <div key={message.id} className="rounded-md border border-border p-2.5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[0.6875rem] text-muted-foreground">
+                {message.role === "user" ? t("settings.sources.previewMe") : t("settings.sources.previewThem")}
+              </span>
+              {message.source && (
+                <span className="text-[0.6875rem] text-muted-foreground/70">{message.source}</span>
+              )}
+              {message.timestamp && (
+                <span className="text-[0.6875rem] text-muted-foreground/70 ml-auto">
+                  {new Date(message.timestamp).toLocaleString(locale)}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-foreground/90 whitespace-pre-wrap break-words leading-relaxed">
+              {message.content}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CollectorJobDetail({ jobId }: { jobId: string }) {
+  const { t, locale } = useLocale();
+  const { data: job } = trpc.collector.getJob.useQuery({ jobId });
+  if (!job) return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
+
+  const statusKey = COLLECTOR_STATUS_LABELS[job.status];
+  const rows: Array<[string, string]> = [
+    [t("settings.sources.jobId"), job.id],
+    [t("settings.sources.sourceLabel"), job.source],
+    [t("settings.sources.status"), statusKey ? t(statusKey) : job.status],
+    [t("settings.sources.progress"), `${job.progress}%`],
+    [t("settings.sources.messageCountLabel"), String(job.messageCount)],
+    [t("settings.sources.startedAt"), job.startedAt ? new Date(job.startedAt).toLocaleString(locale) : "—"],
+    [t("settings.sources.finishedAt"), job.finishedAt ? new Date(job.finishedAt).toLocaleString(locale) : "—"],
+  ];
+
+  return (
+    <div className="p-3 rounded-lg bg-muted/30 border border-border space-y-1.5">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex items-start justify-between gap-3 text-xs">
+          <span className="text-muted-foreground flex-shrink-0">{label}</span>
+          <span className="text-foreground text-right break-all">{value}</span>
+        </div>
+      ))}
+      {job.error && <p className="text-xs text-destructive leading-relaxed">{job.error}</p>}
+    </div>
+  );
+}
+
+// ─── TEMPLATE LIBRARY TAB ────────────────────────────────────────────────────
+
+const TEMPLATE_FAMILY_LABELS: Record<string, "settings.templates.family.colleague" | "settings.templates.family.relationship" | "settings.templates.family.celebrity"> = {
+  colleague: "settings.templates.family.colleague",
+  relationship: "settings.templates.family.relationship",
+  celebrity: "settings.templates.family.celebrity",
+};
+
+function parseTags(raw: string): string[] {
+  return raw.split(/[,，]/).map(tag => tag.trim()).filter(Boolean).slice(0, 20);
+}
+
+function TemplateLibraryTab() {
+  const [, navigate] = useLocation();
+  const { t } = useLocale();
+  const templates = trpc.template.list.useQuery();
+  const personas = trpc.persona.list.useQuery();
+  const instantiate = trpc.template.instantiate.useMutation({
+    onSuccess: (data) => {
+      toast.success(t("settings.templates.instantiated"));
+      personas.refetch();
+      navigate(`/chat/${data.personaId}`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const importTemplate = trpc.template.import.useMutation({
+    onSuccess: data => {
+      toast.success(t("settings.templates.imported"));
+      setOwnRowIds(prev => ({ ...prev, [data.templateId]: data.id }));
+      templates.refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const createFromPersona = trpc.template.createFromPersona.useMutation({
+    onSuccess: data => {
+      toast.success(t("settings.templates.created"));
+      setOwnRowIds(prev => ({ ...prev, [data.templateId]: data.id }));
+      templates.refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteTemplate = trpc.template.delete.useMutation({
+    onSuccess: () => { toast.success(t("settings.templates.deleted")); templates.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const [personaId, setPersonaId] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
+  const [exportRequest, setExportRequest] = useState<{ templateId: string; nonce: number } | null>(null);
+  const [ownRowIds, setOwnRowIds] = useState<Record<string, number>>({});
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const exportQuery = trpc.template.export.useQuery(
+    { templateId: exportRequest?.templateId ?? "" },
+    { enabled: exportRequest !== null },
+  );
+
+  useEffect(() => {
+    const data = exportQuery.data;
+    if (!data) return;
+    const blob = new Blob([data.content], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = data.fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(t("settings.templates.exported"));
+  }, [exportRequest?.nonce, exportQuery.data, t]);
+
+  const templateList = templates.data ?? [];
+  const builtinTemplates = templateList.filter(t => t.builtin);
+  const ownTemplates = templateList.filter(t => !t.builtin);
+  const readyPersonas = (personas.data ?? []).filter(p => p.analysisStatus === "ready");
+
+  function rowIdFor(templateId: string): number | undefined {
+    const known = ownRowIds[templateId];
+    if (typeof known === "number") return known;
+    const fromServer = (templates.data ?? []).find(t => t.id === templateId) as any;
+    return typeof fromServer?.rowId === "number" ? fromServer.rowId : undefined;
+  }
+
+  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const fileContent = await file.text();
+      importTemplate.mutate({ fileContent });
+    } catch {
+      toast.error(t("settings.templates.readFailed"));
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("settings.templates.note")} title={t("settings.templates.title")}
+          action={(
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {t("settings.templates.countLead")} <span className="text-foreground font-medium">{templateList.length}</span> {t("settings.templates.countTail")}
+            </span>
+          )} />
+        {templates.isLoading ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : (
+          <div className="space-y-6">
+            {[
+              { title: t("settings.templates.builtinGroup"), list: builtinTemplates },
+              { title: t("settings.templates.mineGroup"), list: ownTemplates },
+            ].map(group => (
+              <div key={group.title} className="space-y-2.5">
+                <p className="text-xs text-muted-foreground">{group.title}</p>
+                {group.list.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t("settings.templates.empty")}</p>
+                ) : group.list.map(template => {
+                  const rowId = rowIdFor(template.id);
+                  const familyKey = TEMPLATE_FAMILY_LABELS[template.family];
+                  return (
+                    <div key={template.id} className="surface p-3.5 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm text-foreground font-medium truncate">{template.name}</span>
+                            <StatusChip tone="muted">
+                              {familyKey ? t(familyKey) : template.family}
+                            </StatusChip>
+                            {template.builtin && <StatusChip tone="primary">{t("templates.builtin")}</StatusChip>}
+                          </div>
+                          {template.description && (
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{template.description}</p>
+                          )}
+                          {template.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {template.tags.map(tag => (
+                                <span key={tag}
+                                  className="text-[0.6875rem] text-muted-foreground bg-muted/50 border border-border rounded px-1.5 py-0.5">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button size="sm" className="rounded-md px-4" disabled={instantiate.isPending}
+                          onClick={() => instantiate.mutate({ templateId: template.id })}>
+                          <Package className="w-3.5 h-3.5" /> {t("settings.templates.use")}
+                        </Button>
+                        <Button size="sm" variant="outline" className="rounded-md px-4 bg-transparent"
+                          onClick={() => setExportRequest(prev => ({
+                            templateId: template.id,
+                            nonce: (prev?.nonce ?? 0) + 1,
+                          }))}>
+                          <FileJson className="w-3.5 h-3.5" /> {t("common.export")}
+                        </Button>
+                        {!template.builtin && (
+                          <Button size="sm" variant="ghost"
+                            className="rounded-md px-4 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={!rowId || deleteTemplate.isPending}
+                            title={rowId ? t("settings.templates.deleteTitle") : t("settings.templates.deleteUnavailable")}
+                            onClick={() => { if (rowId) deleteTemplate.mutate({ id: rowId }); }}>
+                            <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("settings.templates.fromPersonaNote")} title={t("settings.templates.fromPersonaTitle")} />
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("settings.sources.personaLabel")}</Label>
+            <Select value={personaId} onValueChange={setPersonaId}>
+              <SelectTrigger className="h-9 rounded-md text-sm w-full">
+                <SelectValue placeholder={t("settings.templates.selectAnalyzed")} />
+              </SelectTrigger>
+              <SelectContent>
+                {readyPersonas.map(persona => (
+                  <SelectItem key={persona.id} value={String(persona.id)}>{persona.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {readyPersonas.length === 0 && (
+              <p className="text-[0.6875rem] text-muted-foreground">
+                {t("settings.templates.noAnalyzed")}
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("settings.templates.nameLabel")}</Label>
+              <Input value={name} onChange={e => setName(e.target.value)}
+                placeholder={t("settings.templates.namePlaceholder")} className="h-9 rounded-md text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t("settings.templates.tagsLabel")}</Label>
+              <Input value={tags} onChange={e => setTags(e.target.value)}
+                placeholder={t("settings.templates.tagsPlaceholder")} className="h-9 rounded-md text-sm" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("settings.templates.descriptionLabel")}</Label>
+            <Textarea value={description} onChange={e => setDescription(e.target.value)}
+              placeholder={t("settings.templates.descriptionPlaceholder")} className="min-h-16 text-sm" />
+          </div>
+
+          <Button size="sm" className="rounded-md px-5"
+            disabled={!personaId || !name.trim() || createFromPersona.isPending}
+            onClick={() => createFromPersona.mutate({
+              personaId: Number(personaId),
+              name: name.trim(),
+              description: description.trim() || undefined,
+              tags: parseTags(tags),
+            })}>
+            {createFromPersona.isPending ? t("common.creating") : t("settings.templates.create")}
+          </Button>
+        </div>
+      </section>
+
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("settings.templates.importNote")} title={t("settings.templates.importTitle")} />
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {t("settings.templates.importHint")}
+          </p>
+          <input ref={importInputRef} type="file" accept="application/json,.json"
+            onChange={handleImportFile} className="hidden" />
+          <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
+            disabled={importTemplate.isPending}
+            onClick={() => importInputRef.current?.click()}>
+            <Upload className="w-3.5 h-3.5" />
+            {importTemplate.isPending ? t("settings.templates.importing") : t("settings.templates.importChoose")}
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ─── INSTALL THE APP ─────────────────────────────────────────────────────────
+
+function InstallAppSection() {
+  const { t } = useLocale();
+  const [available, setAvailable] = useState(isInstallAvailable());
+  const [installing, setInstalling] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onInstallAvailabilityChange(setAvailable);
+    return () => { unsubscribe(); };
+  }, []);
+
+  if (!available) return null;
+
+  async function handleInstall() {
+    setInstalling(true);
+    const accepted = await promptInstall();
+    setInstalling(false);
+    if (!accepted) toast.error(t("settings.data.installRejected"));
+  }
+
+  return (
+    <section className="surface p-5 sm:p-6">
+      <SectionHeader note={t("settings.data.installNote")} title={t("settings.data.installTitle")} />
+      <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+        {t("settings.data.installDescription")}
+      </p>
+      <Button size="sm" className="rounded-md px-5" disabled={installing} onClick={handleInstall}>
+        <MonitorDown className="w-3.5 h-3.5" />
+        {installing ? t("settings.data.installing") : t("settings.data.installTitle")}
+      </Button>
+    </section>
+  );
+}
+
 // ─── MAIN SETTINGS PAGE ──────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   const [, navigate] = useLocation();
   const { user } = useAuth({ redirectOnUnauthenticated: true });
+  const { t } = useLocale();
   const [activeTab, setActiveTab] = useState<TabKey>("profile");
 
   if (!user) return <PageLoader />;
@@ -903,7 +1787,7 @@ export default function SettingsPage() {
         <div className="container app-nav">
           <button onClick={() => navigate("/")}
             className="app-nav-back -ml-1 gap-1">
-            <ArrowLeft className="w-4 h-4" /><span className="text-sm">返回</span>
+            <ArrowLeft className="w-4 h-4" /><span className="text-sm">{t("settings.page.back")}</span>
           </button>
           <div className="app-nav-divider" />
           <div className="app-nav-spacer" />
@@ -912,10 +1796,10 @@ export default function SettingsPage() {
 
       <main className="container page-main max-w-3xl">
         <div className="mb-8">
-          <p className="kicker kicker-accent mb-3">账户与偏好</p>
-          <h1 className="page-title">设置</h1>
+          <p className="kicker kicker-accent mb-3">{t("settings.page.kicker")}</p>
+          <h1 className="page-title">{t("settings.title")}</h1>
           <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">
-            账户、模型与微信——把工具放在顺手的位置。
+            {t("settings.page.intro")}
           </p>
         </div>
 
@@ -929,7 +1813,7 @@ export default function SettingsPage() {
                   ? "border-cinnabar text-foreground font-medium"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}>
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           ))}
         </div>
@@ -942,6 +1826,9 @@ export default function SettingsPage() {
           {activeTab === "profile" && <ProfileTab />}
           {activeTab === "ai" && <AISettingsTab />}
           {activeTab === "wechat" && <WeChatTab />}
+          {activeTab === "channels" && <ChannelsTab onOpenTab={setActiveTab} />}
+          {activeTab === "sources" && <DataSourcesTab />}
+          {activeTab === "templates" && <TemplateLibraryTab />}
           {activeTab === "data" && <DataManagementTab />}
         </motion.div>
       </main>

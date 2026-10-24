@@ -112,7 +112,38 @@ OpenAI 兼容协议共用一个适配器，通过 `baseUrl` / `model` 区分，�
 
 默认分身在网页端设置，指令切换只在当前会话内生效。
 
-### 6. 全链路类型安全
+### 6. 飞书通道 — 同样不需要公网地址
+
+除了微信，还接入了**飞书**（企业自建应用）。飞书的「使用长连接接收事件」（WebSocket）模式**不需要公网 IP、域名或 SSL 证书**，和微信通道一样适合放在自己的机器上。
+
+两个通道共用同一套对话管线（`server/chat/service.ts`）、同一套指令、同一个人设与记忆体系 —— 加一个渠道不需要重写任何对话逻辑。
+
+> ⚠️ 飞书通道要求**企业自建应用**（长连接模式不支持商店应用），且应用需**发布并由管理员审批**后权限才会生效。详见网页端「设置 → 渠道」里的说明。
+
+### 7. 流式对话 — 逐字出现，而不是等整段
+
+聊天回复现在是**逐 token 流出**的（Server-Sent Events），不用再对着转圈图标等一整段生成。打断、退出、重连都不会留下半截消息。
+
+### 8. 记忆真的会说话
+
+以前记忆节点只写不读 —— `memory.autoExtract` 抽出来的东西从没有进入过任何一次对话。现在：
+
+- 记忆会按**关键词覆盖度 + 时间新鲜度 + 类别权重 + 人工置顶**打分，取最相关的几条放进上下文；
+- **记忆锚点**（category = `anchor`）永远注入，并且带一条「不要编造」的硬约束，挡住「记忆幻觉」；
+- 超出上下文窗口的旧对话会被压成**滚动摘要**，而不是直接丢掉。
+
+### 9. 情感安全层
+
+产品文档承诺的三类监测现在真的存在了：
+
+| 监测 | 触发 | 表现 |
+|------|------|------|
+| 危机识别 | 出现自伤/自杀类表述 | 分身温和「出戏」说一段关心的话，并给出**本地**求助热线（不上报、不联网） |
+| 对话过久 | 单次连续对话 > 2 小时 | 回复里带一句关心 |
+| 聊得太密 | 单日对话 > 5 次 | 回复里带一句关心 + 界面提示条 |
+| 依赖上升 | 近 7 日频次 > 前 7 日 1.5 倍且连续 3 日上升 | 引导用户回看告别建议 |
+
+### 10. 全链路类型安全
 
 ```
 Drizzle Schema → DB Helpers → tRPC Router → React Query Hook → UI 组件
@@ -200,6 +231,14 @@ pnpm build && pnpm start
 - **数据不出本地**。上传素材保存在 `./uploads/`，配合 Ollama 可实现完全离线推理。
 - **不能替代专业帮助**。如果你正在经历严重的情绪困扰，请寻求专业心理咨询。
 
+### 已知限制：限流是单进程的
+
+请求限流（`server/_core/rate-limit.ts`）用内存令牌桶实现。这对单机自托管是足够的，
+但**多实例部署时每个进程各有一份计数** —— 实际限额会随实例数放大。
+
+限流器是一个接口（`RateLimiter`），换成共享存储（Redis 等）即可解决。
+引入 Redis 属于新增外部依赖，超出本项目的默认依赖范围，需要显式决定后再做。
+
 ## 路线图
 
 - [x] 多阶段性格蒸馏 pipeline
@@ -208,10 +247,19 @@ pnpm build && pnpm start
 - [x] 12 家 LLM 提供商接入
 - [x] 微信机器人集成
 - [x] 对话日记 / 记忆节点 / 数据分析 / TTS 语音
-- [ ] SillyTavern 角色卡（PNG v2）导入导出
+- [x] 流式对话（SSE 逐 token 输出）
+- [x] 记忆召回 + 记忆锚点 + 上下文滚动摘要
+- [x] 情感安全层（危机识别 / 使用强度 / 依赖趋势）
+- [x] 飞书通道（长连接，无需公网地址）
+- [x] 多源聊天记录采集（飞书 / 钉钉 / Slack / 邮件）
+- [x] SillyTavern 角色卡（PNG v2）导入导出
+- [x] 引导式问卷（没有聊天记录也能创建分身）
+- [x] 分身模板库（本地优先）
+- [x] PWA 安装到桌面 / 主屏
+- [x] 主动提醒（纪念日、相识周年）
 - [ ] 全应用国际化 + 情感引擎英文触发词
 - [ ] 插件系统与分身模板市场
-- [ ] 群聊模式 / 引导式问卷构建
+- [ ] 群聊模式
 - [ ] 文档站
 
 ## 创作背景
@@ -361,6 +409,12 @@ scenes             -- 对话场景模板 (内置 + 自定义, 含开场白)
 | `PORT` | 服务端口 | `3000` |
 | `EMOTION_ENGINE` | 情绪判定引擎：`llm`（模型阅读对话判断）/ `heuristic`（纯关键词规则，零额外调用） | `llm` |
 | `PERSONA_AI_TRANSPARENCY` | AI 身份透明：`true`= 被认真询问时承认是 AI；`false` = 完全沉浸模式 | `true` |
+| `ALLOWED_ORIGINS` | 允许发起写操作的其他来源（逗号分隔）。同源始终允许 | 空 |
+| `COOKIE_SAMESITE` | 会话 Cookie 的 SameSite 策略：`lax`（默认）/ `none` / `strict` | `lax` |
+| `MIRRAI_BOOTSTRAP_ADMIN` | 首次运行自动创建本地管理员：`auto` / `manual` | `auto` |
+| `MIRRAI_DATA_ROOT` | 首次运行凭据与数据文件的存放目录 | UPLOAD_DIR 的上级目录 |
+| `SAFETY_RESOURCES_FILE` | 危机支持资源清单的覆盖文件（JSON） | 空（用内置清单） |
+| `REMINDER_QUIET_HOURS` | 主动提醒的免打扰时段 | `23:00-08:00` |
 
 ## 项目结构
 
@@ -368,29 +422,38 @@ scenes             -- 对话场景模板 (内置 + 自定义, 含开场白)
 Mirrai/
 ├── client/                          # React 前端
 │   ├── index.html
+│   ├── public/                      # manifest / Service Worker / 图标 / 字体
 │   └── src/
 │       ├── App.tsx                  # 路由定义
-│       ├── main.tsx                 # 入口 (tRPC + React Query)
+│       ├── main.tsx                 # 入口 (tRPC + React Query + Service Worker)
 │       ├── index.css                # 全局样式 (「深夜来信」设计系统)
-│       ├── pages/                   # Landing · Lobby · Login · HomePage · Upload · Chat · Settings · PersonaEdit · Analytics · Diary
+│       ├── pages/                   # Landing · Lobby · Login · HomePage · Upload · Chat · Settings · PersonaEdit · Analytics · Diary · Onboarding · Questionnaire
 │       ├── components/              # UI 组件 (shadcn/ui + ErrorBoundary + GraduationModal)
 │       ├── contexts/                # ThemeContext · LocaleContext
 │       ├── hooks/                   # useComposition · useMobile · usePersistFn
-│       └── lib/                     # trpc · i18n · utils
+│       └── lib/                     # trpc · i18n · utils · chat-stream · pwa
 │
 ├── server/
-│   ├── _core/                       # Express 入口 · JWT 认证 · tRPC 初始化 · 情感计算 · TTS · HTML 导出
+│   ├── _core/                       # Express 入口 · JWT 认证 · tRPC 初始化 · 限流 · CSRF · 情感计算 · TTS · HTML 导出
+│   ├── chat/                        # 对话主管线 (compose / persist / 记忆召回) + SSE 流式路由
+│   ├── channels/                    # 渠道适配层 (微信 ClawBot · 飞书) + 共用指令与对话桥
+│   ├── safety/                      # 情感安全层 (危机识别 · 使用强度 · 毕业轨迹)
+│   ├── collectors/                  # 多源采集器契约与任务运行器
+│   ├── skill-engine/                # 多阶段蒸馏 pipeline (Python 子进程) + 角色卡 / 模板 / 名人研究
+│   ├── templates/                   # 分身模板库 + 引导式问卷映射
+│   ├── scheduler/                   # 主动提醒调度
+│   ├── bootstrap/                   # 首次运行引导
+│   ├── llm/                         # LLM 抽象层 (providers/ + 注册表 + 能力标志 + 流式)
+│   ├── wechat/                      # 微信 ClawBot 协议实现 (iLink)
 │   ├── routers.ts                   # 全部 tRPC 路由
 │   ├── db.ts                        # 数据库 CRUD
-│   ├── llm/                         # LLM 抽象层 (providers/ + 注册表 + 重试策略)
-│   ├── wechat/                      # ClawBot 通道 · iLink 协议 · 消息路由 · 分身桥接 · 指令
-│   └── skill-engine/                # 多阶段蒸馏 pipeline (Python 子进程)
+│   └── storage.ts                   # 上传存储 (路径包含性校验)
 │
-├── drizzle/                         # Schema (12 张表) + 关系定义
-├── shared/                          # 前后端共享常量与类型
-├── skill-engine/                    # Python 蒸馏工具 (tools/ + prompts/relationship/)
-├── scripts/                         # macOS .app/.dmg 构建脚本
-├── docs/                            # 文档 (创作手记 · 构建指南 · 产品概念)
+├── drizzle/                         # Schema (20+ 张表) + 幂等迁移 SQL
+├── shared/                          # 前后端共享常量与类型 (含亲密度等级)
+├── skill-engine/                    # Python 蒸馏工具 (tools/ + prompts/ + registry.json + references/)
+├── scripts/                         # 构建脚本 · 迁移脚本 · PWA 图标生成
+├── docs/                            # 文档 (创作手记 · 构建指南 · 产品概念 · 发布说明)
 └── .github/                         # CI · Issue/PR 模板
 ```
 
@@ -473,11 +536,31 @@ Mirrai/
 | `wechat.getStatus` / `wechat.startLogin` / `wechat.stop` | Query/Mutation | 通道状态与生命周期 |
 | `wechat.submitVerifyCode` / `wechat.cancelLogin` | Mutation | 扫码登录与验证码确认 |
 | `wechat.setDefaultPersona` / `wechat.unbind` / `wechat.listBindings` | Mutation/Query | 默认分身绑定管理 |
-| `llmConfig.list` / `llmConfig.getDefault` / `llmConfig.listProviders` | Query | LLM 配置查询 |
+| `channel.list` / `channel.getStatus` / `channel.start` / `channel.stop` | Query/Mutation | 渠道通用管理（微信 / 飞书） |
+| `channel.setCredentials` | Mutation | 配置飞书 App ID / Secret（加密存储） |
+| `channel.listBindings` / `channel.setDefaultPersona` / `channel.unbind` | Query/Mutation | 渠道绑定管理 |
+| `llmConfig.list` / `llmConfig.getDefault` / `llmConfig.listProviders` | Query | LLM 配置查询（密钥只回传掩码） |
 | `llmConfig.upsert` / `llmConfig.setDefault` / `llmConfig.updateExtraConfig` | Mutation | LLM 配置管理 |
 | `analytics.overview` | Query | 综合分析 (消息量/情感时线/热力图/时段分布) |
 | `skillEngine.startPipeline` | Mutation | 启动多阶段蒸馏 pipeline |
 | `skillEngine.getJobStatus` | Query | 查询 pipeline 进度 |
+| `skillEngine.exportSkill` | Mutation | 把生成的分身包安装到 Claude / OpenClaw / Codex / Hermes |
+| `collector.listSources` / `collector.listJobs` | Query | 采集来源与任务 |
+| `collector.start` / `collector.getJob` | Mutation/Query | 启动采集任务 / 查询进度 |
+| `template.list` / `template.instantiate` | Query/Mutation | 分身模板库 |
+| `template.createFromPersona` / `template.update` / `template.delete` | Mutation | 模板管理 |
+| `template.import` / `template.export` | Mutation/Query | 模板导入导出 |
+| `personaCard.export` / `personaCard.import` | Mutation | SillyTavern 角色卡（PNG v2）导入导出 |
+| `reminder.list` / `reminder.dismiss` | Query/Mutation | 主动提醒 |
+| `setup` | Query | 首次运行状态探针（公开） |
+
+### REST（非 tRPC）
+
+| 端点 | 类型 | 说明 |
+|------|------|------|
+| `POST /api/auth/register` | REST | 注册 (username + password) |
+| `POST /api/auth/login` | REST | 登录 (返回 JWT Cookie) |
+| `POST /api/chat/stream` | REST | 流式对话 (Server-Sent Events) |
 
 ## 开发指南
 

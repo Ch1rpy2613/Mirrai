@@ -13,6 +13,9 @@
  *   5. loveLanguage     — 爱的语言
  *   6. conflictStyle    — 争吵方式
  *   7. touchingMoments  — 动人时刻
+ *
+ * `realismLevel` and `relationshipPhase` are not layers but quality knobs:
+ * how human the persona sounds, and which stage the relationship is in.
  */
 
 export interface PersonaData {
@@ -26,7 +29,25 @@ export interface PersonaData {
   conflictStyle: string;
   touchingMoments: string;
   summary: string;
+  /**
+   * How human the persona sounds, 0-100. Higher means more imperfection.
+   *
+   * Optional so that personas stored before this field existed still satisfy
+   * the type — the normaliser fills in the default.
+   */
+  realismLevel?: number;
+  /** The stage the relationship is in. Optional for the same reason. */
+  relationshipPhase?: RelationshipPhase;
 }
+
+/** The stages a relationship can be in. */
+export type RelationshipPhase = "initial" | "growing" | "stable" | "strained" | "closing";
+
+/** A `PersonaData` with every field filled in — what the normaliser returns. */
+export type NormalizedPersonaData = PersonaData & {
+  realismLevel: number;
+  relationshipPhase: RelationshipPhase;
+};
 
 export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "personality",
@@ -39,6 +60,22 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "conflictStyle",
   "touchingMoments",
   "summary",
+  "realismLevel",
+  "relationshipPhase",
+];
+
+/** The default realism level: noticeably imperfect, but not a mess. */
+export const DEFAULT_REALISM_LEVEL = 70;
+
+/** The default relationship stage for a persona that never had one. */
+export const DEFAULT_RELATIONSHIP_PHASE: RelationshipPhase = "initial";
+
+const RELATIONSHIP_PHASES: RelationshipPhase[] = [
+  "initial",
+  "growing",
+  "stable",
+  "strained",
+  "closing",
 ];
 
 /** Coerces anything to a trimmed non-empty string, or "" when unusable. */
@@ -64,6 +101,27 @@ function toStringList(value: unknown): string[] {
     .filter(Boolean);
 }
 
+/** Coerces a value to a realism level between 0 and 100. */
+function toRealismLevel(value: unknown): number | null {
+  let level: number;
+  if (typeof value === "number") {
+    level = value;
+  } else if (typeof value === "string" && value.trim()) {
+    level = Number(value);
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(level)) return null;
+  return Math.max(0, Math.min(100, Math.round(level)));
+}
+
+/** Coerces a value to one of the known relationship stages. */
+function toRelationshipPhase(value: unknown): RelationshipPhase | null {
+  if (typeof value !== "string") return null;
+  const phase = value.trim() as RelationshipPhase;
+  return RELATIONSHIP_PHASES.includes(phase) ? phase : null;
+}
+
 /**
  * Normalizes raw LLM output into a complete `PersonaData`.
  *
@@ -75,7 +133,7 @@ function toStringList(value: unknown): string[] {
 export function normalizePersonaData(
   raw: Record<string, unknown> | null | undefined,
   options: { name: string; fallback?: Partial<PersonaData> },
-): PersonaData {
+): NormalizedPersonaData {
   const fallback = options.fallback ?? {};
   const source = raw ?? {};
 
@@ -98,6 +156,14 @@ export function normalizePersonaData(
   const touchingMoments = toText(source.touchingMoments) || fallback.touchingMoments || "";
   const summary = toText(source.summary) || fallback.summary || `${options.name}是一个温暖、真诚的人`;
 
+  // The persona-quality fields were added after the first release, so old
+  // personas do not have them — they get the plan's defaults instead.
+  const realismLevel =
+    toRealismLevel(source.realismLevel ?? fallback.realismLevel) ?? DEFAULT_REALISM_LEVEL;
+  const relationshipPhase =
+    toRelationshipPhase(source.relationshipPhase ?? fallback.relationshipPhase) ??
+    DEFAULT_RELATIONSHIP_PHASE;
+
   return {
     personality,
     speakingStyle,
@@ -109,5 +175,7 @@ export function normalizePersonaData(
     conflictStyle,
     touchingMoments,
     summary,
+    realismLevel,
+    relationshipPhase,
   };
 }

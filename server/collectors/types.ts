@@ -1,0 +1,556 @@
+/**
+ * Collector contracts and the registry of chat-history sources.
+ *
+ * The Python collectors under `skill-engine/tools/` were written before the
+ * TypeScript server existed and nothing referenced them. This module is the
+ * seam that makes them usable: every source is described as a
+ * `SourceConnector` (which tool to run, how to check credentials, how to turn
+ * the tool's output into the shared `CollectResult` contract) so the server
+ * can treat Feishu, DingTalk, Slack, e-mail and WeChat exports the same way.
+ *
+ * Layering:
+ *   types.ts   — contracts + the connector registry (this file)
+ *   runner.ts  — process execution + output normalisation
+ *   jobs.ts    — the in-process job queue that drives the connectors
+ */
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
+import os from "os";
+import path from "path";
+import { encryptSecret } from "../_core/crypto";
+import { normaliseCollectorOutput, parseNormalisedPayload, runCollector } from "./runner";
+
+export type CollectorSourceId = "feishu" | "dingtalk" | "slack" | "email" | "wechat_export";
+
+export interface CollectedMessage {
+  role: "user" | "assistant";
+  content: string;
+  /** ISO 8601 if known. */
+  timestamp?: string;
+  source?: string;
+}
+
+export interface CollectResult {
+  messages: CollectedMessage[];
+  meta: { total: number; source: CollectorSourceId; truncated?: boolean };
+}
+
+export interface CollectorAuthState {
+  ok: boolean;
+  /** Human-readable reason when not ok. */
+  message?: string;
+  /** Whether the operator must complete an interactive step. */
+  requiresInteraction?: boolean;
+}
+
+/**
+ * A connector's credentials in plaintext, keyed by the collector's config key
+ * (`app_id`, `app_secret`, `bot_token`, …).
+ *
+ * Plaintext never leaves the process: the connector encrypts the blob before
+ * it is persisted and the store decrypts it when it is read back.
+ */
+export type CollectorCredentials = Record<string, string>;
+
+export interface CollectInput {
+  /** Target person on the platform. */
+  target?: string;
+  /** Limit on how many messages to collect. */
+  limit?: number;
+  /**
+   * Free-form extra settings (credentials are injected separately).
+   *
+   * Connectors may also read internal keys from here — most notably
+   * `outputDir`, which `collect()` injects before building the CLI arguments
+   * so that `args()` stays the single source of truth for the argv.
+   */
+  options?: Record<string, string>;
+  /** Credentials / config for the source. */
+  config?: Record<string, unknown>;
+  /** Progress sink (0..100) injected by the job runner. */
+  onProgress?: (pct: number) => void;
+  /** Cancellation signal injected by the job runner. */
+  signal?: AbortSignal;
+}
+
+export interface SourceConnector {
+  id: CollectorSourceId;
+  label: string;
+  /** True when the source needs Playwright + a Chromium download. */
+  requiresBrowser?: boolean;
+  /** Python tool this connector drives, relative to skill-engine/tools/. */
+  tool: string;
+  /** CLI arguments, excluding the tool name. */
+  args(input: CollectInput): string[];
+  checkAuth(input: CollectInput): Promise<CollectorAuthState>;
+  collect(input: CollectInput): Promise<CollectResult>;
+  /**
+   * The credential keys this source uses. Empty for sources that need none.
+   */
+  credentialKeys?: string[];
+  /**
+   * Returns the credentials of this source, encrypted for storage.
+   *
+   * The returned blob is what `server/collectors/db-store.ts` writes into the
+   * `config` column of `collection_sources`; `null` when the source has no
+   * credentials at all.
+   */
+  exportCredentials?(input: CollectInput): Promise<string | null>;
+  /**
+   * Configures the connector from a credential blob that has already been
+   * decrypted, so a stored source can be collected from again.
+   */
+  importCredentials?(credentials: CollectorCredentials): void;
+}
+
+/**
+ * Where the Python collectors keep their credentials.
+ *
+ * Every collector defines `CONFIG_PATH = Path.home() / ".colleague-skill" /
+ * <source>_config.json`; Mirrai reads the same files so the operator only has
+ * to run the `--setup` flow of the tool once.
+ */
+const COLLECTOR_CONFIG_DIR = path.join(os.homedir(), ".colleague-skill");
+
+/** Reads one of the collectors' credential files, if it exists and is valid JSON. */
+function readCollectorConfig(fileName: string): Record<string, unknown> | undefined {
+  const filePath = path.join(COLLECTOR_CONFIG_DIR, fileName);
+  if (!existsSync(filePath)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    // A corrupt config file is treated as "not configured" — the collector
+    // itself prints the "--setup" hint when it cannot read it.
+    return undefined;
+  }
+}
+
+/**
+ * Credentials that were restored from the database (already decrypted).
+ *
+ * The collectors keep their credentials in `~/.colleague-skill/*_config.json`;
+ * once a source has been stored, the database copy is authoritative, so it
+ * takes precedence over the local file but not over an explicitly supplied
+ * credential.
+ */
+const restoredCredentials = new Map<CollectorSourceId, CollectorCredentials>();
+
+/** Replaces the credentials a connector uses (plaintext in, plaintext kept). */
+export function setRestoredCredentials(
+  source: CollectorSourceId,
+  credentials: CollectorCredentials,
+): void {
+  restoredCredentials.set(source, { ...credentials });
+}
+
+/** Forgets the credentials restored for a source. */
+export function clearRestoredCredentials(source: CollectorSourceId): void {
+  restoredCredentials.delete(source);
+}
+
+/**
+ * Collects the credential values a connector should use.
+ *
+ * Priority: explicitly supplied config → credentials restored from the
+ * database → the collector's own config file.
+ */
+function collectCredentials(
+  source: CollectorSourceId,
+  input: CollectInput,
+  keys: string[],
+  configFile?: string,
+): CollectorCredentials {
+  const inline = input.config;
+  const restored = restoredCredentials.get(source);
+  const saved = configFile ? readCollectorConfig(configFile) : undefined;
+
+  const values: CollectorCredentials = {};
+  for (const key of keys) {
+    const value =
+      configString(inline, key) ??
+      configString(restored, key) ??
+      configString(saved, key);
+    if (value) values[key] = value;
+  }
+  return values;
+}
+
+/**
+ * Encrypts a credential map for storage.
+ *
+ * The blob is what ends up in `collection_sources.config`; it is decrypted
+ * again by `server/collectors/db-store.ts` when the source is read back.
+ */
+async function encryptCredentials(values: CollectorCredentials): Promise<string | null> {
+  if (Object.keys(values).length === 0) return null;
+  return await encryptSecret(JSON.stringify(values));
+}
+
+/** Reads a string flag out of the caller supplied config. */
+function configString(config: Record<string, unknown> | undefined, key: string): string | undefined {
+  if (!config) return undefined;
+  const value = config[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+/**
+ * Reads the transcript a collector wrote into its `--output-dir`.
+ *
+ * The Feishu/DingTalk/Slack collectors do not print the transcript to stdout:
+ * they write `messages.txt` (plus `docs.txt` and `collection_summary.json`)
+ * into the directory given by `--output-dir` and log progress to stderr.
+ */
+function readCollectorTranscript(outputDir: string): string | undefined {
+  const messagesPath = path.join(outputDir, "messages.txt");
+  if (!existsSync(messagesPath)) return undefined;
+  try {
+    return readFileSync(messagesPath, "utf-8");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Runs a collector that writes its transcript into `--output-dir`.
+ *
+ * The directory is created per run and removed afterwards so a failed run
+ * cannot leave chat history lying around on disk.
+ *
+ * The collector's normalised JSON exit (stdout) is the primary payload; the
+ * transcript file is only read when the collector did not print JSON, and the
+ * legacy format parsers are the last resort.
+ */
+async function collectViaOutputDir(
+  connector: SourceConnector,
+  input: CollectInput,
+): Promise<CollectResult> {
+  const outputDir = mkdtempSync(path.join(os.tmpdir(), "mirrai-collector-"));
+  try {
+    const effective: CollectInput = {
+      ...input,
+      options: { ...(input.options ?? {}), outputDir },
+    };
+    const { stdout, stderr } = await runCollector(connector.tool, connector.args(effective), {
+      onProgress: input.onProgress,
+      signal: input.signal,
+    });
+    const normalised = parseNormalisedPayload(stdout, connector.id, {
+      target: input.target,
+      limit: input.limit,
+    });
+    if (normalised) return normalised;
+
+    const transcript = readCollectorTranscript(outputDir);
+    const raw = transcript ?? stdout;
+    if (!raw.trim()) {
+      throw new Error(
+        `Collector "${connector.id}" produced no transcript (${connector.tool}). ` +
+          stderr.trim().slice(-500),
+      );
+    }
+    return normaliseCollectorOutput(raw, connector.id, {
+      target: input.target,
+      limit: input.limit,
+    });
+  } finally {
+    rmSync(outputDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The flag that asks a collector for the normalised JSON exit.
+ *
+ * The Python collectors print exactly one JSON object when it is present, so
+ * the server never has to parse a vendor-specific report format.
+ */
+const JSON_FORMAT_ARGS = ["--format", "json"];
+
+/** Feishu (飞书) via the open-platform app API.
+ *
+ * Uses `feishu_auto_collector.py`; `feishu_browser.py` (Playwright, reuses a
+ * local Chrome profile) and `feishu_mcp_client.py` (wraps the `feishu-mcp`
+ * npm server) are alternative transports for the same source and are not
+ * driven by default because they need a logged-in browser / an npx install.
+ */
+const FEISHU_CREDENTIAL_KEYS = [
+  "app_id",
+  "app_secret",
+  "user_access_token",
+  "p2p_chat_id",
+  "open_id",
+];
+
+const feishuConnector: SourceConnector = {
+  id: "feishu",
+  label: "飞书 / Feishu",
+  requiresBrowser: false,
+  tool: "feishu_auto_collector.py",
+  credentialKeys: FEISHU_CREDENTIAL_KEYS,
+  args(input: CollectInput): string[] {
+    const argv: string[] = [...JSON_FORMAT_ARGS];
+    if (input.target) argv.push("--name", input.target);
+    if (input.options?.outputDir) argv.push("--output-dir", input.options.outputDir);
+    if (input.limit) argv.push("--msg-limit", String(input.limit));
+    const credentials = collectCredentials(
+      "feishu",
+      input,
+      FEISHU_CREDENTIAL_KEYS,
+      "feishu_config.json",
+    );
+    if (credentials.open_id) argv.push("--open-id", credentials.open_id);
+    if (credentials.user_access_token) argv.push("--user-token", credentials.user_access_token);
+    if (credentials.p2p_chat_id) argv.push("--p2p-chat-id", credentials.p2p_chat_id);
+    return argv;
+  },
+  async checkAuth(input: CollectInput): Promise<CollectorAuthState> {
+    const credentials = collectCredentials(
+      "feishu",
+      input,
+      FEISHU_CREDENTIAL_KEYS,
+      "feishu_config.json",
+    );
+    if (credentials.app_id && credentials.app_secret) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      message:
+        "未找到飞书应用凭据，请运行：python3 tools/feishu_auto_collector.py --setup " +
+        "（或通过 options 传入 app_id / app_secret）",
+      requiresInteraction: true,
+    };
+  },
+  async exportCredentials(input: CollectInput): Promise<string | null> {
+    return await encryptCredentials(
+      collectCredentials("feishu", input, FEISHU_CREDENTIAL_KEYS, "feishu_config.json"),
+    );
+  },
+  importCredentials(credentials: CollectorCredentials): void {
+    setRestoredCredentials("feishu", credentials);
+  },
+  async collect(input: CollectInput): Promise<CollectResult> {
+    return collectViaOutputDir(feishuConnector, input);
+  },
+};
+
+/**
+ * DingTalk (钉钉) via the open API.
+ *
+ * The DingTalk API cannot read historical messages, so the collector falls
+ * back to Playwright scraping a local Chrome profile — hence
+ * `requiresBrowser: true`.
+ */
+const DINGTALK_CREDENTIAL_KEYS = ["app_key", "app_secret"];
+
+const dingtalkConnector: SourceConnector = {
+  id: "dingtalk",
+  label: "钉钉 / DingTalk",
+  requiresBrowser: true,
+  tool: "dingtalk_auto_collector.py",
+  credentialKeys: DINGTALK_CREDENTIAL_KEYS,
+  args(input: CollectInput): string[] {
+    const argv: string[] = [...JSON_FORMAT_ARGS];
+    if (input.target) argv.push("--name", input.target);
+    if (input.options?.outputDir) argv.push("--output-dir", input.options.outputDir);
+    if (input.limit) argv.push("--msg-limit", String(input.limit));
+    if (input.options?.chrome_profile) argv.push("--chrome-profile", input.options.chrome_profile);
+    if (input.options?.show_browser === "true") argv.push("--show-browser");
+    return argv;
+  },
+  async checkAuth(input: CollectInput): Promise<CollectorAuthState> {
+    const credentials = collectCredentials(
+      "dingtalk",
+      input,
+      DINGTALK_CREDENTIAL_KEYS,
+      "dingtalk_config.json",
+    );
+    if (!credentials.app_key || !credentials.app_secret) {
+      return {
+        ok: false,
+        message:
+          "未找到钉钉应用凭据，请运行：python3 tools/dingtalk_auto_collector.py --setup " +
+          "（或通过 options 传入 app_key / app_secret）",
+        requiresInteraction: true,
+      };
+    }
+    return {
+      ok: true,
+      message: "钉钉消息采集依赖 Playwright：pip3 install playwright && playwright install chromium",
+    };
+  },
+  async exportCredentials(input: CollectInput): Promise<string | null> {
+    return await encryptCredentials(
+      collectCredentials("dingtalk", input, DINGTALK_CREDENTIAL_KEYS, "dingtalk_config.json"),
+    );
+  },
+  importCredentials(credentials: CollectorCredentials): void {
+    setRestoredCredentials("dingtalk", credentials);
+  },
+  async collect(input: CollectInput): Promise<CollectResult> {
+    return collectViaOutputDir(dingtalkConnector, input);
+  },
+};
+
+/** Slack via a bot token (`xoxb-…`). */
+const SLACK_CREDENTIAL_KEYS = ["bot_token"];
+
+const slackConnector: SourceConnector = {
+  id: "slack",
+  label: "Slack",
+  requiresBrowser: false,
+  tool: "slack_auto_collector.py",
+  credentialKeys: SLACK_CREDENTIAL_KEYS,
+  args(input: CollectInput): string[] {
+    const argv: string[] = [...JSON_FORMAT_ARGS];
+    if (input.target) argv.push("--name", input.target);
+    if (input.options?.outputDir) argv.push("--output-dir", input.options.outputDir);
+    if (input.limit) argv.push("--msg-limit", String(input.limit));
+    if (input.options?.channel_limit) argv.push("--channel-limit", input.options.channel_limit);
+    return argv;
+  },
+  async checkAuth(input: CollectInput): Promise<CollectorAuthState> {
+    const credentials = collectCredentials(
+      "slack",
+      input,
+      SLACK_CREDENTIAL_KEYS,
+      "slack_config.json",
+    );
+    if (!credentials.bot_token) {
+      return {
+        ok: false,
+        message:
+          "未找到 Slack Bot Token，请运行：python3 tools/slack_auto_collector.py --setup " +
+          "（或通过 options 传入 bot_token）",
+        requiresInteraction: true,
+      };
+    }
+    return { ok: true };
+  },
+  async exportCredentials(input: CollectInput): Promise<string | null> {
+    return await encryptCredentials(
+      collectCredentials("slack", input, SLACK_CREDENTIAL_KEYS, "slack_config.json"),
+    );
+  },
+  importCredentials(credentials: CollectorCredentials): void {
+    setRestoredCredentials("slack", credentials);
+  },
+  async collect(input: CollectInput): Promise<CollectResult> {
+    return collectViaOutputDir(slackConnector, input);
+  },
+};
+
+/**
+ * E-mail history.
+ *
+ * `email_parser.py` prints its Markdown report to stdout when no `--output`
+ * is given, so the report itself is the payload that gets normalised.
+ */
+const emailConnector: SourceConnector = {
+  id: "email",
+  label: "邮件 / E-mail",
+  requiresBrowser: false,
+  tool: "email_parser.py",
+  credentialKeys: [],
+  args(input: CollectInput): string[] {
+    const argv: string[] = [...JSON_FORMAT_ARGS];
+    if (input.options?.file) argv.push("--file", input.options.file);
+    if (input.target) argv.push("--target", input.target);
+    return argv;
+  },
+  async checkAuth(): Promise<CollectorAuthState> {
+    return {
+      ok: true,
+      message: "邮件解析无需凭据，请在 options.file 中提供 .eml / .mbox / .txt 文件路径",
+    };
+  },
+  async exportCredentials(): Promise<string | null> {
+    // Parsing a mail export needs no credentials.
+    return null;
+  },
+  importCredentials(): void {
+    // Nothing to restore.
+  },
+  async collect(input: CollectInput): Promise<CollectResult> {
+    if (!input.options?.file) {
+      throw new Error(
+        'Collector "email" requires options.file (path to a .eml / .mbox / .txt export)',
+      );
+    }
+    if (!input.target) {
+      throw new Error('Collector "email" requires a target (the sender whose mail is kept)');
+    }
+    const { stdout } = await runCollector(emailConnector.tool, emailConnector.args(input), {
+      onProgress: input.onProgress,
+      signal: input.signal,
+    });
+    return normaliseCollectorOutput(stdout, emailConnector.id, {
+      target: input.target,
+      limit: input.limit,
+    });
+  },
+};
+
+/**
+ * WeChat chat-history export.
+ *
+ * Mirrai ships no dedicated WeChat collector, so this source reuses
+ * `feishu_parser.py`: it is a generic export parser that understands a JSON
+ * array of `{ sender, content, timestamp }` records (the shape WeChat JSON
+ * exports use) and TXT lines of `时间 发送人：内容`. WeChat's native
+ * `发送人(时间)` TXT layout is *not* understood by that tool — the operator
+ * has to convert the export to JSON first.
+ */
+const wechatExportConnector: SourceConnector = {
+  id: "wechat_export",
+  label: "微信导出 / WeChat export",
+  requiresBrowser: false,
+  tool: "feishu_parser.py",
+  credentialKeys: [],
+  args(input: CollectInput): string[] {
+    // No `--format json` here: `feishu_parser.py` is a generic export parser
+    // that does not implement the normalised exit, so the legacy transcript
+    // parsers stay the path for this source.
+    const argv: string[] = [];
+    if (input.options?.file) argv.push("--file", input.options.file);
+    if (input.target) argv.push("--target", input.target);
+    return argv;
+  },
+  async checkAuth(): Promise<CollectorAuthState> {
+    return {
+      ok: true,
+      message: "微信导出解析无需凭据，请在 options.file 中提供导出的 JSON / TXT 文件路径",
+    };
+  },
+  async collect(input: CollectInput): Promise<CollectResult> {
+    if (!input.options?.file) {
+      throw new Error(
+        'Collector "wechat_export" requires options.file (path to the exported chat history)',
+      );
+    }
+    if (!input.target) {
+      throw new Error('Collector "wechat_export" requires a target (the person to keep)');
+    }
+    const { stdout } = await runCollector(
+      wechatExportConnector.tool,
+      wechatExportConnector.args(input),
+      { onProgress: input.onProgress, signal: input.signal },
+    );
+    return normaliseCollectorOutput(stdout, wechatExportConnector.id, {
+      target: input.target,
+      limit: input.limit,
+    });
+  },
+};
+
+/**
+ * Every chat-history source Mirrai can collect from.
+ *
+ * The order is the order the UI is expected to present them in.
+ */
+export const COLLECTOR_SOURCES: SourceConnector[] = [
+  feishuConnector,
+  dingtalkConnector,
+  slackConnector,
+  emailConnector,
+  wechatExportConnector,
+];

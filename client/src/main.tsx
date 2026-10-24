@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { registerServiceWorker } from "@/lib/pwa";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
@@ -84,3 +85,7 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+// The service worker makes the app shell load without a network. It never
+// caches conversations.
+registerServiceWorker();

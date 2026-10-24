@@ -1,0 +1,13 @@
+# Optional extras for the celebrity research flow (skill-engine/tools/research/).
+#
+# These are not needed by the distillation pipeline itself, so they are kept
+# out of requirements.txt to avoid pulling heavy binaries into every install.
+#
+#   pip install -r skill-engine/requirements-research.txt
+
+# Downloader for the subtitle and audio scripts (download_subtitles.sh).
+yt-dlp>=2024.4.9
+
+# Speech-to-text for transcribe_audio.py. `openai-whisper` is a drop-in
+# alternative; faster-whisper is the faster one.
+faster-whisper>=1.0.3

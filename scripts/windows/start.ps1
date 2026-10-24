@@ -210,6 +210,19 @@ listen_addresses = 'localhost'
     }
     Pop-Location
 
+    # `push` only creates the tables — it does not run the hand-written data
+    # migrations (for example mapping the old Chinese intimacy levels onto the
+    # new keys). Those are idempotent SQL files, applied in order.
+    Log "Applying data migrations..."
+    Push-Location $AppDir
+    try {
+        & $NodeBin "scripts\migrate.mjs" 2>&1 |
+            Tee-Object -FilePath (Join-Path $Logs "migrate.log")
+    } catch {
+        Log "Data migration note: $($_.Exception.Message)"
+    }
+    Pop-Location
+
     # ─── Create .env template for user ──────────────────────────────────────
     if (-not (Test-Path $EnvFile)) {
         @"
@@ -250,6 +263,23 @@ OPENAI_API_KEY=
     Start-Process "http://localhost:3000"
 
     Write-Host ""
+
+    # On a fresh install the server creates a local administrator and writes
+    # the credentials here. Show them — otherwise the operator cannot sign in.
+    $CredFile = Join-Path $DataRoot "first-run-credentials.txt"
+    for ($i = 0; $i -lt 10; $i++) {
+        if (Test-Path $CredFile) { break }
+        Start-Sleep -Seconds 1
+    }
+    if (Test-Path $CredFile) {
+        Log "Administrator account created / 管理员账号已生成:"
+        Write-Host ""
+        Get-Content $CredFile | ForEach-Object { Write-Host $_ }
+        Write-Host ""
+        Log "Please change this password after signing in. / 请登录后尽快修改密码。"
+        Write-Host ""
+    }
+
     Log "Mirrai is running at http://localhost:3000"
     Log "Config: $EnvFile"
     Write-Host ""
