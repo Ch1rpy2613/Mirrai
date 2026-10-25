@@ -7,11 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowLeft, Save, Eye, X, Plus, Download, Upload
+  ArrowLeft, Save, Eye, X, Plus, Download, Upload, PauseCircle, PlayCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import PageLoader from "@/components/PageLoader";
+import GraduationModeSelect, {
+  graduationModeNoteKey,
+} from "@/components/GraduationModeSelect";
+import { isPresence, type Presence } from "@shared/graduation-mode";
+import { isReachability, type Reachability } from "@shared/user-side";
+import RelationshipTimeline from "@/components/RelationshipTimeline";
+import LetterBox from "@/components/LetterBox";
 import { useLocale } from "@/contexts/LocaleContext";
+import type { GraduationMode } from "@shared/graduation-mode";
 
 /* The values written to the persona, not display strings — the server stores
    them verbatim. The labels the user sees come from the dictionary. */
@@ -105,6 +113,18 @@ export default function PersonaEdit() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  /* The graduation mode is a setting of its own: it decides whether the
+     app may raise a farewell, and it has to be changeable without touching
+     the rest of the profile. */
+  const graduationModeMutation = trpc.persona.update.useMutation({
+    onSuccess: () => { toast.success(t("graduationMode.saved")); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const graduateMutation = trpc.persona.graduate.useMutation({
+    onSuccess: (data) => { toast.success(t("graduation.sent")); setFarewellLetter(data.farewellLetter); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   /**
    * The correction loop: the user says what is wrong, the model turns it
    * into a patch on the persona fields.
@@ -126,6 +146,14 @@ export default function PersonaEdit() {
     { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
   );
 
+  /* The graduation mode: this persona's own override of the instance-wide
+     default, and the mode that is in effect right now. */
+  const { data: graduation } = trpc.persona.graduationMode.useQuery(
+    { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
+  );
+  /** The mode in effect right now — the persona's own, or the inherited one. */
+  const effectiveGraduationMode: GraduationMode = graduation?.mode ?? "suggest";
+
   const [name, setName] = useState("");
   const [relationshipDesc, setRelationshipDesc] = useState("");
   const [togetherFrom, setTogetherFrom] = useState("");
@@ -145,6 +173,23 @@ export default function PersonaEdit() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [correction, setCorrection] = useState("");
   const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [graduationMode, setGraduationMode] = useState<GraduationMode | "inherit">("inherit");
+  const [presence, setPresence] = useState<Presence>("active");
+  const [reachability, setReachability] = useState<Reachability>("reachable");
+  const [proactiveHours, setProactiveHours] = useState(0);
+  /** How much the persona writes like a person typing. */
+  const [realismLevel, setRealismLevel] = useState(70);
+  const [timezone, setTimezone] = useState("");
+  const [farewellLetter, setFarewellLetter] = useState<string | null>(null);
+
+  /**
+   * The mode that will be in effect once the choice above is saved.
+   *
+   * The button below follows this one rather than the saved value, so it
+   * disappears the moment "off" is picked instead of after the save.
+   */
+  const pendingGraduationMode: GraduationMode =
+    graduationMode === "inherit" ? effectiveGraduationMode : graduationMode;
 
   /* The character card: the persona can be exported as a PNG card other
      tools understand, and such a card can be imported back. */
@@ -190,6 +235,12 @@ export default function PersonaEdit() {
     setTogetherTo(persona.togetherTo || "");
     setLlmProvider((persona as any).llmProvider || "");
     setRemindersEnabled(persona.remindersEnabled !== false);
+    setGraduationMode((persona.graduationMode as GraduationMode) ?? "inherit");
+    setPresence(isPresence(persona.presence) ? persona.presence : "active");
+    setReachability(isReachability(persona.reachability) ? persona.reachability : "reachable");
+    setProactiveHours((persona as any).proactiveFrequencyHours ?? 0);
+    setRealismLevel(((persona.personaData as any)?.realismLevel ?? 70));
+    setTimezone(persona.timezone ?? "");
     const p = (persona.personaData as any) || {};
     setPersonality(p.personality || "");
     setSpeakingStyle(p.speakingStyle || "");
@@ -209,11 +260,16 @@ export default function PersonaEdit() {
     togetherFrom: togetherFrom || undefined, togetherTo: togetherTo || undefined,
     llmProvider: llmProvider || undefined,
     remindersEnabled,
+    presence,
+    reachability,
+    proactiveFrequencyHours: proactiveHours,
+    timezone: timezone || null,
   });
 
   const savePersonaData = () => updateDataMutation.mutate({
     id: personaId,
     personaData: { personality, speakingStyle, catchphrases, nickname, memories,
+      realismLevel,
       attachmentStyle, loveLanguage, conflictStyle, touchingMoments, customInstructions, starterQuestions },
   });
 
@@ -288,10 +344,144 @@ export default function PersonaEdit() {
               className="w-4 h-4 rounded border-border accent-primary" />
             <span className="text-xs text-muted-foreground">{t("personaEdit.remindersEnabled")}</span>
           </label>
+          {/* 「先缓一缓」 — a deliberate action, not a dropdown value.
+              It is the thing a person reaches for on a bad week, and it
+              has to be obvious exactly what it stops and what it does
+              not: the app goes quiet, the conversation does not. */}
+          <div className="rounded-lg border border-border/70 p-3.5 space-y-2.5">
+            <div className="flex items-start gap-2.5">
+              <PauseCircle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-foreground">{t("presence.label")}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                  {t("presence.holdNote")}
+                </p>
+                <ul className="text-xs text-muted-foreground/85 leading-relaxed mt-1.5 space-y-0.5">
+                  <li>· {t("presence.holdStops")}</li>
+                  <li>· {t("presence.holdKeeps")}</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {presence === "quiet" ? (
+                <Button size="sm" variant="outline" className="rounded-md bg-transparent"
+                  onClick={() => { setPresence("active"); updateMutation.mutate({ id: personaId, presence: "active" }); }}>
+                  <PlayCircle className="w-3.5 h-3.5" /> {t("presence.holdBack")}
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" className="rounded-md bg-transparent"
+                  onClick={() => { setPresence("quiet"); updateMutation.mutate({ id: personaId, presence: "quiet" }); }}>
+                  <PauseCircle className="w-3.5 h-3.5" /> {t("presence.hold")}
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("proactive.label")}</Label>
+            <select value={String(proactiveHours)} onChange={e => setProactiveHours(Number(e.target.value))}
+              className={selectClass}>
+              <option value="0">{t("proactive.off")}</option>
+              <option value="24">{t("proactive.daily")}</option>
+              <option value="72">{t("proactive.everyThreeDays")}</option>
+              <option value="168">{t("proactive.weekly")}</option>
+            </select>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("proactive.note")}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("reachability.label")}</Label>
+            <select value={reachability} onChange={e => setReachability(e.target.value as Reachability)}
+              className={selectClass}>
+              <option value="reachable">{t("reachability.reachable")}</option>
+              <option value="unreachable">{t("reachability.unreachable")}</option>
+            </select>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t(reachability === "unreachable" ? "reachability.unreachableNote" : "reachability.reachableNote")}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("personaEdit.timezoneLabel")}</Label>
+            <Input value={timezone} onChange={e => setTimezone(e.target.value)}
+              placeholder={t("personaEdit.timezonePlaceholder")} />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("personaEdit.timezoneNote")}
+            </p>
+          </div>
           <Button size="sm" onClick={saveBasic} disabled={updateMutation.isPending}
             className="rounded-md px-5">
             <Save className="w-3.5 h-3.5" />{updateMutation.isPending ? t("common.saving") : t("personaEdit.saveBasic")}
           </Button>
+        </section>
+
+        {/* The letters. A letter that is kept and never answered, and a
+            letter that is delivered, are two different acts. */}
+        <section className="surface p-5 sm:p-6 space-y-5 animate-fade-in-up">
+          <div>
+            <h2 className="section-title">{t("letters.title")}</h2>
+            <p className="text-muted-foreground text-sm mt-1">{t("letters.note")}</p>
+          </div>
+          <LetterBox personaId={personaId} />
+        </section>
+
+        {/* What actually happened. Without this the persona's sense of the
+            relationship is frozen at whatever the pipeline decided. */}
+        <section className="surface p-5 sm:p-6 space-y-5 animate-fade-in-up">
+          <div>
+            <h2 className="section-title">{t("relationship.title")}</h2>
+            <p className="text-muted-foreground text-sm mt-1">{t("relationship.note")}</p>
+          </div>
+          <RelationshipTimeline personaId={personaId} />
+        </section>
+
+        {/* Graduation mode — how much the app may bring a farewell up. */}
+        <section className="surface p-5 sm:p-6 space-y-5 animate-fade-in-up">
+          <div>
+            <h2 className="section-title">{t("graduationMode.title")}</h2>
+            <p className="text-muted-foreground text-sm mt-1">{t("graduationMode.note")}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("graduationMode.title")}</Label>
+            <GraduationModeSelect
+              value={graduationMode}
+              allowInherit
+              onChange={setGraduationMode}
+            />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {graduationMode === "inherit"
+                ? t("graduationMode.globalNote")
+                : t(graduationModeNoteKey(graduationMode) as any)}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button size="sm" onClick={() => graduationModeMutation.mutate({
+              id: personaId,
+              graduationMode: graduationMode === "inherit" ? null : graduationMode,
+            })}
+              disabled={graduationModeMutation.isPending}
+              className="rounded-md px-5">
+              <Save className="w-3.5 h-3.5" />
+              {graduationModeMutation.isPending ? t("common.saving") : t("common.save")}
+            </Button>
+            {/* In "manual" and "suggest" the user may start the farewell
+                whenever they want; in "off" there is nothing to start. */}
+            {pendingGraduationMode !== "off"
+              && persona.analysisStatus === "ready"
+              && persona.graduationStatus !== "graduated" && (
+              <Button size="sm" variant="outline"
+                onClick={() => graduateMutation.mutate({ id: personaId })}
+                disabled={graduateMutation.isPending}
+                className="rounded-md px-5">
+                {graduateMutation.isPending ? t("graduation.writing") : t("graduationMode.generateLetter")}
+              </Button>
+            )}
+          </div>
+          {farewellLetter && (
+            <div className="surface p-5">
+              <p className="kicker mb-2">{t("graduation.letterKicker", { name: persona.name })}</p>
+              <p className="letter-prose text-foreground/90 text-sm whitespace-pre-wrap">{farewellLetter}</p>
+            </div>
+          )}
         </section>
 
         {/* Persona Data Editor */}
@@ -313,6 +503,27 @@ export default function PersonaEdit() {
                 {promptData.prompt}
               </pre>
             )}
+
+            {/* 真人感 — how much the persona writes like a person
+                typing, rather than like an assistant answering. It was
+                a number in the prompt with no way to reach it. */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                {t("personaEdit.realism")} · {realismLevel}
+              </Label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={realismLevel}
+                onChange={(e) => setRealismLevel(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t("personaEdit.realismHint")}
+              </p>
+            </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">{t("personaEdit.personality")}</Label>

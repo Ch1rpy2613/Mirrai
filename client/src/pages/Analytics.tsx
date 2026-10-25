@@ -46,6 +46,15 @@ export default function Analytics() {
   });
   const emotionChartData = Object.values(emotionByDate);
 
+  // The user's own states. The emotion timeline below is the *persona's*
+  // mood — the two are not the same thing, and the app used to show only
+  // the one that was not about the user at all.
+  const userMoodChartData = (data?.moods || []).map((m: any) => ({
+    date: m.date,
+    mood: m.mood,
+    note: m.note,
+  }));
+
   const hourlyData = Array.from({ length: 24 }, (_, h) => {
     const found = (data?.hourlyDistribution || []).find((r: any) => r.hour === h);
     return { hour: `${h}:00`, count: found ? Number(found.count) : 0 };
@@ -106,8 +115,34 @@ export default function Analytics() {
           </div>
         </ChartCard>
 
+        <ChartCard title={t("analytics.myMoodTrend")}>
+          {userMoodChartData.length > 0 ? (
+            <>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {userMoodChartData.slice().reverse().slice(0, 14).map((m: any) => (
+                  <span
+                    key={m.date}
+                    title={m.note || m.date}
+                    className="inline-flex items-center gap-1 text-[0.625rem] px-2 py-0.5 rounded-md border border-border bg-muted/40 text-muted-foreground"
+                  >
+                    <span className="text-foreground/70">{m.date.slice(5)}</span>
+                    {t(`moodCheckIn.moods.${m.mood}` as any)}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t("analytics.myMoodNote")}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("analytics.myMoodEmpty")}
+            </p>
+          )}
+        </ChartCard>
+
         <div className="grid md:grid-cols-2 gap-6">
-          <ChartCard title={t("analytics.emotionTrend")}>
+          <ChartCard title={t("analytics.personaEmotionTrend")}>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={emotionChartData}>

@@ -25,7 +25,17 @@ import {
 import { toast } from "sonner";
 import { isInstallAvailable, onInstallAvailabilityChange, promptInstall } from "@/lib/pwa";
 import PageLoader from "@/components/PageLoader";
+import GraduationModeSelect, {
+  graduationModeNoteKey,
+} from "@/components/GraduationModeSelect";
+import DistillationModePicker from "@/components/DistillationModePicker";
 import { useLocale } from "@/contexts/LocaleContext";
+import SafetyTransparency from "@/components/SafetyTransparency";
+import type { GraduationMode } from "@shared/graduation-mode";
+import {
+  DEFAULT_DISTILLATION_MODE,
+  type DistillationMode,
+} from "@shared/distillation-modes";
 
 // ─── TAB CONFIG ──────────────────────────────────────────────────────────────
 
@@ -207,10 +217,25 @@ function ProfileTab() {
     onSuccess: () => { toast.success(t("settings.profile.passwordChanged")); setShowPasswordDialog(false); setCurrentPwd(""); setNewPwd(""); setConfirmPwd(""); },
     onError: (e: any) => toast.error(e.message),
   });
+  /* The instance-wide default for the graduation mechanism. A persona may
+     override it, so this is the value the ones that do not override it
+     follow. */
+  const updateGraduationMode = trpc.user.updateGraduationMode.useMutation({
+    onSuccess: () => { toast.success(t("graduationMode.saved")); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  /* Whether the app may read the user's own messages. */
+  const updateTrajectoryAssessment = trpc.user.updateTrajectoryAssessment.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  /* Who the user is, as far as the persona is concerned. */
+  const [addressStyle, setAddressStyle] = useState("");
+  const [boundaries, setBoundaries] = useState("");
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
@@ -222,6 +247,8 @@ function ProfileTab() {
     if (profile) {
       setEditName(profile.name || "");
       setEditEmail(profile.email || "");
+      setAddressStyle(profile.addressStyle || "");
+      setBoundaries(profile.boundaries || "");
     }
   }, [profile]);
 
@@ -311,6 +338,104 @@ function ProfileTab() {
           </div>
         </section>
       )}
+
+      {/* Graduation mode — the instance-wide default */}
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("graduationMode.globalNote")} title={t("graduationMode.globalTitle")} />
+        <div className="space-y-2.5">
+          <GraduationModeSelect
+            value={(profile.graduationMode as GraduationMode) ?? "suggest"}
+            onChange={mode => updateGraduationMode.mutate({ mode: mode as GraduationMode })}
+            disabled={updateGraduationMode.isPending}
+          />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t(graduationModeNoteKey((profile.graduationMode as GraduationMode) ?? "suggest") as any)}
+          </p>
+        </div>
+      </section>
+
+      {/* Who the user is. The persona is a portrait of the other person;
+          it knew nothing about the one in front of it. */}
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("userProfile.note")} title={t("userProfile.title")} />
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("userProfile.addressStyle")}</Label>
+            <Input
+              value={addressStyle}
+              onChange={e => setAddressStyle(e.target.value)}
+              placeholder={t("userProfile.addressStylePlaceholder")}
+              maxLength={64}
+              className="h-9 rounded-md text-sm"
+            />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("userProfile.addressStyleNote")}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("userProfile.boundaries")}</Label>
+            <textarea
+              value={boundaries}
+              onChange={e => setBoundaries(e.target.value)}
+              placeholder={t("userProfile.boundariesPlaceholder")}
+              maxLength={500}
+              rows={3}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary/50 resize-y"
+            />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("userProfile.boundariesNote")}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            className="rounded-md px-5"
+            disabled={updateProfile.isPending}
+            onClick={() => updateProfile.mutate({
+              addressStyle: addressStyle.trim() || null,
+              boundaries: boundaries.trim() || null,
+            })}
+          >
+            {updateProfile.isPending ? t("common.saving") : t("common.save")}
+          </Button>
+        </div>
+      </section>
+
+      {/* What the safety layer noticed. It was recorded and then hidden. */}
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("safetyPanel.note")} title={t("safetyPanel.title")} />
+        <SafetyTransparency />
+      </section>
+
+      {/* The local-first promise, made concrete. */}
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("localFirst.note")} title={t("localFirst.title")} />
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+            <p className="text-xs font-medium text-foreground/80 mb-1.5">
+              {t("consent.settingTitle")}
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("consent.settingBody")}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t("localFirst.trajectoryTitle")}</Label>
+            <select
+              value={(profile.trajectoryAssessment as "auto" | "on" | "off") ?? "auto"}
+              onChange={(e) => updateTrajectoryAssessment.mutate({ setting: e.target.value as any })}
+              disabled={updateTrajectoryAssessment.isPending}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+            >
+              <option value="auto">{t("localFirst.trajectoryAuto")}</option>
+              <option value="on">{t("localFirst.trajectoryOn")}</option>
+              <option value="off">{t("localFirst.trajectoryOff")}</option>
+            </select>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("localFirst.trajectoryNote")}
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Security */}
       <section className="surface p-5 sm:p-6">
@@ -414,6 +539,9 @@ function AISettingsTab() {
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(4096);
   const [contextLimit, setContextLimit] = useState(20);
+  // How many memories go into a turn. It was hardcoded, so a person
+  // whose persona needed to remember more had no way to say so.
+  const [retrievalK, setRetrievalK] = useState(5);
 
   useEffect(() => {
     if (defaultConfig.data?.extraConfig) {
@@ -421,6 +549,7 @@ function AISettingsTab() {
       if (e.temperature != null) setTemperature(e.temperature);
       if (e.maxTokens != null) setMaxTokens(e.maxTokens);
       if (e.contextLimit != null) setContextLimit(e.contextLimit);
+      if (e.retrievalK != null) setRetrievalK(e.retrievalK);
     }
   }, [defaultConfig.data]);
 
@@ -452,8 +581,13 @@ function AISettingsTab() {
             min={256} max={8192} step={256} />
           <SliderField label={t("settings.ai.contextLabel")} value={contextLimit} onChange={setContextLimit}
             min={5} max={50} step={5} unit={t("settings.ai.contextUnit")} />
+          <SliderField label={t("settings.ai.retrievalKLabel")} value={retrievalK} onChange={setRetrievalK}
+            min={1} max={20} step={1} unit={t("settings.ai.retrievalKUnit")} />
+          <p className="text-xs text-muted-foreground leading-relaxed -mt-3">
+            {t("settings.ai.retrievalKNote")}
+          </p>
           <Button size="sm" className="rounded-md px-5"
-            onClick={() => updateExtra.mutate({ extraConfig: { temperature, maxTokens, contextLimit } })}
+            onClick={() => updateExtra.mutate({ extraConfig: { temperature, maxTokens, contextLimit, retrievalK } })}
             disabled={updateExtra.isPending}>
             {updateExtra.isPending ? t("common.saving") : t("settings.ai.saveParams")}
           </Button>
@@ -730,7 +864,12 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
 function WeChatCommandsSection() {
   const { t } = useLocale();
   /* The commands themselves are the protocol — the server matches them verbatim. */
-  const commands = ["/使用 <分身名>", "/分身列表", "/当前分身", "/毕业"];
+  const commands = [
+    t("settings.wechat.commandUse"),
+    t("settings.wechat.commandList"),
+    t("settings.wechat.commandCurrent"),
+    t("settings.wechat.commandGraduate"),
+  ];
   const descs = Array.from(t("settings.wechat.commandDescs"));
 
   return (
@@ -768,6 +907,23 @@ function DataManagementTab() {
       const a = document.createElement("a");
       a.href = url;
       a.download = `mirrai-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(t("settings.data.exportSuccess"));
+    },
+    onError: (e: any) => toast.error(t("settings.data.exportFailed", { message: e.message })),
+  });
+
+  /* The full export: every persona, every memory, every diary, the
+     farewell letter, the relationship events and the user's own moods —
+     in a format that does not need this app. */
+  const exportAll = trpc.chat.exportAll.useMutation({
+    onSuccess: (data) => {
+      const blob = new Blob([data.content], { type: data.mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.fileName;
       a.click();
       URL.revokeObjectURL(url);
       toast.success(t("settings.data.exportSuccess"));
@@ -832,12 +988,20 @@ function DataManagementTab() {
         <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
           {t("settings.data.exportDescription")}
         </p>
-        <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
-          onClick={() => exportData.mutate()}
-          disabled={exportData.isPending}>
-          <Download className="w-3.5 h-3.5" />
-          {exportData.isPending ? t("settings.data.exporting") : t("settings.data.exportAll")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
+            onClick={() => exportAll.mutate({ format: "json" })}
+            disabled={exportAll.isPending}>
+            <Download className="w-3.5 h-3.5" />
+            {exportAll.isPending ? t("settings.data.exporting") : t("settings.data.exportJson")}
+          </Button>
+          <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent"
+            onClick={() => exportAll.mutate({ format: "markdown" })}
+            disabled={exportAll.isPending}>
+            <Download className="w-3.5 h-3.5" />
+            {t("settings.data.exportMarkdown")}
+          </Button>
+        </div>
       </section>
 
       {/* Install */}
@@ -1122,23 +1286,23 @@ function DataSourcesTab() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   /**
-   * Which kind of persona the collected material is distilled into.
+   * The distillation preset the collected material is distilled with.
    *
-   * The family decides which prompts run: a colleague has a work dimension,
-   * a public figure has a research flow, a relationship has neither.
+   * The same preset the upload page offers — one vocabulary for the two
+   * places where a persona is built.
    */
-  const [characterFamily, setCharacterFamily] = useState<
-    "relationship" | "colleague" | "celebrity"
-  >("relationship");
-  const [researchProfile, setResearchProfile] = useState<
-    "budget-friendly" | "budget-unfriendly"
-  >("budget-unfriendly");
+  const [mode, setMode] = useState<DistillationMode>(DEFAULT_DISTILLATION_MODE);
 
   const startPipeline = trpc.skillEngine.startPipeline.useMutation({
     onSuccess: () => {
       toast.success(t("settings.sources.importStarted"));
       jobs.refetch();
     },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  /** Keeps the persona's remembered preset in step with the picker. */
+  const saveModeMutation = trpc.persona.update.useMutation({
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -1157,6 +1321,14 @@ function DataSourcesTab() {
   const allCredentialsFilled =
     credentialKeys.length > 0 && credentialKeys.every(key => (credentials[key] ?? "").trim().length > 0);
   const personaList = personas.data ?? [];
+  const selectedPersona = personaList.find(p => String(p.id) === personaId);
+
+  // The persona remembers the preset it was built with, so the picker
+  // starts from that rather than from the default.
+  useEffect(() => {
+    const saved = selectedPersona?.distillationMode;
+    if (saved) setMode(saved as DistillationMode);
+  }, [selectedPersona?.id, selectedPersona?.distillationMode]);
 
   function handleStart() {
     if (!sourceId || !personaId) return;
@@ -1353,39 +1525,19 @@ function DataSourcesTab() {
               become the material the persona is distilled from. */}
           <div className="mt-4 pt-4 border-t border-border space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("settings.sources.familyLabel")}</Label>
-              <Select
-                value={characterFamily}
-                onValueChange={v => setCharacterFamily(v as typeof characterFamily)}
-              >
-                <SelectTrigger className="h-9 rounded-md text-sm w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="relationship">{t("settings.sources.family.relationship")}</SelectItem>
-                  <SelectItem value="colleague">{t("settings.sources.family.colleague")}</SelectItem>
-                  <SelectItem value="celebrity">{t("settings.sources.family.celebrity")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs text-muted-foreground">{t("distillation.title")}</Label>
+              <DistillationModePicker
+                value={mode}
+                onChange={next => {
+                  setMode(next);
+                  // The preset is remembered on the persona, so a re-run
+                  // keeps the same choice.
+                  if (personaId) {
+                    saveModeMutation.mutate({ id: Number(personaId), distillationMode: next });
+                  }
+                }}
+              />
             </div>
-
-            {characterFamily === "celebrity" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">{t("settings.sources.researchProfileLabel")}</Label>
-                <Select
-                  value={researchProfile}
-                  onValueChange={v => setResearchProfile(v as typeof researchProfile)}
-                >
-                  <SelectTrigger className="h-9 rounded-md text-sm w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="budget-friendly">{t("settings.sources.researchProfile.budget-friendly")}</SelectItem>
-                    <SelectItem value="budget-unfriendly">{t("settings.sources.researchProfile.budget-unfriendly")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
 
             <Button
               size="sm"
@@ -1394,8 +1546,7 @@ function DataSourcesTab() {
               onClick={() =>
                 startPipeline.mutate({
                   personaId: Number(personaId),
-                  characterFamily,
-                  ...(characterFamily === "celebrity" ? { researchProfile } : {}),
+                  mode,
                 })
               }
             >

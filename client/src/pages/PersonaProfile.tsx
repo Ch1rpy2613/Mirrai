@@ -1,0 +1,205 @@
+import { useLocation, useParams } from "wouter";
+import { motion } from "framer-motion";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocale } from "@/contexts/LocaleContext";
+import { ArrowLeft, Pencil, Heart, Quote, Calendar, Sparkles } from "lucide-react";
+import PageLoader from "@/components/PageLoader";
+import { PersonaAvatar } from "@/components/PersonaAvatar";
+import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
+import { Button } from "@/components/ui/button";
+import { resolveRelationshipPhase } from "@shared/user-side";
+
+/**
+ * What the app has understood.
+ *
+ * The persona was rebuilt from somebody's chat history, and the result
+ * was a set of fields in a form. The user could edit them, but they
+ * could not *read* them as a portrait — and a person who cannot see what
+ * the system thinks of their ex has no way of knowing whether to trust
+ * it.
+ *
+ * This page is that portrait: read-only, honest, and one click from
+ * correcting anything that is wrong.
+ */
+export default function PersonaProfile() {
+  const params = useParams<{ id: string }>();
+  const personaId = parseInt(params.id || "0");
+  const [, navigate] = useLocation();
+  const { isAuthenticated } = useAuth();
+  const { t, locale } = useLocale();
+
+  const { data: persona, isLoading } = trpc.persona.get.useQuery(
+    { id: personaId },
+    { enabled: isAuthenticated && personaId > 0 },
+  );
+  const { data: memories } = trpc.memory.list.useQuery(
+    { personaId },
+    { enabled: isAuthenticated && personaId > 0 },
+  );
+  const { data: eventsData } = trpc.relationship.list.useQuery(
+    { personaId },
+    { enabled: isAuthenticated && personaId > 0 },
+  );
+
+  if (isLoading || !persona) return <PageLoader />;
+
+  const data = (persona.personaData as any) || {};
+  const phase = resolveRelationshipPhase((eventsData?.events ?? []) as any);
+  const memoryItems = memories?.items ?? [];
+  const anchors = memoryItems.filter((m: any) => m.category === "anchor");
+  const milestones = memoryItems.filter((m: any) => m.category !== "anchor");
+
+  const portrait: Array<{ label: string; value: string; icon?: any }> = [];
+  if (data.personality) portrait.push({ label: t("profile.personality"), value: data.personality });
+  if (data.speakingStyle) portrait.push({ label: t("profile.speakingStyle"), value: data.speakingStyle });
+  if (data.attachmentStyle) portrait.push({ label: t("profile.attachmentStyle"), value: data.attachmentStyle });
+  if (data.loveLanguage) portrait.push({ label: t("profile.loveLanguage"), value: data.loveLanguage });
+  if (data.conflictStyle) portrait.push({ label: t("profile.conflictStyle"), value: data.conflictStyle });
+  if (data.memories) portrait.push({ label: t("profile.memories"), value: data.memories });
+  if (data.touchingMoments) portrait.push({ label: t("profile.touchingMoments"), value: data.touchingMoments });
+  if (data.summary) portrait.push({ label: t("profile.summary"), value: data.summary });
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 app-header">
+        <div className="container app-nav">
+          <button onClick={() => navigate(`/chat/${personaId}`)} className="app-nav-back -ml-1 gap-1">
+            <ArrowLeft className="w-4 h-4" /><span className="text-sm">{t("common.back")}</span>
+          </button>
+          <div className="app-nav-divider" />
+          <div className="app-nav-title-group">
+            <div>
+              <p className="kicker">{t("profile.kicker")}</p>
+              <p className="app-nav-title">{persona.name}</p>
+            </div>
+          </div>
+          <div className="app-nav-spacer" />
+          <Button size="sm" variant="ghost" className="rounded-md text-xs" onClick={() => navigate(`/persona/${personaId}/edit`)}>
+            <Pencil className="w-3.5 h-3.5" /> {t("profile.edit")}
+          </Button>
+        </div>
+      </header>
+
+      <main className="container page-main max-w-3xl space-y-6">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="surface p-5 sm:p-6">
+          <div className="flex items-start gap-4">
+            <PersonaAvatar name={persona.name} className="w-16 h-16 rounded-full text-2xl flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-display text-xl font-semibold text-foreground">{persona.name}</h1>
+                <DigitalPersonaBadge />
+              </div>
+              {persona.relationshipDesc && (
+                <p className="text-sm text-muted-foreground mt-1">{persona.relationshipDesc}</p>
+              )}
+              <div className="flex items-center gap-4 flex-wrap mt-3 text-xs text-muted-foreground">
+                {persona.togetherFrom && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {persona.togetherFrom}
+                    {persona.togetherTo ? ` – ${persona.togetherTo}` : ` – ${t("profile.present")}`}
+                  </span>
+                )}
+                {phase && (
+                  <span className="flex items-center gap-1">
+                    <Heart className="w-3 h-3" />
+                    {t(`relationship.kinds.${phase}` as any)}
+                  </span>
+                )}
+                {persona.timezone && (
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> {persona.timezone}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {portrait.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+            className="surface p-5 sm:p-6"
+          >
+            <h2 className="section-title">{t("profile.portrait")}</h2>
+            <p className="text-xs text-muted-foreground mt-1 mb-4 leading-relaxed">
+              {t("profile.portraitNote")}
+            </p>
+            <dl className="space-y-4">
+              {portrait.map((item) => (
+                <div key={item.label}>
+                  <dt className="text-xs font-medium text-foreground/80">{item.label}</dt>
+                  <dd className="text-sm text-muted-foreground mt-1 leading-relaxed">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </motion.section>
+        )}
+
+        {data.catchphrases?.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+            className="surface p-5 sm:p-6"
+          >
+            <h2 className="section-title">{t("profile.catchphrases")}</h2>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {data.catchphrases.map((phrase: string) => (
+                <span key={phrase} className="text-xs px-2.5 py-1 rounded-md border border-border text-muted-foreground">
+                  {phrase}
+                </span>
+              ))}
+            </div>
+          </motion.section>
+        )}
+
+        {anchors.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="surface p-5 sm:p-6"
+          >
+            <h2 className="section-title">{t("profile.anchors")}</h2>
+            <p className="text-xs text-muted-foreground mt-1 mb-4 leading-relaxed">{t("profile.anchorsNote")}</p>
+            <ul className="space-y-2.5">
+              {anchors.map((memory: any) => (
+                <li key={memory.id} className="flex items-start gap-2">
+                  <Quote className="w-3.5 h-3.5 text-primary/60 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-foreground">{memory.title}</p>
+                    {memory.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{memory.description}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </motion.section>
+        )}
+
+        {milestones.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="surface p-5 sm:p-6"
+          >
+            <h2 className="section-title">{t("profile.milestones")}</h2>
+            <ul className="mt-3 space-y-2">
+              {milestones.map((memory: any) => (
+                <li key={memory.id} className="text-sm text-muted-foreground">
+                  {memory.date && <span className="text-xs text-muted-foreground/70 mr-2">{memory.date}</span>}
+                  {memory.title}
+                </li>
+              ))}
+            </ul>
+          </motion.section>
+        )}
+
+        <motion.p
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}
+          className="text-xs text-muted-foreground leading-relaxed text-center"
+        >
+          {t("profile.disclaimer")}
+        </motion.p>
+      </main>
+    </div>
+  );
+}

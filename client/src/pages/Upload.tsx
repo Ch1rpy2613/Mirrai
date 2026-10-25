@@ -6,8 +6,14 @@ import {
   ArrowLeft, Loader2, ChevronRight, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import DistillationModePicker from "@/components/DistillationModePicker";
+import { resolveIntakeGaps } from "@/lib/intake-gaps";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import {
+  DEFAULT_DISTILLATION_MODE,
+  type DistillationMode,
+} from "@shared/distillation-modes";
 
 const ALL_ACCEPT = ".txt,.csv,image/*,video/*";
 
@@ -71,6 +77,31 @@ function ResearchGaps({ personaId }: { personaId: number }) {
   );
 }
 
+/**
+ * What the intake stage said is missing.
+ *
+ * The distillation pipeline starts by taking stock of the material and
+ * naming the gaps — the chats, the photos, the details it would need to
+ * do a better job. That answer is stored on the job, so it can be shown
+ * here: the user learns what to upload next instead of wondering why the
+ * persona came out thin.
+ */
+function IntakeGaps({ inputMeta }: { inputMeta: unknown }) {
+  const { t } = useLocale();
+  const gaps = resolveIntakeGaps(inputMeta);
+  if (!gaps) return null;
+
+  return (
+    <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
+      <p className="text-sm text-foreground mb-1">{t("upload.gapsTitle")}</p>
+      <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{t("upload.gapsNote")}</p>
+      <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed border-l-2 border-border pl-3 py-1">
+        {gaps}
+      </p>
+    </div>
+  );
+}
+
 function detectFileType(file: File): "chat_txt" | "chat_csv" | "image" | "video" {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "txt") return "chat_txt";
@@ -104,6 +135,9 @@ export default function Upload() {
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, "uploading" | "done" | "error">>({});
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /* The distillation preset this run uses. It is remembered on the
+     persona, so a re-run keeps the same choice. */
+  const [mode, setMode] = useState<DistillationMode>(DEFAULT_DISTILLATION_MODE);
 
   const { data: persona, refetch: refetchPersona } = trpc.persona.get.useQuery(
     { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
@@ -152,12 +186,24 @@ export default function Upload() {
     if (analysisStatus?.status === "ready") refetchPersona();
   }, [analysisStatus?.status]);
 
+  // The persona remembers the preset it was built with, so the picker starts
+  // from the last choice rather than from the default.
+  useEffect(() => {
+    const saved = (persona as any)?.distillationMode;
+    if (saved) setMode(saved as DistillationMode);
+  }, [persona?.distillationMode]);
+
   const uploadMutation = trpc.file.upload.useMutation({
     onError: (e) => toast.error(t("upload.uploadError", { message: e.message })),
   });
   const triggerMutation = trpc.persona.triggerAnalysis.useMutation({
     onSuccess: () => { toast.success(t("upload.analysisStarted")); refetchStatus(); },
     onError: (e) => toast.error(t("upload.analysisFailed", { message: e.message })),
+  });
+  /* The preset is remembered on the persona, so a re-run of the
+     distillation keeps the same choice. */
+  const saveModeMutation = trpc.persona.update.useMutation({
+    onError: (e: any) => toast.error(e.message),
   });
 
   const handleFiles = useCallback(async (fileList: FileList) => {
@@ -299,6 +345,11 @@ export default function Upload() {
             failure. */}
         <ResearchGaps personaId={personaId} />
 
+        {/* What the intake stage found missing from the material. It stays
+            visible after the run, because the natural next step is to
+            upload more and run it again. */}
+        <IntakeGaps inputMeta={jobStatus?.inputMeta} />
+
         {/* Drop Zone */}
         <div
           role="button"
@@ -382,12 +433,29 @@ export default function Upload() {
 
         {/* Trigger Analysis */}
         {hasMaterial && !isAnalyzing && !isReady && (
-          <Button className="w-full h-12 rounded-md text-base font-semibold animate-fade-in-up"
-            onClick={() => triggerMutation.mutate({ id: personaId })} disabled={triggerMutation.isPending}>
-            {triggerMutation.isPending
-              ? <><Loader2 className="w-5 h-5 animate-spin" />{t("upload.starting")}</>
-              : <>{t("upload.startAnalysis")}</>}
-          </Button>
+          <>
+            <div className="surface p-5 sm:p-6 mb-4 animate-fade-in-up">
+              <div className="mb-3">
+                <p className="font-display text-base font-semibold text-foreground">{t("distillation.title")}</p>
+                <p className="text-muted-foreground text-sm mt-1 leading-relaxed">{t("distillation.note")}</p>
+              </div>
+              <DistillationModePicker
+                value={mode}
+                onChange={next => {
+                  setMode(next);
+                  saveModeMutation.mutate({ id: personaId, distillationMode: next });
+                }}
+                disabled={triggerMutation.isPending}
+              />
+            </div>
+            <Button className="w-full h-12 rounded-md text-base font-semibold animate-fade-in-up"
+              onClick={() => triggerMutation.mutate({ id: personaId, mode })}
+              disabled={triggerMutation.isPending}>
+              {triggerMutation.isPending
+                ? <><Loader2 className="w-5 h-5 animate-spin" />{t("upload.starting")}</>
+                : <>{t("upload.startAnalysis")}</>}
+            </Button>
+          </>
         )}
 
         {/* Tips */}

@@ -7,12 +7,16 @@ import PageLoader from "./components/PageLoader";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LocaleProvider } from "./contexts/LocaleContext";
 import HomePage from "./pages/HomePage";
+import TimezoneSync from "./components/TimezoneSync";
+import CommandPalette from "./components/CommandPalette";
 
 const Login = lazy(() => import("./pages/Login"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Diary = lazy(() => import("./pages/Diary"));
 const PersonaEdit = lazy(() => import("./pages/PersonaEdit"));
+const PersonaProfile = lazy(() => import("./pages/PersonaProfile"));
+const Graduation = lazy(() => import("./pages/Graduation"));
 const Upload = lazy(() => import("./pages/Upload"));
 const Chat = lazy(() => import("./pages/Chat"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -31,6 +35,8 @@ function Router() {
         <Route path="/analytics" component={Analytics} />
         <Route path="/diary" component={Diary} />
         <Route path="/persona/:id/edit" component={PersonaEdit} />
+        <Route path="/persona/:id/profile" component={PersonaProfile} />
+        <Route path="/persona/:id/graduation" component={Graduation} />
         <Route path="/upload/:id" component={Upload} />
         <Route path="/chat/:id" component={Chat} />
         <Route path="/404" component={NotFound} />
@@ -47,6 +53,8 @@ function App() {
         <LocaleProvider>
           <TooltipProvider>
             <Toaster />
+            <TimezoneSync />
+            <CommandPalette />
             <Router />
           </TooltipProvider>
         </LocaleProvider>

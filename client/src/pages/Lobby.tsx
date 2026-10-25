@@ -15,7 +15,7 @@ import {
   GraduationCap, Sunrise, Sun, Moon, CloudSun, Sunset,
   Handshake, HeartHandshake,
   Cloud, Waves, Tornado, Trophy, Gem, Sprout, Medal, MessagesSquare,
-  Library, Lock, Drama, Shield, X,
+  Library, Lock, Drama, Shield, X, Pin, ChevronDown, CheckSquare, Square, PauseCircle,
 } from "lucide-react";
 import { Wordmark } from "@/components/Wordmark";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import MoodCheckIn from "@/components/MoodCheckIn";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeIntimacyLevel } from "@shared/intimacy";
@@ -299,7 +300,7 @@ function StatCell({ value, label }: { value: string | number; label: string }) {
 function TodayRecommendation({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
   const { t, locale } = useLocale();
   const recommended = useMemo(() => {
-    const ready = personas.filter((p: any) => p.analysisStatus === "ready");
+    const ready = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
     if (ready.length === 0) return null;
     return ready.sort((a, b) => {
       const aTime = a.lastChatAt ? new Date(a.lastChatAt).getTime() : 0;
@@ -405,7 +406,7 @@ function RemindersPanel({ personas }: { personas: any[] }) {
 function DailyMessages({ personas }: { personas: any[] }) {
   const { t } = useLocale();
   const messages = useMemo(() => {
-    const ready = personas.filter((p: any) => p.analysisStatus === "ready");
+    const ready = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
     if (ready.length === 0) return [];
     const today = new Date().getDate();
     const greetings = Array.from(t("lobby.daily.greetings"));
@@ -641,7 +642,7 @@ function ChatStreak() {
 
 function ConversationStarters({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
   const { t } = useLocale();
-  const ready = personas.filter((p: any) => p.analysisStatus === "ready");
+  const ready = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
   const questions = useMemo(() => Array.from(t("lobby.starters.questions")), [t]);
   const [starterIdx, setStarterIdx] = useState(() => Math.floor(Math.random() * questions.length));
 
@@ -694,7 +695,7 @@ function ConversationStarters({ personas, onChat }: { personas: any[]; onChat: (
 
 function PersonaConstellation({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
   const { t } = useLocale();
-  const ready = personas.filter((p: any) => p.analysisStatus === "ready");
+  const ready = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
   if (ready.length < 2) return null;
 
   const cx = 140, cy = 90;
@@ -840,8 +841,13 @@ function PersonaLeaderboard({ personas }: { personas: any[] }) {
 
 // ─── PERSONA CARD ────────────────────────────────────────────────────────────
 
-function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
+function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin, selectable, selected, onToggleSelect }: {
   persona: any; onChat: () => void; onUpload: () => void; onEdit: () => void; onDelete: () => void;
+  onTogglePin?: () => void;
+  /** The bulk selection. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const { t, locale } = useLocale();
   const status = STATUS_CONFIG[persona.analysisStatus] || STATUS_CONFIG.pending;
@@ -867,12 +873,39 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
   });
 
   return (
-    <div className={`surface surface-interactive p-5 animate-fade-in-up ${isGraduated ? "opacity-80" : ""}`}>
+    <div className={`surface surface-interactive p-5 animate-fade-in-up relative ${isGraduated ? "opacity-80" : ""}`}>
+      {selectable && (
+        <button
+          onClick={onToggleSelect}
+          aria-label={t("lobby.directory.select")}
+          className="absolute top-3 right-3 z-10 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {selected
+            ? <CheckSquare className="w-4 h-4 text-cinnabar" />
+            : <Square className="w-4 h-4" />}
+        </button>
+      )}
       {(isGraduated || (!isGraduated && milestone && MilestoneIcon) || missLevel) && (
         <div className="flex flex-wrap gap-1.5 mb-3">
           {isGraduated && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium text-mood-melancholy bg-mood-melancholy/10 border-mood-melancholy/30">
               <GraduationCap className="w-3 h-3" /> {t("lobby.card.dormant")}
+            </span>
+          )}
+          {/* A paused persona says so. Silence with no explanation looks
+              like a bug. */}
+          {!isGraduated && persona.presence === "quiet" && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium text-muted-foreground bg-muted/60 border-border">
+              <PauseCircle className="w-3 h-3" /> {t("presence.quiet")}
+            </span>
+          )}
+          {/* Why it is quiet. A persona that has gone silent without a
+              word looks like a bug, and the one thing it must not be
+              mistaken for is a breakup. */}
+          {!isGraduated && persona.reachability === "unreachable" && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium text-mood-distant bg-mood-distant/10 border-mood-distant/30"
+              title={t("lobby.card.unreachableNote")}>
+              <CloudSun className="w-3 h-3" /> {t("lobby.card.unreachable")}
             </span>
           )}
           {!isGraduated && milestone && MilestoneIcon && (
@@ -886,6 +919,12 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
             </span>
           )}
         </div>
+      )}
+
+      {!isGraduated && persona.reachability === "unreachable" && (
+        <p className="text-xs text-mood-distant/90 mb-3 leading-relaxed">
+          {t("lobby.card.unreachableLine")}
+        </p>
       )}
 
       {anniversary !== null && anniversary <= 30 && (
@@ -917,6 +956,11 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
             <span className={`inline-flex items-center gap-1 text-[0.6875rem] px-2 py-0.5 rounded-md border ${emotion.chip}`}>
               <EmotionIcon className="w-3 h-3" /> {t(emotion.labelKey)}
             </span>
+            {persona.isPinned && (
+              <span className="inline-flex items-center gap-1 text-[0.6875rem] px-1.5 py-0.5 rounded-md border border-mood-warm/30 bg-mood-warm/10 text-mood-warm">
+                <Pin className="w-2.5 h-2.5" /> {t("lobby.card.pinned")}
+              </span>
+            )}
           </div>
           <p className="text-muted-foreground text-sm truncate">{persona.relationshipDesc || t("lobby.card.relationship")}</p>
 
@@ -1065,6 +1109,13 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
             <Upload className="w-3.5 h-3.5" />{t("lobby.upload")}
           </Button>
         )}
+        {onTogglePin && (
+          <Button size="sm" variant="ghost" title={t("lobby.card.pin")}
+            className={`rounded-md ${persona.isPinned ? "text-mood-warm hover:text-mood-warm" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={onTogglePin}>
+            <Pin className="w-3.5 h-3.5" />
+          </Button>
+        )}
         <Button size="sm" variant="ghost" title={t("lobby.card.edit")} className="text-muted-foreground hover:text-foreground rounded-md" onClick={onEdit}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
@@ -1110,7 +1161,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete }: {
 
 function QuickChatBar({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
   const { t } = useLocale();
-  const readyPersonas = personas.filter((p: any) => p.analysisStatus === "ready");
+  const readyPersonas = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
   if (readyPersonas.length === 0) return null;
 
   return (
@@ -1252,7 +1303,15 @@ function TipsSection() {
 
 // ─── EMPTY STATE ─────────────────────────────────────────────────────────────
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({
+  onCreate,
+  onTryIt,
+  sandboxPending,
+}: {
+  onCreate: () => void;
+  onTryIt: () => void;
+  sandboxPending: boolean;
+}) {
   const { t } = useLocale();
   const quote = useMemo(() => Array.from(t("lobby.quotes"))[Math.floor(Math.random() * 12)], [t]);
   return (
@@ -1287,11 +1346,26 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         ))}
       </motion.div>
 
-      <motion.div variants={fadeUp}>
+      <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <Button onClick={onCreate} className="rounded-md px-8 h-11 gap-2">
           <Plus className="w-4 h-4" /> {t("lobby.emptyState.create")}
         </Button>
+        {/* The first thing the app asks for is somebody else's chat
+            history, and that is the step most people never get past. So
+            there is a way in that needs nothing at all. */}
+        <Button
+          variant="ghost"
+          onClick={onTryIt}
+          disabled={sandboxPending}
+          className="rounded-md h-11 px-5 gap-2 text-muted-foreground"
+        >
+          <Sparkles className="w-4 h-4" />
+          {sandboxPending ? t("lobby.emptyState.trying") : t("lobby.emptyState.tryIt")}
+        </Button>
       </motion.div>
+      <motion.p variants={fadeUp} className="text-xs text-muted-foreground mt-3 max-w-md leading-relaxed">
+        {t("lobby.emptyState.tryItNote")}
+      </motion.p>
     </motion.div>
   );
 }
@@ -1456,6 +1530,11 @@ export default function Lobby() {
   const [filterTab, setFilterTab] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [showSort, setShowSort] = useState(false);
+  /** The graduated personas are folded away by default. */
+  const [showGraduated, setShowGraduated] = useState(false);
+  /** The bulk selection. */
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
 
   const { data: personas, refetch } = trpc.persona.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -1466,6 +1545,14 @@ export default function Lobby() {
   });
 
   const { data: stats } = trpc.persona.stats.useQuery(undefined, { enabled: isAuthenticated });
+
+  const updateMutation = trpc.persona.update.useMutation({
+    onSuccess: () => { refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const togglePin = (persona: any) => {
+    updateMutation.mutate({ id: persona.id, isPinned: !persona.isPinned });
+  };
 
   const deleteMutation = trpc.persona.delete.useMutation({
     onSuccess: () => { toast.success(t("lobby.deleteDialog.deleted")); setDeleteTarget(null); refetch(); },
@@ -1483,6 +1570,9 @@ export default function Lobby() {
       list = list.filter(p => p.analysisStatus === filterTab);
     }
     list = [...list].sort((a, b) => {
+      // A pinned persona sits at the top whatever the sort is. The person
+      // who pinned it wanted it in front of them.
+      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
       switch (sortBy) {
         case "chats": return (b.chatCount || 0) - (a.chatCount || 0);
         case "name": return a.name.localeCompare(b.name, locale);
@@ -1497,11 +1587,35 @@ export default function Lobby() {
     return list;
   }, [personas, searchQuery, filterTab, sortBy, locale]);
 
+  /** The graduated ones, folded away. */
+  const graduatedPersonas = useMemo(
+    () => filteredPersonas.filter((p: any) => p.graduationStatus === "graduated"),
+    [filteredPersonas],
+  );
+  const livePersonas = useMemo(
+    () => filteredPersonas.filter((p: any) => p.graduationStatus !== "graduated"),
+    [filteredPersonas],
+  );
+
   if (loading) {
     return <PageLoader />;
   }
 
   const hasPersonas = personas && personas.length > 0;
+
+  /* A persona the user can talk to without uploading anything. The first
+     thing the app asks for is somebody else's chat history, and that is
+     the step most people never get past. */
+  const [sandboxPending, setSandboxPending] = useState(false);
+  const createSandbox = trpc.persona.createSandbox.useMutation({
+    onSuccess: (data) => { navigate(`/chat/${data.personaId}`); },
+    onError: (e: any) => { toast.error(e.message); setSandboxPending(false); },
+  });
+  const handleTryIt = () => {
+    if (sandboxPending) return;
+    setSandboxPending(true);
+    createSandbox.mutate({});
+  };
   const readyCount = personas?.filter((p: any) => p.analysisStatus === "ready").length || 0;
   const analyzingCount = personas?.filter((p: any) => p.analysisStatus === "analyzing").length || 0;
 
@@ -1552,6 +1666,16 @@ export default function Lobby() {
 
       <main className="container page-main flex-1">
         <HeroBanner username={user?.username} stats={stats} />
+
+        {/* The user's own state, asked for in the first seconds of the
+            visit. The app knew the persona's mood; it had no way of
+            knowing this. */}
+        <div className="mb-8 surface p-5 sm:p-6 animate-fade-in-up">
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h2 className="section-title">{t("moodCheckIn.title")}</h2>
+          </div>
+          <MoodCheckIn />
+        </div>
 
         {stats && (stats.totalPersonas > 0 || stats.totalChats > 0) && (
           <motion.div
@@ -1614,6 +1738,11 @@ export default function Lobby() {
                         </div>
                       )}
                     </div>
+                    <Button size="sm" variant="outline"
+                      onClick={() => { setSelecting(v => !v); setSelected([]); }}
+                      className="text-xs h-7 px-3 bg-transparent">
+                      <CheckSquare className="w-3 h-3" /> {t("lobby.directory.select")}
+                    </Button>
                     <Button size="sm" onClick={() => setShowCreate(true)}
                       className="text-xs h-7 px-3">
                       <Plus className="w-3 h-3" /> {t("lobby.directory.new")}
@@ -1630,6 +1759,29 @@ export default function Lobby() {
                     placeholder={t("lobby.directory.search")}
                     className="w-full h-10 pl-9 pr-4 text-sm bg-card border border-border rounded-md outline-none focus:border-foreground/40 placeholder:text-muted-foreground/40 transition-colors"
                   />
+                </div>
+              )}
+
+              {/* The bulk bar. Acting on one persona at a time is fine
+                  when there are two of them; with eight it is not. */}
+              {selecting && (
+                <div className="flex items-center gap-2 mb-4 surface px-3 py-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">
+                    {t("lobby.directory.selected", { count: selected.length })}
+                  </span>
+                  <div className="app-nav-spacer" />
+                  <Button size="sm" variant="outline" className="text-xs h-7 px-3 bg-transparent"
+                    disabled={selected.length === 0}
+                    onClick={() => {
+                      selected.forEach(id => updateMutation.mutate({ id, isPinned: true }));
+                      setSelected([]);
+                    }}>
+                    <Pin className="w-3 h-3" /> {t("lobby.directory.pinSelected")}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-xs h-7 px-3"
+                    onClick={() => { setSelecting(false); setSelected([]); }}>
+                    {t("common.cancel")}
+                  </Button>
                 </div>
               )}
 
@@ -1653,12 +1805,18 @@ export default function Lobby() {
               )}
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredPersonas.map((p: any) => (
+                {livePersonas.map((p: any) => (
                   <PersonaCard key={p.id} persona={p}
                     onChat={() => navigate(`/chat/${p.id}`)}
                     onUpload={() => navigate(`/upload/${p.id}`)}
                     onEdit={() => navigate(`/persona/${p.id}/edit`)}
-                    onDelete={() => setDeleteTarget(p)} />
+                    onDelete={() => setDeleteTarget(p)}
+                    onTogglePin={() => togglePin(p)}
+                    selectable={selecting}
+                    selected={selected.includes(p.id)}
+                    onToggleSelect={() => setSelected(prev =>
+                      prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                    )} />
                 ))}
                 {filteredPersonas.length === 0 && searchQuery && (
                   <div className="col-span-full py-8 text-center text-sm text-muted-foreground">
@@ -1671,6 +1829,39 @@ export default function Lobby() {
                   </div>
                 )}
               </div>
+
+              {/* The graduated ones are folded away. They are still
+                  there — the letter, the timeline, the page — but they do
+                  not take up the room of the people you are still
+                  talking to. */}
+              {graduatedPersonas.length > 0 && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => setShowGraduated(v => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showGraduated ? "" : "-rotate-90"}`} />
+                    {t("lobby.directory.graduated", { count: graduatedPersonas.length })}
+                  </button>
+                  {showGraduated && (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-3">
+                      {graduatedPersonas.map((p: any) => (
+                        <PersonaCard key={p.id} persona={p}
+                          onChat={() => navigate(`/chat/${p.id}`)}
+                          onUpload={() => navigate(`/upload/${p.id}`)}
+                          onEdit={() => navigate(`/persona/${p.id}/edit`)}
+                          onDelete={() => setDeleteTarget(p)}
+                          onTogglePin={() => togglePin(p)}
+                          selectable={selecting}
+                          selected={selected.includes(p.id)}
+                          onToggleSelect={() => setSelected(prev =>
+                            prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                          )} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <RecentActivity onNavigate={(id) => navigate(`/chat/${id}`)} />
@@ -1697,7 +1888,11 @@ export default function Lobby() {
             </section>
           </>
         ) : (
-          <EmptyState onCreate={() => setShowCreate(true)} />
+          <EmptyState
+            onCreate={() => setShowCreate(true)}
+            onTryIt={handleTryIt}
+            sandboxPending={sandboxPending}
+          />
         )}
       </main>
 

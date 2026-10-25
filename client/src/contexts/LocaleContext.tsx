@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { trpc } from "@/lib/trpc";
 import {
   translate,
   LOCALE_NAMES,
@@ -31,6 +32,20 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     return (localStorage.getItem("mirrai-locale") as Locale) || "zh";
   });
 
+  /**
+   * Tells the server which language the user reads.
+   *
+   * The interface sends it on every request, but the things the app sends
+   * on its own — a reminder at midnight, a reply in a chat window — have
+   * to know it without being asked.
+   */
+  const setLocaleMutation = trpc.user.setLocale.useMutation({
+    onError: () => {
+      /* the interface language is what matters most; the server will catch
+         up on the next request that carries the header */
+    },
+  });
+
   const setLocale = (l: Locale) => {
     setLocaleState(l);
     localStorage.setItem("mirrai-locale", l);
@@ -38,6 +53,9 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     if (typeof document !== "undefined") {
       document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
     }
+    // The server has to know too: the things it sends on its own — a
+    // reminder at midnight, a reply in a chat window — are not asked.
+    setLocaleMutation.mutate({ locale: l });
   };
 
   const value = useMemo<LocaleContextType>(

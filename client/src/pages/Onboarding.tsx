@@ -30,6 +30,9 @@ export default function Onboarding() {
   const [model, setModel] = useState("");
 
   const [personaName, setPersonaName] = useState("");
+  /* The other person's consent. The product promises it; there was no
+     notice anywhere in the product. */
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [relationshipDesc, setRelationshipDesc] = useState("");
   const [togetherFrom, setTogetherFrom] = useState("");
 
@@ -75,6 +78,10 @@ export default function Onboarding() {
   const handleCreatePersona = async () => {
     if (!personaName.trim()) {
       toast.error(t("onboarding.nameRequired"));
+      return;
+    }
+    if (!consentAccepted) {
+      toast.error(t("consent.mustAccept"));
       return;
     }
     try {
@@ -203,7 +210,26 @@ export default function Onboarding() {
               />
             </div>
 
-            <Button onClick={handleCreatePersona} disabled={createPersona.isPending} className="w-full">
+            {/* The ex's consent. The product document promises it, and
+                there was no notice anywhere in the product. */}
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t("consent.notice")}
+              </p>
+              <label className="flex items-start gap-2 mt-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => setConsentAccepted(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded border-border accent-primary flex-shrink-0"
+                />
+                <span className="text-xs text-foreground/80 leading-relaxed">
+                  {t("consent.accept")}
+                </span>
+              </label>
+            </div>
+
+            <Button onClick={handleCreatePersona} disabled={createPersona.isPending || !consentAccepted} className="w-full">
               {createPersona.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : (

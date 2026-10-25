@@ -17,6 +17,14 @@ export interface StreamDoneInfo {
   emotionalState: string;
   graduationSuggested: boolean;
   /**
+   * The memories that were injected into this turn.
+   *
+   * The retrieval used to be invisible, so the persona could bring up
+   * something from three months ago and the user had no way to know it
+   * had been pulled from the store rather than invented.
+   */
+  recalled?: Array<{ id: number; title: string; subject: string }>;
+  /**
    * A gentle nudge from the safety layer.
    *
    * `textKey` points at a dictionary entry so the wording follows the
@@ -44,6 +52,13 @@ export interface StreamChatOptions {
   message: string;
   /** The interface language — it decides the language of the prompt. */
   locale?: "zh" | "en";
+  /**
+   * The message being replied to.
+   *
+   * Without it every reply is a reply to "whatever came last", and a
+   * long conversation becomes impossible to follow.
+   */
+  replyToId?: number;
   signal?: AbortSignal;
   callbacks: StreamChatCallbacks;
 }
@@ -98,13 +113,13 @@ export function parseFrame(frame: string): { event: string; data: unknown } | nu
  * Sends a message and streams the reply.
  */
 export async function streamChat(options: StreamChatOptions): Promise<void> {
-  const { personaId, message, locale, signal, callbacks } = options;
+  const { personaId, message, locale, replyToId, signal, callbacks } = options;
 
   const response = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ personaId, message, locale }),
+    body: JSON.stringify({ personaId, message, locale, replyToId }),
     signal,
   });
 

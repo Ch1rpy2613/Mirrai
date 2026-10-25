@@ -20,6 +20,66 @@ function placeholders(text: string): string[] {
   return Array.from(text.matchAll(/\{\{(\w+)\}\}/g)).map((m) => m[1]).sort();
 }
 
+/**
+ * The dictionary is not allowed to grow entries nobody reads.
+ *
+ * A key that is written and never used is a promise the interface makes
+ * and does not keep — and the dictionary is the only place a feature can
+ * be "planned" without anybody noticing. The server sends some of these
+ * keys as strings (`textKey: "safety.care.dependency"`), so the search
+ * covers the server too.
+ *
+ * A key reached through a template — `t(`relationship.kinds.${kind}`)` —
+ * cannot be found by a plain search, so the namespaces used that way are
+ * exempt.
+ */
+describe("the dictionary", () => {
+  it("has no entry that nothing reads", () => {
+    const source =
+      collectSource("client/src") +
+      collectSource("server") +
+      collectSource("shared");
+
+    // The namespaces whose keys are reached through a template.
+    const dynamic = new Set<string>();
+    for (const match of source.matchAll(/`([A-Za-z0-9_.]+)\.\$\{/g)) {
+      dynamic.add(match[1]);
+    }
+
+    const dead: string[] = [];
+    for (const key of leaves(zh)) {
+      if (source.includes(key)) continue;
+      if ([...dynamic].some((prefix) => key.startsWith(prefix + "."))) continue;
+      // The leaf name on its own is enough: `t("save")` is not how the
+      // interface works, but a leaf used in a template would be caught by
+      // the namespace rule above.
+      dead.push(key);
+    }
+
+    expect(dead).toEqual([]);
+  });
+});
+
+/** Every source file under a directory, as one string. */
+function collectSource(dir: string): string {
+  const { readdirSync, statSync, readFileSync } = require("fs") as typeof import("fs");
+  const { join } = require("path") as typeof import("path");
+  let out = "";
+  const walk = (path: string) => {
+    for (const name of readdirSync(path)) {
+      const full = join(path, name);
+      if (statSync(full).isDirectory()) {
+        if (name === "i18n" || name === "node_modules") continue;
+        walk(full);
+      } else if (/\.(ts|tsx)$/.test(name)) {
+        out += readFileSync(full, "utf8");
+      }
+    }
+  };
+  walk(dir);
+  return out;
+}
+
 describe("the dictionaries", () => {
   it("have the same keys in both languages", () => {
     const zhKeys = leaves(zh).sort();

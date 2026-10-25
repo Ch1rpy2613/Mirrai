@@ -69,8 +69,17 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        // The server's own words — the errors, the notices — have to be in
+        // the language of the person reading them. The client says which
+        // language that is.
+        const headers = new Headers(init?.headers ?? {});
+        const locale = typeof localStorage !== "undefined"
+          ? localStorage.getItem("mirrai-locale")
+          : null;
+        headers.set("x-mirrai-locale", locale === "en" ? "en" : "zh");
         return globalThis.fetch(input, {
           ...(init ?? {}),
+          headers,
           credentials: "include",
         });
       },

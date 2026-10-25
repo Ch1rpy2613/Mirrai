@@ -5,6 +5,10 @@
  * dictionary entry, so the wording follows the interface language. The
  * Chinese text the server sends along is the fallback for a client whose
  * dictionary does not know the key yet.
+ *
+ * The note itself is appended to the persona's reply by the server — it is
+ * the persona saying it, in its own voice. What the interface adds on top
+ * is the banner.
  */
 
 export interface CareNote {
@@ -17,20 +21,22 @@ export interface CareNote {
 type Translate = (key: any, params?: any) => string;
 
 /**
- * The text to show for a care note.
+ * The banner to show for a care note.
  *
- * The dictionary lookup can miss — a key the client does not have, or a
- * server that is newer than the client. In that case the server's own text
- * is better than nothing.
+ * The note itself is appended to the persona's reply — it is the persona
+ * saying it, in its own voice. The banner is the *app* saying it, and it is
+ * a different sentence: showing the note in both places meant the user read
+ * the same line twice, once as a message and once as a toast.
+ *
+ * An empty string means "no banner": either the note did not ask for one,
+ * or the client does not know the banner's wording.
  */
-export function careNoteText(
+export function careBannerText(
   note: CareNote | null | undefined,
   t: Translate,
 ): string {
-  if (!note) return "";
-  if (note.textKey) {
-    const translated = t(note.textKey);
-    if (translated && translated !== note.textKey) return translated;
-  }
-  return note.text;
+  if (!note?.showBanner) return "";
+  const translated = t("safety.usageBanner");
+  if (translated && translated !== "safety.usageBanner") return translated;
+  return "";
 }

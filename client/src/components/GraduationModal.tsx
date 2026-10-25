@@ -4,16 +4,25 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useLocation } from "wouter";
+import { declinesOnCancel } from "@/lib/graduation-action";
 
 interface Props {
   personaId: number;
   personaName: string;
   open: boolean;
   onClose: () => void;
+  /**
+   * "suggest" is the app offering a farewell; "manual" is the user asking
+   * for one. The copy differs, because in the manual case nobody is being
+   * told anything they did not already know.
+   */
+  variant?: "suggest" | "manual";
 }
 
-export default function GraduationModal({ personaId, personaName, open, onClose }: Props) {
+export default function GraduationModal({ personaId, personaName, open, onClose, variant = "suggest" }: Props) {
   const { t } = useLocale();
+  const [, navigate] = useLocation();
   const [phase, setPhase] = useState<"suggest" | "letter">("suggest");
   const [letter, setLetter] = useState("");
 
@@ -41,7 +50,9 @@ export default function GraduationModal({ personaId, personaName, open, onClose 
         className="relative bg-card border border-border rounded-lg w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in"
       >
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h3 className="card-title">{t("graduation.moment")}</h3>
+          <h3 className="card-title">
+            {variant === "manual" ? t("graduation.manualMoment") : t("graduation.moment")}
+          </h3>
           <button onClick={onClose} className="app-nav-icon" aria-label={t("common.close")}>
             <X className="w-4 h-4" />
           </button>
@@ -52,22 +63,36 @@ export default function GraduationModal({ personaId, personaName, open, onClose 
             <div className="space-y-5">
               <div>
                 <p className="font-sans text-base font-semibold text-foreground mb-2.5">
-                  {t("graduation.soulmate", { name: personaName })}
+                  {variant === "manual"
+                    ? t("graduation.manualMoment")
+                    : t("graduation.soulmate", { name: personaName })}
                 </p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  {t("graduation.farewellIntro")}
-                  {t("graduation.farewellBody", { name: personaName })}
+                  {variant === "manual"
+                    ? t("graduation.manualBody", { name: personaName })
+                    : t("graduation.farewellIntro") + t("graduation.farewellBody", { name: personaName })}
                 </p>
               </div>
               <hr className="rule" />
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 rounded-md bg-transparent" onClick={() => declineMutation.mutate({ id: personaId })}
+                {/* In the manual flow the user is not declining a
+                    suggestion — they are simply changing their mind about
+                    writing the letter. Marking the persona as "declined"
+                    here would close the door the manual mode is meant to
+                    keep open. */}
+                <Button variant="outline" className="flex-1 rounded-md bg-transparent"
+                  onClick={() => {
+                    if (!declinesOnCancel(variant)) { onClose(); return; }
+                    declineMutation.mutate({ id: personaId });
+                  }}
                   disabled={declineMutation.isPending}>
-                  {t("graduation.keepCompanionship")}
+                  {variant === "manual" ? t("graduation.manualCancel") : t("graduation.keepCompanionship")}
                 </Button>
                 <Button className="flex-1 rounded-md" onClick={() => graduateMutation.mutate({ id: personaId })}
                   disabled={graduateMutation.isPending}>
-                  {graduateMutation.isPending ? t("graduation.writing") : t("graduation.begin")}
+                  {graduateMutation.isPending
+                    ? t("graduation.writing")
+                    : variant === "manual" ? t("graduation.manualBegin") : t("graduation.begin")}
                 </Button>
               </div>
             </div>
@@ -85,6 +110,13 @@ export default function GraduationModal({ personaId, personaName, open, onClose 
               <p className="text-xs text-muted-foreground text-center leading-relaxed">
                 {t("graduation.letterSaved", { name: personaName })}
               </p>
+              {/* The letter is the beginning of something, not the end of
+                  it. The page holds the timeline, the moments and the
+                  diaries — and it stays there afterwards. */}
+              <Button variant="outline" className="w-full rounded-md bg-transparent"
+                onClick={() => { onClose(); navigate(`/persona/${personaId}/graduation`); }}>
+                {t("graduation.openPage")}
+              </Button>
               <Button className="w-full rounded-md" onClick={onClose}>
                 {t("graduation.goodbye")}
               </Button>
