@@ -29,6 +29,7 @@ function candidate(overrides: Partial<MemoryCandidate> = {}): MemoryCandidate {
     description: "在图书馆门口，她迟到了",
     category: "memory",
     date: "2019-05-20",
+    subject: "them",
     isPinned: false,
     importance: 1,
     lastRecalledAt: null,

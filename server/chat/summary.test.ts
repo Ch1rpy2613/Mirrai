@@ -18,6 +18,14 @@ const getLatestChatSummary = vi.fn();
 const createChatSummary = vi.fn();
 const getDefaultLlmConfig = vi.fn();
 const touchMemoryRecalled = vi.fn();
+const getUserTimezone = vi.fn();
+const getUserById = vi.fn();
+const getRecentUserMood = vi.fn();
+const getRelationshipEvents = vi.fn();
+getUserTimezone.mockResolvedValue(null);
+    getUserById.mockResolvedValue(null);
+    getRecentUserMood.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
 
 vi.mock("../db", () => ({
   getMessagesByPersonaId: (...a: unknown[]) => getMessagesByPersonaId(...a),
@@ -27,6 +35,10 @@ vi.mock("../db", () => ({
   createChatSummary: (...a: unknown[]) => createChatSummary(...a),
   getDefaultLlmConfig: (...a: unknown[]) => getDefaultLlmConfig(...a),
   touchMemoryRecalled: (...a: unknown[]) => touchMemoryRecalled(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
+  getUserById: (...a: unknown[]) => getUserById(...a),
+  getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
+  getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
 }));
 
 const invoke = vi.fn();
@@ -139,7 +151,7 @@ describe("composeMessages — history compaction", () => {
   it("does not summarise a short history", async () => {
     getMessagesByPersonaId.mockResolvedValue(history(5));
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",
@@ -154,7 +166,7 @@ describe("composeMessages — history compaction", () => {
   it("summarises a long history and puts the summary in the system prompt", async () => {
     getMessagesByPersonaId.mockResolvedValue(history(30));
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",
@@ -172,7 +184,7 @@ describe("composeMessages — history compaction", () => {
     getMessagesByPersonaId.mockResolvedValue(history(30));
     invokeWithProvider.mockRejectedValue(new Error("upstream exploded"));
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",
@@ -192,7 +204,7 @@ describe("composeMessages — history compaction", () => {
     getMessagesByPersonaId.mockResolvedValue(history(30));
     resolveProviderForUser.mockRejectedValue(new Error("no provider configured"));
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",
@@ -208,7 +220,7 @@ describe("composeMessages — history compaction", () => {
     getMessagesByPersonaId.mockResolvedValue(history(30));
     invokeWithProvider.mockResolvedValue("   ");
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",
@@ -234,7 +246,7 @@ describe("composeMessages — history compaction", () => {
       createdAt: new Date(NOW.getTime() - 60 * 60 * 1000),
     });
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",
@@ -261,7 +273,7 @@ describe("composeMessages — history compaction", () => {
       createdAt: new Date(NOW.getTime() - 60 * 60 * 1000),
     });
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",

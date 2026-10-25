@@ -25,6 +25,14 @@ const createSafetyEvent = vi.fn();
 const getLastMessageAt = vi.fn();
 const getMessageCountSince = vi.fn();
 const getDailyChatCounts = vi.fn();
+const getSessionStartAt = vi.fn();
+const getUserMessageCountSince = vi.fn();
+const getUserMessageCountForPersonaSince = vi.fn();
+const getDailyUserChatCounts = vi.fn();
+const getUserTimezone = vi.fn();
+const getUserById = vi.fn();
+const getRecentUserMood = vi.fn();
+const getRelationshipEvents = vi.fn();
 
 vi.mock("../db", () => ({
   createMessage: (...a: unknown[]) => createMessage(...a),
@@ -52,6 +60,14 @@ vi.mock("../db", () => ({
   getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
   getMessageCountSince: (...a: unknown[]) => getMessageCountSince(...a),
   getDailyChatCounts: (...a: unknown[]) => getDailyChatCounts(...a),
+  getSessionStartAt: (...a: unknown[]) => getSessionStartAt(...a),
+  getUserMessageCountSince: (...a: unknown[]) => getUserMessageCountSince(...a),
+  getUserMessageCountForPersonaSince: (...a: unknown[]) => getUserMessageCountForPersonaSince(...a),
+  getDailyUserChatCounts: (...a: unknown[]) => getDailyUserChatCounts(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
+  getUserById: (...a: unknown[]) => getUserById(...a),
+  getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
+  getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
 }));
 
 const invoke = vi.fn();
@@ -96,6 +112,7 @@ function persona(overrides: Record<string, unknown> = {}) {
     graduationStatus: null,
     llmProvider: null,
     activeSceneId: null,
+    presence: "active",
     ...overrides,
   } as any;
 }
@@ -109,7 +126,9 @@ describe("runConversation", () => {
       getLatestChatSummary, createChatSummary, getRecentEmotionTrend,
       getMessageCountInRange, setGraduationStatus, getLatestGraduationAssessment,
       createGraduationAssessment, getMessagesSince, touchMemoryRecalled, createSafetyEvent,
-      getLastMessageAt, getMessageCountSince, getDailyChatCounts, invoke, invokeWithProvider,
+      getLastMessageAt, getMessageCountSince, getDailyChatCounts,
+      getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts,
+      invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, inferEmotionalState,
     ]) {
       fn.mockReset();
@@ -134,6 +153,14 @@ describe("runConversation", () => {
     getLastMessageAt.mockResolvedValue(new Date());
     getMessageCountSince.mockResolvedValue(1);
     getDailyChatCounts.mockResolvedValue([]);
+    getSessionStartAt.mockResolvedValue(new Date());
+    getUserTimezone.mockResolvedValue(null);
+    getUserById.mockResolvedValue(null);
+    getRecentUserMood.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
+    getUserMessageCountSince.mockResolvedValue(1);
+    getUserMessageCountForPersonaSince.mockResolvedValue(1);
+    getDailyUserChatCounts.mockResolvedValue([]);
     createMessage.mockResolvedValue(99);
     createSafetyEvent.mockResolvedValue(1);
     touchMemoryRecalled.mockResolvedValue(undefined);
@@ -272,15 +299,13 @@ describe("runConversation", () => {
     expect(inferEmotionalState.mock.calls[0][0].providerInstance).toBe(providerInstance);
   });
 
-  it("measures the conversation length against the message before this turn", async () => {
+  it("measures the conversation length from the start of the session", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    // The database returns the newest message — once this turn is stored that
-    // is the turn itself, which would make the session length zero.
-    getLastMessageAt.mockImplementation(async () =>
-      createMessage.mock.calls.length > 0
-        ? now
-        : new Date(now.getTime() - 3 * 60 * 60 * 1000),
-    );
+    // The conversation began three hours ago and has not paused. The old
+    // measurement was the gap before the newest message, so it fired for a
+    // user who came back after a break and stayed quiet for a five-hour
+    // conversation.
+    getSessionStartAt.mockResolvedValue(new Date(now.getTime() - 3 * 60 * 60 * 1000));
 
     const events = [];
     for await (const event of runConversation({
@@ -295,15 +320,67 @@ describe("runConversation", () => {
 
     const done = events.find((e) => e.type === "done");
     expect(done?.careNote?.kind).toBe("long_session");
-    // The timestamp was read before the turn was stored.
-    expect(getLastMessageAt.mock.invocationCallOrder[0]).toBeLessThan(
-      createMessage.mock.invocationCallOrder[0],
-    );
+  });
+
+  it("refuses to talk to a persona that has graduated", async () => {
+    // The graduation used to be a badge: the app announced the anniversary
+    // of a relationship the user had ended and still let them talk to it.
+    await expect(
+      (async () => {
+        for await (const _ of runConversation({
+          persona: persona({ graduationStatus: "graduated" }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+        })) {
+          // Drain the generator.
+        }
+      })(),
+    ).rejects.toThrow(/毕业/);
+  });
+
+  it("still talks to a persona the user asked to be left alone", async () => {
+    // "Quiet" silences the app, it does not lock the user out.
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({ presence: "quiet" }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    expect(events.some((e) => e.type === "done")).toBe(true);
+  });
+
+  it("mentions a worsening trajectory once, in the persona's own voice", async () => {
+    // The trajectory used to be assessed, stored, and then ignored — only
+    // its "improving" half was ever read.
+    getLatestGraduationAssessment.mockResolvedValue({
+      createdAt: new Date(),
+      trajectory: "worsening",
+    });
+
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "我最近不太好",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    const done = events.find((e) => e.type === "done");
+    expect(done?.type).toBe("done");
+    const stored = createMessage.mock.calls.find((c) => c[0].role === "assistant");
+    expect(stored?.[0].content).toContain("我确实看见了");
   });
 
   it("gives the care note a translation key and the client's language", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    getLastMessageAt.mockResolvedValue(new Date(now.getTime() - 3 * 60 * 60 * 1000));
+    getSessionStartAt.mockResolvedValue(new Date(now.getTime() - 3 * 60 * 60 * 1000));
 
     const events = [];
     for await (const event of runConversation({
@@ -438,7 +515,7 @@ describe("composeMessages", () => {
   });
 
   it("puts the system prompt first", async () => {
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",
@@ -468,7 +545,7 @@ describe("composeMessages", () => {
       },
     ]);
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "你还记得图书馆吗",
@@ -525,7 +602,7 @@ describe("composeMessages", () => {
       },
     ]);
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "看这个",
@@ -552,7 +629,7 @@ describe("composeMessages", () => {
       },
     ]);
 
-    const messages = await composeMessages({
+    const { messages } = await composeMessages({
       persona: persona(),
       userId: 1,
       userMessage: "在吗",

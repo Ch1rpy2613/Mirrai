@@ -1,186 +1,70 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  ArrowLeft, Send, ChevronDown, Trash2, MoreVertical, Loader2,
-  Plus, Image, Mic, X, Play, Pause, Clock, BarChart3, Search, BookOpen, Theater,
-  Volume2, Download, Check,
+  ArrowLeft, Send, ChevronDown, Trash2, MoreVertical,
+  Plus, Image, Mic, X, Clock, BarChart3, Search, BookOpen, Theater,
+  Download, Check, HeartCrack, Pin, UserRound, Moon, CornerUpLeft,
 } from "lucide-react";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
+import { MessageBubble, emotionOf, type Message } from "@/components/MessageBubble";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
 import GraduationModal from "@/components/GraduationModal";
 import { streamChat, isStreamingUnsupported } from "@/lib/chat-stream";
-import { careNoteText } from "@/lib/care-note";
+import { careBannerText } from "@/lib/care-note";
+import { resolveStarterQuestions } from "@/lib/scene-starters";
 import { useLocale } from "@/contexts/LocaleContext";
-import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
+import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone";
+import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
+import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 
-interface Message {
-  id: number | string;
-  role: "user" | "assistant";
-  content: string;
-  messageType?: "text" | "voice" | "image";
-  mediaUrl?: string | null;
-  mediaDuration?: number | null;
-  emotionalState?: string;
-  channel?: string;
-  createdAt?: Date;
-  isStreaming?: boolean;
-}
 
-/** The state of a message, or `null` when it is not a known state. */
-function emotionOf(state: string | null | undefined): EmotionDefinition | null {
-  return (EMOTIONS as Record<string, EmotionDefinition | undefined>)[state ?? ""] ?? null;
-}
+// ─── MAIN CHAT ────────────────────────────────────────────────────────────────
 
-function VoicePlayer({ url, duration }: { url: string; duration?: number | null }) {
+/**
+ * The crisis card.
+ *
+ * A crisis reply is not an ordinary bubble. The server short-circuits the
+ * model and sends something completely different — but until now the flag
+ * that said so was never read, so the most serious moment the app handles
+ * looked exactly like any other message in the thread.
+ */
+function CrisisCard() {
   const { t } = useLocale();
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  // 波形高度固定一次，避免父组件重渲染（如录音计时每秒一次）时跳动
-  const barHeights = useMemo(() => Array.from({ length: 12 }, () => 4 + Math.random() * 12), []);
-
-  const toggle = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(url);
-      audioRef.current.onended = () => setPlaying(false);
-    }
-    if (playing) { audioRef.current.pause(); setPlaying(false); }
-    else { audioRef.current.play(); setPlaying(true); }
-  };
+  const { data } = trpc.safety.resources.useQuery();
 
   return (
-    <button onClick={toggle} aria-label={playing ? t("chat.pauseVoice") : t("chat.playVoice")} className="flex items-center gap-2 min-w-[120px]">
-      {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-      <div className="flex-1 flex items-center gap-0.5">
-        {barHeights.map((h, i) => (
-          <div key={i} className={`w-1 rounded-full bg-current transition-all ${playing ? "animate-pulse" : ""}`}
-            style={{ height: `${h}px`, animationDelay: `${i * 0.05}s` }} />
+    <div
+      role="alert"
+      className="surface border-destructive/40 bg-destructive/5 p-5 sm:p-6 mb-6 animate-fade-in-up"
+    >
+      <p className="font-display text-sm font-semibold text-destructive mb-2">
+        {t("safety.crisisTitle")}
+      </p>
+      <p className="text-sm text-foreground/85 leading-relaxed">
+        {t("safety.crisisBody")}
+      </p>
+      <p className="text-xs text-muted-foreground mt-4 mb-2">
+        {t("safety.resourcesTitle")}
+      </p>
+      <ul className="space-y-1.5">
+        {(data?.resources ?? []).map((resource) => (
+          <li key={resource.id} className="text-xs text-muted-foreground leading-relaxed">
+            <span className="text-foreground/80">{resource.region}</span>
+            {" · "}
+            {resource.description}
+            {" · "}
+            <span className="text-foreground/80">{resource.contact}</span>
+          </li>
         ))}
-      </div>
-      {duration != null && <span className="text-xs opacity-60">{duration}″</span>}
-    </button>
-  );
-}
-
-function TTSButton({ text }: { text: string }) {
-  const { t } = useLocale();
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const ttsMutation = trpc.chat.tts.useMutation();
-
-  const handlePlay = async () => {
-    if (audioUrl && audioRef.current) {
-      if (playing) { audioRef.current.pause(); setPlaying(false); }
-      else { audioRef.current.play(); setPlaying(true); }
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await ttsMutation.mutateAsync({ text: text.slice(0, 500) });
-      setAudioUrl(result.audioUrl);
-      const audio = new Audio(result.audioUrl);
-      audioRef.current = audio;
-      audio.onended = () => setPlaying(false);
-      audio.play();
-      setPlaying(true);
-    } catch { toast.error(t("chat.ttsFailed")); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <button onClick={handlePlay} disabled={loading} title={t("chat.tts")} aria-label={t("chat.tts")}
-      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
-      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className={`w-3 h-3 ${playing ? "text-foreground" : ""}`} />}
-    </button>
-  );
-}
-
-function MessageBubble({ msg, personaName, showMood }: { msg: Message; personaName: string; showMood: boolean }) {
-  const { t, locale } = useLocale();
-  const isUser = msg.role === "user";
-  const mood = emotionOf(msg.emotionalState);
-  const [imgExpanded, setImgExpanded] = useState(false);
-
-  const renderContent = () => {
-    if (msg.messageType === "image" && msg.mediaUrl) {
-      return (
-        <>
-          <img src={msg.mediaUrl} alt="" onClick={() => setImgExpanded(true)}
-            className="max-w-[200px] max-h-[200px] rounded-md cursor-pointer hover:opacity-90 transition-opacity" />
-          {msg.content !== "[图片]" && <p className="mt-1.5 text-sm">{msg.content}</p>}
-          {/* Portal：祖先的 animate-fade-in-up 以 forwards 保留 transform，会把 fixed 定位锚定到气泡上 */}
-          {imgExpanded && createPortal(
-            <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 animate-fade-in"
-              onClick={() => setImgExpanded(false)}>
-              <img src={msg.mediaUrl!} alt="" className="max-w-full max-h-full object-contain rounded-md" />
-            </div>,
-            document.body
-          )}
-        </>
-      );
-    }
-    if (msg.messageType === "voice" && msg.mediaUrl) {
-      return (
-        <div className="flex flex-col gap-1">
-          <VoicePlayer url={msg.mediaUrl} duration={msg.mediaDuration} />
-          {msg.content && msg.content !== "（语音消息）" && (
-            <p className="text-xs opacity-60 mt-1">{msg.content}</p>
-          )}
-        </div>
-      );
-    }
-    if (msg.isStreaming) {
-      if (!msg.content) {
-        return (
-          <span className="inline-flex items-center gap-1 px-0.5 py-1.5">
-            <span className="typing-dot" />
-            <span className="typing-dot" />
-            <span className="typing-dot" />
-          </span>
-        );
-      }
-      return <span>{msg.content}<span className="inline-block w-1 h-4 bg-primary/40 ml-0.5 animate-pulse" /></span>;
-    }
-    if (isUser) return <span>{msg.content}</span>;
-    return <Streamdown className="letter-prose letter-prose--chat" parseIncompleteMarkdown>{msg.content}</Streamdown>;
-  };
-
-  return (
-    <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4 animate-fade-in-up`}>
-      {!isUser && (
-        <PersonaAvatar name={personaName} className="w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5" />
-      )}
-      <div className={`max-w-[78%] sm:max-w-[75%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
-        {!isUser && mood && showMood && (
-          <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md border ${mood.chip}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${mood.dot}`} />
-            {t(mood.labelKey)}
-          </span>
-        )}
-        <div className={`px-3.5 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
-          {renderContent()}
-        </div>
-        {msg.createdAt && !msg.isStreaming && (
-          <span className="text-[11px] text-muted-foreground/50 px-1 flex items-center gap-1.5">
-            {new Date(msg.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
-            {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-mood-happy/10 text-mood-happy">{t("chat.channelWechat")}</span>}
-            {!isUser && msg.messageType !== "voice" && <TTSButton text={msg.content} />}
-          </span>
-        )}
-      </div>
+      </ul>
     </div>
   );
 }
-
-// ─── MAIN CHAT ────────────────────────────────────────────────────────────────
 
 export default function Chat() {
   const params = useParams<{ id: string }>();
@@ -204,7 +88,31 @@ export default function Chat() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showScenePanel, setShowScenePanel] = useState(false);
+  /* The form for a scene of the user's own. */
+  const [showSceneForm, setShowSceneForm] = useState(false);
+  const [sceneName, setSceneName] = useState("");
+  const [sceneIcon, setSceneIcon] = useState("");
+  const [sceneDescription, setSceneDescription] = useState("");
+  const [sceneOverlay, setSceneOverlay] = useState("");
+  const [sceneStarters, setSceneStarters] = useState("");
+  const [sceneState, setSceneState] = useState<EmotionKey>("warm");
   const [showGraduation, setShowGraduation] = useState(false);
+  /** The farewell the user starts themselves, rather than one the app offers. */
+  const [showManualGraduation, setShowManualGraduation] = useState(false);
+  /** A crisis reply is shown with its own card rather than as a bubble. */
+  const [showCrisis, setShowCrisis] = useState(false);
+  /** Whether there are older messages to load, and whether they are loading. */
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  /** The notes kept for later are shown once per visit. */
+  const [dismissedNotes, setDismissedNotes] = useState(false);
+  /** The message the user is replying to. */
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const { data: waitingNotesData } = trpc.letter.todos.useQuery(
+    { personaId },
+    { enabled: isAuthenticated && personaId > 0 },
+  );
+  const waitingNotes = waitingNotesData?.todos ?? [];
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -234,14 +142,64 @@ export default function Chat() {
     { enabled: isAuthenticated && personaId > 0 }
   );
 
+  /* The time on their side of the world. */
+  const theirClock = useMemo(() => {
+    const zone = (persona as any)?.timezone;
+    if (!zone) return null;
+    try {
+      return formatZonedClock(new Date(), zone, locale === "en" ? "en" : "zh");
+    } catch {
+      return null;
+    }
+  }, [(persona as any)?.timezone, locale]);
+
+  /* Whether it is the middle of the night where they are. */
+  const theyAreAsleep = useMemo(() => {
+    const zone = (persona as any)?.timezone;
+    if (!zone) return false;
+    const hour = zonedHour(new Date(), zone);
+    return hour >= 0 && hour < 7;
+  }, [(persona as any)?.timezone]);
+
+  /* How long since you last spoke. A number, because that is what the
+     question is: "how long has it been". */
+  const daysSinceTalk = useMemo(
+    () => daysSinceContact((persona as any)?.lastChatAt),
+    [(persona as any)?.lastChatAt],
+  );
+
   const { data: intimacy } = trpc.persona.getIntimacy.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && personaId > 0 }
   );
 
+  /* The graduation mode decides whether the app may offer a farewell and
+     whether the user may start one from here. */
+  const { data: graduation } = trpc.persona.graduationMode.useQuery(
+    { id: personaId },
+    { enabled: isAuthenticated && personaId > 0 }
+  );
+  const graduationMode = graduation?.mode ?? "suggest";
+
+  /**
+   * The history, polled.
+   *
+   * Two things write to this conversation while the user is not typing
+   * in it: the persona speaking first, and a letter being answered. Both
+   * of them happen in the background, and without polling the message
+   * would sit in the database until the page was reloaded — which
+   * turns "TA 先开口" into something you find out about the next morning.
+   *
+   * React Query does not poll a hidden tab, so a backgrounded window
+   * costs nothing.
+   */
   const { data: history } = trpc.chat.getHistory.useQuery(
     { personaId },
-    { enabled: isAuthenticated && personaId > 0 }
+    {
+      enabled: isAuthenticated && personaId > 0,
+      refetchInterval: 20_000,
+      refetchIntervalInBackground: false,
+    }
   );
 
   const sendMutation = trpc.chat.send.useMutation({
@@ -256,15 +214,67 @@ export default function Chat() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const { data: scenesList } = trpc.scene.list.useQuery(undefined, { enabled: isAuthenticated });
+  /* The message-level operations. Without them a conversation is a
+     transcript: nothing can be repeated, fixed or taken back. */
+  const regenerateMutation = trpc.chat.regenerate.useMutation();
+  const updateMessageMutation = trpc.chat.updateMessage.useMutation();
+  const deleteMessageMutation = trpc.chat.deleteMessage.useMutation();
+  const utils = trpc.useUtils();
+
+  /**
+   * A mutation that can be aborted.
+   *
+   * The React hooks capture their request options when they are created,
+   * so a per-call signal cannot be threaded through them. The client can:
+   * `utils.client.mutation` takes the request options — including the
+   * signal — on every call.
+   */
+  const abortableMutation = useCallback(
+    (path: string, input: unknown, signal: AbortSignal): Promise<any> =>
+      (utils.client as any).mutation(path, input, { signal }),
+    [utils.client],
+  );
+
+  const { data: scenesList, refetch: refetchScenes } = trpc.scene.list.useQuery(undefined, { enabled: isAuthenticated });
   const activateSceneMutation = trpc.scene.activate.useMutation({
     onSuccess: () => { toast.success(t("chat.sceneActivated")); setShowScenePanel(false); },
   });
   const deactivateSceneMutation = trpc.scene.deactivate.useMutation({
     onSuccess: () => { toast.success(t("chat.sceneDeactivated")); setShowScenePanel(false); },
   });
+  /* A scene of the user's own. The server owns the rules — the name
+     length, the ownership check on delete — so the form only makes sure
+     the obvious mistakes do not reach it. */
+  const createSceneMutation = trpc.scene.create.useMutation({
+    onSuccess: () => {
+      toast.success(t("sceneForm.created"));
+      refetchScenes();
+      setShowSceneForm(false);
+      setSceneName(""); setSceneIcon(""); setSceneDescription("");
+      setSceneOverlay(""); setSceneStarters("");
+    },
+    onError: (e: any) => toast.error(t("sceneForm.createFailed", { message: e.message })),
+  });
+  const deleteSceneMutation = trpc.scene.delete.useMutation({
+    onSuccess: () => { toast.success(t("sceneForm.deleted")); refetchScenes(); },
+    onError: (e: any) => toast.error(t("sceneForm.deleteFailed", { message: e.message })),
+  });
 
   const activeScene = scenesList?.find((s: any) => s.id === persona?.activeSceneId);
+
+  /** Creates a scene of the user's own from the form in the scene panel. */
+  const handleCreateScene = () => {
+    const name = sceneName.trim();
+    if (!name) return;
+    createSceneMutation.mutate({
+      name,
+      icon: sceneIcon.trim() || undefined,
+      description: sceneDescription.trim() || undefined,
+      systemPromptOverlay: sceneOverlay.trim() || undefined,
+      emotionalState: sceneState,
+      starters: sceneStarters.split("\n").map((line) => line.trim()).filter(Boolean),
+    });
+  };
 
   const changeStateMutation = trpc.persona.update.useMutation({
     onSuccess: () => toast.success(t("chat.stateChanged")),
@@ -282,7 +292,10 @@ export default function Chat() {
 
   const handleExport = async () => {
     try {
-      const result = await exportMutation.mutateAsync({ personaId });
+      const result = await exportMutation.mutateAsync({
+        personaId,
+        locale: locale === "en" ? "en" : "zh",
+      });
       const blob = new Blob([result.html], { type: "text/html;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -295,13 +308,37 @@ export default function Chat() {
   };
 
   useEffect(() => {
-    if (history) {
-      setMessages(history.map((m: any) => ({
-        id: m.id, role: m.role as "user" | "assistant",
-        content: m.content, messageType: m.messageType, mediaUrl: m.mediaUrl, mediaDuration: m.mediaDuration,
-        emotionalState: m.emotionalState, channel: m.channel, createdAt: m.createdAt,
-      })));
-    }
+    if (!history) return;
+
+    // The quoted text is resolved from the messages themselves, so the
+    // bubble can show what it is answering.
+    const byId = new Map(history.map((m: any) => [m.id, m]));
+
+    // The memories a turn recalled. The server writes them down, so the
+    // answer to "did it recall that or invent it?" is still there after a
+    // reload — it used to live only in the live stream.
+    const fromServer = history.map((m: any) => ({
+      id: m.id, role: m.role as "user" | "assistant",
+      content: m.content, messageType: m.messageType, mediaUrl: m.mediaUrl, mediaDuration: m.mediaDuration,
+      emotionalState: m.emotionalState, channel: m.channel, createdAt: m.createdAt,
+      origin: m.origin ?? null,
+      replyToId: m.replyToId ?? null,
+      replyToContent: m.replyToId ? (byId.get(m.replyToId)?.content ?? null) : null,
+      recalled: (m.recalled ?? []).filter((r: any) => r.title),
+    }));
+
+    // The history is polled, so it can arrive while a reply is still
+    // being written. Replacing the list would wipe the half-written
+    // message, so the local ones the server does not know about yet are
+    // kept.
+    setMessages((prev) => {
+      const known = new Set(fromServer.map((m) => m.id));
+      const pending = prev.filter((m) => !known.has(m.id) && m.isStreaming);
+      if (pending.length === 0) return fromServer;
+      return [...fromServer, ...pending];
+    });
+    // A full page of history means there is probably more behind it.
+    setHasOlder(history.length >= 50);
   }, [history]);
 
   useEffect(() => {
@@ -337,6 +374,7 @@ export default function Chat() {
           personaId,
           message: text,
           locale: locale === "en" ? "en" : "zh",
+          replyToId: typeof replyTo?.id === "number" ? replyTo.id : undefined,
           signal: controller.signal,
           callbacks: {
             onDelta: appendDelta,
@@ -353,12 +391,18 @@ export default function Chat() {
                     emotionalState: info.emotionalState,
                     createdAt: new Date(),
                     isStreaming: false,
+                    recalled: info.recalled,
                   }
                 : m
               ));
               setCurrentState(info.emotionalState);
               if (info.graduationSuggested) setShowGraduation(true);
-              if (info.careNote?.showBanner) toast.info(careNoteText(info.careNote, t));
+              if (info.careNote?.showBanner) toast.info(careBannerText(info.careNote, t));
+              // A crisis reply is not an ordinary bubble. The server says
+              // so, and the flag was defined all the way back in the stream
+              // protocol — but nothing read it, so the most serious moment
+              // the app handles looked exactly like any other message.
+              if (info.crisis) setShowCrisis(true);
             },
             onError: (message) => {
               toast.error(t("chat.interrupted", { message }));
@@ -372,27 +416,198 @@ export default function Chat() {
         const status = (err as { status?: number })?.status;
         if (!isStreamingUnsupported(status ?? 0)) throw err;
 
-        const result = await sendMutation.mutateAsync({
-          personaId,
-          message: text,
-          locale: locale === "en" ? "en" : "zh",
-        });
+        const result = await abortableMutation(
+          "chat.send",
+          {
+            personaId,
+            message: text,
+            locale: locale === "en" ? "en" : "zh",
+            replyToId: typeof replyTo?.id === "number" ? replyTo.id : undefined,
+          },
+          controller.signal,
+        );
         setMessages(prev => prev.map(m => m.id === streamId
           ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
           : m
         ));
         setCurrentState(result.emotionalState);
         if (result.graduationSuggested) setShowGraduation(true);
-        if (result.careNote?.showBanner) toast.info(careNoteText(result.careNote, t));
+        if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
+        setReplyTo(null);
       }
-    } catch {
-      setMessages(prev => prev.filter(m => m.id !== streamId));
+    } catch (err) {
+      // A failed send used to disappear without a word: the bubble was
+      // removed and the user was left wondering whether their message had
+      // gone. Half an answer is still worth keeping.
+      const partial = messages.find((m) => m.id === streamId);
+      if (partial?.content) {
+        setMessages(prev => prev.map((m) => (m.id === streamId ? { ...m, isStreaming: false } : m)));
+        toast.error(t("chat.interrupted", { message: (err as Error)?.message ?? "" }));
+      } else {
+        setMessages(prev => prev.filter(m => m.id !== streamId));
+        toast.error(t("chat.failed", { message: (err as Error)?.message ?? t("errors.unknown") }));
+      }
     } finally {
       abortRef.current = null;
       setIsSending(false);
       textareaRef.current?.focus();
     }
   };
+
+  /**
+   * Replies to a particular message.
+   *
+   * Without it every reply is a reply to "whatever came last", and a
+   * long conversation becomes impossible to follow.
+   */
+  const handleQuote = useCallback((msg: Message) => {
+    setReplyTo(msg);
+    textareaRef.current?.focus();
+  }, []);
+
+  /**
+   * Asks the persona again, replacing the turn that is on screen.
+   *
+   * The server removes the old turn and everything after it, so the
+   * conversation does not end up with two different answers to the same
+   * question.
+   */
+  const handleRegenerate = useCallback(async (msg: Message) => {
+    if (isSending) return;
+    // A message that is still streaming has no id of its own yet.
+    if (typeof msg.id !== "number") return;
+    setIsSending(true);
+    // The stop button works here too.
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const result = await abortableMutation(
+        "chat.regenerate",
+        {
+          personaId,
+          messageId: msg.id,
+          locale: locale === "en" ? "en" : "zh",
+        },
+        controller.signal,
+      );
+      // Drop the old turn from the screen and show the new answer.
+      setMessages(prev => {
+        const index = prev.findIndex((m) => m.id === msg.id);
+        if (index < 0) return prev;
+        const userIndex = prev.slice(0, index).findLastIndex?.(
+          (m) => m.role === "user",
+        ) ?? -1;
+        const cut = userIndex >= 0 ? userIndex : index;
+        return [
+          ...prev.slice(0, cut),
+          { ...prev[cut], content: result.reply, emotionalState: result.emotionalState, isStreaming: false },
+        ];
+      });
+      setCurrentState(result.emotionalState);
+      await utils.chat.getHistory.invalidate({ personaId });
+    } catch (e) {
+      if (controller.signal.aborted) {
+        toast.info(t("chat.interrupted", { message: "" }));
+      } else {
+        toast.error((e as Error)?.message || t("errors.unknown"));
+      }
+    } finally {
+      abortRef.current = null;
+      setIsSending(false);
+    }
+  }, [isSending, personaId, locale, abortableMutation, t, utils.chat.getHistory]);
+
+  /** Saves an edited message. */
+  const handleEditMessage = useCallback(async (msg: Message, content: string) => {
+    if (typeof msg.id !== "number") return;
+    try {
+      await updateMessageMutation.mutateAsync({
+        personaId,
+        messageId: msg.id,
+        content,
+      });
+      setMessages(prev => prev.map((m) => (m.id === msg.id ? { ...m, content } : m)));
+    } catch (e) {
+      toast.error((e as Error)?.message || t("errors.unknown"));
+    }
+  }, [personaId, updateMessageMutation, t]);
+
+  /** Removes a single message. */
+  const handleDeleteMessage = useCallback(async (msg: Message) => {
+    if (typeof msg.id !== "number") return;
+    try {
+      await deleteMessageMutation.mutateAsync({
+        personaId,
+        messageId: msg.id,
+      });
+      setMessages(prev => prev.filter((m) => m.id !== msg.id));
+    } catch (e) {
+      toast.error((e as Error)?.message || t("errors.unknown"));
+    }
+  }, [personaId, deleteMessageMutation, t]);
+
+  /**
+   * Loads the messages before the oldest one on screen.
+   *
+   * The page used to load the last fifty messages and stop, so a long
+   * conversation had no beginning — everything was in the database with
+   * no way to reach it.
+   */
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingOlder) return;
+    const oldest = messages.find((m) => typeof m.id === "number");
+    if (!oldest) return;
+    setLoadingOlder(true);
+    try {
+      const older = await utils.chat.getHistory.fetch({
+        personaId,
+        before: oldest.id as number,
+        limit: 50,
+      });
+      if (older.length > 0) {
+        setMessages(prev => {
+          const known = new Set(prev.map((m) => m.id));
+          const fresh = (older as any[])
+            .filter((m) => !known.has(m.id))
+            .map((m) => ({
+              id: m.id, role: m.role as "user" | "assistant",
+              content: m.content, messageType: m.messageType, mediaUrl: m.mediaUrl,
+              mediaDuration: m.mediaDuration, emotionalState: m.emotionalState,
+              channel: m.channel, createdAt: m.createdAt,
+            }));
+          return [...fresh, ...prev];
+        });
+        setHasOlder(older.length >= 50);
+      } else {
+        setHasOlder(false);
+      }
+    } catch (e) {
+      toast.error((e as Error)?.message || t("errors.unknown"));
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [loadingOlder, messages, personaId, t, utils.chat.getHistory]);
+
+  /**
+   * Scrolls to a message and highlights it.
+   *
+   * A search result that only closes the panel is a search that found
+   * something and then hid it again.
+   */
+  const jumpToMessage = useCallback((messageId: number) => {
+    setTimeout(() => {
+      const element = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (!element) {
+        toast.info(t("chat.messageNotLoaded"));
+        return;
+      }
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.classList.add("ring-2", "ring-primary/50", "rounded-lg");
+      setTimeout(() => {
+        element.classList.remove("ring-2", "ring-primary/50", "rounded-lg");
+      }, 2200);
+    }, 60);
+  }, [t]);
 
   /** Stops an in-flight streaming reply. */
   const handleStopStreaming = useCallback(() => {
@@ -404,6 +619,10 @@ export default function Chat() {
     if (!file || isSending) return;
     setShowAttach(false);
     setIsSending(true);
+    // The stop button used to be a no-op on this path: the controller was
+    // only ever created for the streaming text send.
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const reader = new FileReader();
     reader.onload = async () => {
@@ -415,20 +634,40 @@ export default function Chat() {
       setMessages(prev => [...prev, { id: streamId, role: "assistant", content: "", isStreaming: true, emotionalState: currentState }]);
 
       try {
-        const result = await sendImageMutation.mutateAsync({ personaId, imageContent: base64, fileName: file.name, mimeType: file.type });
+        const result = await abortableMutation(
+          "chat.sendImage",
+          { personaId, imageContent: base64, fileName: file.name, mimeType: file.type },
+          controller.signal,
+        );
         setMessages(prev => prev.map(m => m.id === streamId
           ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
           : m
         ));
         setCurrentState(result.emotionalState);
-      } catch { setMessages(prev => prev.filter(m => m.id !== streamId)); }
-      finally { setIsSending(false); }
+        if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
+        if (result.crisis) setShowCrisis(true);
+      } catch (err) {
+        // A failed send used to vanish without a word.
+        setMessages(prev => prev.filter(m => m.id !== streamId));
+        if (controller.signal.aborted) {
+          toast.info(t("chat.interrupted", { message: "" }));
+        } else {
+          toast.error(t("chat.failed", { message: (err as Error)?.message ?? t("errors.unknown") }));
+        }
+      }
+      finally {
+        abortRef.current = null;
+        setIsSending(false);
+      }
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   }, [isSending, personaId, currentState]);
 
   const startRecording = useCallback(async () => {
+    // The stop button has to work on this path too.
+    const voiceController = new AbortController();
+    abortRef.current = voiceController;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
@@ -452,15 +691,31 @@ export default function Chat() {
           setMessages(prev => [...prev, { id: streamId, role: "assistant", content: "", isStreaming: true, emotionalState: currentState }]);
 
           try {
-            const result = await sendVoiceMutation.mutateAsync({ personaId, audioContent: base64, duration, fileName: `voice-${Date.now()}.webm` });
+            const result = await abortableMutation(
+              "chat.sendVoice",
+              { personaId, audioContent: base64, duration, fileName: `voice-${Date.now()}.webm` },
+              voiceController.signal,
+            );
             setMessages(prev => prev.map(m => {
               if (m.id === streamId) return { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false };
               if (m === userMsg) return { ...m, content: result.transcription || "（语音消息）" };
               return m;
             }));
             setCurrentState(result.emotionalState);
-          } catch { setMessages(prev => prev.filter(m => m.id !== streamId)); }
-          finally { setIsSending(false); }
+            if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
+            if (result.crisis) setShowCrisis(true);
+          } catch (err) {
+            setMessages(prev => prev.filter(m => m.id !== streamId));
+            if (voiceController.signal.aborted) {
+              toast.info(t("chat.interrupted", { message: "" }));
+            } else {
+              toast.error(t("chat.voiceFailed", { message: (err as Error)?.message ?? "" }));
+            }
+          }
+          finally {
+            abortRef.current = null;
+            setIsSending(false);
+          }
         };
         reader.readAsDataURL(blob);
       };
@@ -495,9 +750,11 @@ export default function Chat() {
 
   const mood = EMOTIONS[currentState as keyof typeof EMOTIONS] || EMOTIONS.warm;
   const moodRingStyle = { ["--mood-color" as string]: `var(${mood.cssVar})` };
-  const starterQuestions: string[] = ((persona?.personaData as any)?.starterQuestions?.length > 0
-    ? (persona?.personaData as any).starterQuestions
-    : Array.from(t("chat.defaultStarters")));
+  const starterQuestions: string[] = resolveStarterQuestions({
+    sceneStarters: activeScene?.starters,
+    personaStarters: (persona?.personaData as any)?.starterQuestions,
+    fallback: Array.from(t("chat.defaultStarters")),
+  });
 
   return (
     <div className="h-dvh bg-background flex flex-col relative">
@@ -515,6 +772,30 @@ export default function Chat() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <p className="app-nav-title truncate">{persona?.name || "..."}</p>
+                {/* The user should always know what they are talking to.
+                    The label lives in the interface, not in the model's
+                    discretion. */}
+                <DigitalPersonaBadge compact />
+                {/* The clock on their side. A person whose partner is
+                    abroad needs to know it is the middle of the night
+                    for them — the app had no way to say so. */}
+                {theirClock && (
+                  <span
+                    className="text-[0.625rem] text-muted-foreground/80 flex-shrink-0 hidden sm:inline"
+                    title={t("chat.theirClockHint", { time: theirClock })}
+                  >
+                    {t("chat.theirClock", { time: theirClock })}
+                  </span>
+                )}
+                {/* How long it has been. */}
+                {daysSinceTalk !== null && daysSinceTalk > 0 && (
+                  <span
+                    className="text-[0.625rem] text-muted-foreground/80 flex-shrink-0 hidden sm:inline"
+                    title={t("chat.lastContactHint", { days: daysSinceTalk })}
+                  >
+                    {t("chat.lastContact", { days: daysSinceTalk })}
+                  </span>
+                )}
                 {intimacy && (
                   <span
                     className="text-xs flex-shrink-0"
@@ -573,6 +854,13 @@ export default function Chat() {
               )}
             </div>
 
+            {/* The portrait the app has built. A person who cannot see
+                what the system thinks of their ex has no way of knowing
+                whether to trust it. */}
+            <button onClick={() => navigate(`/persona/${personaId}/profile`)} title={t("profile.kicker")} aria-label={t("profile.kicker")}
+              className="app-nav-icon">
+              <UserRound className="w-4 h-4" />
+            </button>
             <button onClick={() => setShowScenePanel(!showScenePanel)} title={t("chat.sceneMode")} aria-label={t("chat.sceneMode")}
               className={`app-nav-icon ${activeScene || showScenePanel ? "app-nav-icon-active" : ""}`}>
               <Theater className="w-4 h-4" />
@@ -608,6 +896,15 @@ export default function Chat() {
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors disabled:opacity-50">
                       <Download className="w-4 h-4 text-muted-foreground" />{t("chat.export")}
                     </button>
+                    {/* Starting a farewell is the user's own move. It is
+                        hidden when the graduation mode is off, because then
+                        the mechanism is not available at all. */}
+                    {graduationMode !== "off" && (
+                      <button onClick={() => { setShowManualGraduation(true); setShowMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
+                        <HeartCrack className="w-4 h-4 text-muted-foreground" />{t("graduation.manualMoment")}
+                      </button>
+                    )}
                     <button onClick={() => clearMutation.mutate({ personaId })}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors">
                       <Trash2 className="w-4 h-4" />{t("chat.clear")}
@@ -636,27 +933,124 @@ export default function Chat() {
                     </button>
                   </div>
                   {activeScene && (
-                    <div className="mb-3 flex items-center gap-2 px-1">
+                    <div className="mb-3 flex items-center gap-2 px-1 flex-wrap">
                       <span className="text-xs text-muted-foreground">{t("chat.currentScene", { scene: `${activeScene.icon} ${activeScene.name}` })}</span>
+                      {/* The scene overrides the persona's mood while it is
+                          active, so the override is made visible. */}
+                      {activeScene.emotionalState && EMOTIONS[activeScene.emotionalState as EmotionKey] && (
+                        <span className="text-xs text-muted-foreground">
+                          {t("sceneForm.state", {
+                            state: t(EMOTIONS[activeScene.emotionalState as EmotionKey].labelKey),
+                          })}
+                        </span>
+                      )}
                       <button onClick={() => deactivateSceneMutation.mutate({ personaId })}
                         className="text-xs text-destructive hover:underline">{t("chat.noScene")}</button>
                     </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {(scenesList || []).map((scene: any) => (
-                      <button key={scene.id} onClick={() => activateSceneMutation.mutate({ personaId, sceneId: scene.id })}
-                        className={`text-left p-3 rounded-md border transition-colors ${scene.id === persona?.activeSceneId ? "border-cinnabar/40 bg-cinnabar/5" : "border-border hover:border-foreground/30 hover:bg-muted/40"}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          {scene.icon
-                            ? <span className="text-base leading-none">{scene.icon}</span>
-                            : <Theater className="w-4 h-4 text-muted-foreground" />}
-                          <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">{scene.name}</span>
-                          {scene.id === persona?.activeSceneId && <Check className="w-3.5 h-3.5 text-cinnabar flex-shrink-0" />}
-                        </div>
-                        {scene.description && <p className="text-xs text-muted-foreground line-clamp-2">{scene.description}</p>}
-                      </button>
+                      <div key={scene.id}
+                        className={`relative text-left p-3 rounded-md border transition-colors ${scene.id === persona?.activeSceneId ? "border-cinnabar/40 bg-cinnabar/5" : "border-border hover:border-foreground/30 hover:bg-muted/40"}`}>
+                        <button onClick={() => activateSceneMutation.mutate({ personaId, sceneId: scene.id })}
+                          className="w-full text-left">
+                          <div className="flex items-center gap-2 mb-1">
+                            {scene.icon
+                              ? <span className="text-base leading-none">{scene.icon}</span>
+                              : <Theater className="w-4 h-4 text-muted-foreground" />}
+                            <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">{scene.name}</span>
+                            {scene.id === persona?.activeSceneId && <Check className="w-3.5 h-3.5 text-cinnabar flex-shrink-0" />}
+                          </div>
+                          {scene.description && <p className="text-xs text-muted-foreground line-clamp-2">{scene.description}</p>}
+                        </button>
+                        {/* Built-in scenes belong to the installation, so they
+                            cannot be deleted; a user's own scene can. */}
+                        {scene.isBuiltin ? (
+                          <span className="absolute top-2 right-2 text-[10px] text-muted-foreground">
+                            {t("sceneForm.builtin")}
+                          </span>
+                        ) : (
+                          <button onClick={() => {
+                            if (!window.confirm(t("sceneForm.confirmDelete"))) return;
+                            deleteSceneMutation.mutate({ id: scene.id });
+                          }}
+                            aria-label={t("sceneForm.delete")}
+                            className="absolute top-2 right-2 app-nav-icon !h-6 !min-w-6 text-destructive">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
+
+                  {/* A scene of your own. */}
+                  {!showSceneForm ? (
+                    <button onClick={() => setShowSceneForm(true)}
+                      className="mt-3 w-full flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-md py-2.5 transition-colors">
+                      <Plus className="w-3.5 h-3.5" />{t("sceneForm.title")}
+                    </button>
+                  ) : (
+                    <div className="mt-3 border-t border-border pt-3 space-y-3">
+                      <div>
+                        <p className="font-display text-sm font-semibold text-foreground">{t("sceneForm.title")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{t("sceneForm.note")}</p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="block text-xs text-muted-foreground">{t("sceneForm.name")}</label>
+                          <input value={sceneName} onChange={e => setSceneName(e.target.value)}
+                            maxLength={100}
+                            placeholder={t("sceneForm.namePlaceholder")}
+                            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-xs text-muted-foreground">{t("sceneForm.icon")}</label>
+                          <input value={sceneIcon} onChange={e => setSceneIcon(e.target.value)}
+                            maxLength={10}
+                            placeholder={t("sceneForm.iconPlaceholder")}
+                            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-xs text-muted-foreground">{t("sceneForm.description")}</label>
+                        <input value={sceneDescription} onChange={e => setSceneDescription(e.target.value)}
+                          placeholder={t("sceneForm.descriptionPlaceholder")}
+                          className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-xs text-muted-foreground">{t("sceneForm.overlay")}</label>
+                        <textarea value={sceneOverlay} onChange={e => setSceneOverlay(e.target.value)}
+                          placeholder={t("sceneForm.overlayPlaceholder")} rows={2}
+                          className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className="space-y-1.5">
+                          <label className="block text-xs text-muted-foreground">{t("sceneForm.emotionalState")}</label>
+                          <select value={sceneState} onChange={e => setSceneState(e.target.value as EmotionKey)}
+                            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring">
+                            {EMOTION_KEYS.map((key) => (
+                              <option key={key} value={key}>{t(EMOTIONS[key].labelKey)}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-xs text-muted-foreground">{t("sceneForm.starters")}</label>
+                          <textarea value={sceneStarters} onChange={e => setSceneStarters(e.target.value)}
+                            placeholder={t("sceneForm.startersHint")} rows={2}
+                            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleCreateScene}
+                          disabled={createSceneMutation.isPending || !sceneName.trim()}
+                          className="rounded-md px-5">
+                          {createSceneMutation.isPending ? t("sceneForm.creating") : t("sceneForm.create")}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setShowSceneForm(false)}
+                          className="rounded-md">{t("common.cancel")}</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -664,7 +1058,42 @@ export default function Chat() {
         )}
       </header>
 
-      {showSearch && <SearchPanel personaId={personaId} onClose={() => { setShowSearch(false); setSearchQuery(""); }} />}
+      {showSearch && (
+        <SearchPanel
+          personaId={personaId}
+          onClose={() => { setShowSearch(false); setSearchQuery(""); }}
+          onJumpTo={jumpToMessage}
+        />
+      )}
+
+      {showCrisis && <CrisisCard />}
+
+      {/* The notes the user kept for later, surfaced when they come
+          back. They were written for this moment, so they belong here
+          rather than in a list nobody opens. */}
+      {waitingNotes.length > 0 && !dismissedNotes && (
+        <div className="container max-w-2xl mx-auto mb-4">
+          <div className="rounded-xl border border-border/70 bg-muted/30 p-4 relative">
+            <p className="text-xs font-medium text-foreground/80 mb-2">
+              {t("letters.todoTitle")}
+            </p>
+            <ul className="space-y-1.5">
+              {waitingNotes.map((note: any) => (
+                <li key={note.id} className="text-xs text-muted-foreground leading-relaxed">
+                  · {note.body}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => setDismissedNotes(true)}
+              aria-label={t("common.close")}
+              className="absolute top-2.5 right-2.5 text-muted-foreground/60 hover:text-foreground transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -696,6 +1125,18 @@ export default function Chat() {
               </button>
             </motion.div>
           )}
+          {messages.length > 0 && (hasOlder || messages.length >= 50) && (
+            <div className="flex justify-center pb-3">
+              <button
+                type="button"
+                onClick={loadOlderMessages}
+                disabled={loadingOlder || !hasOlder}
+                className="text-xs px-3.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+              >
+                {loadingOlder ? t("chat.loadingOlder") : t("chat.loadOlder")}
+              </button>
+            </div>
+          )}
           {messages.map((msg, i) => {
             // The mood chip is a signal, not decoration — showing it on every
             // message turns the conversation into a wall of labels. It only
@@ -709,12 +1150,17 @@ export default function Chat() {
               msg.emotionalState !== prevMood?.emotionalState,
             );
             return (
+              <div key={msg.id} data-message-id={msg.id}>
               <MessageBubble
-                key={msg.id}
                 msg={msg}
                 personaName={persona?.name || "?"}
                 showMood={showMood}
+                onRegenerate={handleRegenerate}
+                onEdit={handleEditMessage}
+                onDelete={handleDeleteMessage}
+                onQuote={handleQuote}
               />
+              </div>
             );
           })}
           <div ref={messagesEndRef} />
@@ -770,6 +1216,30 @@ export default function Chat() {
                   </>
                 )}
               </div>
+              {/* The message being replied to. */}
+              {replyTo && (
+                <div className="mb-1.5 flex items-center gap-2 rounded-md border-l-2 border-primary/40 bg-muted/40 px-2.5 py-1.5">
+                  <CornerUpLeft className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground line-clamp-1 flex-1">
+                    {replyTo.content}
+                  </span>
+                  <button
+                    onClick={() => setReplyTo(null)}
+                    aria-label={t("common.cancel")}
+                    className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {/* It is the middle of the night where they are. Saying so
+                  is the whole difference between a message that lands and
+                  one that does not. */}
+              {theyAreAsleep && (
+                <p className="text-[0.625rem] text-muted-foreground/80 flex items-center gap-1 mb-1.5">
+                  <Moon className="w-3 h-3" /> {t("chat.theyAreAsleep")}
+                </p>
+              )}
               <Textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown} placeholder={t("chat.placeholder", { name: persona?.name || t("common.them") })}
                 rows={1} className="flex-1 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-foreground/50 rounded-md min-h-[44px] max-h-32 px-4 py-3" />
@@ -795,13 +1265,24 @@ export default function Chat() {
       {showTimeline && <MemoryTimeline personaId={personaId} onClose={() => setShowTimeline(false)} />}
       {showEmotionReport && <EmotionReport personaId={personaId} personaName={persona?.name || "?"} onClose={() => setShowEmotionReport(false)} />}
       <GraduationModal personaId={personaId} personaName={persona?.name || "?"} open={showGraduation} onClose={() => setShowGraduation(false)} />
+      <GraduationModal personaId={personaId} personaName={persona?.name || "?"} open={showManualGraduation}
+        variant="manual" onClose={() => setShowManualGraduation(false)} />
     </div>
   );
 }
 
 // ─── SEARCH PANEL ────────────────────────────────────────────────────────────
 
-function SearchPanel({ personaId, onClose }: { personaId: number; onClose: () => void }) {
+function SearchPanel({
+  personaId,
+  onClose,
+  onJumpTo,
+}: {
+  personaId: number;
+  onClose: () => void;
+  /** Scrolls to a message and highlights it. */
+  onJumpTo?: (messageId: number) => void;
+}) {
   const { t, locale } = useLocale();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -843,7 +1324,8 @@ function SearchPanel({ personaId, onClose }: { personaId: number; onClose: () =>
               <p className="text-xs text-muted-foreground text-center py-4">{t("chat.noResults")}</p>
             ) : (
               results.map((m: any) => (
-                <div key={m.id} className="flex items-start gap-2 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer" onClick={onClose}>
+                <div key={m.id} className="flex items-start gap-2 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => { onJumpTo?.(m.id); onClose(); }}>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-sm flex-shrink-0 mt-0.5 ${m.role === "user" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                     {m.role === "user" ? t("common.me") : t("common.them")}
                   </span>
@@ -875,8 +1357,13 @@ const CATEGORY_LABELS: Record<string, { labelKey: "chat.memory.categories.memory
 function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: () => void }) {
   const { t } = useLocale();
   const { data: memories, refetch } = trpc.memory.list.useQuery({ personaId });
+  const memoryItems = memories?.items ?? [];
   const createMutation = trpc.memory.create.useMutation({ onSuccess: () => { refetch(); setShowAdd(false); } });
   const deleteMutation = trpc.memory.delete.useMutation({ onSuccess: () => refetch() });
+  /* Pinning a memory: a pinned one is injected into every prompt. The
+     field and the retrieval have always been there; there was just no
+     way to set it. */
+  const updateMutation = trpc.memory.update.useMutation({ onSuccess: () => refetch() });
   const extractMutation = trpc.memory.autoExtract.useMutation({
     onSuccess: (data) => { refetch(); toast.success(t("chat.memory.extracted", { count: data.extracted.length })); },
     onError: (e: any) => toast.error(e.message),
@@ -901,7 +1388,7 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {(!memories || memories.length === 0) && !showAdd && (
+          {(!memoryItems || memoryItems.length === 0) && !showAdd && (
             <div className="text-center py-12 text-muted-foreground text-sm">
               <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
               <p>{t("chat.memory.empty")}</p>
@@ -910,8 +1397,14 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
           )}
 
           <div className="relative">
-            {memories && memories.length > 0 && <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />}
-            {memories?.map((m: any) => {
+            {memoryItems && memoryItems.length > 0 && <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />}
+            {/* The list is capped, and it used to be capped silently. */}
+            {(memories?.total ?? 0) > memoryItems.length && (
+              <p className="text-xs text-muted-foreground mb-3">
+                {t("chat.memory.capped", { shown: memoryItems.length, total: memories?.total ?? 0 })}
+              </p>
+            )}
+            {memoryItems?.map((m: any) => {
               const cat = CATEGORY_LABELS[m.category] || CATEGORY_LABELS.memory;
               return (
                 <div key={m.id} className="relative pl-8 pb-6 group">
@@ -923,10 +1416,20 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
                       <p className="text-sm font-medium text-foreground mt-1">{m.title}</p>
                       {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
                     </div>
-                    <button onClick={() => deleteMutation.mutate({ id: m.id })} aria-label={t("chat.memory.delete")}
-                      className="md:opacity-0 md:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => updateMutation.mutate({ id: m.id, isPinned: !m.isPinned })}
+                        aria-label={t("chat.memory.pin")}
+                        title={m.isPinned ? t("chat.memory.unpin") : t("chat.memory.pin")}
+                        className={`md:opacity-0 md:group-hover:opacity-100 transition-all ${m.isPinned ? "text-cinnabar opacity-100" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        <Pin className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => deleteMutation.mutate({ id: m.id })} aria-label={t("chat.memory.delete")}
+                        className="md:opacity-0 md:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -978,9 +1481,15 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
   const [days, setDays] = useState(30);
   const { data: report } = trpc.emotion.getReport.useQuery({ personaId, days });
 
-  const chartData = (report?.snapshots || []).map((s: any) => ({
+  // The bar's height is the number of messages that day — a quantity —
+  // and its colour is the mood. The height used to be the mood's
+  // position in an arbitrary list, so a day with one message and a day
+  // with thirty drew the same bar.
+  const snapshots = report?.snapshots || [];
+  const busiest = Math.max(1, ...snapshots.map((s: any) => Number(s.messageCount) || 0));
+  const chartData = snapshots.map((s: any) => ({
     date: s.date,
-    value: EMOTION_KEYS.indexOf(s.emotionalState) + 1,
+    value: Number(s.messageCount) || 0,
     state: s.emotionalState,
     label: emotionOf(s.emotionalState) ? t(emotionOf(s.emotionalState)!.labelKey) : s.emotionalState,
     messages: s.messageCount,
@@ -1041,7 +1550,7 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
                   {chartData.map((d: any, i: number) => (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1" title={t("chat.report.barTitle", { date: d.date, label: d.label, count: d.messages })}>
                       <div className="w-full rounded-t-sm transition-all hover:opacity-80"
-                        style={{ height: `${(d.value / 6) * 100}%`, backgroundColor: emotionColor(d.state), minHeight: "4px" }} />
+                        style={{ height: `${(d.value / busiest) * 100}%`, backgroundColor: emotionColor(d.state), minHeight: "4px" }} />
                     </div>
                   ))}
                 </div>

@@ -192,7 +192,10 @@ describe("POST /api/chat/stream", () => {
     expect(runConversation).not.toHaveBeenCalled();
   });
 
-  it("returns 404 when the persona does not belong to the user", async () => {
+  it("returns 410 when the persona does not belong to the user", async () => {
+    // 410, not 404: a 404 means "this route does not exist", and the
+    // client uses that to decide the server is too old to stream. A
+    // persona that is gone is not an old server.
     getPersonaById.mockResolvedValue(null);
 
     const res = await fetch(`${baseUrl}/api/chat/stream`, {
@@ -201,7 +204,7 @@ describe("POST /api/chat/stream", () => {
       body: JSON.stringify({ personaId: 99, message: "在吗" }),
     });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(410);
     expect(runConversation).not.toHaveBeenCalled();
   });
 

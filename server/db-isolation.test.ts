@@ -218,9 +218,11 @@ describe("db helpers enforce ownership", () => {
       "bumpUserTokenVersion",
       "deleteUserAccount",
       "getUserById",
+      "updateUserGraduationMode",
       "updateUserLastSignedIn",
       "updateUserPassword",
       "updateUserProfile",
+      "updateUserTrajectoryAssessment",
     ]);
   });
 

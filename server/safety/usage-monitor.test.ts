@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const getLastMessageAt = vi.fn();
-const getMessageCountSince = vi.fn();
-const getDailyChatCounts = vi.fn();
+const getSessionStartAt = vi.fn();
+const getUserMessageCountSince = vi.fn();
+const getDailyUserChatCounts = vi.fn();
 
 vi.mock("../db", () => ({
-  getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
-  getMessageCountSince: (...a: unknown[]) => getMessageCountSince(...a),
-  getDailyChatCounts: (...a: unknown[]) => getDailyChatCounts(...a),
+  getSessionStartAt: (...a: unknown[]) => getSessionStartAt(...a),
+  getUserMessageCountSince: (...a: unknown[]) => getUserMessageCountSince(...a),
+  getDailyUserChatCounts: (...a: unknown[]) => getDailyUserChatCounts(...a),
 }));
 
 import {
@@ -66,6 +66,20 @@ describe("pickCareNote", () => {
     expect(note?.showBanner).toBe(true);
   });
 
+  it("prefers the dependency note over the others", () => {
+    // The dependency signal is the one the product names as a risk, and it
+    // is the rarest. The daily threshold trips after a few conversations,
+    // so it used to pre-empt the dependency note every time it could fire.
+    const note = pickCareNote(
+      signals({
+        dependencyRising: true,
+        sessionDurationMs: 3 * 60 * 60 * 1000,
+        dailyMessageCount: 8,
+      }),
+    );
+    expect(note?.kind).toBe("dependency");
+  });
+
   it("returns only one note", () => {
     const note = pickCareNote(
       signals({ sessionDurationMs: 3 * 60 * 60 * 1000, dailyMessageCount: 8 }),
@@ -93,54 +107,45 @@ describe("evaluateUsage", () => {
   const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
 
   beforeEach(() => {
-    getLastMessageAt.mockReset();
-    getMessageCountSince.mockReset();
-    getDailyChatCounts.mockReset();
-    getMessageCountSince.mockResolvedValue(1);
-    getDailyChatCounts.mockResolvedValue([]);
-    getLastMessageAt.mockResolvedValue(undefined);
+    getSessionStartAt.mockReset();
+    getUserMessageCountSince.mockReset();
+    getDailyUserChatCounts.mockReset();
+    getUserMessageCountSince.mockResolvedValue(1);
+    getDailyUserChatCounts.mockResolvedValue([]);
+    getSessionStartAt.mockResolvedValue(null);
   });
 
-  it("measures the session against the activity before this turn", async () => {
-    // The caller captured the previous message three hours ago.
-    const result = await evaluateUsage({
-      userId: 1,
-      personaId: 1,
-      now: NOW,
-      lastActivityAt: new Date(NOW - 3 * 60 * 60 * 1000),
-    });
-
-    expect(result.sessionDurationMs).toBe(3 * 60 * 60 * 1000);
-    expect(result.sessionDurationMs).toBeGreaterThan(LONG_SESSION_MS);
-    // The stored timestamp is not consulted when the caller knows better.
-    expect(getLastMessageAt).not.toHaveBeenCalled();
-  });
-
-  it("treats an explicit null as no previous activity", async () => {
-    const result = await evaluateUsage({
-      userId: 1,
-      personaId: 1,
-      now: NOW,
-      lastActivityAt: null,
-    });
-
-    expect(result.sessionDurationMs).toBe(0);
-    expect(getLastMessageAt).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the newest stored message", async () => {
-    getLastMessageAt.mockResolvedValue(new Date(NOW - 60 * 60 * 1000));
+  it("measures the session from when the conversation started", async () => {
+    // The conversation began five hours ago and has not paused.
+    getSessionStartAt.mockResolvedValue(new Date(NOW - 5 * 60 * 60 * 1000));
 
     const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
 
-    expect(result.sessionDurationMs).toBe(60 * 60 * 1000);
-    expect(getLastMessageAt).toHaveBeenCalledWith(1, 1);
+    expect(result.sessionDurationMs).toBe(5 * 60 * 60 * 1000);
+    expect(result.sessionDurationMs).toBeGreaterThan(LONG_SESSION_MS);
+  });
+
+  it("does not count a long silence as a long conversation", async () => {
+    // The user was away all afternoon and just came back. The session
+    // starts now, so nothing is long about it.
+    getSessionStartAt.mockResolvedValue(null);
+
+    const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
+
+    expect(result.sessionDurationMs).toBe(0);
+  });
+
+  it("counts only the messages the user sent", async () => {
+    const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
+
+    expect(getUserMessageCountSince).toHaveBeenCalled();
+    expect(result.dailyMessageCount).toBe(1);
   });
 
   it("notices a dependency that starts from nothing", async () => {
     // Three days of 30 messages a day after two quiet weeks — the onset case
     // the ratio rule alone cannot catch.
-    getDailyChatCounts.mockResolvedValue(
+    getDailyUserChatCounts.mockResolvedValue(
       dailyRows(NOW, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30, 30, 30]),
     );
 
@@ -151,7 +156,7 @@ describe("evaluateUsage", () => {
 
   it("still applies the ratio to a week that already had messages", async () => {
     // A flat week before, twice as many messages in the last week.
-    getDailyChatCounts.mockResolvedValue(
+    getDailyUserChatCounts.mockResolvedValue(
       dailyRows(NOW, [10, 10, 10, 10, 10, 10, 10, 30, 30, 30, 30, 30, 30, 30]),
     );
 
@@ -161,7 +166,7 @@ describe("evaluateUsage", () => {
   });
 
   it("does not fire on a steady frequency", async () => {
-    getDailyChatCounts.mockResolvedValue(dailyRows(NOW, new Array(14).fill(30)));
+    getDailyUserChatCounts.mockResolvedValue(dailyRows(NOW, new Array(14).fill(30)));
 
     const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
 
@@ -169,7 +174,7 @@ describe("evaluateUsage", () => {
   });
 
   it("does not fire when the burst is not the last few days", async () => {
-    getDailyChatCounts.mockResolvedValue(
+    getDailyUserChatCounts.mockResolvedValue(
       dailyRows(NOW, [0, 0, 0, 0, 0, 0, 0, 30, 30, 30, 30, 30, 30, 0]),
     );
 
@@ -263,5 +268,43 @@ describe("collectReminders", () => {
       now: new Date("2025-06-16T10:00:00"),
     });
     expect(first[0].dedupeKey).not.toBe(second[0]?.dedupeKey);
+  });
+
+  it("says nothing when the relationship has ended", () => {
+    // The end date was stored but never read, so an anniversary was
+    // announced to someone whose relationship had already finished.
+    const reminders = collectReminders({
+      persona: {
+        id: 1, name: "小A", togetherFrom: "2021-06-15", togetherTo: "2024-01-01",
+        remindersEnabled: true,
+      },
+      anniversaries: [{ id: 1, title: "第一次见面", date: "06-15" }],
+      now,
+    });
+    expect(reminders).toHaveLength(0);
+  });
+
+  it("says nothing when the persona has graduated", () => {
+    const reminders = collectReminders({
+      persona: {
+        id: 1, name: "小A", togetherFrom: "2021-06-15", remindersEnabled: true,
+        graduationStatus: "graduated",
+      },
+      anniversaries: [{ id: 1, title: "第一次见面", date: "06-15" }],
+      now,
+    });
+    expect(reminders).toHaveLength(0);
+  });
+
+  it("says nothing when the user asked for some space", () => {
+    const reminders = collectReminders({
+      persona: {
+        id: 1, name: "小A", togetherFrom: null, remindersEnabled: true,
+        presence: "quiet",
+      },
+      anniversaries: [{ id: 1, title: "第一次见面", date: "06-15" }],
+      now,
+    });
+    expect(reminders).toHaveLength(0);
   });
 });

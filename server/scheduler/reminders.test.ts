@@ -13,7 +13,10 @@ const getChannelBindingsByUserId = vi.fn();
 const hasReminderDelivery = vi.fn();
 const recordReminder = vi.fn();
 
+const getUserLocale = vi.fn();
+
 vi.mock("../db", () => ({
+  getUserLocale: (...a: unknown[]) => getUserLocale(...a),
   getAllPersonasForReminders: (...a: unknown[]) => getAllPersonasForReminders(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
@@ -78,6 +81,36 @@ describe("collectReminders", () => {
       now,
     });
     expect(reminders).toEqual([]);
+  });
+
+  it("stops the relationship reminders when the two of them cannot reach each other", () => {
+    // "你们在一起三周年了" is not a sentence to push at somebody who
+    // cannot get through to the person. Distance is not a breakup, but
+    // it does mean the anniversaries are not for today.
+    const reminders = collectReminders({
+      persona: persona({ reachability: "unreachable" }),
+      anniversaries: [{ id: 1, title: "第一次见面", date: "05-20" }],
+      now,
+    });
+    expect(reminders.some((r) => r.kind === "anniversary")).toBe(false);
+  });
+
+  it("stops the years-together reminder when they cannot reach each other", () => {
+    const reminders = collectReminders({
+      persona: persona({ togetherFrom: "2021-05-20", reachability: "unreachable" }),
+      anniversaries: [],
+      now,
+    });
+    expect(reminders.some((r) => r.kind === "together_years")).toBe(false);
+  });
+
+  it("keeps the anniversaries when they can reach each other", () => {
+    const reminders = collectReminders({
+      persona: persona({ reachability: "reachable" }),
+      anniversaries: [{ id: 1, title: "第一次见面", date: "05-20" }],
+      now,
+    });
+    expect(reminders.some((r) => r.kind === "anniversary")).toBe(true);
   });
 
   it("matches an anniversary written as MM-DD", () => {
@@ -190,6 +223,7 @@ describe("deliverReminder", () => {
     hasReminderDelivery.mockResolvedValue(false);
     recordReminder.mockResolvedValue(true);
     getChannelAdapter.mockReturnValue({ send });
+    getUserLocale.mockResolvedValue("zh");
   });
 
   const reminder = {
@@ -276,6 +310,7 @@ describe("runReminderSweep", () => {
     hasReminderDelivery.mockResolvedValue(false);
     recordReminder.mockResolvedValue(true);
     getChannelAdapter.mockReturnValue({ send });
+    getUserLocale.mockResolvedValue("zh");
     getMemoriesByPersonaId.mockResolvedValue([]);
     getFilesByPersonaId.mockResolvedValue([]);
     getAllPersonasForReminders.mockResolvedValue([persona()]);
