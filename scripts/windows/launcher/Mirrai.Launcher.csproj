@@ -10,7 +10,7 @@
     <RootNamespace>Mirrai.Launcher</RootNamespace>
     <Product>Mirrai</Product>
     <AssemblyTitle>Mirrai</AssemblyTitle>
-    <Version>1.1.0</Version>
+    <Version>1.3.0</Version>
     <ApplicationIcon>..\..\..\installer\mirrai.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>

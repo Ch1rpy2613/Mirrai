@@ -6,7 +6,7 @@
 ; administrator rights are needed and PostgreSQL is never started elevated.
 
 #define MyAppName "Mirrai"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "Ch1rpy2613"
 #define MyAppURL "https://github.com/Ch1rpy2613/Mirrai"
 #define MyAppExeName "Mirrai.exe"
