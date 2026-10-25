@@ -10,10 +10,15 @@
  * message arrived on, so `/使用` behaves the same in WeChat and in Feishu.
  */
 import { checkGraduationEligibility } from "../_core/persona-utils";
+import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
 import { getMessageCountInRange, getPersonasByUserId, getRecentEmotionTrend, setGraduationStatus } from "../db";
+import { writeFarewellLetter } from "../chat/farewell";
 import { llmService } from "../llm";
 import type { Persona } from "../../drizzle/schema";
 import type { ChannelId } from "./types";
+import { mayReachOut } from "@shared/graduation-mode";
+import { copy, detectLocale, type Locale } from "@shared/copy";
+import { CHANNEL_COMMANDS } from "@shared/copy/channels";
 
 /** Session-scoped persona override, keyed by conversation id. */
 const activePersonaOverrides = new Map<string, number>();
@@ -40,13 +45,15 @@ export type CommandResult = {
   reply?: string;
 };
 
-const COMMAND_HELP = [
-  "可用指令：",
-  "/使用 <分身名> — 切换当前对话的分身",
-  "/分身列表 — 查看所有可用分身",
-  "/当前分身 — 查看当前正在对话的分身",
-  "/毕业 — 生成告别信并完成毕业",
-].join("\n");
+/**
+ * The help text, in the language the person is writing in.
+ *
+ * The command they typed is the only thing that says which language they
+ * want, so that is what it decides.
+ */
+function commandHelp(locale: Locale): string {
+  return copy(locale, "channels.commandHelp");
+}
 
 /**
  * Resolves a persona by name.
@@ -116,17 +123,24 @@ export async function handleCommand(params: {
 
   const { command, args } = parsed;
 
+  // The language the person is writing in is the language they should be
+  // answered in.
+  const locale = detectLocale(params.text);
+
   switch (command) {
-    case "/使用":
-    case "/use": {
+    case CHANNEL_COMMANDS.use.zh:
+    case CHANNEL_COMMANDS.use.en: {
       if (!args) {
-        return { handled: true, reply: "用法：/使用 <分身名>。\n" + COMMAND_HELP };
+        return {
+          handled: true,
+          reply: copy(locale, "channels.useUsage", { help: commandHelp(locale) }),
+        };
       }
 
       const all = await getPersonasByUserId(params.userId);
       const ready = all.filter((p) => p.analysisStatus === "ready");
       if (ready.length === 0) {
-        return { handled: true, reply: "还没有可以对话的分身，请先在网页端完成解析。" };
+        return { handled: true, reply: copy(locale, "channels.noReadyPersona") };
       }
 
       const match = matchPersonaByName(ready, args);
@@ -134,52 +148,60 @@ export async function handleCommand(params: {
         if (match.candidates && match.candidates.length > 0) {
           return {
             handled: true,
-            reply: `有多个分身匹配「${args}」：${match.candidates.join("、")}。请说得更具体一些。`,
+            reply: copy(locale, "channels.ambiguousPersona", {
+              query: args,
+              candidates: match.candidates.join(locale === "en" ? ", " : "、"),
+            }),
           };
         }
         return {
           handled: true,
-          reply: `没有找到分身「${args}」。可用分身：${ready.map((p) => p.name).join("、")}`,
+          reply: copy(locale, "channels.personaNotFound", {
+            query: args,
+            available: ready.map((p) => p.name).join(locale === "en" ? ", " : "、"),
+          }),
         };
       }
 
       activePersonaOverrides.set(params.conversationKey, match.persona.id);
-      return { handled: true, reply: `已切换到 ${match.persona.name}。` };
+      return { handled: true, reply: copy(locale, "channels.switchedPersona", { name: match.persona.name }) };
     }
 
-    case "/分身列表":
-    case "/personas": {
+    case CHANNEL_COMMANDS.personas.zh:
+    case CHANNEL_COMMANDS.personas.en: {
       const all = await getPersonasByUserId(params.userId);
       if (all.length === 0) {
-        return { handled: true, reply: "你还没有创建任何分身。" };
+        return { handled: true, reply: copy(locale, "channels.noPersonas") };
       }
       const activeId = getActivePersonaId(params.conversationKey, params.defaultPersonaId);
       const lines = all.map((p) => {
-        const marker = p.id === activeId ? " ← 当前" : "";
-        const ready = p.analysisStatus === "ready" ? "" : "（解析中）";
+        const marker = p.id === activeId ? copy(locale, "channels.personaListCurrent") : "";
+        const ready = p.analysisStatus === "ready" ? "" : copy(locale, "channels.personaListAnalysing");
         return `- ${p.name}${ready}${marker}`;
       });
-      return { handled: true, reply: ["你的分身：", ...lines].join("\n") };
+      return { handled: true, reply: [copy(locale, "channels.personaListHeading"), ...lines].join("\n") };
     }
 
-    case "/当前分身":
-    case "/current": {
+    case CHANNEL_COMMANDS.current.zh:
+    case CHANNEL_COMMANDS.current.en: {
       const all = await getPersonasByUserId(params.userId);
       const activeId = getActivePersonaId(params.conversationKey, params.defaultPersonaId);
       const persona = all.find((p) => p.id === activeId);
       return {
         handled: true,
-        reply: persona ? `当前正在和 ${persona.name} 说话。` : "当前没有绑定分身。",
+        reply: persona
+          ? copy(locale, "channels.currentPersona", { name: persona.name })
+          : copy(locale, "channels.noBoundPersona"),
       };
     }
 
-    case "/毕业":
-    case "/graduate":
-      return await handleGraduationCommand(params);
+    case CHANNEL_COMMANDS.graduate.zh:
+    case CHANNEL_COMMANDS.graduate.en:
+      return await handleGraduationCommand(params, locale);
 
-    case "/帮助":
-    case "/help":
-      return { handled: true, reply: COMMAND_HELP };
+    case CHANNEL_COMMANDS.help.zh:
+    case CHANNEL_COMMANDS.help.en:
+      return { handled: true, reply: commandHelp(locale) };
 
     default:
       // Unknown commands fall through to the normal conversation.
@@ -193,65 +215,103 @@ export async function handleCommand(params: {
  * The letter is delivered over the channel when possible; if delivery fails
  * the user is told to read it on the web, where it is always persisted.
  */
-async function handleGraduationCommand(params: {
-  userId: number;
-  conversationKey: string;
-  defaultPersonaId: number;
-  channel?: ChannelId;
-  sendLetter?: (letter: string) => Promise<boolean>;
-}): Promise<CommandResult> {
+async function handleGraduationCommand(
+  params: {
+    userId: number;
+    conversationKey: string;
+    defaultPersonaId: number;
+    channel?: ChannelId;
+    sendLetter?: (letter: string) => Promise<boolean>;
+  },
+  locale: Locale,
+): Promise<CommandResult> {
   const personaId = getActivePersonaId(params.conversationKey, params.defaultPersonaId);
   const all = await getPersonasByUserId(params.userId);
   const persona = all.find((p) => p.id === personaId);
   if (!persona) {
-    return { handled: true, reply: "当前没有绑定分身。" };
+    return { handled: true, reply: copy(locale, "channels.noBoundPersona") };
   }
   if (persona.analysisStatus !== "ready") {
-    return { handled: true, reply: `${persona.name} 还在解析中，暂时不能毕业。` };
+    return { handled: true, reply: copy(locale, "channels.stillAnalysing", { name: persona.name }) };
   }
   if (persona.graduationStatus === "graduated") {
     return {
       handled: true,
       reply: persona.farewellLetter
-        ? `${persona.name} 已经毕业了。\n\n${persona.farewellLetter}`
-        : `${persona.name} 已经毕业了。`,
+        ? copy(locale, "channels.alreadyGraduatedWithLetter", {
+            name: persona.name,
+            letter: persona.farewellLetter,
+          })
+        : copy(locale, "channels.alreadyGraduated", { name: persona.name }),
     };
   }
   if (persona.graduationStatus === "declined") {
-    return { handled: true, reply: `${persona.name} 的毕业已被推迟。想清楚再回来。` };
+    // A refusal is not a life sentence. It starts a cooldown, and after the
+    // cooldown the user may come back and finish the goodbye — otherwise
+    // the channel was a one-way door, with no way back but waking the
+    // persona from the web.
+    const offer = canOfferGraduation({
+      status: persona.graduationStatus,
+      suggestedAt: persona.graduationSuggestedAt,
+      declinedAt: persona.graduationDeclinedAt,
+    });
+    if (!offer.allowed) {
+      return { handled: true, reply: copy(locale, "channels.graduationPostponed", { name: persona.name }) };
+    }
   }
 
-  // Re-check eligibility before honouring the request.
-  const recentEmotions = await getRecentEmotionTrend(personaId, params.userId, 14);
-  const recentFreq = await getMessageCountInRange(personaId, params.userId, 7, 0);
-  const prevFreq = await getMessageCountInRange(personaId, params.userId, 14, 7);
-  const eligibility = checkGraduationEligibility({
-    intimacyLevel: persona.intimacyLevel,
-    recentEmotions,
-    chatCount: persona.chatCount || 0,
-    recentChatFrequency: recentFreq,
-    previousChatFrequency: prevFreq,
+  // Whether the graduation may happen at all is the user's choice.
+  const mode = await getEffectiveGraduationMode({
+    personaMode: persona.graduationMode,
+    userId: params.userId,
   });
-
-  if (!eligibility.eligible && persona.graduationStatus !== "suggested") {
-    return {
-      handled: true,
-      reply: `现在还不是告别的时候：${eligibility.reason}。\n再陪 TA 走一段吧。`,
-    };
+  if (mode === "off") {
+    return { handled: true, reply: copy(locale, "channels.graduationModeOff", { name: persona.name }) };
   }
 
-  const response = await llmService.invoke({
-    messages: [
-      { role: "system", content: "你是一个正在道别的角色，语气要克制、温柔、不说教。" },
-      {
-        role: "user",
-        content: `我们已经走过了很长的路，现在是时候说再见了。请用${persona.name}的口吻，写一封温暖的告别信。回顾我们的美好时光，表达祝福和不舍。信的长度在200-400字之间。只返回信的内容，不要有其他文字。`,
-      },
-    ],
+  // A persona the user asked to be left alone is not one to say goodbye to
+  // just yet.
+  const presence = getEffectivePresence({
+    personaPresence: persona.presence,
+    graduationStatus: persona.graduationStatus,
   });
+  if (!mayReachOut(presence)) {
+    return { handled: true, reply: copy(locale, "channels.personaIsQuiet", { name: persona.name }) };
+  }
 
-  const farewellLetter =
-    response || `亲爱的，感谢你一路的陪伴。虽然我们要说再见了，但那些美好的回忆会永远留在心里。祝你一切都好。—— ${persona.name}`;
+  // The thresholds exist to stop the app from deciding too early. In the
+  // "manual" mode the user has already decided, so they do not apply.
+  if (mode !== "manual") {
+    // Re-check eligibility before honouring the request.
+    const recentEmotions = await getRecentEmotionTrend(personaId, params.userId, 14);
+    const recentFreq = await getMessageCountInRange(personaId, params.userId, 7, 0);
+    const prevFreq = await getMessageCountInRange(personaId, params.userId, 14, 7);
+    const eligibility = checkGraduationEligibility({
+      intimacyLevel: persona.intimacyLevel,
+      recentEmotions,
+      chatCount: persona.chatCount || 0,
+      recentChatFrequency: recentFreq,
+      previousChatFrequency: prevFreq,
+      locale,
+    });
+
+    if (!eligibility.eligible && persona.graduationStatus !== "suggested") {
+      return {
+        handled: true,
+        reply: copy(locale, "channels.notTimeToSayGoodbye", { reason: eligibility.reason }),
+      };
+    }
+  }
+
+  // The letter is written with the user's own provider, from the same
+  // material the conversation would have had. Using the server's provider
+  // meant a channel user with their own key got an error at the one moment
+  // the product exists for. Whatever happens, the user gets a letter.
+  const farewellLetter = await writeFarewellLetter({
+    persona,
+    userId: params.userId,
+    locale,
+  });
 
   await setGraduationStatus(personaId, params.userId, "graduated", farewellLetter);
 
@@ -270,9 +330,12 @@ async function handleGraduationCommand(params: {
 
   // The wording names the channel. The WeChat copy has to stay exactly as it
   // was before the channels were unified.
-  const channelName = params.channel === "wechat" ? "微信" : "当前渠道";
+  const channelName = copy(
+    locale,
+    params.channel === "wechat" ? "channels.channelNameWechat" : "channels.channelNameDefault",
+  );
   return {
     handled: true,
-    reply: `${farewellLetter}\n\n（这封信已经保存了，如果${channelName}没有显示，请在网页端查看。）`,
+    reply: copy(locale, "channels.letterSavedElsewhere", { letter: farewellLetter, channel: channelName }),
   };
 }

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, jsonb } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, jsonb } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const analysisStatusEnum = pgEnum("analysis_status", ["pending", "analyzing", "ready", "error"]);
@@ -22,8 +22,7 @@ export const memoryCategoryEnum = pgEnum("memory_category", ["milestone", "memor
 export const graduationStatusEnum = pgEnum("graduation_status", ["suggested", "graduated", "declined"]);
 
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: varchar("username", { length: 100 }).notNull().unique(),
+  id: serial("id").primaryKey(),  username: varchar("username", { length: 100 }).notNull().unique(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   openId: varchar("openId", { length: 64 }).unique(),
   name: text("name"),
@@ -36,6 +35,59 @@ export const users = pgTable("users", {
    * this is what makes a logout actually revoke access.
    */
   tokenVersion: integer("tokenVersion").default(0).notNull(),
+  /**
+   * The instance-wide default for the graduation mechanism.
+   *
+   * "suggest" (the historical behaviour) has the app offer a graduation when
+   * the thresholds are met; "manual" leaves the decision entirely to the
+   * user; "off" switches the mechanism off. A persona may override this.
+   */
+  graduationMode: varchar("graduationMode", { length: 16 }).default("suggest").notNull(),
+  /**
+   * The user's own timezone, as an IANA name ("Asia/Shanghai").
+   *
+   * The app used the server's clock for everything, which meant a persona
+   * in another timezone was greeted as if it were the user's own evening.
+   */
+  timezone: varchar("timezone", { length: 64 }),
+  /**
+   * The language this person reads.
+   *
+   * The interface asks for it on every request, but the things the app
+   * sends on its own — a reminder at midnight, a reply in a chat window —
+   * have to know it without being asked. So it is kept here.
+   */
+  locale: varchar("locale", { length: 8 }).default("zh").notNull(),
+  /**
+   * How the user wants to be addressed.
+   *
+   * The persona is rebuilt from the other person's chat history, so it
+   * knows how *they* talk. It has no idea how the user wants to be
+   * called — "宝贝" to someone who has just been through a breakup is
+   * not a small thing.
+   */
+  addressStyle: varchar("addressStyle", { length: 64 }),
+  /**
+   * Whether the app may read the user's own messages to assess their
+   * emotional trajectory.
+   *
+   * The trajectory is the one place where the app sends a month of raw
+   * private conversation to the model. It is what lets the app notice a
+   * user who is getting better — but it is also the app reading
+   * something the user never wrote for anyone else.
+   *
+   * "auto" runs it when the graduation mechanism is in its suggesting
+   * mode, because that is what the mechanism is for. "on" and "off" are
+   * the user's own decision.
+   */
+  trajectoryAssessment: varchar("trajectoryAssessment", { length: 8 }).default("auto").notNull(),
+  /**
+   * Things the persona should not bring up.
+   *
+   * "别提我前任" or "别再提那家餐厅". A line the user can draw, which
+   * the persona is told about and respects.
+   */
+  boundaries: text("boundaries"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -82,6 +134,70 @@ export const personas = pgTable("personas", {
   graduationStatus: graduationStatusEnum(),
   graduatedAt: timestamp("graduatedAt"),
   farewellLetter: text("farewellLetter"),
+  /**
+   * When the graduation was first offered.
+   *
+   * The suggestion has to be made once, not on every turn — the app
+   * nagging about a farewell is the opposite of what it promises.
+   */
+  graduationSuggestedAt: timestamp("graduationSuggestedAt"),
+  /** When the user last declined it; a later suggestion may be made again. */
+  graduationDeclinedAt: timestamp("graduationDeclinedAt"),
+  /**
+   * Whether the persona is around right now.
+   *
+   * This is separate from `graduationStatus`, which records the *ritual*
+   * (has the user said goodbye?). Presence records the *company*:
+   *
+   *   active — the persona is reachable and the app may reach out
+   *   quiet  — the user asked for some space; no outreach, no suggestions
+   *   asleep — the persona has graduated and must not disturb anyone
+   */
+  presence: varchar("presence", { length: 16 }).default("active").notNull(),
+  /**
+   * Where this persona lives, as an IANA timezone name.
+   *
+   * The persona's time-of-day awareness is computed in *their* timezone,
+   * not the server's — which matters for anyone whose partner is abroad.
+   */
+  timezone: varchar("timezone", { length: 64 }),
+  /**
+   * Whether the two of them can currently reach each other.
+   *
+   * It is a state of the *connection*, not of the relationship: the
+   * relationship may be perfectly intact and the two of them simply not
+   * be in touch. The app had no way to express that, so "we are apart"
+   * and "we broke up" were the same thing, and a person who was simply
+   * out of touch was treated as though it were over.
+   */
+  reachability: varchar("reachability", { length: 16 }).default("reachable").notNull(),
+  /**
+   * Pinned personas sit at the top of the lobby.
+   *
+   * A person with six personas and one they talk to every day should not
+   * have to hunt for it every morning.
+   */
+  isPinned: boolean("isPinned").default(false).notNull(),
+  /**
+   * How often the persona may reach out on its own, in hours.
+   *
+   * Zero means never. It is the default, and it is a real value rather
+   * than a missing one: the product's goal is to help the user finish a
+   * relationship, so an app that speaks first is something the user has
+   * to buy, not something they get by default.
+   */
+  proactiveFrequencyHours: integer("proactiveFrequencyHours").default(0).notNull(),
+  /**
+   * This persona's own graduation mode. Null means "inherit the user's
+   * instance default", so changing the default still reaches it.
+   */
+  graduationMode: varchar("graduationMode", { length: 16 }),
+  /**
+   * The distillation preset this persona was built with — "fast",
+   * "standard", "deep", "colleague" or "celebrity". Null means the
+   * standard preset, which is what the app used before the presets existed.
+   */
+  distillationMode: varchar("distillationMode", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -116,6 +232,33 @@ export const messages = pgTable("messages", {
   mediaUrl: text("mediaUrl"),
   mediaDuration: integer("mediaDuration"),
   emotionalState: varchar("emotionalState", { length: 50 }),
+  /**
+   * The message this one replies to.
+   *
+   * Without it, every reply is a reply to "whatever came last", and a
+   * conversation that has been going for a while becomes impossible to
+   * follow — which is the thing people are in these conversations to do.
+   */
+  replyToId: integer("replyToId"),
+  /**
+   * The memories that were injected into this turn, as a JSON array.
+   *
+   * The retrieval used to be entirely invisible: the persona would
+   * bring up something from three months ago and there was no way to
+   * know it had been recalled rather than invented. It has to be
+   * written down, or the answer to that question disappears the moment
+   * the page is reloaded.
+   */
+  recalledMemoryIds: text("recalledMemoryIds"),
+  /**
+   * Where this message came from, when it is not an ordinary turn.
+   *
+   * "letter" — the answer to a letter the user wrote. It landed in the
+   * conversation, but without a marker it was just another message, and
+   * the connection to the letter was lost the moment it arrived.
+   * "proactive" — the persona spoke first.
+   */
+  origin: varchar("origin", { length: 16 }),
   channel: channelEnum().default("web").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -236,7 +379,30 @@ export const memories = pgTable("memories", {
   lastRecalledAt: timestamp("lastRecalledAt"),
   /** Structured fact key for anchor memories (e.g. `birthday`). */
   factKey: varchar("factKey", { length: 120 }),
+  /**
+   * Whose memory this is.
+   *
+   * "them" is about the persona; "me" is about the user. The two are
+   * different kinds of thing: one of them is the other person's life,
+   * and the other is the user's — and a persona that treats them the
+   * same ends up talking about the user's own life as if it were the
+   * persona's.
+   */
+  subject: varchar("subject", { length: 8 }).default("them").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/**
+ * When the memories were last extracted.
+ *
+ * The extraction is a fact about a conversation, so it is kept with the
+ * conversation rather than in a settings row.
+ */
+export const memoryExtractions = pgTable("memory_extractions", {
+  id: serial("id").primaryKey(),
+  personaId: integer("personaId").notNull(),
+  userId: integer("userId").notNull(),
+  extractedAt: timestamp("extractedAt").defaultNow().notNull(),
 });
 
 export type Memory = typeof memories.$inferSelect;
@@ -272,6 +438,131 @@ export const diaryEntries = pgTable("diary_entries", {
 export type DiaryEntry = typeof diaryEntries.$inferSelect;
 export type InsertDiaryEntry = typeof diaryEntries.$inferInsert;
 
+/**
+ * The user's own emotional state, recorded by the user.
+ *
+ * The app modelled the persona and never the person. Everything the user
+ * felt was inferred from what they said *to* the persona and stored as the
+ * persona's mood — so the analytics page charted the AI's feelings on the
+ * user's own dashboard, and a user in the middle of a breakup had nowhere
+ * to put how they were actually doing.
+ *
+ * One row per day. Checking in again replaces the day's entry, so the
+ * act of recording is cheap and repeatable.
+ */
+export const userMoods = pgTable(
+  "user_moods",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("userId").notNull().references(() => users.id),
+    /** The day, as "YYYY-MM-DD" in the user's own time zone. */
+    date: varchar("date", { length: 10 }).notNull(),
+    mood: varchar("mood", { length: 16 }).notNull(),
+    /** A word or two, if the user felt like writing one. */
+    note: text("note"),
+    /** "manual" when the user recorded it, "inferred" when the app did. */
+    source: varchar("source", { length: 16 }).default("manual").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userDateIdx: uniqueIndex("user_moods_user_date_idx").on(table.userId, table.date),
+  }),
+);
+
+export type UserMood = typeof userMoods.$inferSelect;
+export type InsertUserMood = typeof userMoods.$inferInsert;
+
+/**
+ * What actually happened in the relationship.
+ *
+ * The app simulated a conversation and remembered the other person's
+ * milestones, but it had no place to record reality: that the two of them
+ * fought last week, that they got back together, that they broke up, that
+ * they are simply out of touch. Without that, the persona's sense of the
+ * relationship was frozen at whatever the distillation pipeline decided on
+ * the day it ran.
+ *
+ * The events are the user's own record. The app does not guess them.
+ */
+export const relationshipEvents = pgTable(
+  "relationship_events",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("userId").notNull().references(() => users.id),
+    personaId: integer("personaId").notNull().references(() => personas.id),
+    /**
+     * What kind of event it is: "together", "apart", "reunion",
+     * "breakup", "conflict", "reconciliation", "news", "meetup",
+     * "triggered".
+     */
+    kind: varchar("kind", { length: 24 }).notNull(),
+    title: varchar("title", { length: 200 }).notNull(),
+    detail: text("detail"),
+    /** When it happened, which is not necessarily when it was recorded. */
+    happenedAt: timestamp("happenedAt").defaultNow().notNull(),
+    recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    personaTimeIdx: index("relationship_events_persona_time_idx").on(
+      table.personaId,
+      table.happenedAt,
+    ),
+  }),
+);
+
+export type RelationshipEvent = typeof relationshipEvents.$inferSelect;
+export type InsertRelationshipEvent = typeof relationshipEvents.$inferInsert;
+
+/**
+ * A letter the user wrote to the persona.
+ *
+ * The app had exactly one way to say something: talk to it, and get an
+ * answer. But the things people most want to say to somebody they cannot
+ * reach are the things they cannot say *to* them — and the reply is
+ * sometimes the problem. Writing a letter that is never delivered, and
+ * one that is, are two different acts, and both are missing here.
+ *
+ * A delivered letter is answered late. Instant replies are the one thing
+ * that gives the game away, and a person who has waited a day for
+ * someone to answer them would not get an answer in three seconds.
+ */
+export const letters = pgTable(
+  "letters",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("userId").notNull().references(() => users.id),
+    personaId: integer("personaId").notNull().references(() => personas.id),
+    body: text("body").notNull(),
+    /**
+     * "letter" — something written to the persona.
+     * "todo"   — 「等 TA 回来再说」: a note to yourself, kept for the
+     *   moment the two of you are in touch again.
+     */
+    kind: varchar("kind", { length: 16 }).default("letter").notNull(),
+    /** How the user was feeling when they wrote it. */
+    mood: varchar("mood", { length: 16 }),
+    /**
+     * "private" — kept, never answered.
+     * "waiting" — delivered, the reply is not due yet.
+     * "answered" — the persona has replied.
+     */
+    status: varchar("status", { length: 16 }).default("private").notNull(),
+    /** When the reply is due. */
+    replyAt: timestamp("replyAt"),
+    repliedAt: timestamp("repliedAt"),
+    replyText: text("replyText"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    personaTimeIdx: index("letters_persona_time_idx").on(table.personaId, table.createdAt),
+    dueIdx: index("letters_reply_due_idx").on(table.status, table.replyAt),
+  }),
+);
+
+export type Letter = typeof letters.$inferSelect;
+export type InsertLetter = typeof letters.$inferInsert;
+
 export const scenes = pgTable("scenes", {
   id: serial("id").primaryKey(),
   userId: integer("userId"),
@@ -283,7 +574,14 @@ export const scenes = pgTable("scenes", {
   starters: jsonb("starters"),
   isBuiltin: boolean("isBuiltin").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  // A built-in scene is identified by its name, and the seeding routine
+  // fills in whatever is missing by name — so two rows with the same name
+  // would be indistinguishable. Custom scenes are not covered: the user
+  // may name them whatever they like.
+  builtinNameUnique: uniqueIndex("scenes_builtin_name_idx")
+    .on(table.name).where(sql`${table.isBuiltin} = true`),
+}));
 
 export type Scene = typeof scenes.$inferSelect;
 export type InsertScene = typeof scenes.$inferInsert;

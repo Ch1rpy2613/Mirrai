@@ -15,13 +15,18 @@ import { llmService } from "../llm";
 import { resolveProviderForUser } from "../llm/user-provider";
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
-import { buildSystemPrompt, computeIntimacy } from "../_core/persona-utils";
-import { inferEmotionalState } from "../_core/emotion";
-import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
+import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
+import { inferEmotionalState, isEmotionalState } from "../_core/emotion";
+import { retrieveMemories } from "./retrieval";
 import { buildCrisisResponse, buildGentleCheckIn, detectCrisis } from "../safety/crisis";
 import { evaluateUsage, pickCareNote, type CareNote } from "../safety/usage-monitor";
 import { assessTrajectory, getStoredTrajectory } from "../safety/trajectory";
 import { checkGraduationEligibility } from "../_core/persona-utils";
+import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
+import { mayReachOut } from "@shared/graduation-mode";
+import { copy, localizeScene } from "@shared/copy";
+import { buildPromptForPersona } from "./prompt";
+import { extractMemories, isExtractionDue } from "./memory-extract";
 
 export type ChatMode = "stream" | "once";
 
@@ -40,6 +45,8 @@ export type ChatEvent =
   | {
       type: "done";
       messageId: number;
+      /** The memories that were injected into this turn. */
+      recalled?: Array<{ id: number; title: string; subject: string }>;
       emotionalState: string;
       graduationSuggested: boolean;
       careNote: CareNote | null;
@@ -52,6 +59,13 @@ export interface ConversationOptions {
   userId: number;
   /** The user's message. */
   message: string;
+  /**
+   * The message this turn is replying to.
+   *
+   * It is quoted in the prompt, so the persona answers the thing that
+   * was actually said rather than whatever happened to come last.
+   */
+  replyToId?: number | null;
   /** Explicit provider override (from `persona.llmProvider`). */
   providerName?: string;
   /** Channel the message arrived on. */
@@ -83,8 +97,10 @@ async function maybeCompactHistory(params: {
   history: Array<{ id: number; role: string; content: string; createdAt: Date }>;
   keepCount: number;
   providerName?: string;
+  locale?: "zh" | "en";
   now: Date;
 }): Promise<string> {
+  const locale = params.locale ?? "zh";
   const evicted = params.history.slice(0, Math.max(0, params.history.length - params.keepCount));
   if (evicted.length < 10) return "";
 
@@ -102,8 +118,15 @@ async function maybeCompactHistory(params: {
     }
   }
 
+  // The transcript is read by the model, so the names in it are in the
+  // language the persona is speaking.
   const transcript = evicted
-    .map((m) => `${m.role === "user" ? "用户" : "分身"}：${m.content}`)
+    .map((m) => {
+      const speaker = m.role === "user"
+        ? copy(locale, "prompt.speakerUser")
+        : copy(locale, "prompt.speakerPersona");
+      return `${speaker}${m.content}`;
+    })
     .join("\n");
 
   try {
@@ -115,8 +138,7 @@ async function maybeCompactHistory(params: {
       messages: [
         {
           role: "system",
-          content:
-            "你是一个对话记录整理助手。把下面的聊天记录压缩成不超过 300 字的中文摘要，保留关键事件、约定、称呼和情感转折，不要评论，只输出摘要本身。",
+          content: copy(locale, "prompts.historySummary"),
         },
         { role: "user", content: transcript },
       ],
@@ -178,8 +200,14 @@ export async function composeMessages(params: {
   locale?: "zh" | "en";
   now?: Date;
   extraConfig?: Record<string, any>;
-}): Promise<LLMMessage[]> {
+  /** The message this turn replies to. */
+  replyToId?: number | null;
+}): Promise<{
+  messages: LLMMessage[];
+  recalled: Array<{ id: number; title: string; subject: string }>;
+}> {
   const now = params.now ?? new Date();
+  const locale = params.locale ?? "zh";
   const contextLimit = Math.max(4, params.contextLimit);
   const history = await db.getMessagesByPersonaId(params.persona.id, params.userId, 200);
 
@@ -192,10 +220,24 @@ export async function composeMessages(params: {
     userId: params.userId,
     userMessage: params.userMessage,
     topK: params.extraConfig?.retrievalK,
+    locale,
     now: now.getTime(),
   });
   const anchors = retrieved.filter((m) => m.category === "anchor");
   const ordinary = retrieved.filter((m) => m.category !== "anchor");
+
+  // The message being replied to. Without it, every reply is a reply to
+  // "whatever came last".
+  let quotedSection = "";
+  if (params.replyToId) {
+    const quoted = await db
+      .getMessageById(params.replyToId, params.userId)
+      .catch(() => null);
+    if (quoted) {
+      const who = quoted.role === "user" ? copy(locale, "prompt.roleUser") : params.persona.name;
+      quotedSection = copy(locale, "prompt.quotedSection", { who, content: quoted.content });
+    }
+  }
 
   const summarySection = await maybeCompactHistory({
     persona: params.persona,
@@ -203,22 +245,57 @@ export async function composeMessages(params: {
     history: history as any,
     keepCount: contextLimit - 1,
     providerName: params.providerName,
+    locale,
     now,
   });
 
-  const systemPrompt = buildSystemPrompt(params.persona, {
-    sceneOverlay: scene?.systemPromptOverlay ?? null,
-    memorySection: formatMemoriesForPrompt(ordinary),
-    anchorSection: formatAnchorsForPrompt(anchors),
-    summarySection: summarySection ? `【以往对话摘要】\n${summarySection}` : "",
-    realismLevel: params.extraConfig?.realismLevel,
+  // The prompt is built in one place, so the one the user inspects is
+  // the one the model works from. It carries everything the app knows:
+  // who the persona is, who it is talking to, what has been happening
+  // between them, and what the persona remembers.
+  const systemPrompt = await buildPromptForPersona({
+    persona: params.persona,
+    userId: params.userId,
+    userMessage: params.userMessage,
     locale: params.locale,
     now,
+    // The scene's own wording goes into the prompt, so it has to be in
+    // the language the persona is speaking.
+    sceneOverlay: scene
+      ? (localizeScene(scene as any, params.locale ?? "zh") as any).systemPromptOverlay ?? null
+      : null,
+    // A scene carries the mood it is meant to be set in. It is a
+    // presentation override, not a state change: the persona's own state
+    // machine keeps running in the database, so leaving the scene puts the
+    // persona back where it was.
+    emotionalDesc: scene?.emotionalState && isEmotionalState(scene.emotionalState)
+      ? getEmotionalStateDesc(scene.emotionalState, params.locale ?? "zh")
+      : undefined,
+    summarySection: summarySection
+      ? `${copy(locale, "prompt.summarySectionHeading")}\n${summarySection}`
+      : "",
+    memories: retrieved as any,
+    quotedSection,
   });
 
   const recent = history.slice(-(contextLimit - 1)).map((m) => toLLMMessage(m));
 
-  return [{ role: "system", content: systemPrompt }, ...recent];
+  return {
+    messages: [{ role: "system", content: systemPrompt }, ...recent],
+    /**
+     * The memories that went into this turn.
+     *
+     * The retrieval used to be entirely invisible: the persona would
+     * bring up something from three months ago and the user had no way
+     * to know it had been pulled from the store rather than invented —
+     * which is exactly the question worth being able to ask.
+     */
+    recalled: retrieved.map((m) => ({
+      id: m.id,
+      title: m.title,
+      subject: (m as any).subject ?? "them",
+    })),
+  };
 }
 
 /**
@@ -235,14 +312,21 @@ export async function* runConversation(
   const now = options.now ?? new Date();
   const locale = options.locale ?? "zh";
 
+  // A persona that has said goodbye is asleep. It used to stay perfectly
+  // chatable, which meant the "graduation" was only a badge: the app
+  // announced the anniversary of a relationship the user had ended and
+  // still let them talk to it. Waking the persona is the way back.
+  const presence = getEffectivePresence({
+    personaPresence: persona.presence,
+    graduationStatus: persona.graduationStatus,
+  });
+  if (presence === "asleep") {
+    throw new Error(copy(locale, "prompt.graduatedNotice", { name: persona.name }));
+  }
+
   const defaultConfig = await db.getDefaultLlmConfig(userId);
   const extraConfig = (defaultConfig?.extraConfig as any) ?? {};
   const contextLimit = extraConfig.contextLimit || 20;
-
-  // The last activity has to be read *before* this turn is stored: afterwards
-  // the newest message is the turn itself and the session duration is always
-  // zero, which would make the long-conversation signal impossible to fire.
-  const lastActivityAt = (await db.getLastMessageAt(persona.id, userId)) ?? null;
 
   // The user's turn is stored first so the history and any summarisation see it.
   if (!options.alreadyPersisted) {
@@ -255,6 +339,7 @@ export async function* runConversation(
       channel: options.channel ?? "web",
       messageType: options.media?.type ?? "text",
       mediaUrl: options.media?.url ?? null,
+      replyToId: options.replyToId ?? null,
     });
   }
 
@@ -294,7 +379,7 @@ export async function* runConversation(
   // answers normally and checks in afterwards.
   const gentleCheckIn = crisis.weakSignal ? buildGentleCheckIn(persona.name, locale) : null;
 
-  const llmMessages = await composeMessages({
+  const { messages: llmMessages, recalled } = await composeMessages({
     persona,
     userId,
     userMessage: message,
@@ -302,6 +387,7 @@ export async function* runConversation(
     providerName: options.providerName,
     locale,
     now,
+    replyToId: options.replyToId,
     extraConfig,
   });
 
@@ -343,12 +429,20 @@ export async function* runConversation(
           signal: options.signal,
         },
       });
-      replyText = replyText || "（沉默）";
+      replyText = replyText || copy(locale, "prompt.silence");
       yield { type: "delta", text: replyText };
     }
   } catch (e) {
     failed = true;
     failureMessage = (e as Error).message;
+    // A cancelled reply is not a failed reply: the user asked for it to
+    // stop, so nothing is stored and nothing is counted. Storing a
+    // "（沉默）" in its place would put a message in the transcript that
+    // the person never received and never asked for.
+    if (options.signal?.aborted) {
+      yield { type: "error", message: "aborted", partial: replyText.length > 0 };
+      return;
+    }
     console.error("[Chat] LLM call failed:", e);
     yield { type: "error", message: failureMessage, partial: replyText.length > 0 };
   }
@@ -360,7 +454,6 @@ export async function* runConversation(
     userId,
     personaId: persona.id,
     now: now.getTime(),
-    lastActivityAt,
   });
   const careNote = pickCareNote(signals, locale);
   if (careNote) {
@@ -372,21 +465,43 @@ export async function* runConversation(
     }).catch((e) => console.warn("[Safety] Failed to record usage event:", e));
   }
 
-  // Even a partial answer is kept — half a sentence is still worth more than
-  // nothing when the user is waiting.
-  const baseText = replyText || "（沉默）";
-  const appended = [gentleCheckIn, careNote?.text].filter((part): part is string => !!part);
-  const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
-
-  const messageId = await db.createMessage({
+  // The trajectory is assessed here, before the reply is composed, so that
+  // a user whose emotional direction has turned can be noticed in the same
+  // breath. It used to be assessed afterwards, and only its "improving"
+  // half was ever read.
+  const trajectory = await maybeAssessTrajectory({
     personaId: persona.id,
     userId,
-    role: "assistant",
-    content: finalText,
-    emotionalState: persona.emotionalState,
-    channel: options.channel ?? "web",
+    providerName: options.providerName,
+    providerInstance: provider,
+    locale,
+    now,
   });
+  const worsening = trajectory === "worsening";
+  if (worsening) {
+    await db.createSafetyEvent({
+      userId,
+      personaId: persona.id,
+      type: "graduation_trajectory",
+      severity: "info",
+    }).catch((e) => console.warn("[Safety] Failed to record the trajectory event:", e));
+  }
 
+  // Even a partial answer is kept — half a sentence is still worth more than
+  // nothing when the user is waiting.
+  const baseText = replyText || copy(locale, "prompt.silence");
+  const appended = [gentleCheckIn, careNote?.text].filter((part): part is string => !!part);
+  // A worsening trajectory is only worth mentioning when the persona is not
+  // already saying something caring — two notes in one reply is a lecture.
+  if (worsening && !careNote) {
+    appended.push(worseningTrajectoryNote(locale));
+  }
+  const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
+
+  // The emotional state is inferred *before* the reply is stored. It used
+  // to be stored with the persona's previous state and inferred
+  // afterwards, so the message showed the new mood live and the old one
+  // after a reload — the same conversation, two different emotions.
   const emotion = await inferEmotionalState({
     userMessage: message,
     assistantReply: finalText,
@@ -399,6 +514,19 @@ export async function* runConversation(
     locale,
   });
   const newEmotionalState = emotion.state;
+
+  const messageId = await db.createMessage({
+    personaId: persona.id,
+    userId,
+    role: "assistant",
+    content: finalText,
+    emotionalState: newEmotionalState,
+    channel: options.channel ?? "web",
+    // Which memories went into this turn, so the answer to "did it
+    // recall that, or invent it?" survives a reload.
+    recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
+  });
+
   yield { type: "emotion", state: newEmotionalState, reason: emotion.reason };
 
   await db.updatePersona(persona.id, userId, {
@@ -410,11 +538,20 @@ export async function* runConversation(
   const todayStr = now.toISOString().slice(0, 10);
   const existing = await db.getTodaySnapshot(persona.id, userId);
   if (!existing) {
+    // The count is the number of messages that actually happened today.
+    // It used to be written as 1, which meant the "message count" in the
+    // emotion report was really "the number of days with a snapshot" —
+    // and every day had exactly one.
+    const messageCount = await db.getUserMessageCountForPersonaSince(
+      persona.id,
+      userId,
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+    );
     await db.createEmotionSnapshot({
       personaId: persona.id,
       userId,
       emotionalState: newEmotionalState,
-      messageCount: 1,
+      messageCount,
       date: todayStr,
     });
   }
@@ -423,17 +560,10 @@ export async function* runConversation(
   const intimacy = computeIntimacy(intimacyData);
   await db.updateIntimacy(persona.id, userId, intimacy.score, intimacy.level);
 
-  // The trajectory has to be assessed before the graduation check, which
-  // reads the stored assessment — otherwise the early-graduation branch never
-  // sees a trajectory at all.
-  await maybeAssessTrajectory({
-    personaId: persona.id,
-    userId,
-    providerName: options.providerName,
-    providerInstance: provider,
-    now,
-  });
-
+  // The graduation check reads the stored trajectory, and the trajectory
+  // was already assessed earlier in this turn — before the reply was
+  // composed, so that a user whose direction has turned could be noticed in
+  // the same breath.
   const graduationSuggested = await evaluateGraduation({
     persona,
     userId,
@@ -450,6 +580,16 @@ export async function* runConversation(
   if (careNote) {
     yield { type: "delta", text: `\n\n${careNote.text}` };
   }
+  if (worsening && !careNote) {
+    yield { type: "delta", text: `\n\n${worseningTrajectoryNote(locale)}` };
+  }
+
+  // The memories are extracted on their own, at most once a day, and
+  // only when there is enough new conversation to be worth extracting.
+  // It runs in the background: the reply is already written, and nobody
+  // should wait for it.
+  maybeExtractMemories(persona, userId, locale).catch((e) =>
+    console.warn("[Chat] The memory extraction failed:", e.message));
 
   yield {
     type: "done",
@@ -458,7 +598,36 @@ export async function* runConversation(
     graduationSuggested,
     careNote,
     crisis: false,
+    recalled,
   };
+}
+
+/**
+ * Runs the extraction when it is due.
+ *
+ * The cost of a model call is real, so this is throttled hard: once a
+ * day, and only when there are enough new messages to extract from.
+ */
+async function maybeExtractMemories(
+  persona: Persona,
+  userId: number,
+  locale: "zh" | "en" = "zh",
+  now = new Date(),
+): Promise<void> {
+  const last = await db.getLastExtractionAt(persona.id, userId);
+  const newMessages = await db.getUserMessageCountForPersonaSince(
+    persona.id,
+    userId,
+    last ?? new Date(now.getTime() - 24 * 3_600_000),
+  );
+  if (!isExtractionDue({
+    lastExtractedAt: last,
+    newMessageCount: newMessages,
+    now,
+  })) {
+    return;
+  }
+  await extractMemories({ persona, userId, locale, now });
 }
 
 /**
@@ -468,31 +637,80 @@ export async function* runConversation(
  * every turn would be expensive; the stored assessment says whether it is
  * time again. A failure is never fatal — the turn goes on without a fresh
  * trajectory.
+ *
+ * The result is returned so the reply can react to it. A trajectory that is
+ * getting worse used to be computed, stored, and then ignored: the safety
+ * layer only ever noticed the user getting better, which is the one
+ * direction that does not need watching.
  */
 async function maybeAssessTrajectory(params: {
   personaId: number;
   userId: number;
   providerName?: string;
   providerInstance?: LLMProvider;
+  locale?: "zh" | "en";
   now: Date;
-}): Promise<void> {
+}): Promise<"improving" | "stable" | "worsening" | null> {
+  try {
+    if (!(await isTrajectoryAssessmentAllowed(params.userId))) return null;
+  } catch (e) {
+    console.warn("[Safety] Could not read the trajectory setting:", (e as Error).message);
+  }
+
   try {
     const latest = await db.getLatestGraduationAssessment(params.personaId, params.userId);
     if (latest) {
       const age = params.now.getTime() - new Date(latest.createdAt).getTime();
-      if (age < TRAJECTORY_INTERVAL_MS) return;
+      if (age < TRAJECTORY_INTERVAL_MS) return latest.trajectory as any;
     }
 
-    await assessTrajectory({
+    const assessment = await assessTrajectory({
       userId: params.userId,
       personaId: params.personaId,
       provider: params.providerName,
       providerInstance: params.providerInstance,
+      locale: params.locale,
       now: params.now.getTime(),
     });
+    return (assessment?.trajectory as any) ?? null;
   } catch (e) {
     console.warn("[Safety] Trajectory assessment failed:", (e as Error).message);
+    return null;
   }
+}
+
+/**
+ * Whether the app may read the user's own messages to assess their
+ * trajectory.
+ *
+ * The trajectory is the one place where a month of raw private
+ * conversation goes to the model. It is also what lets the app notice a
+ * user who is getting better — which is the whole point of the product —
+ * so "auto" runs it when the graduation mechanism is in its suggesting
+ * mode, and leaves it to the user otherwise.
+ */
+async function isTrajectoryAssessmentAllowed(userId: number): Promise<boolean> {
+  const user = await db.getUserById(userId);
+  if (!user) return true;
+  const setting = (user as any).trajectoryAssessment ?? "auto";
+  if (setting === "off") return false;
+  if (setting === "on") return true;
+  const mode = await getEffectiveGraduationMode({
+    personaMode: null,
+    userId,
+  });
+  return mode === "suggest";
+}
+
+/**
+ * The line appended when the emotional trajectory is getting worse.
+ *
+ * It is deliberately not a lecture and not a suggestion to let go. The
+ * user is not being asked to change anything — they are being told that
+ * the app noticed, which is the part that was missing.
+ */
+function worseningTrajectoryNote(locale: "zh" | "en"): string {
+  return copy(locale, "prompt.worseningTrajectoryNote");
 }
 
 /**
@@ -500,15 +718,49 @@ async function maybeAssessTrajectory(params: {
  *
  * The hard thresholds decide; the emotional trajectory can make the app
  * mention it earlier, as a gentle nudge rather than a decision.
+ *
+ * Whether the app may mention it at all is the user's choice: only the
+ * "suggest" mode lets the app raise the topic by itself. The other two
+ * modes are silence here — the user still keeps every entry point of their
+ * own.
+ *
+ * It is exported so the gate can be tested on its own; the conversation
+ * pipeline is the only caller.
  */
-async function evaluateGraduation(params: {
+export async function evaluateGraduation(params: {
   persona: Persona;
   userId: number;
   intimacyLevel: string;
   chatCount: number;
+  now?: Date;
 }): Promise<boolean> {
   const { persona, userId } = params;
-  if (persona.graduationStatus) return false;
+  const now = params.now ?? new Date();
+
+  // A persona that has graduated is final; nothing may re-open it.
+  // An offer that was made — or declined — puts the persona in a cooldown,
+  // so the suggestion arrives occasionally instead of on every turn.
+  const offer = canOfferGraduation({
+    status: persona.graduationStatus,
+    suggestedAt: persona.graduationSuggestedAt,
+    declinedAt: persona.graduationDeclinedAt,
+    now,
+  });
+  if (!offer.allowed) return false;
+
+  // A persona the user asked to be left alone is not one to raise a
+  // farewell with.
+  const presence = getEffectivePresence({
+    personaPresence: persona.presence,
+    graduationStatus: persona.graduationStatus,
+  });
+  if (!mayReachOut(presence)) return false;
+
+  const mode = await getEffectiveGraduationMode({
+    personaMode: persona.graduationMode,
+    userId,
+  });
+  if (mode !== "suggest") return false;
 
   const recentEmotions = await db.getRecentEmotionTrend(persona.id, userId, 14);
   const recentFreq = await db.getMessageCountInRange(persona.id, userId, 7, 0);
@@ -537,6 +789,9 @@ async function evaluateGraduation(params: {
       type: "graduation_trajectory",
       severity: "info",
     }).catch(() => undefined);
+    // The offer has to be recorded, or it is made again on the next turn —
+    // and an offer that repeats itself is nagging, not a suggestion.
+    await db.setGraduationStatus(persona.id, userId, "suggested");
     return true;
   }
 

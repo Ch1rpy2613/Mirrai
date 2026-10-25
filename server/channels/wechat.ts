@@ -15,12 +15,14 @@ import {
 import { setWechatBindingPersona, getWechatBindingsByUserId } from "../db";
 import { clearAllActivePersonas } from "../wechat/commands";
 import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
+import { copy, type Locale } from "@shared/copy";
 
 const CHANNEL_ID = "wechat" as const;
 
 export class WechatAdapter implements ChannelAdapter {
   id: ChannelId = CHANNEL_ID;
-  label = "微信（ClawBot）";
+  label = copy("zh", "channels.channelLabelWechat");
+  labelForLocale = (locale: Locale) => copy(locale, "channels.channelLabelWechat");
   requiresCredentials = false;
 
   async start(userId: number): Promise<void> {
@@ -46,22 +48,31 @@ export class WechatAdapter implements ChannelAdapter {
     };
   }
 
-  async send(userId: number, targetId: string, text: string): Promise<void> {
+  async send(
+    userId: number,
+    targetId: string,
+    text: string,
+    locale: Locale = "zh",
+  ): Promise<void> {
     // `sendWeixinText` reports a missing or expired bot session by
     // returning false rather than throwing. Swallowing that would let the
     // caller record the message as delivered when nothing was sent, so the
     // failure has to surface.
     const sent = await sendWeixinText(userId, targetId, text);
     if (!sent) {
-      throw new Error("微信消息发送失败：机器人未登录或会话已失效。");
+      throw new Error(copy(locale, "errors.wechatSendFailed"));
     }
   }
 
-  async setDefaultPersona(userId: number, personaId: number): Promise<void> {
+  async setDefaultPersona(
+    userId: number,
+    personaId: number,
+    locale: Locale = "zh",
+  ): Promise<void> {
     const bindings = await getWechatBindingsByUserId(userId);
     const targetId = bindings[0]?.wechatUserId;
     if (!targetId) {
-      throw new Error("还没有绑定任何微信会话。");
+      throw new Error(copy(locale, "errors.wechatNoBinding"));
     }
     await setWechatBindingPersona({
       userId,

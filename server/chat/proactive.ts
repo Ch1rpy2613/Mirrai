@@ -1,0 +1,220 @@
+/**
+ * The persona reaching out first.
+ *
+ * The replica never spoke on its own. The user always had to open the
+ * app and start — which means the reason to open it was the user
+ * feeling like it, not the other person. For anybody whose partner is
+ * away, that is the whole difference: the reason you open the app is to
+ * see whether they would have said something.
+ *
+ * So the persona now speaks first, sometimes. What it says is grounded
+ * in what it actually knows — the memories, the two clocks, how long it
+ * has been, how the user has been doing — and it is delivered as a real
+ * message in the conversation, because a message is what a person sends
+ * and a notification is what a machine sends.
+ *
+ * The frequency is the user's, and zero is a real value. The product's
+ * goal is to help the user finish a relationship, so an app that speaks
+ * first is something they have to buy, not something they get.
+ */
+import type { Persona } from "../../drizzle/schema";
+import * as db from "../db";
+import { buildSystemPrompt } from "../_core/persona-utils";
+import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
+import { resolveProviderForUser } from "../llm/user-provider";
+import { llmService } from "../llm";
+import { buildUserContextBlock, isUserMood } from "@shared/user-side";
+import { zonedHour, zonedOffsetHours } from "@shared/timezone";
+import { mayReachOut, type Presence } from "@shared/graduation-mode";
+import { copy } from "@shared/copy";
+
+/** The longest a proactive message may be. A first word is not a letter. */
+const MAX_PROACTIVE_LENGTH = 120;
+
+export interface ProactiveContext {
+  /** How long since the last message, in days. */
+  daysSinceLastChat: number;
+  /** The time on the user's side. */
+  userHour: number;
+  /** The time on the persona's side. */
+  personaHour: number;
+  /**
+   * How many hours the persona's clock is ahead of the user's.
+   *
+   * "They are six hours ahead of you" is a thing a person can act on.
+   * "They are in another timezone" is not — it is the reason a message
+   * lands at three in the morning.
+   */
+  hoursApart: number | null;
+  /** The user's own recent state, if they said. */
+  userMood: string | null;
+  /** Whether the relationship has ended. */
+  relationshipEnded: boolean;
+}
+
+/**
+ * Collects what the persona knows about right now.
+ */
+export async function collectProactiveContext(params: {
+  persona: Persona;
+  userId: number;
+  now?: Date;
+}): Promise<ProactiveContext> {
+  const now = params.now ?? new Date();
+  const user = await db.getUserById(params.userId).catch(() => null);
+  const lastMessage = await db.getLastMessageAt(params.persona.id, params.userId);
+  const daysSinceLastChat = lastMessage
+    ? Math.floor((now.getTime() - new Date(lastMessage).getTime()) / 86_400_000)
+    : 0;
+  const mood = await db.getRecentUserMood(params.userId).catch(() => null);
+
+  const userZone = user?.timezone ?? null;
+  const personaZone = (params.persona as any).timezone ?? null;
+
+  return {
+    daysSinceLastChat,
+    userHour: zonedHour(now, userZone),
+    personaHour: zonedHour(now, personaZone),
+    hoursApart: personaZone
+      ? zonedOffsetHours(now, personaZone) - zonedOffsetHours(now, userZone)
+      : null,
+    userMood: mood && isUserMood(mood.mood) ? mood.mood : null,
+    relationshipEnded: Boolean((params.persona as any).togetherTo?.trim()),
+  };
+}
+
+/**
+ * The instruction that makes it a first word rather than a reply.
+ *
+ * Every sentence is one fact, and the fact is only there when it is true:
+ * the app knows how long it has been, how far apart the two clocks are, how
+ * the user has been, and whether it is still a relationship — and it tells
+ * the persona the ones that apply.
+ */
+export function buildProactiveInstruction(
+  context: ProactiveContext,
+  locale: "zh" | "en" = "zh",
+): string {
+  const parts: string[] = [];
+
+  parts.push(copy(locale, "prompts.proactiveOpening"));
+  if (context.daysSinceLastChat >= 3) {
+    parts.push(copy(locale, "prompts.proactiveDaysSince", { days: context.daysSinceLastChat }));
+  }
+  if (context.hoursApart !== null && Math.abs(context.hoursApart) >= 1) {
+    const hours = Math.abs(Math.round(context.hoursApart));
+    parts.push(
+      copy(locale, "prompts.proactiveClock", {
+        direction: copy(locale, context.hoursApart > 0 ? "prompts.clockAhead" : "prompts.clockBehind"),
+        hours: copy(locale, hours === 1 ? "prompts.hourUnit" : "prompts.hourUnits", { hours }),
+      }),
+    );
+  }
+  if (context.userMood) {
+    parts.push(copy(locale, "prompts.proactiveMood"));
+  }
+  if (context.relationshipEnded) {
+    parts.push(copy(locale, "prompts.proactiveEnded"));
+  }
+  parts.push(copy(locale, "prompts.proactiveLength"));
+  return parts.join("\n");
+}
+
+/**
+ * Writes a message the persona starts.
+ */
+export async function composeProactiveMessage(params: {
+  persona: Persona;
+  userId: number;
+  locale?: "zh" | "en";
+  now?: Date;
+}): Promise<string | null> {
+  const { persona } = params;
+  const locale = params.locale ?? "zh";
+  const now = params.now ?? new Date();
+
+  const context = await collectProactiveContext({
+    persona,
+    userId: params.userId,
+    now,
+  });
+
+  const memories = await retrieveMemories({
+    personaId: persona.id,
+    userId: params.userId,
+    userMessage: buildProactiveInstruction(context, locale),
+    locale,
+  }).catch(() => []);
+  const anchors = memories.filter((m) => m.category === "anchor");
+  const ordinary = memories.filter((m) => m.category !== "anchor");
+
+  const user = await db.getUserById(params.userId).catch(() => null);
+  const userContext = buildUserContextBlock(
+    {
+      name: user?.name,
+      addressStyle: user?.addressStyle,
+      boundaries: user?.boundaries,
+    },
+    { locale, mood: context.userMood as any },
+  );
+
+  const systemPrompt = buildSystemPrompt(persona, {
+    anchorSection: formatAnchorsForPrompt(anchors, locale),
+    memorySection: formatMemoriesForPrompt(ordinary, locale),
+    userContext,
+    locale,
+    now,
+  });
+
+  const messages = [
+    { role: "system" as const, content: systemPrompt },
+    { role: "user" as const, content: buildProactiveInstruction(context, locale) },
+  ];
+
+  let text = "";
+  try {
+    const provider = await resolveProviderForUser({
+      userId: params.userId,
+      providerName: (persona as any).llmProvider ?? undefined,
+    });
+    if (provider) {
+      text = await provider.invoke(messages);
+    }
+  } catch (e) {
+    console.warn("[Proactive] The user's provider failed:", (e as Error).message);
+  }
+
+  if (!text?.trim()) {
+    try {
+      text = await llmService.invoke({ messages });
+    } catch (e) {
+      console.warn("[Proactive] No provider could write the message:", (e as Error).message);
+    }
+  }
+
+  const trimmed = text?.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, MAX_PROACTIVE_LENGTH * 4);
+}
+
+/**
+ * Whether a persona is due to speak first.
+ *
+ * Three conditions, and all three have to hold: the user asked for it
+ * (the frequency is not zero), enough time has passed, and the persona
+ * is actually around. A persona the user has put to sleep, or asked to
+ * be left alone, does not come back on its own.
+ */
+export function isProactiveDue(params: {
+  frequencyHours: number;
+  lastChatAt: Date | null;
+  presence: string;
+  now?: Date;
+}): boolean {
+  const now = params.now ?? new Date();
+  if (!params.frequencyHours || params.frequencyHours <= 0) return false;
+  if (!mayReachOut(params.presence as Presence)) return false;
+  if (!params.lastChatAt) return true;
+  const elapsed = now.getTime() - new Date(params.lastChatAt).getTime();
+  return elapsed >= params.frequencyHours * 3_600_000;
+}

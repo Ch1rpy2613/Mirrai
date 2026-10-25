@@ -21,6 +21,7 @@ import * as db from "../db";
 import { handleChannelChat } from "./bridge";
 import { getActivePersonaId, handleCommand } from "./commands";
 import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
+import { copy, detectLocale, type Locale } from "@shared/copy";
 
 const CHANNEL_ID = "feishu" as const;
 
@@ -43,13 +44,12 @@ const connections = new Map<number, RunningConnection>();
  * not need it — so it is imported dynamically and the failure is reported
  * clearly rather than crashing the server at boot.
  */
-async function loadSdk(): Promise<typeof import("@larksuiteoapi/node-sdk")> {
+async function loadSdk(locale: Locale = "zh"): Promise<typeof import("@larksuiteoapi/node-sdk")> {
   try {
     return await import("@larksuiteoapi/node-sdk");
   } catch (e) {
     throw new Error(
-      "飞书通道需要 @larksuiteoapi/node-sdk，请先运行 `pnpm install` 安装依赖。" +
-        ` (${(e as Error).message})`,
+      `${copy(locale, "errors.feishuSdkMissing")} (${(e as Error).message})`,
     );
   }
 }
@@ -109,9 +109,13 @@ export async function handleFeishuEvent(params: {
   const text = extractMessageText(event.message ?? {});
   if (!text || !text.trim()) return;
 
+  // The language the person is writing in is the language they should be
+  // answered in — the channel has no language switch of its own.
+  const locale = detectLocale(text);
+
   const binding = await db.getChannelBinding(userId, CHANNEL_ID, chatId);
   if (!binding) {
-    await sendText(chatId, "还没有设置默认分身。请在网页端「设置 → 飞书」里选择要对话的分身。");
+    await sendText(chatId, copy(locale, "channels.noDefaultPersonaFeishu"));
     return;
   }
 
@@ -140,16 +144,14 @@ export async function handleFeishuEvent(params: {
     personaId,
     messageText: text,
     channel: CHANNEL_ID,
+    locale,
   });
 
   if (!reply) return;
 
   const persona = await db.getPersonaById(personaId, userId);
   if (persona?.graduationStatus === "suggested") {
-    await sendText(
-      chatId,
-      `${reply}\n\n（如果你觉得是时候了，回复「/毕业」我来写最后一封信。）`,
-    );
+    await sendText(chatId, `${reply}${copy(locale, "channels.graduationHint")}`);
     return;
   }
 
@@ -161,7 +163,8 @@ export async function handleFeishuEvent(params: {
  */
 export class FeishuAdapter implements ChannelAdapter {
   id: ChannelId = CHANNEL_ID;
-  label = "飞书";
+  label = copy("zh", "channels.channelNameFeishu");
+  labelForLocale = (locale: Locale) => copy(locale, "channels.channelNameFeishu");
   requiresCredentials = true;
 
   /** Stores the app credentials for a user, encrypted. */
@@ -180,7 +183,7 @@ export class FeishuAdapter implements ChannelAdapter {
       await saveCollectionSource({
         userId,
         source: "feishu",
-        label: "飞书",
+        label: copy("zh", "labels.collector.feishu"),
         encryptedCredentials: encrypted,
       });
     } catch (e) {
@@ -189,15 +192,15 @@ export class FeishuAdapter implements ChannelAdapter {
     }
   }
 
-  async start(userId: number): Promise<void> {
+  async start(userId: number, locale: Locale = "zh"): Promise<void> {
     if (connections.has(userId)) return;
 
     const credentials = await readCredentials(userId);
     if (!credentials) {
-      throw new Error("飞书通道尚未配置 App ID / App Secret。");
+      throw new Error(copy(locale, "errors.feishuNoCredentials"));
     }
 
-    const lark = await loadSdk();
+    const lark = await loadSdk(locale);
 
     const client = new lark.Client({
       appId: credentials.appId,
@@ -270,10 +273,15 @@ export class FeishuAdapter implements ChannelAdapter {
     };
   }
 
-  async send(userId: number, targetId: string, text: string): Promise<void> {
+  async send(
+    userId: number,
+    targetId: string,
+    text: string,
+    locale: Locale = "zh",
+  ): Promise<void> {
     const connection = connections.get(userId);
     if (!connection) {
-      throw new Error("飞书通道尚未连接。");
+      throw new Error(copy(locale, "errors.feishuNotConnected"));
     }
     await connection.client.im.v1.message.create({
       params: { receive_id_type: "chat_id" },
@@ -285,11 +293,15 @@ export class FeishuAdapter implements ChannelAdapter {
     });
   }
 
-  async setDefaultPersona(userId: number, personaId: number): Promise<void> {
+  async setDefaultPersona(
+    userId: number,
+    personaId: number,
+    locale: Locale = "zh",
+  ): Promise<void> {
     const bindings = await db.getChannelBindingsByUserId(userId, CHANNEL_ID);
     const targetId = bindings[0]?.targetId;
     if (!targetId) {
-      throw new Error("还没有绑定任何飞书会话。");
+      throw new Error(copy(locale, "errors.feishuNoBinding"));
     }
     await db.setChannelBindingPersona({
       userId,

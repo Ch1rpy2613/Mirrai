@@ -17,6 +17,7 @@
  * `realismLevel` and `relationshipPhase` are not layers but quality knobs:
  * how human the persona sounds, and which stage the relationship is in.
  */
+import { copy, type Locale } from "@shared/copy";
 
 export interface PersonaData {
   personality: string;
@@ -129,32 +130,44 @@ function toRelationshipPhase(value: unknown): RelationshipPhase | null {
  * instead of an array, and `memories` may be a list of objects. Everything is
  * coerced into the canonical types, and missing fields fall back to a sensible
  * default so a partially-formed response never produces an empty persona.
+ *
+ * The fallbacks are the persona's own words, so they follow the language the
+ * persona is written in rather than the language of the interface.
  */
 export function normalizePersonaData(
   raw: Record<string, unknown> | null | undefined,
-  options: { name: string; fallback?: Partial<PersonaData> },
+  options: { name: string; fallback?: Partial<PersonaData>; locale?: Locale },
 ): NormalizedPersonaData {
   const fallback = options.fallback ?? {};
   const source = raw ?? {};
+  const locale = options.locale ?? "zh";
 
   const personality =
-    toText(source.personality) || fallback.personality || `${options.name}是一个温柔体贴的人。`;
+    toText(source.personality) ||
+    fallback.personality ||
+    copy(locale, "labels.persona.fallbackPersonality", { name: options.name });
   const speakingStyle =
-    toText(source.speakingStyle) || fallback.speakingStyle || "说话温柔自然，喜欢用可爱的语气词";
+    toText(source.speakingStyle) ||
+    fallback.speakingStyle ||
+    copy(locale, "labels.persona.fallbackSpeakingStyle");
 
   const rawCatchphrases = source.catchphrases ?? source.catchPhrase;
   const catchphrases = toStringList(rawCatchphrases);
   const resolvedCatchphrases = catchphrases.length
     ? catchphrases
-    : fallback.catchphrases ?? ["嗯嗯", "好呀", "哈哈"];
+    : fallback.catchphrases ?? toStringList(copy(locale, "labels.persona.fallbackCatchphrases"));
 
-  const nickname = toText(source.nickname) || fallback.nickname || "宝贝";
+  const nickname = toText(source.nickname) || fallback.nickname || copy(locale, "labels.persona.fallbackNickname");
   const memories = toText(source.memories) || fallback.memories || "";
-  const attachmentStyle = toText(source.attachmentStyle) || fallback.attachmentStyle || "安全型";
-  const loveLanguage = toText(source.loveLanguage) || fallback.loveLanguage || "未知";
-  const conflictStyle = toText(source.conflictStyle) || fallback.conflictStyle || "未知";
+  const attachmentStyle =
+    toText(source.attachmentStyle) || fallback.attachmentStyle || copy(locale, "labels.persona.fallbackAttachmentStyle");
+  const loveLanguage = toText(source.loveLanguage) || fallback.loveLanguage || copy(locale, "labels.persona.unknown");
+  const conflictStyle = toText(source.conflictStyle) || fallback.conflictStyle || copy(locale, "labels.persona.unknown");
   const touchingMoments = toText(source.touchingMoments) || fallback.touchingMoments || "";
-  const summary = toText(source.summary) || fallback.summary || `${options.name}是一个温暖、真诚的人`;
+  const summary =
+    toText(source.summary) ||
+    fallback.summary ||
+    copy(locale, "labels.persona.fallbackSummary", { name: options.name });
 
   // The persona-quality fields were added after the first release, so old
   // personas do not have them — they get the plan's defaults instead.

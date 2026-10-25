@@ -17,6 +17,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { runPythonTool } from "./runner";
+import { copy, type Locale } from "@shared/copy";
 
 /** The hosts a generated skill can be installed into. */
 export const SKILL_EXPORT_HOSTS = ["claude-code", "openclaw", "codex", "hermes"] as const;
@@ -69,12 +70,15 @@ function outputLines(stdout: string): string[] {
 }
 
 /** Installs the generated skill into the requested host. */
-export async function exportSkillToHost(input: SkillExportInput): Promise<SkillExportResult> {
+export async function exportSkillToHost(
+  input: SkillExportInput,
+  locale: Locale = "zh",
+): Promise<SkillExportResult> {
   const skillPath = path.resolve(input.skillPath);
   const skillFile = path.join(skillPath, "SKILL.md");
 
   if (!fs.existsSync(skillPath) || !fs.existsSync(skillFile)) {
-    throw new Error(`技能包不存在或缺少 SKILL.md：${skillPath}`);
+    throw new Error(copy(locale, "errors.skillPackageMissing", { path: skillPath }));
   }
 
   const commandName = readCommandName(skillPath);
@@ -142,7 +146,7 @@ export async function exportSkillToHost(input: SkillExportInput): Promise<SkillE
   }
 
   if (!installedPath) {
-    throw new Error(`安装器没有返回安装路径：${input.host}`);
+    throw new Error(copy(locale, "errors.skillInstallPathMissing", { host: input.host }));
   }
 
   const installedSkillFile = path.join(installedPath, "SKILL.md");

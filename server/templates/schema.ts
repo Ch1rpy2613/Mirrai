@@ -7,6 +7,7 @@
  * so there is deliberately no remote marketplace here.
  */
 import type { PersonaData } from "../_core/persona-schema";
+import { copy, type Locale } from "@shared/copy";
 
 export const TEMPLATE_SCHEMA_VERSION = 1;
 
@@ -42,27 +43,33 @@ export interface TemplateValidationResult {
  * Checks that an unknown object is a usable template.
  *
  * Used by the import path, where the file may come from anywhere.
+ *
+ * The reason is reported to the person who uploaded the file, so it is
+ * in their language.
  */
-export function validateTemplate(value: unknown): TemplateValidationResult {
+export function validateTemplate(
+  value: unknown,
+  locale: Locale = "zh",
+): TemplateValidationResult {
   if (!value || typeof value !== "object") {
-    return { ok: false, error: "模板必须是一个对象" };
+    return { ok: false, error: copy(locale, "errors.templateNotAnObject") };
   }
   const candidate = value as Partial<PersonaTemplate>;
   if (typeof candidate.id !== "string" || !candidate.id.trim()) {
-    return { ok: false, error: "模板缺少 id" };
+    return { ok: false, error: copy(locale, "errors.templateMissingId") };
   }
   if (typeof candidate.name !== "string" || !candidate.name.trim()) {
-    return { ok: false, error: "模板缺少 name" };
+    return { ok: false, error: copy(locale, "errors.templateMissingName") };
   }
   if (!candidate.personaData || typeof candidate.personaData !== "object") {
-    return { ok: false, error: "模板缺少 personaData" };
+    return { ok: false, error: copy(locale, "errors.templateMissingPersonaData") };
   }
   if (
     candidate.family !== "colleague" &&
     candidate.family !== "relationship" &&
     candidate.family !== "celebrity"
   ) {
-    return { ok: false, error: "模板的 family 必须是 colleague / relationship / celebrity" };
+    return { ok: false, error: copy(locale, "errors.templateWrongFamily") };
   }
   return { ok: true };
 }

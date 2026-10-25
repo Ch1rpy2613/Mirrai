@@ -61,3 +61,27 @@ export function intimacyLevelIcon(value: string | null | undefined): string {
   );
   return match?.icon ?? INTIMACY_LEVELS[0].icon;
 }
+
+/**
+ * The label for a stored level, in the language asked for.
+ *
+ * The exports used to carry their own table of level names, and it had
+ * fallen behind: the levels above "familiar" were missing from it, so an
+ * export of a close relationship printed the raw key — `soulmate` — where
+ * a person expected a name. There is one table now, and it is this one.
+ *
+ * A level that is in no table at all is printed as it is. Calling it
+ * "acquainted" because it was not recognised would be worse than saying
+ * nothing useful.
+ */
+export function intimacyLevelLabel(
+  value: string | null | undefined,
+  locale: "zh" | "en" = "zh",
+): string {
+  const trimmed = value?.trim() ?? "";
+  const match = INTIMACY_LEVELS.find(
+    (l) => l.key === trimmed || l.name === trimmed || l.nameEn === trimmed,
+  );
+  if (!match) return trimmed;
+  return locale === "en" ? match.nameEn : match.name;
+}

@@ -6,9 +6,11 @@
  */
 import { feishuAdapter } from "./feishu";
 import { wechatAdapter } from "./wechat";
+import { channelLabel } from "./types";
 import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
 
 export type { ChannelAdapter, ChannelId, ChannelStatus };
+export { channelLabel };
 
 const adapters = new Map<ChannelId, ChannelAdapter>();
 

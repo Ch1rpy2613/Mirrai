@@ -14,6 +14,7 @@ import { llmService } from "../llm";
 import { extractJsonObject } from "../_core/json";
 import type { LLMProvider } from "../llm/types";
 import * as db from "../db";
+import { copy } from "@shared/copy";
 
 export type Trajectory = "improving" | "stable" | "worsening";
 
@@ -26,15 +27,6 @@ export interface TrajectoryAssessment {
   /** The model's free-form note. */
   note?: string;
 }
-
-const SYSTEM_PROMPT = `你是一个情感状态分析助手。阅读一段用户与 AI 分身的对话，判断用户当前的情绪走向。
-
-判断依据：
-- "遗憾"类表达：假设、后悔、弥补、如果当初、可惜、没能、错过了、还在想
-- "释然"类表达：谢谢、感谢你、成长、释怀、放下、接受了、挺好的、想通了
-
-只返回 JSON，不要任何其他文字：
-{"trajectory":"improving|stable|worsening","regretRatio":0-100,"gratitudeRatio":0-100,"note":"30字以内的观察"}`;
 
 function ratioOf(text: string, patterns: RegExp[]): number {
   if (!text) return 0;
@@ -68,9 +60,12 @@ export async function assessTrajectory(params: {
    * falling back to the environment key.
    */
   providerInstance?: LLMProvider;
+  /** The language the assessment is written in. */
+  locale?: "zh" | "en";
   now?: number;
 }): Promise<TrajectoryAssessment | null> {
   const now = params.now ?? Date.now();
+  const locale = params.locale ?? "zh";
   const since = new Date(now);
   since.setDate(since.getDate() - 28);
 
@@ -80,7 +75,7 @@ export async function assessTrajectory(params: {
 
   const transcript = userMessages
     .slice(-120)
-    .map((content) => `用户：${content}`)
+    .map((content) => copy(locale, "prompts.trajectoryTranscriptLine", { content }))
     .join("\n");
 
   const localRegret = ratioOf(transcript, REGRET_PATTERNS);
@@ -94,7 +89,7 @@ export async function assessTrajectory(params: {
   try {
     const request = {
       messages: [
-        { role: "system" as const, content: SYSTEM_PROMPT },
+        { role: "system" as const, content: copy(locale, "prompts.trajectoryAnalysis") },
         { role: "user" as const, content: transcript },
       ],
       options: { provider: params.provider, temperature: 0, maxTokens: 300 },

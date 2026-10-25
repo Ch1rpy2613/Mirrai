@@ -7,6 +7,7 @@
  * memory anchors, the character card export — works the same way.
  */
 import { normalizePersonaData, type PersonaData } from "../_core/persona-schema";
+import { copy, type Locale } from "@shared/copy";
 
 export interface QuestionnaireAnswers {
   /** The person's name. */
@@ -35,33 +36,41 @@ export interface QuestionnaireAnswers {
   notes?: string;
 }
 
-const COMMUNICATION_STYLE_TEXT: Record<string, string> = {
-  gentle: "说话温和，语气轻，习惯先照顾对方的感受",
-  direct: "说话直接，结论先行，不喜欢绕弯子",
-  playful: "爱开玩笑，语气活泼，喜欢用玩笑掩饰真实情绪",
-  quiet: "话不多，但每句都很认真",
-  detailed: "喜欢把事情讲得很细，会交代前因后果",
-  caring: "总是先问对方吃没吃、睡没睡，照顾人很自然",
-  irritable: "容易急，说话冲，但事后会后悔",
-  literary: "喜欢用比喻和意象，表达得含蓄",
+/**
+ * The answers, in words.
+ *
+ * These end up in the persona's own description — the one the user reads
+ * on the profile page and the one the model is given. They were Chinese
+ * only, so an English user answered an English questionnaire and got a
+ * Chinese person back.
+ */
+const COMMUNICATION_STYLE_KEYS: Record<string, string> = {
+  gentle: "questionnaire.style.gentle",
+  direct: "questionnaire.style.direct",
+  playful: "questionnaire.style.playful",
+  quiet: "questionnaire.style.quiet",
+  detailed: "questionnaire.style.detailed",
+  caring: "questionnaire.style.caring",
+  irritable: "questionnaire.style.irritable",
+  literary: "questionnaire.style.literary",
 };
 
-const CONFLICT_TEXT: Record<string, string> = {
-  silent: "吵起来会先沉默，等自己冷静了才说原因",
-  direct: "当场把话说开，不喜欢拖着",
-  forget: "不记仇，过了就过了",
-  cold: "会冷战，不主动联系，等对方先低头",
-  dramatic: "情绪很外放，会反复提起同一件事",
-  apologetic: "习惯先道歉，哪怕不是自己的错",
+const CONFLICT_KEYS: Record<string, string> = {
+  silent: "questionnaire.conflict.silent",
+  direct: "questionnaire.conflict.direct",
+  forget: "questionnaire.conflict.forget",
+  cold: "questionnaire.conflict.cold",
+  dramatic: "questionnaire.conflict.dramatic",
+  apologetic: "questionnaire.conflict.apologetic",
 };
 
-const LOVE_LANGUAGE_TEXT: Record<string, string> = {
-  words: "肯定的言语",
-  time: "陪伴的时间",
-  gifts: "具体的礼物",
-  acts: "为对方做的实际的事",
-  touch: "身体接触和亲密",
-  service: "日常的服务与照顾",
+const LOVE_LANGUAGE_KEYS: Record<string, string> = {
+  words: "questionnaire.love.words",
+  time: "questionnaire.love.time",
+  gifts: "questionnaire.love.gifts",
+  acts: "questionnaire.love.acts",
+  touch: "questionnaire.love.touch",
+  service: "questionnaire.love.service",
 };
 
 export interface QuestionnaireResult {
@@ -75,21 +84,37 @@ export interface QuestionnaireResult {
 
 /**
  * Builds a persona from questionnaire answers.
+ *
+ * The language follows the person: the answers they gave were in their
+ * language, so the person that comes out of them should be too.
  */
-export function buildPersonaFromAnswers(answers: QuestionnaireAnswers): QuestionnaireResult {
+export function buildPersonaFromAnswers(
+  answers: QuestionnaireAnswers,
+  locale: Locale = "zh",
+): QuestionnaireResult {
   const name = (answers.name ?? "").trim() || "TA";
 
   const relationshipParts: string[] = [];
   if (answers.relationship?.trim()) relationshipParts.push(answers.relationship.trim());
-  if (answers.togetherFrom?.trim()) relationshipParts.push(`从 ${answers.togetherFrom.trim()} 开始`);
-  const relationshipDesc = relationshipParts.join("，") || "重要的人";
+  if (answers.togetherFrom?.trim()) {
+    relationshipParts.push(
+      copy(locale, "questionnaire.togetherFrom", { date: answers.togetherFrom.trim() }),
+    );
+  }
+  const relationshipDesc =
+    relationshipParts.join(locale === "en" ? ", " : "，") ||
+    copy(locale, "questionnaire.importantPerson");
 
   const styles = (answers.communicationStyles ?? [])
-    .map((key) => COMMUNICATION_STYLE_TEXT[key] ?? key)
+    .map((key) => {
+      const copyKey = COMMUNICATION_STYLE_KEYS[key];
+      return copyKey ? copy(locale, copyKey) : key;
+    })
     .filter(Boolean);
-  const speakingStyle = styles.length > 0
-    ? styles.join("；")
-    : "说话自然，语气随性";
+  const speakingStyle =
+    styles.length > 0
+      ? styles.join(locale === "en" ? "; " : "；")
+      : copy(locale, "questionnaire.style.default");
 
   const catchphrases = (answers.catchphrases ?? [])
     .map((p) => p.trim())
@@ -101,13 +126,23 @@ export function buildPersonaFromAnswers(answers: QuestionnaireAnswers): Question
   const personalityParts: string[] = [];
   if (answers.caresAbout?.trim()) personalityParts.push(answers.caresAbout.trim());
   if (answers.boundaries?.trim()) {
-    personalityParts.push(`雷区与边界：${answers.boundaries.trim()}`);
+    personalityParts.push(
+      copy(locale, "questionnaire.boundaries", { value: answers.boundaries.trim() }),
+    );
   }
   if (answers.notes?.trim()) personalityParts.push(answers.notes.trim());
-  const personality = personalityParts.join("。") || `${name}是一个温柔体贴的人。`;
+  const personality =
+    personalityParts.join(locale === "en" ? ". " : "。") ||
+    copy(locale, "questionnaire.defaultPersonality", { name });
 
-  const conflictStyle = CONFLICT_TEXT[answers.conflictStyle ?? ""] ?? answers.conflictStyle?.trim() ?? "未知";
-  const loveLanguage = LOVE_LANGUAGE_TEXT[answers.loveLanguage ?? ""] ?? answers.loveLanguage?.trim() ?? "未知";
+  const conflictKey = CONFLICT_KEYS[answers.conflictStyle ?? ""];
+  const conflictStyle =
+    (conflictKey ? copy(locale, conflictKey) : answers.conflictStyle?.trim()) ||
+    copy(locale, "prompt.unknown");
+  const loveKey = LOVE_LANGUAGE_KEYS[answers.loveLanguage ?? ""];
+  const loveLanguage =
+    (loveKey ? copy(locale, loveKey) : answers.loveLanguage?.trim()) ||
+    copy(locale, "prompt.unknown");
 
   const memories = answers.metStory?.trim() ?? "";
 
@@ -116,15 +151,15 @@ export function buildPersonaFromAnswers(answers: QuestionnaireAnswers): Question
       personality,
       speakingStyle,
       catchphrases,
-      nickname: answers.nickname?.trim() || "宝贝",
+      nickname: answers.nickname?.trim() || copy(locale, "questionnaire.defaultNickname"),
       memories,
-      attachmentStyle: "待观察",
+      attachmentStyle: copy(locale, "questionnaire.attachmentToObserve"),
       loveLanguage,
       conflictStyle,
       touchingMoments: "",
-      summary: `${name}是${relationshipDesc}。`,
+      summary: copy(locale, "questionnaire.summary", { name, relationship: relationshipDesc }),
     },
-    { name },
+    { name, locale },
   );
 
   return {

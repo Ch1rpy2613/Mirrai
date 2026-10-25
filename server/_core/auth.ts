@@ -30,9 +30,9 @@ function parseCookies(cookieHeader: string | undefined): Map<string, string> {
  * Rejects the request when the auth endpoint is being called too often.
  * Returns true when the request was rejected (and the response was sent).
  */
-function rejectIfRateLimited(req: Request, res: Response): boolean {
+async function rejectIfRateLimited(req: Request, res: Response): Promise<boolean> {
   const key = getClientIp(req);
-  const result = rateLimiter.check(key, RATE_LIMITS.auth);
+  const result = await rateLimiter.check(key, RATE_LIMITS.auth);
   if (result.allowed) return false;
   res.setHeader("Retry-After", Math.ceil(result.retryAfterMs / 1000));
   res.status(429).json({ error: "Too many attempts, please try again later" });
@@ -92,7 +92,7 @@ export async function authenticateRequest(req: Request): Promise<User> {
 
 export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/register", async (req: Request, res: Response) => {
-    if (rejectIfRateLimited(req, res)) return;
+    if (await rejectIfRateLimited(req, res)) return;
 
     const { username, password } = req.body;
     if (!username || !password || typeof username !== "string" || typeof password !== "string") {
@@ -134,7 +134,7 @@ export function registerAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
-    if (rejectIfRateLimited(req, res)) return;
+    if (await rejectIfRateLimited(req, res)) return;
 
     const { username, password } = req.body;
     if (!username || !password) {

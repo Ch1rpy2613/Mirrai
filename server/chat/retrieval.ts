@@ -10,6 +10,7 @@
  * matched with character bigrams, which needs no word segmenter.
  */
 import * as db from "../db";
+import { copy } from "@shared/copy";
 
 export interface MemoryCandidate {
   id: number;
@@ -20,6 +21,8 @@ export interface MemoryCandidate {
   isPinned: boolean;
   importance: number;
   lastRecalledAt: Date | null;
+  /** Whose memory this is: "them" or "me". */
+  subject: string;
   createdAt: Date;
 }
 
@@ -185,32 +188,65 @@ export function selectMemories(
 }
 
 /**
- * Renders retrieved memories as a prompt section.
+ * The punctuation between a memory's title and its description.
+ *
+ * The two languages punctuate it differently, so it cannot be a constant.
+ * It is not a copy entry either: the copy table's Chinese half has to
+ * carry Chinese characters, and a lone full-width colon has none — so the
+ * one piece of punctuation that has no words in it stays here, where it is
+ * one character wide.
  */
-export function formatMemoriesForPrompt(memories: ScoredMemory[]): string {
+function descriptionSeparator(locale: "zh" | "en"): string {
+  return locale === "en" ? ": " : "：";
+}
+
+/**
+ * Renders retrieved memories as a prompt section.
+ *
+ * The section is read by the model, so the headings and the markers that
+ * say which memory is which are in the language the persona is speaking.
+ */
+export function formatMemoriesForPrompt(
+  memories: ScoredMemory[],
+  locale: "zh" | "en" = "zh",
+): string {
   if (memories.length === 0) return "";
   const lines = memories.map((m) => {
     const date = m.date ? `${m.date} ` : "";
-    const description = m.description ? `：${m.description}` : "";
-    const kind = m.category === "anchor" ? "（事实）" : m.category === "milestone" ? "（重要时刻）" : "";
-    return `- ${date}${m.title}${description}${kind}`;
+    const description = m.description
+      ? `${descriptionSeparator(locale)}${m.description}`
+      : "";
+    const kind = m.category === "anchor"
+      ? copy(locale, "prompt.memoryMarkerFact")
+      : m.category === "milestone"
+        ? copy(locale, "prompt.memoryMarkerMilestone")
+        : "";
+    // A memory about the user is marked, so the persona does not mistake
+    // the user's own life for the persona's.
+    const whose = (m as any).subject === "me" ? copy(locale, "prompt.memoryMarkerAboutUser") : "";
+    return `- ${date}${m.title}${description}${kind}${whose}`;
   });
-  return `【相关记忆】\n${lines.join("\n")}`;
+  return `${copy(locale, "prompt.memorySectionHeading")}\n${lines.join("\n")}`;
 }
 
 /**
  * Renders anchor memories as a prompt section with a no-hallucination rule.
  */
-export function formatAnchorsForPrompt(anchors: ScoredMemory[]): string {
+export function formatAnchorsForPrompt(
+  anchors: ScoredMemory[],
+  locale: "zh" | "en" = "zh",
+): string {
   if (anchors.length === 0) return "";
   const lines = anchors.map((m) => {
-    const description = m.description ? `：${m.description}` : "";
+    const description = m.description
+      ? `${descriptionSeparator(locale)}${m.description}`
+      : "";
     return `- ${m.title}${description}`;
   });
   return [
-    "【事实锚点（不得违背）】",
+    copy(locale, "prompt.anchorSectionHeading"),
     ...lines,
-    "若对话需要引用锚点以外的具体事实，而记忆中没有记录，请表现为不确定，不要编造。",
+    copy(locale, "prompt.anchorNoHallucinationRule"),
   ].join("\n");
 }
 
@@ -227,17 +263,19 @@ export function formatAnchorsForPrompt(anchors: ScoredMemory[]): string {
  */
 export function fileSummaryCandidates(
   files: Array<{ id: number; originalName: string; extractedMemory: string | null; createdAt: Date }>,
+  locale: "zh" | "en" = "zh",
 ): MemoryCandidate[] {
   return files
     .filter((file) => (file.extractedMemory ?? "").trim().length > 0)
     .map((file) => ({
       id: -Math.abs(file.id),
-      title: `聊天记录：${file.originalName}`,
+      title: copy(locale, "prompt.fileSummaryTitle", { name: file.originalName }),
       description: (file.extractedMemory ?? "").trim().slice(0, FILE_SUMMARY_MAX_LENGTH),
       category: "file_summary",
       date: null,
       isPinned: false,
       importance: 0,
+      subject: "them",
       lastRecalledAt: null,
       createdAt: file.createdAt,
     }));
@@ -254,6 +292,7 @@ export async function retrieveMemories(params: {
   userId: number;
   userMessage: string;
   topK?: number;
+  locale?: "zh" | "en";
   now?: number;
 }): Promise<ScoredMemory[]> {
   const rows = await db.getMemoriesByPersonaId(params.personaId, params.userId);
@@ -263,6 +302,7 @@ export async function retrieveMemories(params: {
     description: row.description,
     category: row.category,
     date: row.date,
+    subject: (row as any).subject ?? "them",
     isPinned: row.isPinned,
     importance: row.importance,
     lastRecalledAt: row.lastRecalledAt,
@@ -283,7 +323,7 @@ export async function retrieveMemories(params: {
   } catch {
     files = [];
   }
-  const fileCandidates = fileSummaryCandidates(files);
+  const fileCandidates = fileSummaryCandidates(files, params.locale ?? "zh");
   const fileSelected = selectMemories(fileCandidates, params.userMessage, {
     topK: FILE_SUMMARY_TOP_K,
     now: params.now,

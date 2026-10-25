@@ -49,10 +49,17 @@ function makeCtx(userId = 1): TrpcContext {
       loginMethod: "local",
       role: "user",
       tokenVersion: 0,
+      graduationMode: "suggest",
+      timezone: null,
+    locale: "zh",
+      addressStyle: null,
+      boundaries: null,
+      trajectoryAssessment: "auto",
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
     },
+    locale: "zh",
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
   };
@@ -88,6 +95,7 @@ describe("auth.me", () => {
   it("returns null when not authenticated", async () => {
     const ctx: TrpcContext = {
       user: null,
+      locale: "zh",
       req: { protocol: "https", headers: {} } as TrpcContext["req"],
       res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
     };

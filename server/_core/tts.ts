@@ -3,11 +3,125 @@ import { existsSync, mkdirSync, readdirSync } from "fs";
 import { rename, writeFile } from "fs/promises";
 import path from "path";
 import { ENV } from "./env";
+import { copy } from "@shared/copy";
 
 const UPLOAD_DIR = ENV.uploadDir || "./uploads";
 const TTS_ROOT = path.join(UPLOAD_DIR, "tts");
-const DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural";
+/**
+ * The voice used when nobody picks one.
+ *
+ * It has to be one of the voices the picker offers, or the picker opens
+ * on something that is not in it.
+ */
+export const DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural";
 const MAX_TEXT_LENGTH = 500;
+
+/** A voice, with its name in both languages. */
+export interface TtsVoice {
+  /**
+   * The identifier the provider knows the voice by.
+   *
+   * It is never translated: it is a name in the provider's catalogue, and
+   * a voice that changes its id is a voice that stops working.
+   */
+  id: string;
+  /** The name of the voice, in the language it is listed in. */
+  label: string;
+  /** The name of the voice in the other language. */
+  labelEn: string;
+  /** The language the voice speaks. */
+  locale: "zh" | "en";
+}
+
+/**
+ * The voices the app offers.
+ *
+ * The voice was hardcoded, so every persona in every language spoke with
+ * the same one — and an English user got a Chinese voice reading English
+ * words. The voice is part of who somebody is, so it is the user's call.
+ *
+ * The names are bilingual, because a voice is looked for by name and a
+ * name nobody can read is a name nobody can find.
+ */
+export const TTS_VOICES: TtsVoice[] = [
+  {
+    id: "zh-CN-XiaoxiaoNeural",
+    label: copy("zh", "labels.voice.xiaoxiao"),
+    labelEn: copy("en", "labels.voice.xiaoxiao"),
+    locale: "zh",
+  },
+  {
+    id: "zh-CN-YunxiNeural",
+    label: copy("zh", "labels.voice.yunxi"),
+    labelEn: copy("en", "labels.voice.yunxi"),
+    locale: "zh",
+  },
+  {
+    id: "zh-CN-XiaoyiNeural",
+    label: copy("zh", "labels.voice.xiaoyi"),
+    labelEn: copy("en", "labels.voice.xiaoyi"),
+    locale: "zh",
+  },
+  {
+    id: "zh-CN-YunyangNeural",
+    label: copy("zh", "labels.voice.yunyang"),
+    labelEn: copy("en", "labels.voice.yunyang"),
+    locale: "zh",
+  },
+  {
+    id: "zh-HK-HiuMaanNeural",
+    label: copy("zh", "labels.voice.hiumaan"),
+    labelEn: copy("en", "labels.voice.hiumaan"),
+    locale: "zh",
+  },
+  {
+    id: "en-US-AriaNeural",
+    label: "Aria · female",
+    labelEn: "Aria · female",
+    locale: "en",
+  },
+  {
+    id: "en-US-GuyNeural",
+    label: "Guy · male",
+    labelEn: "Guy · male",
+    locale: "en",
+  },
+  {
+    id: "en-GB-SoniaNeural",
+    label: "Sonia · female (UK)",
+    labelEn: "Sonia · female (UK)",
+    locale: "en",
+  },
+  {
+    id: "en-US-JennyNeural",
+    label: "Jenny · female (warm)",
+    labelEn: "Jenny · female (warm)",
+    locale: "en",
+  },
+];
+
+/** A voice, with the name the person choosing it will read. */
+export interface LocalisedVoice {
+  id: string;
+  label: string;
+  locale: "zh" | "en";
+}
+
+/**
+ * The voices that suit a language, named in that language.
+ *
+ * The picker shows the name the person reading it can read, so the
+ * label follows the interface rather than the voice.
+ */
+export function voicesForLocale(locale: "zh" | "en"): LocalisedVoice[] {
+  const matching = TTS_VOICES.filter((voice) => voice.locale === locale);
+  const voices = matching.length > 0 ? matching : TTS_VOICES;
+  return voices.map((voice) => ({
+    id: voice.id,
+    label: locale === "en" ? voice.labelEn : voice.label,
+    locale: voice.locale,
+  }));
+}
 
 function getCacheKey(text: string, voice: string): string {
   return createHash("sha256").update(text + voice).digest("hex").slice(0, 16);

@@ -16,12 +16,43 @@ import path from "path";
 import { ENV } from "../_core/env";
 import { hashPassword } from "../_core/password";
 import * as db from "../db";
+import { copy } from "@shared/copy";
 
 const ADMIN_USERNAME = "admin";
 const PASSWORD_LENGTH = 16;
 
 /** Characters that are hard to confuse when read off a screen. */
 const PASSWORD_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
+
+/**
+ * A label in both languages, on one line.
+ *
+ * The first run has no interface to ask which language the operator
+ * reads, so every label says both things. The Chinese comes first because
+ * it is the product's original voice; `gap` is the number of spaces
+ * before the separator, which is what lines the labels up in the console.
+ */
+function bilingual(key: string, gap = 1): string {
+  const zh = copy("zh", key);
+  const en = copy("en", key);
+  return `${zh}${" ".repeat(gap)}/ ${en}`;
+}
+
+/**
+ * The width of a line in terminal columns.
+ *
+ * A CJK character takes two columns, so a box drawn by counting the
+ * characters does not line up.
+ */
+function displayWidth(text: string): number {
+  let width = 0;
+  for (const char of text) {
+    const wide =
+      /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(char);
+    width += wide ? 2 : 1;
+  }
+  return width;
+}
 
 export function generatePassword(length = PASSWORD_LENGTH): string {
   const bytes = randomBytes(length);
@@ -84,26 +115,35 @@ export async function bootstrapAdminAccount(): Promise<BootstrapResult> {
     const credentialsPath = path.join(dataRoot, "first-run-credentials.txt");
 
     const contents = [
-      "Mirrai 首次运行凭据 / Mirrai first-run credentials",
+      bilingual("labels.bootstrap.credentialsTitle"),
       "",
-      `用户名 / Username: ${ADMIN_USERNAME}`,
-      `密码 / Password:   ${password}`,
+      `${bilingual("labels.bootstrap.username")}: ${ADMIN_USERNAME}`,
+      `${bilingual("labels.bootstrap.password")}:   ${password}`,
       "",
-      "请登录后尽快修改密码。",
-      "Please change this password after signing in.",
+      bilingual("labels.bootstrap.changePassword"),
       "",
     ].join("\n");
 
     writeFileSync(credentialsPath, contents, { mode: 0o600 });
 
+    // The box is drawn from the two languages of the same sentence, so
+    // the operator reads one of them and never has to guess which half of
+    // a line is meant for them.
+    const boxLines = [
+      `  ${copy("zh", "labels.bootstrap.createdAccount")}`,
+      `  ${copy("en", "labels.bootstrap.createdAccount")}`,
+    ];
+    const boxWidth = Math.max(...boxLines.map(displayWidth)) + 2;
+
     console.log("");
-    console.log("  ┌──────────────────────────────────────────────┐");
-    console.log("  │  Mirrai 已创建本地管理员账号                  │");
-    console.log("  │  A local administrator account was created    │");
-    console.log("  └──────────────────────────────────────────────┘");
-    console.log(`     用户名 / Username: ${ADMIN_USERNAME}`);
-    console.log(`     密码   / Password: ${password}`);
-    console.log(`     凭据文件 / Credentials file: ${credentialsPath}`);
+    console.log(`  ┌${"─".repeat(boxWidth)}┐`);
+    for (const line of boxLines) {
+      console.log(`  │${line}${" ".repeat(boxWidth - displayWidth(line))}│`);
+    }
+    console.log(`  └${"─".repeat(boxWidth)}┘`);
+    console.log(`     ${bilingual("labels.bootstrap.username")}: ${ADMIN_USERNAME}`);
+    console.log(`     ${bilingual("labels.bootstrap.password", 3)}: ${password}`);
+    console.log(`     ${bilingual("labels.bootstrap.credentialsFile")}: ${credentialsPath}`);
     console.log("");
 
     return { created: true, username: ADMIN_USERNAME, password, credentialsPath };

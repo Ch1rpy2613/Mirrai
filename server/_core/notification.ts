@@ -42,6 +42,9 @@ export async function notifyOwner(
   const text = `${payload.title}\n${payload.content}`.trim();
 
   const bindings = await db.getChannelBindingsByUserId(userId).catch(() => []);
+  // The channel's own wording follows the language of the person it is
+  // delivering to.
+  const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
 
   for (const binding of bindings) {
     if (!binding.isActive) continue;
@@ -49,7 +52,7 @@ export async function notifyOwner(
     if (!adapter) continue;
 
     try {
-      await adapter.send(userId, binding.targetId, text);
+      await adapter.send(userId, binding.targetId, text, locale);
       return { delivered: true, channel: binding.channel };
     } catch (e) {
       console.warn(

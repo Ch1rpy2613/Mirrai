@@ -23,6 +23,12 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     loginMethod: "local",
     role: "user",
     tokenVersion: 0,
+    graduationMode: "suggest",
+    timezone: null,
+    locale: "zh",
+    addressStyle: null,
+    boundaries: null,
+    trajectoryAssessment: "auto",
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -30,6 +36,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 
   const ctx: TrpcContext = {
     user,
+    locale: "zh",
     req: {
       protocol: "https",
       headers: {},

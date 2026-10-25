@@ -34,10 +34,21 @@ import {
   runQualityCheck,
   sanitizeForCopyright,
   saveResearchProfile,
-  AGENTIC_PROTOCOL,
   type CelebrityResearchResult,
   type CelebrityResearchStage,
 } from "./celebrity";
+import {
+  getDistillationPreset,
+  type DistillationMode,
+  type DistillationPreset,
+} from "@shared/distillation-modes";
+import { copy, type Locale } from "@shared/copy";
+import { registerSkillPrompts } from "@shared/copy/skill-prompts";
+
+// The prompt dictionary is assembled in `shared/copy/index.ts`. Registering it
+// here as well means `copy()` finds these keys whether or not that wiring
+// has landed yet — a prompt must never go out carrying a key name.
+registerSkillPrompts();
 
 export type CharacterFamily = "colleague" | "relationship" | "celebrity";
 
@@ -60,6 +71,22 @@ export type PipelineInput = {
    * five-stage path.
    */
   researchProfile?: string | null;
+  /**
+   * The named preset for this run.
+   *
+   * A preset decides the family, the research profile and the three depth
+   * knobs — how much material the analysis reads, how deterministic the
+   * extraction is, and how many photos are described. When it is given it
+   * wins over `characterFamily` and `researchProfile`; when it is not, the
+   * run behaves exactly as it did before the presets existed.
+   */
+  mode?: DistillationMode | null;
+  /**
+   * The language the prompts and the progress messages are written in.
+   *
+   * It defaults to Chinese, which is what the app has always used.
+   */
+  locale?: Locale;
 };
 
 /**
@@ -71,7 +98,12 @@ export type PipelineInput = {
  */
 const WORK_DIMENSION_FAMILIES: CharacterFamily[] = ["colleague", "celebrity"];
 
-const MAX_CHAT_SAMPLE = 10000;
+/**
+ * The research material limits.
+ *
+ * The chat sample size is not here: it is part of the distillation preset,
+ * so that the user can choose how much of the material a run reads.
+ */
 const MAX_RESEARCH_SAMPLE = 12000;
 const MAX_RESEARCH_MATERIAL = 20000;
 
@@ -113,6 +145,8 @@ async function describeImages(
   name: string,
   imageUrls: string[],
   provider?: string,
+  maxImages: number = 6,
+  locale: Locale = "zh",
 ): Promise<string> {
   if (imageUrls.length === 0) return "";
 
@@ -120,10 +154,10 @@ async function describeImages(
     const content: Array<{ type: "text"; text: string } | { type: "image_url"; url: string }> = [
       {
         type: "text",
-        text: `这些是我和${name}的照片。请描述照片中体现的情感氛围，以及能反映${name}性格特质的细节。用中文，2-3句话。`,
+        text: copy(locale, "skillPrompts.pipeline.describeImages", { name }),
       },
     ];
-    for (const url of imageUrls.slice(0, 6)) {
+    for (const url of imageUrls.slice(0, maxImages)) {
       content.push({ type: "image_url", url });
     }
 
@@ -145,40 +179,40 @@ async function describeImages(
  * quality gate: code fences, quote blocks and timestamps fail the copyright
  * check.
  */
-function renderPersonaDocument(name: string, personaData: PersonaData): string {
+function renderPersonaDocument(name: string, personaData: PersonaData, locale: Locale): string {
   const catchphrases = personaData.catchphrases.map((phrase) => `- ${phrase}`).join("\n");
   return sanitizeForCopyright(
     [
-      `# 人物性格：${name}`,
+      copy(locale, "skillPrompts.document.personaTitle", { name }),
       "",
-      "## 性格",
+      copy(locale, "skillPrompts.document.personality"),
       personaData.personality,
       "",
-      "## 说话方式",
+      copy(locale, "skillPrompts.document.speakingStyle"),
       personaData.speakingStyle,
       "",
-      "## 口头禅",
+      copy(locale, "skillPrompts.document.catchphrases"),
       catchphrases,
       "",
-      "## 昵称",
+      copy(locale, "skillPrompts.document.nickname"),
       personaData.nickname,
       "",
-      "## 依恋类型",
+      copy(locale, "skillPrompts.document.attachmentStyle"),
       personaData.attachmentStyle,
       "",
-      "## 爱的语言",
+      copy(locale, "skillPrompts.document.loveLanguage"),
       personaData.loveLanguage,
       "",
-      "## 争吵方式",
+      copy(locale, "skillPrompts.document.conflictStyle"),
       personaData.conflictStyle,
       "",
-      "## 动人时刻",
+      copy(locale, "skillPrompts.document.touchingMoments"),
       personaData.touchingMoments,
       "",
-      "## 记忆",
+      copy(locale, "skillPrompts.document.memories"),
       personaData.memories,
       "",
-      "## 一句话总结",
+      copy(locale, "skillPrompts.document.summary"),
       personaData.summary,
     ].join("\n"),
   );
@@ -196,6 +230,7 @@ function renderWorkDocument(
   personaData: PersonaData,
   research: CelebrityResearchResult | null,
   producedWorkDocument?: string | null,
+  locale: Locale = "zh",
 ): string {
   const lines: string[] = [];
 
@@ -204,58 +239,66 @@ function renderWorkDocument(
   if (producedWorkDocument && producedWorkDocument.trim()) {
     lines.push(producedWorkDocument.trim());
   } else {
-    lines.push(`# 工作能力：${name}`);
+    lines.push(copy(locale, "skillPrompts.document.workTitle", { name }));
     lines.push("");
-    lines.push("## 定位");
+    lines.push(copy(locale, "skillPrompts.document.positioning"));
     lines.push(personaData.summary);
     lines.push("");
-    lines.push("## 经验素材");
+    lines.push(copy(locale, "skillPrompts.document.experienceMaterial"));
     lines.push(personaData.memories);
   }
 
   if (research) {
     lines.push("");
-    lines.push("## 心智模型");
+    lines.push(copy(locale, "skillPrompts.document.mentalModels"));
     if (research.mentalModels.length > 0) {
       for (const model of research.mentalModels) {
-        lines.push(`- ${model.name}：${model.definition}（依据：${model.evidence_anchors}）`);
-        lines.push(`  - 第一眼先看：${model.sees_first}`);
-        lines.push(`  - 会过滤掉：${model.filters_out}`);
-        lines.push(`  - 失效场景：${model.failure_mode}`);
+        lines.push(
+          copy(locale, "skillPrompts.draft.modelLine", {
+            name: model.name,
+            definition: model.definition,
+            evidence: model.evidence_anchors,
+          }),
+        );
+        lines.push(copy(locale, "skillPrompts.draft.modelSeesFirst", { value: model.sees_first }));
+        lines.push(copy(locale, "skillPrompts.draft.modelFiltersOut", { value: model.filters_out }));
+        lines.push(
+          copy(locale, "skillPrompts.draft.modelFailureMode", { value: model.failure_mode }),
+        );
       }
     } else {
-      lines.push("- 研究阶段未产出心智模型。");
+      lines.push(copy(locale, "skillPrompts.document.noMentalModels"));
     }
     lines.push("");
-    lines.push("## 已知答案");
+    lines.push(copy(locale, "skillPrompts.document.knownAnswers"));
     if (research.knownAnswerQuestions.length > 0) {
       for (const answer of research.knownAnswerQuestions) {
         lines.push(`- Question: ${answer.question}`);
         lines.push(`  Evidence anchors: ${answer.evidence_anchors}`);
       }
     } else {
-      lines.push("- 研究阶段未产出已知答案问题。");
+      lines.push(copy(locale, "skillPrompts.document.noKnownAnswers"));
     }
     lines.push("");
-    lines.push("## 智识谱系");
+    lines.push(copy(locale, "skillPrompts.document.genealogy"));
     if (research.genealogy.length > 0) {
       for (const entry of research.genealogy) lines.push(`- ${entry}`);
     } else {
-      lines.push("- 智识谱系尚未整理：研究笔记里还没有可核对的思想来源。");
+      lines.push(copy(locale, "skillPrompts.draft.noGenealogy"));
     }
     lines.push("");
-    lines.push("## 分析协议");
-    for (const step of AGENTIC_PROTOCOL.split("\n")) lines.push(step);
+    lines.push(copy(locale, "skillPrompts.document.protocol"));
+    for (const step of copy(locale, "skillPrompts.agenticProtocol").split("\n")) lines.push(step);
     lines.push("");
-    lines.push("## 来源");
+    lines.push(copy(locale, "skillPrompts.document.sources"));
     if (research.sources.length > 0) {
       for (const source of research.sources) lines.push(`- ${source}`);
     } else {
-      lines.push("- 尚未记录可核对的来源 URL。");
+      lines.push(copy(locale, "skillPrompts.draft.noSources"));
     }
     if (research.audit) {
       lines.push("");
-      lines.push("## 研究审计");
+      lines.push(copy(locale, "skillPrompts.document.researchAudit"));
       lines.push(sanitizeForCopyright(research.audit).slice(0, 4000));
     }
   }
@@ -292,21 +335,30 @@ async function writeSkillPackage(input: {
   workDocument?: string | null;
   /** The merged persona document, when the merge stage ran. */
   personaDocument?: string | null;
+  /** The language the documents are written in. */
+  locale?: Locale;
 }): Promise<string | null> {
+  const locale = input.locale ?? "zh";
   const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "mirrai-skill-"));
   try {
     const workPath = path.join(stagingDir, "work.md");
     const personaPath = path.join(stagingDir, "persona.md");
     fs.writeFileSync(
       workPath,
-      renderWorkDocument(input.name, input.personaData, input.research, input.workDocument),
+      renderWorkDocument(
+        input.name,
+        input.personaData,
+        input.research,
+        input.workDocument,
+        locale,
+      ),
       "utf-8",
     );
     fs.writeFileSync(
       personaPath,
       input.personaDocument?.trim()
         ? input.personaDocument.trim()
-        : renderPersonaDocument(input.name, input.personaData),
+        : renderPersonaDocument(input.name, input.personaData, locale),
       "utf-8",
     );
 
@@ -366,14 +418,18 @@ async function runIntakeStage(input: {
   chatContent: string;
   imageCount: number;
   provider?: string;
+  locale?: Locale;
 }): Promise<string> {
+  const locale = input.locale ?? "zh";
   try {
     const prompt = loadPrompt(input.characterFamily, "intake", input.profile);
     const material = [
-      `人物名称：${input.name}`,
-      `聊天记录字数：${input.chatContent.length}`,
-      `图片数量：${input.imageCount}`,
-      input.chatContent.slice(0, 4000) || "（没有聊天记录文本）",
+      copy(locale, "skillPrompts.pipeline.intakePersonName", { name: input.name }),
+      copy(locale, "skillPrompts.pipeline.intakeChatLength", {
+        length: input.chatContent.length,
+      }),
+      copy(locale, "skillPrompts.pipeline.intakeImageCount", { count: input.imageCount }),
+      input.chatContent.slice(0, 4000) || copy(locale, "skillPrompts.pipeline.intakeNoChat"),
     ].join("\n\n");
 
     const response = await llmService.invoke({
@@ -382,9 +438,7 @@ async function runIntakeStage(input: {
         {
           role: "user",
           content:
-            "以下是已经拿到的材料。请盘点这些材料能支撑到什么程度，" +
-            "并列出还缺哪些材料（按优先级排列）。\n\n" +
-            material,
+            copy(locale, "skillPrompts.pipeline.intakeInstruction") + material,
         },
       ],
       options: { provider: input.provider, temperature: 0.3, maxTokens: 1200 },
@@ -411,13 +465,17 @@ async function runWorkDimension(input: {
   analysisResult: string;
   research?: CelebrityResearchResult | null;
   provider?: string;
+  /** The extraction stages run at a lower temperature than the default. */
+  temperature?: number;
+  locale?: Locale;
 }): Promise<{ analysis: string; document: string } | null> {
+  const locale = input.locale ?? "zh";
   try {
     const analyzerPrompt = loadPrompt(input.characterFamily, "work_analyzer", input.profile);
     const builderPrompt = loadPrompt(input.characterFamily, "work_builder", input.profile);
 
     const researchBlock = input.research?.digest
-      ? `\n\n## 研究笔记\n\n${input.research.digest.slice(0, MAX_RESEARCH_SAMPLE)}`
+      ? `\n\n${copy(locale, "skillPrompts.pipeline.researchNotesHeading")}\n\n${input.research.digest.slice(0, MAX_RESEARCH_SAMPLE)}`
       : "";
 
     const analysis = await llmService.invoke({
@@ -426,10 +484,15 @@ async function runWorkDimension(input: {
         {
           role: "user",
           content:
-            `人物名称：${input.name}\n\n人物分析结果：\n${input.analysisResult}${researchBlock}`,
+            copy(locale, "skillPrompts.pipeline.workAnalyzerName", { name: input.name }) +
+            "\n\n" +
+            copy(locale, "skillPrompts.pipeline.workAnalyzerResult", {
+              result: input.analysisResult,
+            }) +
+            researchBlock,
         },
       ],
-      options: { provider: input.provider },
+      options: { provider: input.provider, temperature: input.temperature },
     });
 
     const document = await llmService.invoke({
@@ -438,10 +501,13 @@ async function runWorkDimension(input: {
         {
           role: "user",
           content:
-            `人物名称：${input.name}\n\n工作维度分析：\n${analysis}${researchBlock}`,
+            copy(locale, "skillPrompts.pipeline.workAnalyzerName", { name: input.name }) +
+            "\n\n" +
+            copy(locale, "skillPrompts.pipeline.workBuilderResult", { analysis }) +
+            researchBlock,
         },
       ],
-      options: { provider: input.provider },
+      options: { provider: input.provider, temperature: input.temperature },
     });
 
     return { analysis: analysis || "", document: document || "" };
@@ -466,7 +532,11 @@ async function runMerger(input: {
   personaDocument: string;
   workDocument: string;
   provider?: string;
+  /** The extraction stages run at a lower temperature than the default. */
+  temperature?: number;
+  locale?: Locale;
 }): Promise<string> {
+  const locale = input.locale ?? "zh";
   try {
     const prompt = loadPrompt(input.characterFamily, "merger", input.profile);
     const merged = await llmService.invoke({
@@ -475,12 +545,12 @@ async function runMerger(input: {
         {
           role: "user",
           content:
-            `人物名称：${input.name}\n\n` +
+            copy(locale, "skillPrompts.pipeline.mergerName", { name: input.name }) + "\n\n" +
             `=== persona.md ===\n${input.personaDocument}\n\n` +
             `=== work.md ===\n${input.workDocument}`,
         },
       ],
-      options: { provider: input.provider },
+      options: { provider: input.provider, temperature: input.temperature },
     });
     return (merged || "").trim();
   } catch (e) {
@@ -544,12 +614,34 @@ async function runSkillPipelineOnce(
   attempt: number,
   maxAttempts: number,
 ): Promise<void> {
-  const { personaId, userId, characterFamily, name, chatContent } = input;
+  const { personaId, userId, name, chatContent } = input;
+  // Chinese is the default: it is what the app has always said, and a
+  // caller that does not name a locale keeps the historical behaviour.
+  const locale = input.locale ?? "zh";
+
+  // The preset decides the family, the research profile and the three depth
+  // knobs. When the caller named one, it wins over the family and the
+  // profile that were passed alongside it; when it did not, the run keeps
+  // the family and the profile it was given and takes the depth knobs from
+  // the standard preset — which is what the app always used.
+  const preset: DistillationPreset = getDistillationPreset(input.mode);
+  const characterFamily: CharacterFamily = input.mode
+    ? preset.characterFamily
+    : input.characterFamily;
+  const requestedProfile = input.mode ? preset.researchProfile : input.researchProfile;
 
   // The research profile only applies to the celebrity family, and only a
   // profile that declares the complete research flow unlocks the extra stages.
-  const resolution = resolveCelebrityProfile(characterFamily, input.researchProfile);
+  const resolution = resolveCelebrityProfile(characterFamily, requestedProfile);
   const effectiveProfile = resolution.profile;
+
+  // What the job row records about the run: the research profile and the
+  // preset, if there were any. Nothing at all stays NULL, as it was.
+  const jobMeta: Record<string, unknown> = {
+    ...(input.intakeMeta ?? {}),
+    ...(effectiveProfile ? { researchProfile: effectiveProfile } : {}),
+    ...(input.mode ? { distillationMode: preset.id } : {}),
+  };
 
   const jobId = await db.createSkillJob({
     personaId,
@@ -560,9 +652,7 @@ async function runSkillPipelineOnce(
     // profile a run used.
     researchProfile: effectiveProfile ?? null,
     pipelineStage: "intake",
-    inputMeta: effectiveProfile
-      ? { ...(input.intakeMeta ?? {}), researchProfile: effectiveProfile }
-      : input.intakeMeta ?? null,
+    inputMeta: Object.keys(jobMeta).length > 0 ? jobMeta : null,
   }).catch((e) => {
     console.error("[SkillEngine] Failed to create skill job:", e);
     return 0;
@@ -616,6 +706,7 @@ async function runSkillPipelineOnce(
           skillDir,
           sourceMaterial: buildResearchMaterial(chatContent, input.intakeMeta),
           provider: input.provider,
+          locale,
           onStage: async (stage, progress, message) => {
             await setJobStage(
               {
@@ -643,18 +734,18 @@ async function runSkillPipelineOnce(
     // stage id has to say so, otherwise a consumer cannot tell "we are
     // waiting for the chat logs" from "we are reading them".
     const hasMaterial = chatContent.trim().length > 0 || (input.imageUrls?.length ?? 0) > 0;
+    const intakeMessage = hasMaterial
+      ? copy(locale, "skill.takingStock")
+      : copy(locale, "skill.waitingMaterial");
     await setJobStage(
       {
         pipelineStage: hasMaterial ? "intake" : "collecting",
         stageProgress: stageProgress.intake,
-        stageMessage: hasMaterial ? "正在盘点素材..." : "等待素材...",
+        stageMessage: intakeMessage,
       },
       jobId,
     );
-    await setPersonaProgress(
-      stageProgress.intake,
-      hasMaterial ? "正在盘点素材..." : "等待素材...",
-    );
+    await setPersonaProgress(stageProgress.intake, intakeMessage);
 
     intakeNotes = await runIntakeStage({
       characterFamily,
@@ -663,6 +754,7 @@ async function runSkillPipelineOnce(
       chatContent,
       imageCount: input.imageUrls?.length ?? 0,
       provider: input.provider,
+      locale,
     });
 
     if (intakeNotes && jobId) {
@@ -682,19 +774,21 @@ async function runSkillPipelineOnce(
       {
         pipelineStage: "analyzing_persona",
         stageProgress: stageProgress.analyzing_persona,
-        stageMessage: "正在分析人物性格...",
+        stageMessage: copy(locale, "skill.analyzingPersona"),
       },
       jobId,
     );
-    await setPersonaProgress(stageProgress.analyzing_persona, "正在分析人物性格...");
+    await setPersonaProgress(stageProgress.analyzing_persona, copy(locale, "skill.analyzingPersona"));
 
     const analyzerPrompt = loadPrompt(characterFamily, "persona_analyzer", effectiveProfile);
-    const chatSample = chatContent.slice(0, MAX_CHAT_SAMPLE);
-    const chatBlock = chatSample || "（暂无聊天记录，请基于已有信息谨慎推断）";
+    const chatSample = chatContent.slice(0, preset.chatSampleLimit);
+    const chatBlock = chatSample || copy(locale, "skillPrompts.pipeline.noChatBlock");
     const analysisMaterial = research
       ? [
           chatBlock,
-          `## 研究笔记（来自公开资料研究阶段）\n\n${research.digest.slice(0, MAX_RESEARCH_SAMPLE)}`,
+          copy(locale, "skill.researchNote", {
+            notes: research.digest.slice(0, MAX_RESEARCH_SAMPLE),
+          }),
         ].join("\n\n")
       : chatBlock;
     const analysisResult = await llmService.invoke({
@@ -702,10 +796,15 @@ async function runSkillPipelineOnce(
         { role: "system", content: analyzerPrompt },
         {
           role: "user",
-          content: `人物名称：${name}\n\n聊天记录/素材：\n${analysisMaterial}`,
+          content:
+            copy(locale, "skillPrompts.pipeline.analyzerName", { name }) +
+            "\n\n" +
+            copy(locale, "skillPrompts.pipeline.analyzerMaterial", {
+              material: analysisMaterial,
+            }),
         },
       ],
-      options: { provider: input.provider },
+      options: { provider: input.provider, temperature: preset.analysisTemperature },
     });
 
     // ── Stage 2: build ─────────────────────────────────────────────────────
@@ -713,25 +812,31 @@ async function runSkillPipelineOnce(
       {
         pipelineStage: "building",
         stageProgress: stageProgress.building,
-        stageMessage: "正在构建人物画像...",
+        stageMessage: copy(locale, "skill.buildingPortrait"),
       },
       jobId,
     );
-    await setPersonaProgress(stageProgress.building, "正在构建人物画像...");
+    await setPersonaProgress(stageProgress.building, copy(locale, "skill.buildingPortrait"));
 
     const builderPrompt = loadPrompt(characterFamily, "persona_builder", effectiveProfile);
     const builderMaterial = research
       ? [
-          `分析结果：\n${analysisResult}`,
-          `研究笔记：\n${research.digest.slice(0, MAX_RESEARCH_SAMPLE)}`,
+          copy(locale, "skillPrompts.pipeline.builderAnalysis", { result: analysisResult }),
+          copy(locale, "skillPrompts.pipeline.builderResearchNotes", {
+            notes: research.digest.slice(0, MAX_RESEARCH_SAMPLE),
+          }),
         ].join("\n\n")
-      : `分析结果：\n${analysisResult}`;
+      : copy(locale, "skillPrompts.pipeline.builderAnalysis", { result: analysisResult });
     const builtPersona = await llmService.invoke({
       messages: [
         { role: "system", content: builderPrompt },
-        { role: "user", content: `人物名称：${name}\n\n${builderMaterial}` },
+        {
+          role: "user",
+          content:
+            copy(locale, "skillPrompts.pipeline.builderName", { name }) + "\n\n" + builderMaterial,
+        },
       ],
-      options: { provider: input.provider },
+      options: { provider: input.provider, temperature: preset.analysisTemperature },
     });
 
     // ── Stage 2b: the work dimension ───────────────────────────────────────
@@ -743,11 +848,11 @@ async function runSkillPipelineOnce(
         {
           pipelineStage: "analyzing_work",
           stageProgress: stageProgress.analyzing_work,
-          stageMessage: "正在分析工作维度...",
+          stageMessage: copy(locale, "skill.analyzingWork"),
         },
         jobId,
       );
-      await setPersonaProgress(stageProgress.analyzing_work, "正在分析工作维度...");
+      await setPersonaProgress(stageProgress.analyzing_work, copy(locale, "skill.analyzingWork"));
 
       const work = await runWorkDimension({
         characterFamily,
@@ -756,6 +861,8 @@ async function runSkillPipelineOnce(
         analysisResult,
         research,
         provider: input.provider,
+        temperature: preset.analysisTemperature,
+        locale,
       });
       workDocument = work?.document?.trim() || null;
     }
@@ -770,11 +877,11 @@ async function runSkillPipelineOnce(
         {
           pipelineStage: "merging",
           stageProgress: stageProgress.merging,
-          stageMessage: "正在合并工作与人格维度...",
+          stageMessage: copy(locale, "skill.mergingDimensions"),
         },
         jobId,
       );
-      await setPersonaProgress(stageProgress.merging, "正在合并工作与人格维度...");
+      await setPersonaProgress(stageProgress.merging, copy(locale, "skill.mergingDimensions"));
 
       mergedPersonaDocument =
         (await runMerger({
@@ -784,6 +891,8 @@ async function runSkillPipelineOnce(
           personaDocument: builtPersona,
           workDocument,
           provider: input.provider,
+          temperature: preset.analysisTemperature,
+          locale,
         })) || null;
     }
 
@@ -795,11 +904,11 @@ async function runSkillPipelineOnce(
         // tell them apart.
         pipelineStage: "structuring",
         stageProgress: stageProgress.structuring,
-        stageMessage: "正在整合结果...",
+        stageMessage: copy(locale, "skill.integrating"),
       },
       jobId,
     );
-    await setPersonaProgress(stageProgress.structuring, "正在整合结果...");
+    await setPersonaProgress(stageProgress.structuring, copy(locale, "skill.integrating"));
 
     const structurerPrompt = loadPrompt(characterFamily, "structurer", effectiveProfile);
     const structuredRaw = await llmService.invoke({
@@ -808,20 +917,36 @@ async function runSkillPipelineOnce(
         {
           role: "user",
           content:
-            `人物名称：${name}\n\n行为分析：\n${analysisResult}\n\n人物画像：\n` +
-            `${mergedPersonaDocument || builtPersona}`,
+            copy(locale, "skillPrompts.pipeline.structurerName", { name }) +
+            "\n\n" +
+            copy(locale, "skillPrompts.pipeline.structurerAnalysis", {
+              analysis: analysisResult,
+            }) +
+            "\n\n" +
+            copy(locale, "skillPrompts.pipeline.structurerPortrait", {
+              portrait: mergedPersonaDocument || builtPersona,
+            }),
         },
       ],
-      options: { provider: input.provider, temperature: 0.3 },
+      options: { provider: input.provider, temperature: preset.analysisTemperature },
     });
 
     const parsed = extractJsonObject(structuredRaw);
 
     // ── Stage 4: enrich with photo memories ────────────────────────────────
-    const imageNote = await describeImages(name, input.imageUrls ?? [], input.provider);
-    const baseData = normalizePersonaData(parsed, { name });
+    const imageNote = await describeImages(
+      name,
+      input.imageUrls ?? [],
+      input.provider,
+      preset.maxImages,
+      locale,
+    );
+    const baseData = normalizePersonaData(parsed, { name, locale });
     const personaData: PersonaData = imageNote
-      ? { ...baseData, memories: `${baseData.memories}\n\n【照片记忆】${imageNote}`.trim() }
+      ? {
+          ...baseData,
+          memories: `${baseData.memories}\n\n${copy(locale, "skillPrompts.pipeline.photoMemories")}${imageNote}`.trim(),
+        }
       : baseData;
 
     // ── Stage 5: persist ───────────────────────────────────────────────────
@@ -829,7 +954,7 @@ async function runSkillPipelineOnce(
       personaData,
       analysisStatus: "ready",
       analysisProgress: 100,
-      analysisMessage: `${name} 的数字分身已准备好，可以开始对话了`,
+      analysisMessage: copy(locale, "skillPrompts.pipeline.personaReady", { name }),
       // Only link the job when one was actually created.
       ...(jobId ? { skillJobId: jobId } : {}),
     });
@@ -838,7 +963,7 @@ async function runSkillPipelineOnce(
       await db.updateSkillJob(jobId, userId, {
         pipelineStage: "complete",
         stageProgress: 100,
-        stageMessage: "完成",
+        stageMessage: copy(locale, "skill.done"),
         analysisResult: personaData as any,
       });
     }
@@ -856,6 +981,7 @@ async function runSkillPipelineOnce(
         researchProfile: effectiveProfile,
         workDocument,
         personaDocument: mergedPersonaDocument,
+        locale,
       });
     } catch (e) {
       console.warn("[SkillEngine] Python skill_writer failed (non-critical):", e);
@@ -906,7 +1032,7 @@ async function runSkillPipelineOnce(
       await setJobStage(
         {
           pipelineStage: "intake",
-          stageMessage: `第 ${attempt} 次尝试失败，正在重试...`,
+          stageMessage: copy(locale, "skill.retrying", { attempt }),
         },
         jobId,
       );
@@ -922,7 +1048,7 @@ async function runSkillPipelineOnce(
     );
     await db.updatePersona(personaId, userId, {
       analysisStatus: "error",
-      analysisMessage: "性格蒸馏失败，请重试",
+      analysisMessage: copy(locale, "skill.analysisFailed"),
     });
   }
 }

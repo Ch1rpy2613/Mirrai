@@ -190,7 +190,12 @@ export function stripProgressLines(text: string): string {
     .join("\n");
 }
 
-/** Role markers used by chat transcripts (`用户：…`, `TA: …`, …). */
+/**
+ * Role markers used by chat transcripts (`用户：…`, `TA: …`, …).
+ *
+ * i18n:allow-input — these are the markers a pasted transcript actually
+ * uses, so they are matched against the input rather than shown to anyone.
+ */
 const ROLE_MARKER = /^\s*(用户|我方|我|对方|TA|User|Me|Assistant|AI|机器人|分身)\s*[:：]\s*(.*)$/i;
 
 /** `[2024-01-01 10:00]` / `[2024-01-01 10:00][群名]` lines of the collectors' reports. */
@@ -213,7 +218,11 @@ function isStructuralLine(line: string): boolean {
   );
 }
 
-/** Maps a role marker to the message role it represents. */
+/**
+ * Maps a role marker to the message role it represents.
+ *
+ * i18n:allow-input — the markers are matched against what was pasted in.
+ */
 function roleFromMarker(marker: string): "user" | "assistant" | null {
   const key = marker.trim().toLowerCase();
   if (key === "用户" || key === "我方" || key === "我" || key === "对方" || key === "user" || key === "me") {
@@ -531,7 +540,12 @@ function parseBracketReport(
   return messages;
 }
 
-/** Decides the role of a `[time][label] content` line. */
+/**
+ * Decides the role of a `[time][label] content` line.
+ *
+ * i18n:allow-input — the section and label names are matched against what
+ * the collector wrote, not shown to anybody.
+ */
 function bracketRole(section: string, label: string, target?: string): "user" | "assistant" {
   // Only the private-chat section mixes both sides; every other section
   // contains the target's own messages.

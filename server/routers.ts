@@ -1,5 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { requestAbortSignal } from "./_core/context";
+import { extractMemories } from "./chat/memory-extract";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router, rateLimit } from "./_core/trpc";
 import { z } from "zod";
@@ -14,23 +16,31 @@ import {
   getPersonasWithStats, getUserStats, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId,
   createMessage, getMessagesByPersonaId, clearMessagesByPersonaId, searchMessages,
+  updateUserMessage, deleteMessage, deleteMessagesFrom, getPreviousMessage,
+  getMessagesBefore, hasOlderMessages, searchAllMessages,
   createWechatBinding, getWechatBindingsByUserId, deleteWechatBinding, setWechatBindingPersona,
   getSkillJobById, updateSkillJob, getLlmConfigsByUserId, upsertLlmConfig, setDefaultLlmConfig, getDefaultLlmConfig,
   getResearchProfilesByPersonaId,
   updateUserProfile, updateUserPassword, deleteUserAccount, getAccountStats, exportUserData,
-  getUserById, bumpUserTokenVersion,
-  createMemory, getMemoriesByPersonaId, deleteMemory,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
+  getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
+  createMemory, getMemoriesByPersonaId, countMemories, getMemoryTitles, deleteMemory, updateMemory,
+  setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
   getCollectedMessagesForPersona,
   getIntimacyData, updateIntimacy,
   getMessageVolume, getEmotionTimeline, getPersonaEngagement, getHourlyDistribution, getAnalyticsStats,
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
   getScenes, getSceneById, createScene, deleteScene, activateScene,
   getExportData, getRecentEmotionTrend, getMessageCountInRange, setGraduationStatus,
+  getSafetyEvents, resolveSafetyEvent, getLatestGraduationAssessment,
   getChannelBindingsByUserId, getChannelBinding, setChannelBindingPersona,
   deleteChannelBinding, getChannelState, upsertChannelState,
   getUserTemplates, createUserTemplate, updateUserTemplate, deleteUserTemplate,
   createQuestionnaireAnswers, getActiveReminders, dismissReminder,
   appendPersonaCorrection,
+  upsertUserMood, getUserMoods,
+  createLetter, getLetters, getDueLetters, getLastLetterReplyAt,
+  answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes,
+  createRelationshipEvent, getRelationshipEvents, deleteRelationshipEvent,
 } from "./db";
 import { nanoid } from "nanoid";
 import path from "path";
@@ -39,20 +49,32 @@ import { clearAllActivePersonas } from "./wechat/commands";
 import { runSkillPipeline } from "./skill-engine/pipeline";
 import { exportSkillToHost } from "./skill-engine/skill-export";
 import { getEmotionalStateDesc, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
+import { getEffectiveGraduationMode, getGraduationModeDetails, canOfferGraduation, getEffectivePresence } from "./_core/graduation";
+import type { personas as personasTable } from "../drizzle/schema";
+import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
 import { inferEmotionalState } from "./_core/emotion";
+import { getCrisisResources } from "./safety/resources";
+import { isValidTimeZone, zonedDateKey } from "@shared/timezone";
+import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
+import { copy, localizeScene } from "@shared/copy";
+import { mayReachOut } from "@shared/graduation-mode";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { extractJsonArray, extractJsonObject } from "./_core/json";
 import { runConversation } from "./chat/service";
+import { writeFarewellLetter } from "./chat/farewell";
+import { writeLetter } from "./chat/letters";
 import { encryptSecret } from "./_core/crypto";
 import { RATE_LIMITS } from "./_core/rate-limit";
 import { sanitizeFileName, checkFileExtension } from "./_core/filename";
 import { getSetupStatus } from "./bootstrap/setup-status";
 import { getChannelAdapter, listChannels } from "./channels";
+import { channelLabel } from "./channels/types";
 import { feishuAdapter } from "./channels/feishu";
 import { getBuiltinTemplates } from "./templates";
 import { normalizeTemplate, validateTemplate, type PersonaTemplate } from "./templates/schema";
 import { buildPersonaFromAnswers } from "./templates/questionnaire";
+import { sourceLabel } from "./collectors/types";
 import {
   personaDataToCard,
   cardToNormalizedPersona,
@@ -69,7 +91,7 @@ import {
   getCollectorJob,
   listCollectorJobs,
 } from "./collectors";
-import { listPersistedCollectorJobs } from "./collectors/db-store";
+import { listPersistedCollectorJobs, collectedSpeaker } from "./collectors/db-store";
 
 /**
  * Resolves a persona's picture to PNG bytes for the character-card export.
@@ -134,8 +156,19 @@ async function startPersonaDistillation(params: {
    * build, and the four research stages never run.
    */
   researchProfile?: string | null;
+  /**
+   * The named preset for this run.
+   *
+   * When it is given it decides the family, the research profile and the
+   * depth knobs; the two arguments above are then ignored. A caller that
+   * does not name a preset keeps the historical behaviour.
+   */
+  mode?: DistillationMode | null;
+  /** The language the status messages are written in. */
+  locale?: "zh" | "en";
 }): Promise<void> {
-  const { personaId, userId, name, characterFamily } = params;
+  const { personaId, userId, name } = params;
+  const locale = params.locale ?? "zh";
 
   try {
     const files = await getFilesByPersonaId(personaId, userId);
@@ -152,24 +185,30 @@ async function startPersonaDistillation(params: {
     const collected = await getCollectedMessagesForPersona(personaId, userId);
     const collectedTranscript = collected.length > 0
       ? collected
-          .map((m) => `${m.role === "user" ? "我" : "TA"}：${m.content}`)
+          .map((m) => `${collectedSpeaker(m.role, locale)}${m.content}`)
           .join("\n")
       : "";
 
     await updatePersona(personaId, userId, {
       analysisStatus: "analyzing",
       analysisProgress: 5,
-      analysisMessage: "启动性格蒸馏引擎...",
+      analysisMessage: copy(locale, "persona.analysisStarting"),
     });
 
     await runSkillPipeline({
       personaId,
       userId,
-      characterFamily,
+      // The family and the profile are only used when the caller did not
+      // name a preset; the pipeline resolves the preset first.
+      characterFamily: params.characterFamily,
       name,
       chatContent: [chatContent, collectedTranscript].filter(Boolean).join("\n\n---\n\n"),
       imageUrls,
       researchProfile: params.researchProfile ?? undefined,
+      mode: params.mode ?? undefined,
+      // The prompts and the progress messages are written in the language
+      // the person is using.
+      locale,
     });
   } catch (e) {
     // The persona must never be left stuck in "pending" — the upload page
@@ -177,7 +216,7 @@ async function startPersonaDistillation(params: {
     console.error("[Persona] Distillation failed to start:", e);
     await updatePersona(personaId, userId, {
       analysisStatus: "error",
-      analysisMessage: "解析失败，请重试",
+      analysisMessage: copy(locale, "persona.analysisFailed"),
     }).catch(() => {});
   }
 }
@@ -190,12 +229,12 @@ async function startPersonaDistillation(params: {
  * a model they never chose. A custom endpoint is expressed by pointing a
  * registered provider (OpenAI, for instance) at a different `baseUrl`.
  */
-function assertKnownProvider(providerName: string): void {
+function assertKnownProvider(providerName: string, locale: "zh" | "en" = "zh"): void {
   const known = registry.list().map((p) => p.name.toLowerCase());
   if (known.includes(providerName.trim().toLowerCase())) return;
   throw new TRPCError({
     code: "BAD_REQUEST",
-    message: `未知的 LLM 提供商：${providerName}`,
+    message: copy(locale, "errors.unknownProvider", { provider: providerName }),
   });
 }
 
@@ -218,6 +257,9 @@ export const appRouter = router({
         loginMethod: ctx.user.loginMethod,
         createdAt: ctx.user.createdAt,
         lastSignedIn: ctx.user.lastSignedIn,
+        // The user's own clock, so the client can keep it in step with the
+        // browser's.
+        timezone: ctx.user.timezone,
       };
     }),
     logout: publicProcedure.mutation(async ({ ctx }) => {
@@ -237,6 +279,20 @@ export const appRouter = router({
   }),
 
   user: router({
+    /**
+     * Remembers the language the user reads.
+     *
+     * The interface sends it on every request, but the things the app
+     * sends on its own — a reminder at midnight, a reply in a chat
+     * window — have to know it without being asked.
+     */
+    setLocale: protectedProcedure
+      .input(z.object({ locale: z.enum(["zh", "en"]) }))
+      .mutation(async ({ ctx, input }) => {
+        await setUserLocale(ctx.user.id, input.locale);
+        return { success: true };
+      }),
+
     getProfile: protectedProcedure.query(async ({ ctx }) => {
       const user = await getUserById(ctx.user.id);
       if (!user) throw new TRPCError({ code: "NOT_FOUND" });
@@ -249,12 +305,114 @@ export const appRouter = router({
         loginMethod: user.loginMethod,
         createdAt: user.createdAt,
         lastSignedIn: user.lastSignedIn,
+        // The instance-wide default for the graduation mechanism. The
+        // client needs it to show what a persona that inherits the default
+        // will actually do.
+        graduationMode: user.graduationMode,
+        // The user's own clock, so the app can greet them in their morning.
+        timezone: user.timezone,
+        // How the user wants to be addressed, and what they would rather
+        // the persona did not bring up.
+        addressStyle: user.addressStyle,
+        boundaries: user.boundaries,
+        // Whether the app may read the user's own messages to assess
+        // their emotional trajectory.
+        trajectoryAssessment: user.trajectoryAssessment,
       };
     }),
 
-    updateProfile: protectedProcedure
-      .input(z.object({ name: z.string().min(1).max(100).optional(), email: z.string().email().max(320).optional() }))
+    /**
+     * Sets whether the app may read the user's own messages.
+     *
+     * The trajectory assessment is the one place where the app sends a
+     * month of raw private conversation to the model. "auto" runs it when
+     * the graduation mechanism is in its suggesting mode; "on" and "off"
+     * are the user's own decision.
+     */
+    updateTrajectoryAssessment: protectedProcedure
+      .input(z.object({ setting: z.enum(["auto", "on", "off"]) }))
       .mutation(async ({ ctx, input }) => {
+        await updateUserTrajectoryAssessment(ctx.user.id, input.setting);
+        return { success: true };
+      }),
+
+    /**
+     * How the user has been doing.
+     *
+     * The app inferred the persona's mood from the conversation and charted
+     * it on the user's own dashboard. These are the user's own states,
+     * recorded by the user — one entry per day, and checking in again
+     * replaces the day's entry.
+     */
+    setMood: protectedProcedure
+      .input(z.object({
+        mood: z.enum(["great", "okay", "low", "down", "anxious", "numb"]),
+        note: z.string().max(280).optional(),
+        /** The day, as "YYYY-MM-DD" in the user's own time zone. */
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const date = input.date ?? zonedDateKey(new Date(), ctx.user.timezone);
+        const mood = await upsertUserMood({
+          userId: ctx.user.id,
+          date,
+          mood: input.mood,
+          note: input.note ?? null,
+        });
+        return { success: true, mood };
+      }),
+
+    /** The user's own moods, oldest first. */
+    moods: protectedProcedure
+      .input(z.object({ days: z.number().int().min(1).max(365).optional() }))
+      .query(async ({ ctx, input }) => {
+        return getUserMoods(ctx.user.id, input.days ?? 30);
+      }),
+
+    /**
+     * Sets the instance-wide default for the graduation mechanism.
+     *
+     * A persona that has its own setting keeps it; the ones that inherit
+     * follow this value.
+     */
+    updateGraduationMode: protectedProcedure
+      .input(z.object({ mode: z.enum(["suggest", "manual", "off"]) }))
+      .mutation(async ({ ctx, input }) => {
+        await updateUserGraduationMode(ctx.user.id, input.mode);
+        return { success: true };
+      }),
+
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(100).optional(),
+        email: z.string().email().max(320).optional(),
+        /**
+         * The user's own time zone, as an IANA name.
+         *
+         * The client sends what the browser reports. It is used for the
+         * user's own clock — "good morning" has to mean the user's morning
+         * — and as the default for a persona that has no zone of its own.
+         */
+        timezone: z.string().max(64).nullable().optional(),
+        /**
+         * How the user wants to be addressed.
+         *
+         * The persona knows how the other person talks. It had no idea how
+         * the user wants to be called.
+         */
+        addressStyle: z.string().max(64).nullable().optional(),
+        /**
+         * What the persona should not bring up.
+         *
+         * A line the user can draw, which the persona is told about and
+         * respects.
+         */
+        boundaries: z.string().max(500).nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (input.timezone !== undefined && input.timezone && !isValidTimeZone(input.timezone)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.unknownTimezone") });
+        }
         await updateUserProfile(ctx.user.id, input);
         return { success: true };
       }),
@@ -263,9 +421,9 @@ export const appRouter = router({
       .input(z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(6).max(128) }))
       .mutation(async ({ ctx, input }) => {
         const user = await getUserById(ctx.user.id);
-        if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST", message: "无法修改密码" });
+        if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.cannotChangePassword") });
         const valid = await verifyPassword(input.currentPassword, user.passwordHash);
-        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "当前密码错误" });
+        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: copy(ctx.locale, "errors.currentPasswordWrong") });
         await updateUserPassword(ctx.user.id, await hashPassword(input.newPassword));
         // A password change signs every other device out.
         await bumpUserTokenVersion(ctx.user.id);
@@ -285,7 +443,7 @@ export const appRouter = router({
         const user = await getUserById(ctx.user.id);
         if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST" });
         const valid = await verifyPassword(input.confirmPassword, user.passwordHash);
-        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "密码错误" });
+        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: copy(ctx.locale, "errors.passwordWrong") });
         await deleteUserAccount(ctx.user.id);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -335,7 +493,7 @@ export const appRouter = router({
         }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const result = buildPersonaFromAnswers(input.answers);
+        const result = buildPersonaFromAnswers(input.answers, ctx.locale);
 
         const personaId = await createPersona({
           userId: ctx.user.id,
@@ -347,7 +505,7 @@ export const appRouter = router({
           source: "questionnaire",
           analysisStatus: "ready",
           analysisProgress: 100,
-          analysisMessage: "由问卷创建",
+          analysisMessage: copy(ctx.locale, "persona.fromQuestionnaire"),
         });
 
         await createQuestionnaireAnswers({
@@ -359,6 +517,42 @@ export const appRouter = router({
         return { personaId };
       }),
 
+    /**
+     * Creates a persona the user can talk to right now.
+     *
+     * The first thing the app asked for was somebody else's chat history.
+     * That is the single biggest barrier in front of the product: you have
+     * to go and find a file, and most people never get that far.
+     *
+     * A sandbox persona is one of the built-in characters, ready to talk
+     * with no upload at all. It is a place to try the product out, and it
+     * can be replaced later by a real one distilled from real logs.
+     */
+    createSandbox: protectedProcedure
+      .input(z.object({ templateId: z.string().min(1).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const builtins = getBuiltinTemplates();
+        const template =
+          builtins.find((t) => t.id === input.templateId) ??
+          builtins.find((t) => t.family === "relationship") ??
+          builtins[0];
+        if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const personaId = await createPersona({
+          userId: ctx.user.id,
+          name: template.name,
+          relationshipDesc: template.description ?? null,
+          togetherFrom: null,
+          togetherTo: null,
+          personaData: template.personaData as any,
+          analysisStatus: "ready",
+          analysisProgress: 100,
+          analysisMessage: copy(ctx.locale, "persona.example"),
+          source: "sandbox",
+        });
+        return { personaId, name: template.name };
+      }),
+
     create: protectedProcedure
       .input(z.object({
         name: z.string().min(1).max(100),
@@ -367,7 +561,7 @@ export const appRouter = router({
         togetherTo: z.string().max(50).optional(),
         // Where the persona came from. "upload" is the default — the persona
         // is built from uploaded chat logs.
-        source: z.enum(["upload", "questionnaire", "card"]).default("upload"),
+        source: z.enum(["upload", "questionnaire", "card", "sandbox"]).default("upload"),
       }))
       .mutation(async ({ ctx, input }) => {
         const id = await createPersona({ userId: ctx.user.id, ...input, analysisStatus: "pending" });
@@ -375,12 +569,83 @@ export const appRouter = router({
       }),
 
     update: protectedProcedure
-      .input(z.object({ id: z.number(), name: z.string().min(1).max(100).optional(), relationshipDesc: z.string().max(200).optional(), togetherFrom: z.string().max(50).optional(), togetherTo: z.string().max(50).optional(), emotionalState: z.enum(["warm","playful","nostalgic","melancholy","happy","distant"]).optional(), llmProvider: z.string().max(64).optional(), remindersEnabled: z.boolean().optional() }))
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1).max(100).optional(),
+        relationshipDesc: z.string().max(200).optional(),
+        togetherFrom: z.string().max(50).optional(),
+        togetherTo: z.string().max(50).optional(),
+        emotionalState: z.enum(["warm","playful","nostalgic","melancholy","happy","distant"]).optional(),
+        llmProvider: z.string().max(64).optional(),
+        remindersEnabled: z.boolean().optional(),
+        /**
+         * This persona's graduation mode. Null means "inherit the user's
+         * instance default" — which is why null is a value here and not
+         * merely "not given".
+         */
+        graduationMode: z.enum(["suggest", "manual", "off"]).nullable().optional(),
+        /** The distillation preset a re-run should use. */
+        distillationMode: z.enum(["fast", "standard", "deep", "colleague", "celebrity"]).nullable().optional(),
+        /**
+         * Where this persona lives, as an IANA time zone name.
+         *
+         * The persona's sense of time is computed in their own zone, not the
+         * server's — which matters for anyone whose partner is abroad.
+         */
+        timezone: z.string().max(64).nullable().optional(),
+        /**
+         * Whether the app may reach out about this persona.
+         *
+         * "quiet" is the user asking for some space. It is separate from
+         * the graduation ritual, which records whether the goodbye has
+         * happened.
+         */
+        presence: z.enum(["active", "quiet", "asleep"]).optional(),
+        /**
+         * Whether the two of them can currently reach each other.
+         *
+         * A distance is not a breakup, and the app had no way to say so.
+         */
+        reachability: z.enum(["reachable", "unreachable"]).optional(),
+        /** Pinned personas sit at the top of the lobby. */
+        isPinned: z.boolean().optional(),
+        /**
+         * How often the persona may start a conversation on its own, in
+         * hours. Zero means never — and zero is the default, because an
+         * app that speaks first is something the user has to buy.
+         */
+        proactiveFrequencyHours: z.number().int().min(0).max(720).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
-        const { id, ...data } = input;
+        const { id, ...rest } = input;
         // A persona that points at a provider that does not exist would
         // silently talk to a different model.
-        if (data.llmProvider) assertKnownProvider(data.llmProvider);
+        if (rest.llmProvider) assertKnownProvider(rest.llmProvider, ctx.locale);
+        // Drizzle ignores undefined values in an update, so the two settings
+        // that can be cleared are only written when they were actually sent.
+        const data: Partial<typeof personasTable.$inferInsert> = {
+          name: rest.name,
+          relationshipDesc: rest.relationshipDesc,
+          togetherFrom: rest.togetherFrom,
+          togetherTo: rest.togetherTo,
+          emotionalState: rest.emotionalState,
+          llmProvider: rest.llmProvider,
+          remindersEnabled: rest.remindersEnabled,
+        };
+        if (rest.graduationMode !== undefined) data.graduationMode = rest.graduationMode;
+        if (rest.distillationMode !== undefined) data.distillationMode = rest.distillationMode;
+        if (rest.timezone !== undefined) {
+          if (rest.timezone && !isValidTimeZone(rest.timezone)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.unknownTimezone") });
+          }
+          data.timezone = rest.timezone;
+        }
+        if (rest.presence !== undefined) data.presence = rest.presence;
+        if (rest.reachability !== undefined) data.reachability = rest.reachability;
+        if (rest.isPinned !== undefined) data.isPinned = rest.isPinned;
+        if (rest.proactiveFrequencyHours !== undefined) {
+          data.proactiveFrequencyHours = rest.proactiveFrequencyHours;
+        }
         await updatePersona(id, ctx.user.id, data);
         return { success: true };
       }),
@@ -395,12 +660,27 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    /**
+     * The prompt the persona is actually given.
+     *
+     * It used to be the bare identity prompt — no memories, no anchors,
+     * no summary, no 【关于对话者】 — so the prompt a user inspected was
+     * not the prompt the model was working from. The person who wanted
+     * to know what the app understood was shown a simplified version of
+     * it, which is exactly the wrong thing to show them.
+     */
     getSystemPrompt: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return { prompt: buildSystemPrompt(persona) };
+
+        const { buildPromptForPersona } = await import("./chat/prompt");
+        const prompt = await buildPromptForPersona({
+          persona,
+          userId: ctx.user.id,
+        });
+        return { prompt };
       }),
 
     delete: protectedProcedure
@@ -448,7 +728,7 @@ export const appRouter = router({
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         if (!persona.personaData) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "这个分身还没有完成解析" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotAnalyzed") });
         }
 
         // The correction is a stage of its own: it changes the persona, and
@@ -458,7 +738,7 @@ export const appRouter = router({
         if (jobId) {
           await updateSkillJob(jobId, ctx.user.id, {
               pipelineStage: "correcting",
-              stageMessage: "正在按你的修正更新人设...",
+              stageMessage: copy(ctx.locale, "persona.updating"),
             })
             .catch(() => undefined);
         }
@@ -469,6 +749,7 @@ export const appRouter = router({
           personaData: persona.personaData as any,
           correction: input.correction,
           provider: (persona as any).llmProvider || undefined,
+          locale: ctx.locale,
         });
 
         if (!result) {
@@ -478,7 +759,7 @@ export const appRouter = router({
           }
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "没能理解这次修正，请说得更具体一些",
+            message: copy(ctx.locale, "errors.correctionNotUnderstood"),
           });
         }
 
@@ -541,18 +822,41 @@ export const appRouter = router({
         // Only meaningful for the celebrity family: the research profile
         // decides whether the four-stage research flow runs.
         researchProfile: z.enum(["budget-friendly", "budget-unfriendly"]).optional(),
+        // The named preset. When it is given it decides the family, the
+        // research profile and the depth of the run.
+        mode: z.enum(["fast", "standard", "deep", "colleague", "celebrity"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         startPersonaDistillation({
+          locale: ctx.locale,
           personaId: input.id,
           userId: ctx.user.id,
           name: persona.name,
           characterFamily: input.characterFamily,
           researchProfile: input.researchProfile ?? null,
+          mode: input.mode ?? null,
         }).catch((e) => console.error("[triggerAnalysis] error:", e));
         return { success: true };
+      }),
+
+    /**
+     * The graduation mode that applies to a persona.
+     *
+     * The client needs the effective mode to decide whether it may offer
+     * the farewell itself, and the two stored values to show what the
+     * persona inherits and what it overrides.
+     */
+    graduationMode: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.id, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return getGraduationModeDetails({
+          personaMode: persona.graduationMode,
+          userId: ctx.user.id,
+        });
       }),
 
     checkGraduation: protectedProcedure
@@ -563,8 +867,64 @@ export const appRouter = router({
         if (persona.graduationStatus === "graduated") {
           return { eligible: false, status: "graduated" as const, farewellLetter: persona.farewellLetter };
         }
-        if (persona.graduationStatus === "suggested") {
-          return { eligible: true, status: "suggested" as const, farewellLetter: null };
+        // An offer that was made — or refused — puts the persona in a
+        // cooldown. During it the answer does not change; after it the
+        // thresholds are consulted again, because a refusal has to be
+        // revisable or it is a decision the user never gets to make.
+        const offer = canOfferGraduation({
+          status: persona.graduationStatus,
+          suggestedAt: persona.graduationSuggestedAt,
+          declinedAt: persona.graduationDeclinedAt,
+        });
+        if (!offer.allowed) {
+          return {
+            eligible: persona.graduationStatus === "suggested",
+            status: (persona.graduationStatus || null) as string | null,
+            reason: copy(
+          ctx.locale,
+          persona.graduationStatus === "declined"
+            ? "graduation.statusAlreadyDeclined"
+            : "graduation.statusAlreadySuggested",
+        ),
+            farewellLetter: null,
+          };
+        }
+        // A persona the user asked to be left alone is not one to raise a
+        // farewell with.
+        const presence = getEffectivePresence({
+          personaPresence: persona.presence,
+          graduationStatus: persona.graduationStatus,
+        });
+        if (!mayReachOut(presence)) {
+          return {
+            eligible: false,
+            status: (persona.graduationStatus || null) as string | null,
+            reason: copy(ctx.locale, "graduation.statusQuiet"),
+            farewellLetter: null,
+          };
+        }
+        // The mode decides whether the app may raise the topic at all. In
+        // "manual" the user starts it themselves; in "off" it is not
+        // available — either way the thresholds are not the answer.
+        const mode = await getEffectiveGraduationMode({
+          personaMode: persona.graduationMode,
+          userId: ctx.user.id,
+        });
+        if (mode === "off") {
+          return {
+            eligible: false,
+            status: (persona.graduationStatus || null) as string | null,
+            reason: copy(ctx.locale, "graduation.statusModeOff"),
+            farewellLetter: null,
+          };
+        }
+        if (mode === "manual") {
+          return {
+            eligible: false,
+            status: (persona.graduationStatus || null) as string | null,
+            reason: copy(ctx.locale, "graduation.statusManualOnly"),
+            farewellLetter: null,
+          };
         }
         const recentEmotions = await getRecentEmotionTrend(input.id, ctx.user.id, 14);
         const recentFreq = await getMessageCountInRange(input.id, ctx.user.id, 7, 0);
@@ -587,14 +947,27 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const systemPrompt = buildSystemPrompt(persona);
-        const response = await llmService.invoke({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `我们已经走过了很长的路，现在是时候说再见了。请用${persona.name}的口吻，写一封温暖的告别信。回顾我们的美好时光，表达祝福和不舍。信的长度在200-400字之间。只返回信的内容，不要有其他文字。` },
-          ],
+        // "off" means the mechanism is switched off for this persona, so
+        // there is no farewell letter to write. The other two modes welcome
+        // it — in "manual" the thresholds do not apply, because the user has
+        // already made the decision.
+        const mode = await getEffectiveGraduationMode({
+          personaMode: persona.graduationMode,
+          userId: ctx.user.id,
         });
-        const farewellLetter = response || `亲爱的，感谢你一路的陪伴。虽然我们要说再见了，但那些美好的回忆会永远留在心里。祝你一切都好。—— ${persona.name}`;
+        if (mode === "off") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.graduationModeOff") });
+        }
+        // The letter is written with the user's own provider, from the same
+        // material the conversation would have had. Using the server's
+        // provider meant that anyone who configured a key in the settings —
+        // and only there — got an error at the one moment the product exists
+        // for.
+        const farewellLetter = await writeFarewellLetter({
+          persona,
+          userId: ctx.user.id,
+          locale: ctx.locale,
+        });
         await setGraduationStatus(input.id, ctx.user.id, "graduated", farewellLetter);
         return { farewellLetter };
       }),
@@ -611,7 +984,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        if (persona.graduationStatus !== "graduated") throw new TRPCError({ code: "BAD_REQUEST", message: "该分身未毕业" });
+        if (persona.graduationStatus !== "graduated") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotGraduated") });
         await setGraduationStatus(input.id, ctx.user.id, null);
         return { success: true };
       }),
@@ -633,10 +1006,10 @@ export const appRouter = router({
         const buffer = Buffer.from(input.fileContent, "base64");
         // The declared size is a hint; the decoded bytes are the truth.
         if (buffer.length > MAX_UPLOAD_BYTES) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "文件太大" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.fileTooLarge") });
         }
         const safeName = sanitizeFileName(input.fileName);
-        const extensionProblem = checkFileExtension(safeName, input.fileType);
+        const extensionProblem = checkFileExtension(safeName, input.fileType, ctx.locale);
         if (extensionProblem) {
           throw new TRPCError({ code: "BAD_REQUEST", message: extensionProblem });
         }
@@ -661,11 +1034,127 @@ export const appRouter = router({
 
   chat: router({
     getHistory: protectedProcedure
-      .input(z.object({ personaId: z.number(), limit: z.number().min(1).max(200).default(50) }))
+      .input(z.object({
+        personaId: z.number(),
+        limit: z.number().min(1).max(200).default(50),
+        /** The id of the oldest message on screen; older ones come back. */
+        before: z.number().optional(),
+      }))
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return getMessagesByPersonaId(input.personaId, ctx.user.id, input.limit);
+        const rows = input.before !== undefined
+          ? await getMessagesBefore(input.personaId, ctx.user.id, input.before, input.limit)
+          : await getMessagesByPersonaId(input.personaId, ctx.user.id, input.limit);
+
+        // The memories each turn recalled, with their titles.
+        const ids = rows.flatMap((m: any) => parseRecalledIds(m.recalledMemoryIds));
+        const titles = await getMemoryTitles(ids);
+        return rows.map((m: any) => ({
+          ...m,
+          recalled: parseRecalledIds(m.recalledMemoryIds).map((id: number) => ({
+            id,
+            title: titles.get(id) ?? "",
+          })),
+        }));
+      }),
+
+    /**
+     * Searches across every persona the user has.
+     *
+     * A person looking for something they said six months ago does not
+     * remember which conversation it was in.
+     */
+    searchAll: protectedProcedure
+      .input(z.object({
+        query: z.string().min(1).max(200),
+        limit: z.number().int().min(1).max(200).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const rows = await searchAllMessages(ctx.user.id, input.query, input.limit ?? 50);
+        const personas = await getPersonasByUserId(ctx.user.id);
+        const names = new Map(personas.map((p) => [p.id, p.name]));
+        return rows.map((row) => ({
+          ...row,
+          personaName: names.get(row.personaId) ?? "",
+        }));
+      }),
+
+    /**
+     * Rewrites a message and asks the persona again.
+     *
+     * The old turn and everything after it belonged to a version of the
+     * conversation that is being replaced, so they go with it.
+     */
+    regenerate: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
+      .input(z.object({
+        personaId: z.number(),
+        /** The assistant message to replace. */
+        messageId: z.number(),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotReadyShort") });
+
+        const previous = await getPreviousMessage(input.personaId, ctx.user.id, input.messageId);
+        if (!previous || previous.role !== "user") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotFound") });
+        }
+
+        const removed = await deleteMessagesFrom(previous.id, ctx.user.id);
+        if (removed === 0) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotFound") });
+
+        let reply = "";
+        let emotionalState: string = persona.emotionalState;
+        for await (const event of runConversation({
+          persona,
+          userId: ctx.user.id,
+          message: previous.content,
+          providerName: (persona as any).llmProvider || undefined,
+          mode: "once",
+          locale: input.locale,
+          signal: requestAbortSignal(ctx.req),
+        })) {
+          if (event.type === "delta") reply += event.text;
+          else if (event.type === "emotion") emotionalState = event.state;
+        }
+        return { reply, emotionalState };
+      }),
+
+    /**
+     * Edits a message the user sent.
+     *
+     * The edit is saved; the persona is not asked again. That is the
+     * difference between "fix what I wrote" and "say it again".
+     */
+    updateMessage: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        messageId: z.number(),
+        content: z.string().min(1).max(2000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const updated = await updateUserMessage(input.messageId, ctx.user.id, input.content);
+        if (!updated) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotEditable") });
+        return { success: true };
+      }),
+
+    /** Deletes a single message. */
+    deleteMessage: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        messageId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const deleted = await deleteMessage(input.messageId, ctx.user.id);
+        if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
       }),
 
     send: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
@@ -675,16 +1164,24 @@ export const appRouter = router({
         // The interface language. It decides which emotion triggers the
         // heuristic uses and which language the prompt is written in.
         locale: z.enum(["zh", "en"]).default("zh"),
+        /**
+         * The message being replied to.
+         *
+         * Without it every reply is a reply to "whatever came last",
+         * and a long conversation becomes impossible to follow.
+         */
+        replyToId: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: "分身还未准备好，请先完成 AI 解析" });
+        if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotReady") });
 
         let reply = "";
         let emotionalState: string = persona.emotionalState;
         let graduationSuggested = false;
         let careNote = null;
+        let crisis = false;
 
         for await (const event of runConversation({
           persona,
@@ -693,16 +1190,21 @@ export const appRouter = router({
           providerName: (persona as any).llmProvider || undefined,
           mode: "once",
           locale: input.locale,
+          replyToId: input.replyToId,
+          // Pressing "stop" has to stop the model too, not just the
+          // waiting.
+          signal: requestAbortSignal(ctx.req),
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
+            crisis = event.crisis;
           }
         }
 
-        return { reply, emotionalState, graduationSuggested, careNote };
+        return { reply, emotionalState, graduationSuggested, careNote, crisis };
       }),
 
     sendImage: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
@@ -716,7 +1218,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: "分身还未准备好" });
+        if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotReadyShort") });
 
         // The target model must actually understand images — otherwise the
         // picture would be dropped silently and the answer would be about
@@ -729,7 +1231,7 @@ export const appRouter = router({
         if (provider && !provider.capabilities.vision) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `当前模型 ${provider.name} 不支持图片理解，请更换模型或改用文字描述`,
+            message: copy(ctx.locale, "errors.modelCannotSeeImages", { provider: provider.name }),
           });
         }
 
@@ -741,22 +1243,29 @@ export const appRouter = router({
         let reply = "";
         let emotionalState: string = persona.emotionalState;
         let graduationSuggested = false;
+        let careNote = null;
+        let crisis = false;
 
         for await (const event of runConversation({
           persona,
           userId: ctx.user.id,
-          message: "[图片]",
+          message: copy(ctx.locale, "prompt.imagePlaceholder"),
           providerName,
           mode: "once",
           locale: input.locale,
           media: { url, type: "image", mimeType: input.mimeType },
+          signal: requestAbortSignal(ctx.req),
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
-          else if (event.type === "done") graduationSuggested = event.graduationSuggested;
+          else if (event.type === "done") {
+            graduationSuggested = event.graduationSuggested;
+            careNote = event.careNote;
+            crisis = event.crisis;
+          }
         }
 
-        return { reply, emotionalState, imageUrl: url, graduationSuggested };
+        return { reply, emotionalState, imageUrl: url, graduationSuggested, careNote, crisis };
       }),
 
     sendVoice: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
@@ -770,36 +1279,57 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: "分身还未准备好" });
+        if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotReadyShort") });
 
         const buffer = Buffer.from(input.audioContent, "base64");
         const safeName = sanitizeFileName(input.fileName);
         const fileKey = `chat/${ctx.user.id}/${input.personaId}/${nanoid()}-${safeName}`;
         const { url } = await storagePut(fileKey, buffer, "audio/webm");
 
-        const transcription = await llmService.invoke({
-          messages: [{ role: "user", content: `请将以下语音消息转写为文字。如果无法转写，请根据上下文猜测可能的内容。语音时长：${input.duration}秒` }],
-        }) || "（语音消息）";
+        // The transcription runs on the user's own provider, like the
+        // conversation does. It used to go through the server's key, so a
+        // user who had configured one got a voice message transcribed by a
+        // model they had not chosen — or not transcribed at all.
+        const providerName = (persona as any).llmProvider || undefined;
+        const voiceProvider = await resolveProviderForUser({
+          userId: ctx.user.id,
+          providerName,
+        });
+        const transcriptionRequest = [{
+          role: "user" as const,
+          content: copy(ctx.locale, "prompts.voiceTranscription", { duration: input.duration }),
+        }];
+        const transcription = (voiceProvider
+          ? await voiceProvider.invoke(transcriptionRequest).catch(() => "")
+          : await llmService.invoke({ messages: transcriptionRequest }).catch(() => "")
+        ) || copy(ctx.locale, "prompt.voicePlaceholder");
 
         let reply = "";
         let emotionalState: string = persona.emotionalState;
         let graduationSuggested = false;
+        let careNote = null;
+        let crisis = false;
 
         for await (const event of runConversation({
           persona,
           userId: ctx.user.id,
           message: transcription,
-          providerName: (persona as any).llmProvider || undefined,
+          providerName,
           mode: "once",
           locale: input.locale,
           media: { url, type: "voice" },
+          signal: requestAbortSignal(ctx.req),
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
-          else if (event.type === "done") graduationSuggested = event.graduationSuggested;
+          else if (event.type === "done") {
+            graduationSuggested = event.graduationSuggested;
+            careNote = event.careNote;
+            crisis = event.crisis;
+          }
         }
 
-        return { reply, emotionalState, transcription, voiceUrl: url, graduationSuggested };
+        return { reply, emotionalState, transcription, voiceUrl: url, graduationSuggested, careNote, crisis };
       }),
 
     clear: protectedProcedure
@@ -817,7 +1347,7 @@ export const appRouter = router({
         return searchMessages(input.personaId, ctx.user.id, input.query, input.limit);
       }),
 
-    tts: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
+    tts: protectedProcedure.use(rateLimit(RATE_LIMITS.tts))
       .input(z.object({ text: z.string().min(1).max(500), voice: z.string().max(64).optional() }))
       .mutation(async ({ ctx, input }) => {
         const { generateTTS } = await import("./_core/tts");
@@ -825,8 +1355,22 @@ export const appRouter = router({
         return { audioUrl };
       }),
 
+    /** The voices on offer. The voice used to be hardcoded. */
+    voices: publicProcedure
+      .input(z.object({ locale: z.enum(["zh", "en"]).default("zh") }))
+      .query(async ({ input }) => {
+        const { voicesForLocale } = await import("./_core/tts");
+        return { voices: voicesForLocale(input.locale) };
+      }),
+
     export: protectedProcedure
-      .input(z.object({ personaId: z.number() }))
+      .input(z.object({
+        personaId: z.number(),
+        // The export follows the language of the interface. It used to be
+        // Chinese whatever the interface was, so an English-speaking user
+        // downloaded a keepsake they could not read.
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
       .mutation(async ({ ctx, input }) => {
         const data = await getExportData(input.personaId, ctx.user.id);
         if (!data) throw new TRPCError({ code: "NOT_FOUND" });
@@ -839,9 +1383,46 @@ export const appRouter = router({
           memories: data.memories,
           emotionSnapshots: data.emotionSnapshots,
           diaryEntries: data.diaryEntries,
+          letters: data.letters,
           intimacy,
-        });
-        return { html, fileName: `${data.persona.name}-对话记录.html` };
+        }, input.locale);
+        const fileName = input.locale === "en"
+          ? `${data.persona.name}-conversation.html`
+          : copy(ctx.locale, "persona.exportFileName", { name: data.persona.name });
+        return { html, fileName };
+      }),
+
+    /**
+     * Everything the user has, in a format that does not need this app.
+     *
+     * The export used to be a single HTML page with the messages on it.
+     * "My data" means the memories, the diaries, the snapshots, the
+     * farewell letter, the relationship events and the user's own moods
+     * too — and a format the user can keep.
+     */
+    exportAll: protectedProcedure
+      .input(z.object({
+        format: z.enum(["json", "markdown"]).default("json"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { buildExportBundle, exportAsJson, exportAsMarkdown } = await import(
+          "./_core/export-data"
+        );
+        const bundle = await buildExportBundle(ctx.user.id);
+        if (!bundle) throw new TRPCError({ code: "NOT_FOUND" });
+
+        if (input.format === "markdown") {
+          return {
+            content: exportAsMarkdown(bundle, ctx.locale),
+            fileName: `mirrai-${new Date().toISOString().slice(0, 10)}.md`,
+            mimeType: "text/markdown",
+          };
+        }
+        return {
+          content: exportAsJson(bundle),
+          fileName: `mirrai-${new Date().toISOString().slice(0, 10)}.json`,
+          mimeType: "application/json",
+        };
       }),
   }),
 
@@ -924,7 +1505,7 @@ export const appRouter = router({
             const status = await adapter.status(ctx.user.id);
             return {
               id: adapter.id,
-              label: adapter.label,
+              label: channelLabel(adapter, ctx.locale),
               requiresCredentials: adapter.requiresCredentials,
               connected: status.connected,
               status: status.status,
@@ -932,7 +1513,7 @@ export const appRouter = router({
           } catch {
             return {
               id: adapter.id,
-              label: adapter.label,
+              label: channelLabel(adapter, ctx.locale),
               requiresCredentials: adapter.requiresCredentials,
               connected: false,
               status: "error",
@@ -956,7 +1537,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const adapter = getChannelAdapter(input.channel);
         if (!adapter) throw new TRPCError({ code: "NOT_FOUND" });
-        await adapter.start(ctx.user.id);
+        await adapter.start(ctx.user.id, ctx.locale);
         return { success: true };
       }),
 
@@ -978,7 +1559,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         if (input.channel !== "feishu") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "该通道不需要这样配置凭据" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.channelNeedsNoCredentials") });
         }
         await feishuAdapter.setCredentials(ctx.user.id, {
           appId: input.appId,
@@ -1077,7 +1658,7 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         if (!persona.personaData) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "这个分身还没有完成解析" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotAnalyzed") });
         }
 
         const templateId = `${input.name.trim().replace(/\s+/g, "-").toLowerCase()}-${Date.now().toString(36)}`;
@@ -1124,10 +1705,10 @@ export const appRouter = router({
         try {
           parsed = JSON.parse(input.fileContent);
         } catch {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "文件不是有效的 JSON" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.invalidJson") });
         }
 
-        const validation = validateTemplate(parsed);
+        const validation = validateTemplate(parsed, ctx.locale);
         if (!validation.ok) {
           throw new TRPCError({ code: "BAD_REQUEST", message: validation.error });
         }
@@ -1215,7 +1796,7 @@ export const appRouter = router({
           personaData: personaData as any,
           analysisStatus: "ready",
           analysisProgress: 100,
-          analysisMessage: "从模板创建",
+          analysisMessage: copy(ctx.locale, "persona.fromTemplate"),
         });
 
         return { personaId, family };
@@ -1236,7 +1817,7 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         if (!persona.personaData) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "这个分身还没有完成解析" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotAnalyzed") });
         }
 
         const memories = await getMemoriesByPersonaId(input.personaId, ctx.user.id);
@@ -1265,7 +1846,7 @@ export const appRouter = router({
             keys: m.title ? [m.title] : undefined,
           })),
           creator: "Mirrai",
-        });
+        }, ctx.locale);
 
         // The card keeps the persona's picture when it has one; otherwise the
         // application's own icon is used.
@@ -1291,12 +1872,12 @@ export const appRouter = router({
         } catch (e) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `无法读取角色卡：${(e as Error).message}`,
+            message: copy(ctx.locale, "errors.cardUnreadable", { reason: (e as Error).message }),
           });
         }
 
-        const imported = cardToPersonaImport(card);
-        const personaData = cardToNormalizedPersona(card);
+        const imported = cardToPersonaImport(card, ctx.locale);
+        const personaData = cardToNormalizedPersona(card, ctx.locale);
 
         if (input.personaId) {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
@@ -1323,7 +1904,7 @@ export const appRouter = router({
           source: "card",
           analysisStatus: "ready",
           analysisProgress: 100,
-          analysisMessage: "从角色卡导入",
+          analysisMessage: copy(ctx.locale, "persona.fromCard"),
         });
 
         return { personaId, created: true };
@@ -1357,10 +1938,10 @@ export const appRouter = router({
    */
   collector: router({
     /** Lists the platforms a chat history can be collected from. */
-    listSources: protectedProcedure.query(() =>
+    listSources: protectedProcedure.query(({ ctx }) =>
       COLLECTOR_SOURCES.map((source) => ({
         id: source.id,
-        label: source.label,
+        label: sourceLabel(source, ctx.locale),
         requiresBrowser: source.requiresBrowser ?? false,
         // The credential fields the authorisation form has to render.
         credentialKeys: source.credentialKeys ?? [],
@@ -1466,7 +2047,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const connector = getCollector(input.source);
         if (!connector) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "未知的采集来源" });
+          throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.unknownCollector") });
         }
 
         const collectInput = { target: input.target } as any;
@@ -1481,7 +2062,7 @@ export const appRouter = router({
         } catch (e) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `授权失败：${(e as Error).message}`,
+            message: copy(ctx.locale, "errors.authorisationFailed", { reason: (e as Error).message }),
           });
         }
 
@@ -1544,17 +2125,22 @@ export const appRouter = router({
         // The celebrity research profile. Without it the celebrity family
         // runs the ordinary three-stage build.
         researchProfile: z.enum(["budget-friendly", "budget-unfriendly"]).optional(),
+        // The named preset. When it is given it decides the family, the
+        // research profile and the depth of the run.
+        mode: z.enum(["fast", "standard", "deep", "colleague", "celebrity"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
         startPersonaDistillation({
+          locale: ctx.locale,
           personaId: input.personaId,
           userId: ctx.user.id,
           name: persona.name,
           characterFamily: input.characterFamily,
           researchProfile: input.researchProfile ?? null,
+          mode: input.mode ?? null,
         }).catch((e) => console.error("[SkillEngine] Pipeline error:", e));
 
         return { success: true };
@@ -1604,7 +2190,7 @@ export const appRouter = router({
         if (!job.generatedSkillPath) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "技能包尚未生成，无法导出",
+            message: copy(ctx.locale, "errors.skillNotGenerated"),
           });
         }
 
@@ -1612,12 +2198,12 @@ export const appRouter = router({
           return await exportSkillToHost({
             skillPath: job.generatedSkillPath,
             host: input.host,
-          });
+          }, ctx.locale);
         } catch (e) {
           console.error("[SkillEngine] Skill export failed:", e);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: e instanceof Error ? e.message : "技能导出失败",
+            message: e instanceof Error ? e.message : copy(ctx.locale, "errors.skillExportFailed"),
           });
         }
       }),
@@ -1672,7 +2258,7 @@ export const appRouter = router({
         extraConfig: z.record(z.string(), z.any()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        assertKnownProvider(input.providerName);
+        assertKnownProvider(input.providerName, ctx.locale);
         const { apiKey, ...rest } = input;
         const payload: Parameters<typeof upsertLlmConfig>[1] = { ...rest };
 
@@ -1698,7 +2284,7 @@ export const appRouter = router({
         apiKey: z.string().min(1).max(512),
       }))
       .mutation(async ({ ctx, input }) => {
-        assertKnownProvider(input.providerName);
+        assertKnownProvider(input.providerName, ctx.locale);
         const encrypted = await encryptSecret(input.apiKey);
         const id = await upsertLlmConfig(ctx.user.id, {
           providerName: input.providerName,
@@ -1713,7 +2299,7 @@ export const appRouter = router({
       .input(z.object({ extraConfig: z.record(z.string(), z.any()) }))
       .mutation(async ({ ctx, input }) => {
         const config = await getDefaultLlmConfig(ctx.user.id);
-        if (!config) throw new TRPCError({ code: "NOT_FOUND", message: "请先配置默认 LLM 提供商" });
+        if (!config) throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.noDefaultProvider") });
         const merged = { ...((config.extraConfig as any) || {}), ...input.extraConfig };
         await upsertLlmConfig(ctx.user.id, { providerName: config.providerName, extraConfig: merged });
         invalidateUserProviderCache(ctx.user.id);
@@ -1723,7 +2309,7 @@ export const appRouter = router({
     setDefault: protectedProcedure
       .input(z.object({ providerName: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
-        assertKnownProvider(input.providerName);
+        assertKnownProvider(input.providerName, ctx.locale);
         await setDefaultLlmConfig(ctx.user.id, input.providerName);
         invalidateUserProviderCache(ctx.user.id);
         return { success: true };
@@ -1736,7 +2322,13 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return getMemoriesByPersonaId(input.personaId, ctx.user.id);
+        const [items, total] = await Promise.all([
+          getMemoriesByPersonaId(input.personaId, ctx.user.id),
+          countMemories(input.personaId, ctx.user.id),
+        ]);
+        // The total is returned so the interface can say when the list
+        // has been cut short. It used to be cut short silently.
+        return { items, total };
       }),
 
     create: protectedProcedure
@@ -1748,12 +2340,46 @@ export const appRouter = router({
         date: z.string().max(50).optional(),
         /** A structured fact key for anchor memories, e.g. "birthday". */
         factKey: z.string().max(120).optional(),
+        /**
+         * Whose memory this is: "them" or "me".
+         *
+         * A memory about the user's own life is the user's, and the
+         * persona has to be able to tell the two apart.
+         */
+        subject: z.enum(["them", "me"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         const id = await createMemory({ ...input, userId: ctx.user.id });
         return { id };
+      }),
+
+    /**
+     * Edits a memory, or pins it.
+     *
+     * A pinned memory is injected into every single prompt — it is the
+     * one the user wants the persona never to forget. The field existed
+     * and the retrieval read it, but nothing ever wrote it, so there was
+     * no way to pin anything.
+     */
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().min(1).max(200).optional(),
+        description: z.string().max(2000).nullable().optional(),
+        category: z.enum(["milestone", "memory", "anniversary", "anchor"]).optional(),
+        date: z.string().max(50).nullable().optional(),
+        isPinned: z.boolean().optional(),
+        importance: z.number().int().min(1).max(10).optional(),
+        /** Whose memory this is: "them" or "me". */
+        subject: z.enum(["them", "me"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...data } = input;
+        const row = await updateMemory(id, ctx.user.id, data);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true, memory: row };
       }),
 
     delete: protectedProcedure
@@ -1769,40 +2395,12 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         const history = await getMessagesByPersonaId(input.personaId, ctx.user.id, 50);
-        if (history.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "没有聊天记录可供提取" });
+        if (history.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.noMessagesToExtract") });
 
-        const chatText = history.map(m => `${m.role === "user" ? "用户" : persona.name}: ${m.content}`).join("\n");
-        const response = await llmService.invoke({
-          messages: [
-            { role: "system", content: "你是记忆提取助手。请从对话中提取重要的记忆节点。只返回JSON数组，每个元素包含 title, description, category(milestone/memory/anniversary/anchor), date(如果能推断)。最多提取5条。\n\ncategory 的含义：\n- milestone：重要时刻（第一次见面、分手那天）\n- memory：普通回忆\n- anniversary：每年重复的纪念日\n- anchor：具体的事实型记忆（例如「TA 的生日是 3 月 14 日」「TA 在 XX 大学读书」）。这类记忆是对话中不可违背的事实，如果对话里出现了明确的具体日期、地点、称呼、身份信息，就标记为 anchor。" },
-            { role: "user", content: chatText },
-          ],
-        });
-
-        const extracted: Array<{ title: string; description?: string; category?: string; date?: string }> = [];
-        try {
-          const arr = extractJsonArray(response);
-          if (arr) {
-            for (const raw of arr.slice(0, 5)) {
-              const item = (raw ?? {}) as {
-                title?: string;
-                description?: string;
-                category?: string;
-                date?: string;
-              };
-              const id = await createMemory({
-                personaId: input.personaId, userId: ctx.user.id,
-                title: item.title || "记忆",
-                description: item.description,
-                category: (["milestone", "memory", "anniversary", "anchor"].includes(item.category as string) ? item.category : "memory") as any,
-                date: item.date,
-              });
-              extracted.push({ ...item, title: item.title || "记忆" });
-            }
-          }
-        } catch (e) { console.error("[autoExtract] parse error:", e); }
-
-        return { extracted };
+        // The extraction is the same one that runs on its own, so the
+        // button cannot store what is already held.
+        const result = await extractMemories({ persona, userId: ctx.user.id, locale: ctx.locale });
+        return { extracted: result.added, skipped: result.skipped };
       }),
   }),
 
@@ -1844,23 +2442,23 @@ export const appRouter = router({
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         const date = input.date || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "日期格式无效，需要 YYYY-MM-DD" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.invalidDateFormat") });
         }
         const today = new Date().toISOString().slice(0, 10);
         if (date > today) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "不能为未来日期生成日记" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.futureDiary") });
         }
         const existing = await getDiaryByDate(input.personaId, ctx.user.id, date);
-        if (existing) throw new TRPCError({ code: "CONFLICT", message: "该日期已有日记" });
+        if (existing) throw new TRPCError({ code: "CONFLICT", message: copy(ctx.locale, "errors.diaryExists") });
         const msgs = await getMessagesByDate(input.personaId, ctx.user.id, date);
-        if (msgs.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "该日期没有聊天记录" });
-        const chatText = msgs.map(m => `${m.role === "user" ? "用户" : persona.name}: ${m.content || ""}`).join("\n");
+        if (msgs.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.noMessagesThatDay") });
+        const chatText = msgs.map(m => `${m.role === "user" ? copy(ctx.locale, "prompt.roleUser") : persona.name}: ${m.content || ""}`).join("\n");
         if (!chatText.trim()) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "该日期的聊天记录内容为空" });
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.emptyMessagesThatDay") });
         }
         const response = await llmService.invoke({
           messages: [
-            { role: "system", content: '你是日记助手。请根据对话记录生成一篇温暖的日记。只返回JSON：{"summary":"2-3句概述","highlights":["亮点1","亮点2"],"emotionalArc":{"start":"开始情绪","end":"结束情绪","dominant":"主导情绪"},"quotes":["原话1","原话2"],"reflection":"温暖的反思1-2句"}' },
+            { role: "system", content: copy(ctx.locale, "prompts.diaryWriting") },
             { role: "user", content: chatText.slice(0, 6000) },
           ],
         });
@@ -1873,7 +2471,7 @@ export const appRouter = router({
         };
         const id = await createDiaryEntry({
           personaId: input.personaId, userId: ctx.user.id, date,
-          summary: parsed.summary || "今天和TA聊了天",
+          summary: parsed.summary || copy(ctx.locale, "persona.diaryFallbackSummary"),
           highlights: parsed.highlights || [],
           emotionalArc: parsed.emotionalArc || {},
           quotes: parsed.quotes || [],
@@ -1891,13 +2489,263 @@ export const appRouter = router({
       }),
   }),
 
+  /**
+   * The crisis-support resources.
+   *
+   * The client shows them on the crisis card. They are served from the
+   * same list the server quotes in a crisis reply, so the two can never
+   * disagree about which number to call.
+   */
+  safety: router({
+    // The resources are the same for everybody and contain nothing about
+    // the user, so the crisis card can fetch them before sign-in too.
+    resources: publicProcedure.query(async ({ ctx }) => ({
+      resources: getCrisisResources().map((r) => ({
+        id: r.id,
+        region: ctx.locale === "en" ? r.regionEn ?? r.region : r.region,
+        description: ctx.locale === "en" ? r.descriptionEn ?? r.description : r.description,
+        contact: r.contact,
+      })),
+    })),
+
+    /**
+     * What the safety layer noticed.
+     *
+     * The events were written and then never shown to anybody: the app
+     * noticed a crisis, a dependency or a worsening mood, recorded it,
+     * and said nothing. A safety layer the user cannot see is not a safety
+     * layer so much as a private log.
+     */
+    events: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(200).optional() }))
+      .query(async ({ ctx, input }) => {
+        const events = await getSafetyEvents(ctx.user.id, input.limit ?? 50);
+        return {
+          events: events.map((event) => ({
+            id: event.id,
+            type: event.type,
+            severity: event.severity,
+            personaId: event.personaId,
+            handled: event.handled,
+            createdAt: event.createdAt,
+          })),
+        };
+      }),
+
+    /**
+     * Marks an event as dealt with.
+     *
+     * The user has seen it, which is all "handled" ever meant.
+     */
+    resolveEvent: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await resolveSafetyEvent(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
+    /**
+     * How the app sees the relationship.
+     *
+     * The trajectory assessment is the only thing in the database that
+     * reads the *user's* own language — the ratios of regret and
+     * gratitude. It was computed, stored, and then hidden from the person
+     * it was about.
+     */
+    assessments: protectedProcedure.query(async ({ ctx }) => {
+      const personas = await getPersonasByUserId(ctx.user.id);
+      const result = [];
+      for (const persona of personas) {
+        const latest = await getLatestGraduationAssessment(persona.id, ctx.user.id);
+        if (!latest) continue;
+        result.push({
+          personaId: persona.id,
+          personaName: persona.name,
+          trajectory: latest.trajectory,
+          regretRatio: latest.regretRatio,
+          gratitudeRatio: latest.gratitudeRatio,
+          note: (latest.assessment as any)?.note ?? null,
+          createdAt: latest.createdAt,
+        });
+      }
+      return { assessments: result };
+    }),
+  }),
+
+  /**
+   * What actually happened in the relationship.
+   *
+   * The app simulated a conversation and remembered the other person's
+   * milestones, but it had nowhere to record reality: that they fought,
+   * got back together, broke up, or are simply out of touch. The events
+   * are the user's own record of their own life — the app does not guess
+   * them, because guessing means inventing a relationship the user did
+   * not have.
+   */
+  relationship: router({
+    list: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        limit: z.number().int().min(1).max(200).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const events = await getRelationshipEvents(
+          input.personaId,
+          ctx.user.id,
+          input.limit ?? 50,
+        );
+        return { events, phase: resolveRelationshipPhase(events) };
+      }),
+
+    add: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        kind: z.enum([
+          "together", "apart", "reunion", "breakup", "conflict",
+          "reconciliation", "news", "meetup", "triggered",
+        ]),
+        title: z.string().min(1).max(200),
+        detail: z.string().max(2000).optional(),
+        /** When it happened, as an ISO date. Defaults to now. */
+        happenedAt: z.string().datetime().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const event = await createRelationshipEvent({
+          userId: ctx.user.id,
+          personaId: input.personaId,
+          kind: input.kind,
+          title: input.title,
+          detail: input.detail ?? null,
+          happenedAt: input.happenedAt ? new Date(input.happenedAt) : undefined,
+        });
+
+        // A breakup or a reunion changes the relationship itself, so the
+        // persona's record is updated to match. The end date is what the
+        // app uses to stop the anniversaries and to speak about the past
+        // rather than the present.
+        if (input.kind === "breakup" && !persona.togetherTo) {
+          await updatePersona(input.personaId, ctx.user.id, {
+            togetherTo: (input.happenedAt ? new Date(input.happenedAt) : new Date())
+              .toISOString().slice(0, 10),
+          });
+        }
+        if ((input.kind === "reunion" || input.kind === "reconciliation") && persona.togetherTo) {
+          await updatePersona(input.personaId, ctx.user.id, { togetherTo: null });
+        }
+
+        return { success: true, event };
+      }),
+
+    remove: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const removed = await deleteRelationshipEvent(input.id, ctx.user.id);
+        if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+  }),
+
+  /**
+   * Letters.
+   *
+   * The app had one way to say something: talk to it, and get an answer.
+   * But the things people most want to say to somebody they cannot reach
+   * are the things they cannot say *to* them — and sometimes the answer
+   * is the problem.
+   *
+   * A letter can be kept and never answered, or delivered. A delivered
+   * letter is answered a day later, because instant replies are the one
+   * thing that gives the game away.
+   */
+  letter: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const letters = await getLetters(input.personaId, ctx.user.id);
+        return { letters };
+      }),
+
+    write: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        body: z.string().min(1).max(5000),
+        /** How the user was feeling, if they said. */
+        mood: z.string().max(16).optional(),
+        /**
+         * Whether the persona is allowed to answer it.
+         *
+         * A letter that is never delivered is a different act, and
+         * sometimes it is the one that is wanted.
+         */
+        deliver: z.boolean().default(false),
+        /**
+         * "letter" is written to the persona. "todo" is 「等 TA 回来再说」
+         * — a note kept for the moment the two of them are in touch
+         * again.
+         */
+        kind: z.enum(["letter", "todo"]).default("letter"),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const letter = await writeLetter({
+          persona,
+          userId: ctx.user.id,
+          body: input.body,
+          mood: input.mood ?? null,
+          deliver: input.kind === "todo" ? false : input.deliver,
+          kind: input.kind,
+          locale: input.locale,
+        });
+        return { success: true, letter };
+      }),
+
+    /** The notes the user kept for later. */
+    todos: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return { todos: await getWaitingNotes(input.personaId, ctx.user.id) };
+      }),
+
+    remove: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const removed = await deleteLetter(input.id, ctx.user.id);
+        if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+  }),
+
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return getScenes(ctx.user.id);
+      const scenes = await getScenes(ctx.user.id);
+      // A scene the app ships should read in the language the person is
+      // reading. A scene they wrote themselves is left exactly as they
+      // wrote it.
+      return scenes.map((scene: any) => localizeScene(scene, ctx.locale));
     }),
 
     create: protectedProcedure
-      .input(z.object({ name: z.string().min(1).max(100), description: z.string().optional(), icon: z.string().max(10).optional(), systemPromptOverlay: z.string().optional(), emotionalState: z.string().optional(), starters: z.array(z.string()).optional() }))
+      .input(z.object({
+        name: z.string().min(1).max(100),
+        description: z.string().optional(),
+        icon: z.string().max(10).optional(),
+        systemPromptOverlay: z.string().optional(),
+        // The scene's mood has to be one the persona's state machine knows,
+        // otherwise the scene would put a word into the prompt that nothing
+        // else understands.
+        emotionalState: z.enum(["warm", "playful", "nostalgic", "melancholy", "happy", "distant"]).optional(),
+        starters: z.array(z.string()).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         return createScene({ ...input, userId: ctx.user.id, starters: input.starters || [], isBuiltin: false });
       }),
@@ -1910,7 +2758,7 @@ export const appRouter = router({
         // success that did not happen.
         const deleted = await deleteScene(input.id, ctx.user.id);
         if (!deleted) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "这个场景不存在，或者不属于你" });
+          throw new TRPCError({ code: "FORBIDDEN", message: copy(ctx.locale, "errors.personaNotFound") });
         }
         return { success: true };
       }),
@@ -1938,14 +2786,17 @@ export const appRouter = router({
     overview: protectedProcedure
       .input(z.object({ days: z.number().min(1).max(365).default(30) }))
       .query(async ({ ctx, input }) => {
-        const [stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution] = await Promise.all([
+        const [stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution, moods] = await Promise.all([
           getAnalyticsStats(ctx.user.id, input.days),
           getMessageVolume(ctx.user.id, input.days),
           getEmotionTimeline(ctx.user.id, input.days),
           getPersonaEngagement(ctx.user.id, input.days),
           getHourlyDistribution(ctx.user.id, input.days),
+          // The user's own states. The emotion timeline above is the
+          // *persona's* mood, and the two are not the same thing.
+          getUserMoods(ctx.user.id, input.days),
         ]);
-        return { stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution };
+        return { stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution, moods };
       }),
   }),
 });

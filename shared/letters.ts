@@ -1,0 +1,107 @@
+/**
+ * Letters.
+ *
+ * The app had one way to say something: talk to it, and get an answer.
+ * But the things people most want to say to somebody they cannot reach
+ * are the things they cannot say *to* them — and sometimes the answer is
+ * the problem.
+ *
+ * A letter that is kept and never answered, and a letter that is
+ * delivered, are two different acts. Both are missing from a product that
+ * only has a chat box.
+ */
+
+export type LetterStatus = "private" | "waiting" | "answered";
+
+export const LETTER_STATUSES: readonly LetterStatus[] = ["private", "waiting", "answered"];
+
+export function isLetterStatus(value: unknown): value is LetterStatus {
+  return (
+    typeof value === "string" &&
+    (LETTER_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * How long a delivered letter takes to be answered.
+ *
+ * Not an hour — an hour is still a machine. Not a week — a week is a
+ * stranger. A day is about how long it takes a person to decide what to
+ * say to something that was hard to say, and to say it.
+ */
+export const REPLY_DELAY_HOURS = 20;
+
+/**
+ * The shortest gap between two answers to the same person.
+ *
+ * Writing five letters in a row and getting five answers within the
+ * hour is a machine talking to itself. This is the one place where the
+ * app deliberately slows itself down.
+ */
+export const MIN_REPLY_GAP_HOURS = 12;
+
+/**
+ * When a letter's reply is due.
+ *
+ * The gap between two answers is enforced when the answer is given, not
+ * when the letter is written: a letter written an hour after another one
+ * is not due until the hour after *that* letter's answer.
+ */
+export function resolveReplyAt(params: {
+  now?: Date;
+  delayHours?: number;
+}): Date {
+  const now = params.now ?? new Date();
+  const delay = params.delayHours ?? REPLY_DELAY_HOURS;
+  return new Date(now.getTime() + delay * 3_600_000);
+}
+
+/**
+ * When a letter may be answered, given when the last one was.
+ *
+ * Writing five letters and getting five answers within the hour is a
+ * machine talking to itself. This is the one place where the app
+ * deliberately slows itself down.
+ */
+export function earliestAnswerAt(
+  lastReplyAt: Date | null | undefined,
+  now: Date = new Date(),
+): Date | null {
+  if (!lastReplyAt) return null;
+  const earliest = new Date(
+    new Date(lastReplyAt).getTime() + MIN_REPLY_GAP_HOURS * 3_600_000,
+  );
+  return earliest > now ? earliest : null;
+}
+
+/**
+ * The instruction the persona is given when it answers a letter.
+ *
+ * It is not the usual "reply like a chat message". A letter deserves a
+ * letter back: something with the weight of a letter, and not a text
+ * bubble.
+ */
+export function buildLetterReplyInstruction(params: {
+  personaName: string;
+  letterBody: string;
+  locale?: "zh" | "en";
+  relationshipEnded?: boolean;
+}): string {
+  const locale = params.locale ?? "zh";
+  if (locale === "en") {
+    return [
+      `Someone you know has written you a letter. It is not a message — it is a letter, and it was written carefully.`,
+      "",
+      params.letterBody,
+      "",
+      `Answer it as ${params.personaName}, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter.`,
+    ].join("\n");
+  }
+  return [
+    `有人给你写了一封信。这不是一条消息——是一封信，是认真写下来的。`,
+    "",
+    params.letterBody,
+    "",
+    `请以${params.personaName}的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。`,
+  ].join("\n");
+}

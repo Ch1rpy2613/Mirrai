@@ -7,6 +7,7 @@
  * reduced to a single safe path segment before it is used.
  */
 import path from "path";
+import { copy } from "@shared/copy";
 
 /** Control characters plus the punctuation that is unsafe on at least one OS. */
 const UNSAFE_CHARS = /[\u0000-\u001f\u007f<>:"/\\|?*]/g;
@@ -51,16 +52,22 @@ export function fileExtension(name: string): string {
 export function checkFileExtension(
   fileName: string,
   fileType: string,
+  locale: "zh" | "en" = "zh",
 ): string | null {
   const allowed = ALLOWED_EXTENSIONS[fileType];
   // An unknown kind is not allowed to carry any extension at all.
-  if (!allowed) return `不支持的文件类型：${fileType}`;
+  if (!allowed) return copy(locale, "errors.fileTypeNotSupported", { type: fileType });
   if (allowed.length === 0) return null;
 
   const ext = fileExtension(fileName);
-  if (!ext) return `文件缺少扩展名（${allowed.join(" / ")}）`;
+  if (!ext) {
+    return copy(locale, "errors.fileMissingExtension", { allowed: allowed.join(" / ") });
+  }
   if (!allowed.includes(ext)) {
-    return `不支持的文件扩展名：${ext}（允许：${allowed.join(" / ")}）`;
+    return copy(locale, "errors.fileExtensionNotSupported", {
+      ext,
+      allowed: allowed.join(" / "),
+    });
   }
   return null;
 }

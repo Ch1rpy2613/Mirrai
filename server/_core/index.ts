@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
 import { csrfGuard } from "./csrf";
+import { initRateLimiter } from "./rate-limit";
 import { uploadsAuthGuard } from "./uploads";
 import { registerChatStreamRoute } from "../chat/stream-route";
 import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
@@ -85,6 +86,15 @@ async function startServer() {
   // Create the first administrator on an empty instance.
   await bootstrapAdminAccount().catch((e) =>
     console.error("[Bootstrap] First-run setup failed:", e),
+  );
+
+  // The rate limiter, counted in a store every copy of the app shares.
+  //
+  // It is set up after the server is already listening, because a Redis
+  // that cannot be reached must not stop the app from starting — the
+  // limiter simply counts per process, as it always did.
+  await initRateLimiter().catch((e) =>
+    console.warn("[Rate-limit] Could not set up the shared store:", e),
   );
 
   // Collection jobs: mirror every state change into the database, and mark

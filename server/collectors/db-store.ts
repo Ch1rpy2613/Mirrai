@@ -18,6 +18,7 @@ import * as db from "../db";
 import type { CollectedMessage } from "./types";
 import type { CollectorAuthState, CollectorCredentials, CollectInput, SourceConnector } from "./types";
 import type { CollectorJob, CollectorJobStatus } from "./jobs";
+import { copy } from "@shared/copy";
 
 /**
  * Mirrors a job into the database.
@@ -154,12 +155,29 @@ export async function importCollectedMessages(params: {
 }
 
 /**
+ * The name a collected transcript gives each side.
+ *
+ * "我" is Chinese, so it lives in the copy table. "TA" cannot go there
+ * either: the copy table's Chinese half has to carry Chinese characters,
+ * and "TA" — the letter pair the app has always written for the other
+ * person — has none of them. So it is spelled out here, with its English
+ * counterpart beside it.
+ */
+export function collectedSpeaker(role: string, locale: "zh" | "en" = "zh"): string {
+  if (role === "user") return copy(locale, "prompt.speakerSelf");
+  return locale === "en" ? "Them: " : "TA：";
+}
+
+/**
  * Renders collected messages as the transcript the distillation pipeline
  * expects.
  */
-export function toTranscript(messages: Array<{ role: string; content: string }>): string {
+export function toTranscript(
+  messages: Array<{ role: string; content: string }>,
+  locale: "zh" | "en" = "zh",
+): string {
   return messages
-    .map((m) => `${m.role === "user" ? "我" : "TA"}：${m.content}`)
+    .map((m) => `${collectedSpeaker(m.role, locale)}${m.content}`)
     .join("\n");
 }
 

@@ -17,6 +17,7 @@
 import type { PersonaData } from "../_core/persona-schema";
 import { normalizePersonaData } from "../_core/persona-schema";
 import type { CharacterBookEntry, CharacterCardV2, CharacterCardV2Data } from "./card";
+import { copy, type Locale } from "@shared/copy";
 
 /** A memory of the persona, as used to build the card's lore book. */
 export interface PersonaCardMemory {
@@ -90,19 +91,58 @@ export interface PersonaCardImport {
 /** Key under which the Mirrai extension lives inside `data.extensions`. */
 const MIRRAI_EXTENSION_KEY = "mirrai";
 
-/** Labels used in the human-readable fields, so they can be parsed back. */
-const DESCRIPTION_LABELS = {
-  personality: "性格",
-  attachmentStyle: "依恋类型",
-  loveLanguage: "爱的语言",
-  conflictStyle: "争吵方式",
-} as const;
+/**
+ * Labels used in the human-readable fields, so they can be parsed back.
+ *
+ * A card is a file somebody downloads and shares, so it has a language of
+ * its own — but it can also be read back, and a card written in either
+ * language has to import. That is why every label carries both.
+ */
+type CardLabel = { zh: string; en: string };
 
-const MES_EXAMPLE_LABELS = {
-  speakingStyle: "说话方式",
-  catchphrases: "常用语气词",
-  nickname: "称呼对方",
-} as const;
+const DESCRIPTION_LABELS: Record<string, CardLabel> = {
+  personality: { zh: "性格", en: "Personality" },
+  attachmentStyle: { zh: "依恋类型", en: "Attachment style" },
+  loveLanguage: { zh: "爱的语言", en: "Love language" },
+  conflictStyle: { zh: "争吵方式", en: "How they argue" },
+};
+
+const MES_EXAMPLE_LABELS: Record<string, CardLabel> = {
+  speakingStyle: { zh: "说话方式", en: "How they speak" },
+  catchphrases: { zh: "常用语气词", en: "Favourite words" },
+  nickname: { zh: "称呼对方", en: "What they call you" },
+};
+
+/** The separator between a label and its value, per language. */
+const LABEL_SEPARATOR: Record<Locale, string> = { zh: "：", en: ": " };
+
+/**
+ * The label of a field, in the language the card is written in.
+ */
+function cardLabel(labels: Record<string, CardLabel>, key: string, locale: Locale): string {
+  return labels[key]?.[locale] ?? labels[key]?.zh ?? key;
+}
+
+/**
+ * The value of a labelled field, in whichever language the card was
+ * written in.
+ *
+ * A card downloaded from a Chinese Mirrai has to import into an English
+ * one, and the other way round, so both labels are always accepted.
+ */
+function labelledValue(
+  parsed: Record<string, string>,
+  labels: Record<string, CardLabel>,
+  key: string,
+  locale: Locale,
+): string {
+  const order: Locale[] = locale === "en" ? ["en", "zh"] : ["zh", "en"];
+  for (const language of order) {
+    const value = parsed[labels[key]?.[language] ?? ""];
+    if (value) return value;
+  }
+  return "";
+}
 
 /**
  * Disclosure line appended to the creator notes.
@@ -112,8 +152,9 @@ const MES_EXAMPLE_LABELS = {
  * may travel to third-party tools — so the notes have to carry that
  * disclosure with them.
  */
-const AI_DISCLOSURE_LINE =
-  "本卡片是 AI 数字分身的模拟角色，并非真人本人。请在获得被模拟者知情同意的前提下使用，并尊重 TA 的隐私与意愿。";
+function aiDisclosureLine(locale: Locale): string {
+  return copy(locale, "labels.card.disclaimer");
+}
 
 /** Reads a string field, tolerating a missing card payload. */
 function asText(value: unknown): string {
@@ -138,10 +179,11 @@ function personaText(persona: PersonaData, key: keyof PersonaData): string {
 }
 
 /** Joins `标签：内容` pairs, skipping the ones without content. */
-function joinLabelled(pairs: Array<[string, string]>): string {
+function joinLabelled(pairs: Array<[string, string]>, locale: Locale): string {
+  const separator = LABEL_SEPARATOR[locale] ?? LABEL_SEPARATOR.zh;
   return pairs
     .filter((pair) => pair[1].trim().length > 0)
-    .map((pair) => `${pair[0]}：${pair[1].trim()}`)
+    .map((pair) => `${pair[0]}${separator}${pair[1].trim()}`)
     .join("\n");
 }
 
@@ -151,7 +193,11 @@ function parseLabelled(text: string): Record<string, string> {
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const separator = trimmed.indexOf("：");
+    // The separator is the full-width colon in a Chinese card and the
+    // ordinary one in an English card, so both are accepted.
+    const wide = trimmed.indexOf("：");
+    const narrow = trimmed.indexOf(":");
+    const separator = wide === -1 ? narrow : narrow === -1 ? wide : Math.min(wide, narrow);
     if (separator === -1) continue;
     const label = trimmed.slice(0, separator).trim();
     const value = trimmed.slice(separator + 1).trim();
@@ -165,11 +211,16 @@ function buildScenario(
   relationshipDesc: string | undefined,
   togetherFrom: string | undefined,
   togetherTo: string | undefined,
+  locale: Locale,
 ): string {
   const desc = (relationshipDesc ?? "").trim();
   const from = (togetherFrom ?? "").trim();
   const to = (togetherTo ?? "").trim();
-  const period = from && to ? `（${from} 至 ${to}）` : from ? `（${from} 起）` : "";
+  const period = from && to
+    ? copy(locale, "labels.card.period", { from, to })
+    : from
+      ? copy(locale, "labels.card.periodFrom", { from })
+      : "";
   return [desc, period].filter(Boolean).join("\n");
 }
 
@@ -186,10 +237,12 @@ function parseScenario(scenario: string): {
   for (const line of scenario.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const period = /^（(.+?)(?:\s*(至|到|—|~|起)\s*(.*?))?）$/.exec(trimmed);
+    const period =
+      /^（(.+?)(?:\s*(至|到|—|~|起)\s*(.*?))?）$/.exec(trimmed) ??
+      /^\((.+?)(?:\s*(?:to|until|—|~)\s*(.*?))?\)$/.exec(trimmed);
     if (period) {
       togetherFrom = period[1].trim();
-      togetherTo = (period[3] ?? "").trim();
+      togetherTo = (period[3] ?? period[2] ?? "").trim();
     } else if (!relationshipDesc) {
       relationshipDesc = trimmed;
     }
@@ -293,22 +346,28 @@ export function resolveCardOpeningLines(input: {
 
 /**
  * Turns a Mirrai persona into a V2 character card.
+ *
+ * The card is a file somebody downloads and shares, so it is written in
+ * one language — the one the person asked for — rather than in both.
  */
-export function personaDataToCard(args: PersonaCardExportArgs): CharacterCardV2 {
+export function personaDataToCard(
+  args: PersonaCardExportArgs,
+  locale: Locale = "zh",
+): CharacterCardV2 {
   const persona = args.personaData;
 
   const description = joinLabelled([
-    [DESCRIPTION_LABELS.personality, personaText(persona, "personality")],
-    [DESCRIPTION_LABELS.attachmentStyle, personaText(persona, "attachmentStyle")],
-    [DESCRIPTION_LABELS.loveLanguage, personaText(persona, "loveLanguage")],
-    [DESCRIPTION_LABELS.conflictStyle, personaText(persona, "conflictStyle")],
-  ]);
+    [cardLabel(DESCRIPTION_LABELS, "personality", locale), personaText(persona, "personality")],
+    [cardLabel(DESCRIPTION_LABELS, "attachmentStyle", locale), personaText(persona, "attachmentStyle")],
+    [cardLabel(DESCRIPTION_LABELS, "loveLanguage", locale), personaText(persona, "loveLanguage")],
+    [cardLabel(DESCRIPTION_LABELS, "conflictStyle", locale), personaText(persona, "conflictStyle")],
+  ], locale);
 
   const mesExample = joinLabelled([
-    [MES_EXAMPLE_LABELS.speakingStyle, personaText(persona, "speakingStyle")],
-    [MES_EXAMPLE_LABELS.catchphrases, personaText(persona, "catchphrases")],
-    [MES_EXAMPLE_LABELS.nickname, personaText(persona, "nickname")],
-  ]);
+    [cardLabel(MES_EXAMPLE_LABELS, "speakingStyle", locale), personaText(persona, "speakingStyle")],
+    [cardLabel(MES_EXAMPLE_LABELS, "catchphrases", locale), personaText(persona, "catchphrases")],
+    [cardLabel(MES_EXAMPLE_LABELS, "nickname", locale), personaText(persona, "nickname")],
+  ], locale);
 
   const memories = collectMemories(args);
   const anchorCount = memories.filter((memory) => memory.anchor === true).length;
@@ -321,16 +380,16 @@ export function personaDataToCard(args: PersonaCardExportArgs): CharacterCardV2 
 
   const tags: string[] = [];
   for (const tag of [
-    "AI模拟",
+    copy(locale, "labels.card.type"),
     (args.relationshipDesc ?? "").trim(),
     (args.intimacyLevel ?? "").trim(),
-    `锚点${anchorCount}`,
+    copy(locale, "labels.card.anchorCount", { count: anchorCount }),
   ]) {
     if (tag && tags.indexOf(tag) === -1) tags.push(tag);
   }
 
   const relationshipDesc = (args.relationshipDesc ?? "").trim();
-  const creatorNotes = [relationshipDesc, AI_DISCLOSURE_LINE].filter(Boolean).join("\n\n");
+  const creatorNotes = [relationshipDesc, aiDisclosureLine(locale)].filter(Boolean).join("\n\n");
 
   const extension: MirraiExtension = {
     format: "mirrai-persona-card",
@@ -347,7 +406,7 @@ export function personaDataToCard(args: PersonaCardExportArgs): CharacterCardV2 
     name: args.name,
     description,
     personality: personaText(persona, "personality"),
-    scenario: buildScenario(args.relationshipDesc, args.togetherFrom, args.togetherTo),
+    scenario: buildScenario(args.relationshipDesc, args.togetherFrom, args.togetherTo, locale),
     first_mes: opening.firstMessage,
     mes_example: mesExample,
     creator_notes: creatorNotes,
@@ -360,7 +419,7 @@ export function personaDataToCard(args: PersonaCardExportArgs): CharacterCardV2 
     extensions: { [MIRRAI_EXTENSION_KEY]: extension },
     character_book: {
       entries: buildBookEntries(memories),
-      name: `${args.name}的记忆`,
+      name: copy(locale, "labels.card.memoryBook", { name: args.name }),
     },
   };
 
@@ -373,8 +432,11 @@ export function personaDataToCard(args: PersonaCardExportArgs): CharacterCardV2 
  * The Mirrai extension is used when present, because it holds the original
  * values; otherwise the human-readable fields are parsed. Fields without
  * content are left out so the caller can fill the defaults.
+ *
+ * The labels of both languages are accepted, so a card written in one
+ * language imports into a persona in the other.
  */
-export function cardToPersonaData(card: CharacterCardV2): Partial<PersonaData> {
+export function cardToPersonaData(card: CharacterCardV2, locale: Locale = "zh"): Partial<PersonaData> {
   const data = card.data ?? ({} as CharacterCardV2Data);
   const extension = readMirraiExtension(card);
   const mirrored = extension?.persona;
@@ -387,13 +449,13 @@ export function cardToPersonaData(card: CharacterCardV2): Partial<PersonaData> {
   const personality = firstText(
     mirrored?.personality,
     data.personality,
-    description[DESCRIPTION_LABELS.personality],
+    labelledValue(description, DESCRIPTION_LABELS, "personality", locale),
   );
   if (personality) result.personality = personality;
 
   const speakingStyle = firstText(
     mirrored?.speakingStyle,
-    mesExample[MES_EXAMPLE_LABELS.speakingStyle],
+    labelledValue(mesExample, MES_EXAMPLE_LABELS, "speakingStyle", locale),
   );
   if (speakingStyle) result.speakingStyle = speakingStyle;
 
@@ -402,27 +464,30 @@ export function cardToPersonaData(card: CharacterCardV2): Partial<PersonaData> {
     : [];
   const catchphrases = mirroredCatchphrases.length
     ? mirroredCatchphrases
-    : splitList(mesExample[MES_EXAMPLE_LABELS.catchphrases] ?? "");
+    : splitList(labelledValue(mesExample, MES_EXAMPLE_LABELS, "catchphrases", locale));
   if (catchphrases.length) result.catchphrases = catchphrases;
 
-  const nickname = firstText(mirrored?.nickname, mesExample[MES_EXAMPLE_LABELS.nickname]);
+  const nickname = firstText(
+    mirrored?.nickname,
+    labelledValue(mesExample, MES_EXAMPLE_LABELS, "nickname", locale),
+  );
   if (nickname) result.nickname = nickname;
 
   const attachmentStyle = firstText(
     mirrored?.attachmentStyle,
-    description[DESCRIPTION_LABELS.attachmentStyle],
+    labelledValue(description, DESCRIPTION_LABELS, "attachmentStyle", locale),
   );
   if (attachmentStyle) result.attachmentStyle = attachmentStyle;
 
   const loveLanguage = firstText(
     mirrored?.loveLanguage,
-    description[DESCRIPTION_LABELS.loveLanguage],
+    labelledValue(description, DESCRIPTION_LABELS, "loveLanguage", locale),
   );
   if (loveLanguage) result.loveLanguage = loveLanguage;
 
   const conflictStyle = firstText(
     mirrored?.conflictStyle,
-    description[DESCRIPTION_LABELS.conflictStyle],
+    labelledValue(description, DESCRIPTION_LABELS, "conflictStyle", locale),
   );
   if (conflictStyle) result.conflictStyle = conflictStyle;
 
@@ -449,7 +514,7 @@ export function cardToPersonaData(card: CharacterCardV2): Partial<PersonaData> {
  * Recovers everything a persona needs from a card, including the fields
  * that are not part of `PersonaData`.
  */
-export function cardToPersonaImport(card: CharacterCardV2): PersonaCardImport {
+export function cardToPersonaImport(card: CharacterCardV2, locale: Locale = "zh"): PersonaCardImport {
   const extension = readMirraiExtension(card);
   const scenario = parseScenario(asText(card.data?.scenario));
 
@@ -462,7 +527,7 @@ export function cardToPersonaImport(card: CharacterCardV2): PersonaCardImport {
     relationshipDesc,
     togetherFrom,
     togetherTo,
-    personaData: cardToPersonaData(card),
+    personaData: cardToPersonaData(card, locale),
   };
 }
 
@@ -470,10 +535,11 @@ export function cardToPersonaImport(card: CharacterCardV2): PersonaCardImport {
  * Recovers a complete persona from a card, filling the defaults with the
  * same normaliser the distillation pipeline uses.
  */
-export function cardToNormalizedPersona(card: CharacterCardV2): PersonaData {
-  const imported = cardToPersonaImport(card);
+export function cardToNormalizedPersona(card: CharacterCardV2, locale: Locale = "zh"): PersonaData {
+  const imported = cardToPersonaImport(card, locale);
   return normalizePersonaData(imported.personaData as unknown as Record<string, unknown>, {
     name: imported.name || "TA",
+    locale,
     fallback: {
       personality: imported.personaData.personality,
       speakingStyle: imported.personaData.speakingStyle,

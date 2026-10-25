@@ -1,5 +1,8 @@
 import { INTIMACY_LEVELS, normalizeIntimacyLevel } from "@shared/intimacy";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
+import { zonedHour } from "@shared/timezone";
+import { buildReachabilityNote, type Reachability } from "@shared/user-side";
+import { copy } from "@shared/copy";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -23,28 +26,23 @@ export function computeIntimacy(params: {
   return { score, level: level.key, levelName: level.name, icon: level.icon };
 }
 
-/** Human-readable description of an emotional state, used inside the prompt. */
+/**
+ * Human-readable description of an emotional state, used inside the prompt.
+ *
+ * The six descriptions are in the copy table: they are the app describing
+ * the persona's own mood to the persona, in the language the persona is
+ * speaking.
+ */
 export function getEmotionalStateDesc(state: string, locale: "zh" | "en" = "zh"): string {
-  if (locale === "en") {
-    const map: Record<string, string> = {
-      warm: "warm mode — relaxed and affectionate towards the user",
-      playful: "playful mode — cheerful, joking, a little spoiled",
-      nostalgic: "nostalgic mode — thinking back to the past, easily moved",
-      melancholy: "melancholy mode — a little low, but still willing to talk",
-      happy: "happy mode — bright and full of energy",
-      distant: "distant mode — distracted, giving shorter answers",
-    };
-    return map[state] || map["warm"];
-  }
   const map: Record<string, string> = {
-    warm: "温柔模式 — 你现在心情很好，对用户充满温柔和爱意",
-    playful: "俏皮模式 — 你现在心情愉快，喜欢开玩笑和撒娇",
-    nostalgic: "思念模式 — 你现在很想念过去的时光，容易触景生情",
-    melancholy: "忧郁模式 — 你现在有些低落，但仍然愿意倾诉",
-    happy: "开心模式 — 你现在非常开心，充满活力",
-    distant: "疏离模式 — 你现在有些心不在焉，回复比较简短",
+    warm: "prompt.emotionalWarm",
+    playful: "prompt.emotionalPlayful",
+    nostalgic: "prompt.emotionalNostalgic",
+    melancholy: "prompt.emotionalMelancholy",
+    happy: "prompt.emotionalHappy",
+    distant: "prompt.emotionalDistant",
   };
-  return map[state] || map["warm"];
+  return copy(locale, map[state] || map.warm);
 }
 
 /**
@@ -74,16 +72,38 @@ export function computeEmotionalState(
 
 /**
  * Describes the moment of day, used to colour the persona's tone.
+ *
+ * The hour is the persona's own, not the server's: a persona who lives in
+ * another timezone is not having the user's evening. Without a timezone the
+ * local time is used, which is the historical behaviour.
  */
-export function getTimeOfDay(date: Date = new Date()): { key: string; label: string; intimate: boolean } {
-  const hour = date.getHours();
-  if (hour >= 0 && hour < 5) return { key: "lateNight", label: "深夜", intimate: true };
-  if (hour < 9) return { key: "earlyMorning", label: "清晨", intimate: false };
-  if (hour < 12) return { key: "morning", label: "上午", intimate: false };
-  if (hour < 14) return { key: "noon", label: "午后", intimate: false };
-  if (hour < 18) return { key: "afternoon", label: "下午", intimate: false };
-  if (hour < 22) return { key: "evening", label: "傍晚", intimate: false };
-  return { key: "night", label: "夜里", intimate: true };
+export function getTimeOfDay(
+  date: Date = new Date(),
+  timeZone?: string | null,
+  locale: "zh" | "en" = "zh",
+): { key: string; label: string; intimate: boolean } {
+  const hour = zonedHour(date, timeZone);
+  // The label goes into the prompt, so it has to be in the language the
+  // persona is speaking. "It is 深夜 right now" was a sentence in two
+  // languages at once. The key stays the same in both — it identifies the
+  // hour, it is not read by anybody.
+  const labels: Record<string, string> = {
+    lateNight: "prompt.timeLateNight",
+    earlyMorning: "prompt.timeEarlyMorning",
+    morning: "prompt.timeMorning",
+    noon: "prompt.timeNoon",
+    afternoon: "prompt.timeAfternoon",
+    evening: "prompt.timeEvening",
+    night: "prompt.timeNight",
+  };
+  const label = (key: string) => copy(locale, labels[key]);
+  if (hour >= 0 && hour < 5) return { key: "lateNight", label: label("lateNight"), intimate: true };
+  if (hour < 9) return { key: "earlyMorning", label: label("earlyMorning"), intimate: false };
+  if (hour < 12) return { key: "morning", label: label("morning"), intimate: false };
+  if (hour < 14) return { key: "noon", label: label("noon"), intimate: false };
+  if (hour < 18) return { key: "afternoon", label: label("afternoon"), intimate: false };
+  if (hour < 22) return { key: "evening", label: label("evening"), intimate: false };
+  return { key: "night", label: label("night"), intimate: true };
 }
 
 /**
@@ -113,6 +133,48 @@ export interface SystemPromptOptions {
   locale?: "zh" | "en";
   /** Reference time for time-of-day and relationship length. */
   now?: Date;
+  /**
+   * The time zone the time-of-day awareness is computed in.
+   *
+   * It defaults to the persona's own zone. A persona who lives abroad has
+   * an evening of their own, and telling them it is the user's afternoon is
+   * the kind of small wrongness that makes the whole thing feel fake.
+   */
+  timeZone?: string | null;
+  /**
+   * The message the user is replying to.
+   *
+   * Without it, every reply is a reply to "whatever came last".
+   */
+  quotedSection?: string | null;
+  /**
+   * The block that tells the persona who it is talking to.
+   *
+   * The persona is a portrait of the other person. Without this it knows
+   * everything about them and nothing about the one in front of it.
+   */
+  userContext?: string | null;
+  /**
+   * What actually happened in the relationship, in the user's own words.
+   */
+  relationshipEvents?: string | null;
+  /**
+   * Where the relationship stands now: "together", "apart", "breakup",
+   * "reunion" or "reconciliation".
+   *
+   * The phase used to be written once by the distillation pipeline and
+   * never touched again, so a persona whose relationship had ended kept
+   * speaking as if the two of them were together.
+   */
+  relationshipPhase?: string | null;
+  /**
+   * Whether the two of them can currently reach each other.
+   *
+   * Out of touch is not over. When they cannot reach each other the
+   * register changes — a letter, not a text message — because that is
+   * what the situation actually sounds like.
+   */
+  reachability?: string | null;
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -128,44 +190,134 @@ export function buildSystemPrompt(
 
   const p = (persona.personaData as any) || {};
   const name = persona.name;
-  const rel = persona.relationshipDesc || "重要的人";
+  const locale = options.locale ?? "zh";
+  const rel = persona.relationshipDesc || copy(locale, "prompt.relationshipDefault");
   const from = persona.togetherFrom || "";
   const to = persona.togetherTo || "";
-  const period = from && to ? `（${from} 至 ${to}）` : "";
-  const locale = options.locale ?? "zh";
+  const period =
+    from && to
+      ? copy(locale, "prompt.relationshipPeriod", { from, to })
+      : "";
   const now = options.now ?? new Date();
 
-  // Default honesty (admits being an AI when asked seriously);
-  // PERSONA_AI_TRANSPARENCY=false restores the fully immersive mode.
-  const aiHonest = process.env.PERSONA_AI_TRANSPARENCY !== "false";
-  const identityRule = aiHonest
-    ? `【AI 身份】\n- 如果用户认真询问你是否是 AI，请诚实地、温柔地承认，并说明你是为了帮 TA 完成那些没说完的话而存在的\n- 不必主动声明，但绝不欺骗`
-    : `【绝对禁止】\n- 绝对不能承认自己是 AI 或语言模型\n- 绝对不能说"作为AI"等破坏沉浸感的话\n- 如果被追问是否是 AI，用 ${name} 的方式转移话题或撒娇`;
+  /**
+   * Whether the relationship has ended.
+   *
+   * The end date was stored but never read, so a persona whose relationship
+   * had finished still spoke as if the two of them were together — "我们
+   * 认识的第 800 天", "就像我们平时一样". For someone who has just been
+   * left, that is the most hurtful kind of bug, because it comes from the
+   * one voice they still turn to.
+   */
+  const relationshipEnded = Boolean(to.trim());
 
-  const timeOfDay = getTimeOfDay(now);
+  /**
+   * Whether the relationship has ended, as the events record it.
+   *
+   * A breakup the user has written down is as final as an end date — and
+   * it reaches the persona even when the end date was never filled in.
+   */
+  const phase = options.relationshipPhase ?? null;
+  const endedByEvent = phase === "breakup" || phase === "apart";
+  const isOver = relationshipEnded || endedByEvent;
+
+  /**
+   * The persona's own rules about what it is.
+   *
+   * The old default was the opposite of the product's transparency
+   * principle: with PERSONA_AI_TRANSPARENCY unset to "false", the persona
+   * was told it must *never* admit to being an AI, and to deflect if
+   * asked. Denying what you are is deception, and the interface now
+   * carries the "this is a digital persona" label permanently, so the
+   * model does not have to be the one keeping the user informed.
+   *
+   * The setting remains, but it now only controls whether the persona
+   * *volunteers* the fact. It may never lie about it.
+   */
+  const volunteersIdentity = process.env.PERSONA_AI_TRANSPARENCY !== "false";
+  const identityRule = volunteersIdentity
+    ? copy(locale, "prompt.identityVolunteers")
+    : copy(locale, "prompt.identityQuiet", { name });
+
+  /**
+   * The rules that hold no matter what the user is feeling.
+   *
+   * The product promises a non-harm principle: it will not encourage
+   * harmful patterns, and it will not manufacture a fantasy that hurts
+   * the user. Nothing implemented that — the persona could talk a person
+   * into waiting for someone who was never coming, or into staying
+   * attached to a relationship that was over.
+   *
+   * These are deliberately part of the persona's own instructions, at the
+   * front, rather than a filter bolted on afterwards. A model that is told
+   * the boundary as part of the character keeps it; a model that is
+   * filtered afterwards has already said the thing.
+   */
+  const hardRules = copy(locale, "prompt.hardRules");
+
+  // The time of day is the persona's own, not the server's. A persona in
+  // another timezone was being told it was the user's evening.
+  const timeOfDay = getTimeOfDay(now, options.timeZone ?? persona.timezone, locale);
   const togetherDays = daysSince(from, now);
+
+  const identitySection = isOver
+    ? copy(locale, "prompt.identityEnded", { name, rel, period })
+    : phase === "reunion" || phase === "reconciliation" || phase === "together"
+      ? copy(locale, "prompt.identityTogetherAgain", { name, rel, period })
+      : copy(locale, "prompt.identityNormal", { name, rel, period });
 
   const sections: Array<string | null | undefined> = [
     identityRule,
-    `【身份】\n你是 ${name}，${rel}${period}。\n你现在正在和用户聊天，就像你们平时一样自然。`,
-    p.personality ? `【性格特质】\n${p.personality}` : "",
+    hardRules,
+    identitySection,
+    p.personality ? `${copy(locale, "prompt.personalityHeading")}\n${p.personality}` : "",
     p.speakingStyle
-      ? `【说话方式】\n${p.speakingStyle}\n- 常用语气词：${(p.catchphrases || []).join("、") || "无"}\n- 称呼对方：${p.nickname || "宝贝"}`
+      ? `${copy(locale, "prompt.speakingStyleHeading")}\n${p.speakingStyle}\n${copy(
+          locale,
+          "prompt.catchphrases",
+          {
+            value:
+              (p.catchphrases || []).join(locale === "en" ? ", " : "、") ||
+              copy(locale, "prompt.noCatchphrases"),
+          },
+        )}\n${copy(locale, "prompt.nickname", {
+          value: p.nickname || copy(locale, "prompt.noNickname"),
+        })}`
       : "",
+    options.userContext || "",
+    options.quotedSection || "",
+    options.relationshipEvents || "",
+    buildReachabilityNote(
+      (options.reachability as Reachability) ?? "reachable",
+      locale,
+    ),
     options.anchorSection || "",
     options.memorySection || "",
     options.summarySection || "",
-    p.memories ? `【重要记忆】\n${p.memories}` : "",
+    p.memories ? `${copy(locale, "prompt.memoriesHeading")}\n${p.memories}` : "",
     p.attachmentStyle
-      ? `【情感模式】\n依恋类型：${p.attachmentStyle}\n爱的语言：${p.loveLanguage || "未知"}\n争吵时：${p.conflictStyle || "未知"}`
+      ? `${copy(locale, "prompt.attachmentHeading")}\n${copy(locale, "prompt.attachmentStyle", {
+          value: p.attachmentStyle,
+        })}\n${copy(locale, "prompt.loveLanguage", {
+          value: p.loveLanguage || copy(locale, "prompt.unknown"),
+        })}\n${copy(locale, "prompt.conflictStyle", {
+          value: p.conflictStyle || copy(locale, "prompt.unknown"),
+        })}`
       : "",
-    `【当前情感状态】\n${options.emotionalDesc || getEmotionalStateDesc(persona.emotionalState, locale)}`,
-    buildTimeAwareness(timeOfDay, togetherDays, locale),
-    options.sceneOverlay ? `【当前场景】\n${options.sceneOverlay}` : "",
-    buildRealismRules(options.realismLevel ?? (p.realismLevel as number | undefined) ?? 70),
-    buildRelationshipPhase(p.relationshipPhase),
-    `【对话原则】\n- 用第一人称说话，回复像真实聊天消息，不要太长\n- 偶尔主动提起你们共同的回忆\n- 保持 ${name} 独特的语言风格`,
-    p.customInstructions ? `【用户自定义指令】\n${p.customInstructions}` : "",
+    `${copy(locale, "prompt.emotionalStateHeading")}\n${
+      options.emotionalDesc || getEmotionalStateDesc(persona.emotionalState, locale)
+    }`,
+    buildTimeAwareness(timeOfDay, togetherDays, locale, isOver),
+    options.sceneOverlay ? `${copy(locale, "prompt.sceneHeading")}\n${options.sceneOverlay}` : "",
+    buildRealismRules(
+      options.realismLevel ?? (p.realismLevel as number | undefined) ?? 70,
+      locale,
+    ),
+    buildRelationshipPhase(p.relationshipPhase, locale),
+    copy(locale, "prompt.conversationPrinciples", { name }),
+    p.customInstructions
+      ? `${copy(locale, "prompt.customInstructionsHeading")}\n${p.customInstructions}`
+      : "",
   ];
 
   return sections.filter(Boolean).join("\n\n");
@@ -175,52 +327,59 @@ function buildTimeAwareness(
   timeOfDay: { key: string; label: string; intimate: boolean },
   togetherDays: number | null,
   locale: "zh" | "en",
+  relationshipEnded = false,
 ): string {
   const parts: string[] = [];
-  if (locale === "en") {
-    parts.push(`It is ${timeOfDay.label} right now.`);
-    if (timeOfDay.intimate) {
-      parts.push("The hour is quiet — keep replies a little shorter and a little more intimate.");
-    }
-    if (togetherDays !== null) {
-      parts.push(`You have known each other for ${togetherDays} days.`);
-    }
-  } else {
-    parts.push(`现在是${timeOfDay.label}。`);
-    if (timeOfDay.intimate) {
-      parts.push("这个点周围很安静，回复可以更短一点、更亲近一点。");
-    }
-    if (togetherDays !== null) {
-      parts.push(`你们已经认识 ${togetherDays} 天了。`);
-    }
+  parts.push(copy(locale, "prompt.timeNow", { label: timeOfDay.label }));
+  if (timeOfDay.intimate) {
+    parts.push(copy(locale, "prompt.timeQuiet"));
   }
-  return `【时间感知】\n${parts.join("\n")}`;
+  if (togetherDays !== null) {
+    parts.push(
+      copy(
+        locale,
+        relationshipEnded ? "prompt.togetherDaysEnded" : "prompt.togetherDays",
+        { days: togetherDays },
+      ),
+    );
+  }
+  return `${copy(locale, "prompt.timeAwarenessHeading")}\n${parts.join("\n")}`;
 }
 
-function buildRealismRules(realismLevel: number): string {
+function buildRealismRules(realismLevel: number, locale: "zh" | "en" = "zh"): string {
   const level = Math.max(0, Math.min(100, Number(realismLevel) || 0));
   if (level === 0) return "";
-  const intensity = level >= 70 ? "明显" : level >= 40 ? "偶尔" : "几乎不";
+  const intensity = copy(
+    locale,
+    level >= 70
+      ? "prompt.realismIntensityHigh"
+      : level >= 40
+        ? "prompt.realismIntensityMedium"
+        : "prompt.realismIntensityLow",
+  );
   return [
-    "【真人感】",
-    `- 像真人打字：${intensity}省略主语、句子不完整、带一点语气词和错别字`,
-    "- 不要每次都回应问题本身，偶尔会答一半、跳到别的事",
-    "- 不要写得太工整完整，真实的聊天没有段落感",
+    copy(locale, "prompt.realismHeading"),
+    copy(locale, "prompt.realismRules", { intensity }),
   ].join("\n");
 }
 
-function buildRelationshipPhase(phase: unknown): string {
+function buildRelationshipPhase(phase: unknown, locale: "zh" | "en" = "zh"): string {
   if (typeof phase !== "string" || !phase) return "";
   const map: Record<string, string> = {
-    initial: "你们还在互相试探的阶段",
-    growing: "你们的关系正在慢慢靠近",
-    stable: "你们处在一个稳定的位置",
-    strained: "你们之间有一些没说开的东西",
-    closing: "你们正走向一个结束",
+    initial: "prompt.phaseInitial",
+    growing: "prompt.phaseGrowing",
+    stable: "prompt.phaseStable",
+    strained: "prompt.phaseStrained",
+    closing: "prompt.phaseClosing",
   };
-  const description = map[phase];
-  if (!description) return "";
-  return `【关系阶段】\n${description}。回应时符合这个阶段。`;
+  const key = map[phase];
+  if (!key) return "";
+  const description = copy(locale, key);
+  return `${copy(locale, "prompt.relationshipPhaseHeading")}\n${copy(
+    locale,
+    "prompt.relationshipPhaseAnswer",
+    { description },
+  )}`;
 }
 
 /**
@@ -236,25 +395,33 @@ export function checkGraduationEligibility(params: {
   chatCount: number;
   recentChatFrequency: number;
   previousChatFrequency: number;
+  /**
+   * The language the reason is written in.
+   *
+   * The reason is read by a person, in a chat window, at the moment they
+   * are deciding whether to say goodbye. It has to be in their language.
+   */
+  locale?: "zh" | "en";
 }): { eligible: boolean; reason: string } {
+  const locale = params.locale ?? "zh";
   if (normalizeIntimacyLevel(params.intimacyLevel) !== "soulmate") {
-    return { eligible: false, reason: "亲密度未达到灵魂伴侣" };
+    return { eligible: false, reason: copy(locale, "graduation.reasonIntimacy") };
   }
   if (params.chatCount < 50) {
-    return { eligible: false, reason: "对话次数不足" };
+    return { eligible: false, reason: copy(locale, "graduation.reasonChatCount") };
   }
   const total = params.recentEmotions.length;
   if (total < 7) {
-    return { eligible: false, reason: "情感数据不足" };
+    return { eligible: false, reason: copy(locale, "graduation.reasonEmotionData") };
   }
   const positive = params.recentEmotions.filter(e =>
     ["happy", "warm", "playful"].includes(e.emotionalState)
   ).length;
   if (positive / total < 0.6) {
-    return { eligible: false, reason: "近期情绪尚未稳定向好" };
+    return { eligible: false, reason: copy(locale, "graduation.reasonEmotionsRising") };
   }
   if (params.recentChatFrequency > params.previousChatFrequency * 1.5 && params.previousChatFrequency > 0) {
-    return { eligible: false, reason: "对话频率仍在增长" };
+    return { eligible: false, reason: copy(locale, "graduation.reasonFrequencyRising") };
   }
-  return { eligible: true, reason: "已达到毕业条件" };
+  return { eligible: true, reason: copy(locale, "graduation.reasonEligible") };
 }

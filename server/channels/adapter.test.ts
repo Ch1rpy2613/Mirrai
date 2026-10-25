@@ -320,7 +320,22 @@ describe("feishu adapter", () => {
     });
     decryptSecret.mockResolvedValue(JSON.stringify({ appId: "cli_x", appSecret: "secret" }));
 
-    await expect(feishuAdapter.start(1)).rejects.toThrow(/pnpm install/);
+    // The SDK is an optional dependency, and an install that never touches
+    // Feishu does not have it. The failure has to be *simulated* — it used
+    // to be simulated by the package simply not being in node_modules,
+    // which meant the test passed for the wrong reason the moment
+    // somebody ran a full install.
+    vi.resetModules();
+    vi.doMock("@larksuiteoapi/node-sdk", () => {
+      throw new Error("Cannot find module '@larksuiteoapi/node-sdk'");
+    });
+
+    try {
+      await expect(feishuAdapter.start(1)).rejects.toThrow(/pnpm install/);
+    } finally {
+      vi.doUnmock("@larksuiteoapi/node-sdk");
+      vi.resetModules();
+    }
 
     // The channel never claims to be connected after the failure.
     expect(upsertChannelState).not.toHaveBeenCalled();
@@ -509,5 +524,41 @@ describe("shared commands", () => {
     await wechatAdapter.stop(1);
 
     expect(getActivePersonaId(WECHAT_KEY, 1)).toBe(1);
+  });
+
+  it("refuses to graduate when the graduation mode is off", async () => {
+    getPersonasByUserId.mockResolvedValue([
+      { ...personas[0], graduationMode: "off" },
+    ]);
+
+    const result = await handleCommand({
+      userId: 1,
+      conversationKey: FEISHU_KEY,
+      text: "/毕业",
+      defaultPersonaId: 1,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.reply).toContain("毕业模式已关闭");
+    expect(setGraduationStatus).not.toHaveBeenCalled();
+  });
+
+  it("skips the thresholds when the graduation mode is manual", async () => {
+    // 小B is nowhere near the thresholds — but in the manual mode the user
+    // has already decided, so the thresholds do not apply.
+    getPersonasByUserId.mockResolvedValue([
+      { ...personas[1], graduationMode: "manual" },
+    ]);
+
+    const result = await handleCommand({
+      userId: 1,
+      conversationKey: FEISHU_KEY,
+      text: "/毕业",
+      defaultPersonaId: 2,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.reply).toContain(LETTER);
+    expect(setGraduationStatus).toHaveBeenCalledWith(2, 1, "graduated", LETTER);
   });
 });

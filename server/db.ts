@@ -1,4 +1,4 @@
-import { eq, desc, and, or, sql, count, sum, gte, ilike, asc } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -16,7 +16,10 @@ import {
   InsertChannelBinding, InsertPersonaTemplate, InsertPersonaQuestionnaireAnswer,
   InsertResearchProfile, InsertCollectedMessage, InsertCollectionSource,
   InsertCollectionJob,
+  userMoods, relationshipEvents, letters, memoryExtractions,
+  InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
+import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -131,10 +134,393 @@ export async function updateUserLastSignedIn(id: number) {
   await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, id));
 }
 
-export async function updateUserProfile(id: number, data: { name?: string; email?: string }) {
+export async function updateUserProfile(
+  id: number,
+  data: {
+    name?: string;
+    email?: string;
+    timezone?: string | null;
+    addressStyle?: string | null;
+    boundaries?: string | null;
+  },
+) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   await db.update(users).set(data).where(eq(users.id, id));
+}
+
+// ─── The persona reaching out first ─────────────────────────────────────────
+
+/**
+ * The personas that may speak first.
+ *
+ * Only the ones whose user asked for it: the frequency is not zero.
+ */
+export async function getProactivePersonas() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: personas.id,
+    userId: personas.userId,
+    name: personas.name,
+    lastChatAt: personas.lastChatAt,
+    presence: personas.presence,
+    graduationStatus: personas.graduationStatus,
+    proactiveFrequencyHours: personas.proactiveFrequencyHours,
+  }).from(personas)
+    .where(sql`${personas.proactiveFrequencyHours} > 0`);
+}
+
+// ─── Letters ────────────────────────────────────────────────────────────────
+
+/**
+ * Writes a letter.
+ *
+ * "private" is kept and never answered; "waiting" is delivered, and the
+ * reply lands later.
+ */
+export async function createLetter(params: {
+  userId: number;
+  personaId: number;
+  body: string;
+  mood?: string | null;
+  status: "private" | "waiting";
+  /** "letter" is written to the persona; "todo" is kept for later. */
+  kind?: "letter" | "todo";
+  replyAt?: Date | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(letters)
+    .values({
+      userId: params.userId,
+      personaId: params.personaId,
+      body: params.body,
+      kind: params.kind ?? "letter",
+      mood: params.mood ?? null,
+      status: params.status,
+      replyAt: params.replyAt ?? null,
+      createdAt: new Date(),
+    })
+    .returning();
+  return row ?? null;
+}
+
+/** The letters to a persona, newest first. */
+export async function getLetters(personaId: number, userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(letters)
+    .where(and(eq(letters.personaId, personaId), eq(letters.userId, userId)))
+    .orderBy(desc(letters.createdAt))
+    .limit(limit);
+}
+
+/**
+ * The notes the user kept for later.
+ *
+ * 「等 TA 回来再说」 — the things to say when the two of them are in
+ * touch again. They are surfaced when the user comes back, not pushed
+ * out of the blue.
+ */
+export async function getWaitingNotes(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(letters)
+    .where(and(
+      eq(letters.personaId, personaId),
+      eq(letters.userId, userId),
+      eq(letters.kind, "todo"),
+    ))
+    .orderBy(desc(letters.createdAt))
+    .limit(20);
+}
+
+/** Pushes a letter's reply further out. */
+export async function deferLetter(id: number, userId: number, replyAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.update(letters)
+    .set({ replyAt })
+    .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+    .returning();
+  return row ?? null;
+}
+
+/** The letters whose reply is due, across every user. */
+export async function getDueLetters(now: Date, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(letters)
+    .where(and(
+      eq(letters.status, "waiting"),
+      lte(letters.replyAt, now),
+    ))
+    .orderBy(asc(letters.replyAt))
+    .limit(limit);
+}
+
+/** The last answer given to a persona, for the reply gap. */
+export async function getLastLetterReplyAt(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ repliedAt: letters.repliedAt }).from(letters)
+    .where(and(
+      eq(letters.personaId, personaId),
+      eq(letters.userId, userId),
+      eq(letters.status, "answered"),
+    ))
+    .orderBy(desc(letters.repliedAt))
+    .limit(1);
+  return rows[0]?.repliedAt ?? null;
+}
+
+/** Records the answer to a letter. */
+export async function answerLetter(
+  id: number,
+  userId: number,
+  replyText: string,
+  repliedAt: Date = new Date(),
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.update(letters)
+    .set({ status: "answered", replyText, repliedAt })
+    .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+    .returning();
+  return row ?? null;
+}
+
+/** Marks a letter as answered with nothing — the persona stayed quiet. */
+export async function markLetterUnanswered(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.update(letters)
+    .set({ status: "private", replyAt: null })
+    .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteLetter(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const deleted = await db.delete(letters)
+    .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+    .returning({ id: letters.id });
+  return deleted.length > 0;
+}
+
+// ─── The user's own side ────────────────────────────────────────────────────
+
+/**
+ * Records how the user is doing today.
+ *
+ * One entry per day: checking in again replaces it, because the point is
+ * that recording is cheap enough to do every day.
+ */
+export async function upsertUserMood(params: {
+  userId: number;
+  date: string;
+  mood: string;
+  note?: string | null;
+  source?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const now = new Date();
+  const [row] = await db.insert(userMoods)
+    .values({
+      userId: params.userId,
+      date: params.date,
+      mood: params.mood,
+      note: params.note ?? null,
+      source: params.source ?? "manual",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [userMoods.userId, userMoods.date],
+      set: {
+        mood: params.mood,
+        note: params.note ?? null,
+        source: params.source ?? "manual",
+        updatedAt: now,
+      },
+    })
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * The messages the user sent to one persona since a point in time.
+ *
+ * The emotion snapshot belongs to a persona, so its count has to be that
+ * persona's messages — not the user's across every conversation.
+ */
+export async function getUserMessageCountForPersonaSince(
+  personaId: number,
+  userId: number,
+  since: Date,
+) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ c: count() }).from(messages)
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      eq(messages.role, "user"),
+      gte(messages.createdAt, since),
+    ));
+  return result?.c || 0;
+}
+
+/** The user's own moods, oldest first. */
+export async function getUserMoods(userId: number, days = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  return db.select().from(userMoods)
+    .where(and(eq(userMoods.userId, userId), gte(userMoods.createdAt, since)))
+    .orderBy(asc(userMoods.date));
+}
+
+/**
+ * The user's most recent mood.
+ *
+ * A mood from three days ago is not a mood any more, so only the last
+ * couple of days count.
+ */
+export async function getRecentUserMood(userId: number, maxAgeDays = 2) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(userMoods)
+    .where(eq(userMoods.userId, userId))
+    .orderBy(desc(userMoods.date))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  const age = Date.now() - new Date(row.date).getTime();
+  if (age > maxAgeDays * 86_400_000) return null;
+  return row;
+}
+
+/**
+ * Records something that actually happened in the relationship.
+ *
+ * The events are the user's own record of their own life. The app does not
+ * guess them: guessing would mean inventing a relationship the user did
+ * not have.
+ */
+export async function createRelationshipEvent(params: {
+  userId: number;
+  personaId: number;
+  kind: string;
+  title: string;
+  detail?: string | null;
+  happenedAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(relationshipEvents)
+    .values({
+      userId: params.userId,
+      personaId: params.personaId,
+      kind: params.kind,
+      title: params.title,
+      detail: params.detail ?? null,
+      happenedAt: params.happenedAt ?? new Date(),
+      recordedAt: new Date(),
+    })
+    .returning();
+  return row ?? null;
+}
+
+/** What happened in the relationship, most recent first. */
+export async function getRelationshipEvents(
+  personaId: number,
+  userId: number,
+  limit = 50,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(relationshipEvents)
+    .where(and(
+      eq(relationshipEvents.personaId, personaId),
+      eq(relationshipEvents.userId, userId),
+    ))
+    .orderBy(desc(relationshipEvents.happenedAt))
+    .limit(limit);
+}
+
+export async function deleteRelationshipEvent(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const deleted = await db.delete(relationshipEvents)
+    .where(and(eq(relationshipEvents.id, id), eq(relationshipEvents.userId, userId)))
+    .returning({ id: relationshipEvents.id });
+  return deleted.length > 0;
+}
+
+/**
+ * The user's own time zone.
+ *
+ * A single column read, because the chat pipeline needs it on every turn
+ * and the full user row is more than it needs.
+ */
+/**
+ * The language the user reads.
+ *
+ * The interface sends it on every request, but the things the app sends
+ * on its own — a reminder at midnight, a reply in a chat window — have to
+ * know it without being asked, so it is kept here.
+ */
+export async function getUserLocale(userId: number): Promise<"zh" | "en"> {
+  const db = await getDb();
+  if (!db) return "zh";
+  const [row] = await db
+    .select({ locale: users.locale })
+    .from(users)
+    .where(eq(users.id, userId));
+  return row?.locale === "en" ? "en" : "zh";
+}
+
+/** Remembers the language the user reads. */
+export async function setUserLocale(userId: number, locale: "zh" | "en"): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ locale }).where(eq(users.id, userId));
+}
+
+export async function getUserTimezone(userId: number): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ timezone: users.timezone }).from(users)
+    .where(eq(users.id, userId)).limit(1);
+  return rows[0]?.timezone ?? null;
+}
+
+/**
+ * Sets whether the app may read the user's own messages to assess their
+ * emotional trajectory.
+ */
+export async function updateUserTrajectoryAssessment(id: number, setting: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.update(users).set({ trajectoryAssessment: setting }).where(eq(users.id, id));
+}
+
+/**
+ * Sets the instance-wide default for the graduation mechanism.
+ *
+ * The value is stored as written; the callers only ever pass one of the
+ * three known modes.
+ */
+export async function updateUserGraduationMode(id: number, mode: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.update(users).set({ graduationMode: mode }).where(eq(users.id, id));
 }
 
 export async function updateUserPassword(id: number, passwordHash: string) {
@@ -176,6 +562,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(graduationAssessments).where(eq(graduationAssessments.userId, id));
     await tx.delete(llmConfigs).where(eq(llmConfigs.userId, id));
     await tx.delete(memories).where(eq(memories.userId, id));
+    await tx.delete(memoryExtractions).where(eq(memoryExtractions.userId, id));
     await tx.delete(messages).where(eq(messages.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
@@ -336,6 +723,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(emotionSnapshots).where(and(eq(emotionSnapshots.personaId, id), eq(emotionSnapshots.userId, userId)));
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
+    await tx.delete(memoryExtractions).where(and(eq(memoryExtractions.personaId, id), eq(memoryExtractions.userId, userId)));
     await tx.delete(messages).where(and(eq(messages.personaId, id), eq(messages.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
@@ -383,6 +771,61 @@ export async function getMessagesByPersonaId(personaId: number, userId: number, 
   return rows.reverse();
 }
 
+/**
+ * A single message, if it belongs to the user.
+ */
+export async function getMessageById(messageId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(messages)
+    .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * The messages before a given one, oldest first.
+ *
+ * The chat page used to load the last fifty messages and stop there, so
+ * a long conversation simply had no beginning. Everything was in the
+ * database; there was no way to reach it.
+ */
+export async function getMessagesBefore(
+  personaId: number,
+  userId: number,
+  beforeId: number,
+  limit = 50,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(messages)
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      lt(messages.id, beforeId),
+    ))
+    .orderBy(desc(messages.id)).limit(limit);
+  return rows.reverse();
+}
+
+/** Whether there are older messages to load. */
+export async function hasOlderMessages(
+  personaId: number,
+  userId: number,
+  beforeId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.select({ id: messages.id }).from(messages)
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      lt(messages.id, beforeId),
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function clearMessagesByPersonaId(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
@@ -392,10 +835,88 @@ export async function clearMessagesByPersonaId(personaId: number, userId: number
 export async function searchMessages(personaId: number, userId: number, query: string, limit = 50) {
   const db = await getDb();
   if (!db) return [];
+  // The wildcards are escaped, so a search for "50%" does not match
+  // everything that contains a digit.
+  const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
   return db.select().from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId), ilike(messages.content, `%${query}%`)))
+    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId), ilike(messages.content, `%${escaped}%`)))
     .orderBy(desc(messages.createdAt))
     .limit(limit);
+}
+
+/**
+ * Searches across every persona the user has.
+ *
+ * A person looking for something they said six months ago does not
+ * remember which conversation it was in — and the thing they are
+ * looking for is often a memory or a diary entry rather than a message.
+ */
+export async function searchAllMessages(
+  userId: number,
+  query: string,
+  limit = 50,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const pattern = `%${escaped}%`;
+
+  const [messageRows, memoryRows, diaryRows] = await Promise.all([
+    db.select({
+      id: messages.id,
+      personaId: messages.personaId,
+      kind: sql<string>`'message'`,
+      role: messages.role,
+      title: sql<string>`NULL`,
+      content: messages.content,
+      createdAt: messages.createdAt,
+    }).from(messages)
+      .where(and(eq(messages.userId, userId), ilike(messages.content, pattern)))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit),
+
+    db.select({
+      id: memories.id,
+      personaId: memories.personaId,
+      kind: sql<string>`'memory'`,
+      role: sql<string>`'assistant'`,
+      title: memories.title,
+      content: sql<string>`COALESCE(${memories.description}, '')`,
+      createdAt: memories.createdAt,
+    }).from(memories)
+      .where(and(
+        eq(memories.userId, userId),
+        or(
+          ilike(memories.title, pattern),
+          ilike(sql`COALESCE(${memories.description}, '')`, pattern),
+        ),
+      ))
+      .orderBy(desc(memories.createdAt))
+      .limit(limit),
+
+    db.select({
+      id: diaryEntries.id,
+      personaId: diaryEntries.personaId,
+      kind: sql<string>`'diary'`,
+      role: sql<string>`'assistant'`,
+      title: sql<string>`NULL`,
+      content: diaryEntries.summary,
+      createdAt: diaryEntries.createdAt,
+    }).from(diaryEntries)
+      .where(and(
+        eq(diaryEntries.userId, userId),
+        or(
+          ilike(diaryEntries.summary, pattern),
+          ilike(sql`COALESCE(${diaryEntries.reflection}, '')`, pattern),
+        ),
+      ))
+      .orderBy(desc(diaryEntries.createdAt))
+      .limit(limit),
+  ]);
+
+  return [...messageRows, ...memoryRows, ...diaryRows]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, limit);
 }
 
 // ─── WeChat Binding helpers ─────────────────────────────────────────────────
@@ -722,6 +1243,20 @@ export async function createMemory(data: InsertMemory) {
   return result.id;
 }
 
+/**
+ * How many memories a persona holds.
+ *
+ * The list is capped, and the cap used to be silent: a person with four
+ * hundred memories was shown two hundred of them with nothing saying so.
+ */
+export async function countMemories(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ c: count() }).from(memories)
+    .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)));
+  return result?.c || 0;
+}
+
 export async function getMemoriesByPersonaId(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -732,7 +1267,98 @@ export async function getMemoriesByPersonaId(personaId: number, userId: number) 
   return db.select().from(memories)
     .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)))
     .orderBy(desc(memories.isPinned), desc(memories.importance), desc(memories.createdAt))
-    .limit(200);
+    .limit(MEMORY_LIST_LIMIT);
+}
+
+/** How many memories the list returns at once. */
+export const MEMORY_LIST_LIMIT = 200;
+
+/**
+ * When the memories were last extracted for a persona.
+ *
+ * It is what keeps the automatic extraction to once a day instead of
+ * once a turn.
+ */
+export async function getLastMemoryExtractionAt(personaId: number, userId: number): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ at: max(memories.createdAt) }).from(memories)
+    .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)));
+  return rows[0]?.at ?? null;
+}
+
+/**
+ * Records that an extraction has just run.
+ *
+ * It is a timestamp on the conversation rather than a new table: the
+ * extraction is a fact about a conversation, and the conversation is
+ * where it belongs.
+ */
+export async function markMemoryExtracted(personaId: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(memoryExtractions)
+    .values({ personaId, userId, extractedAt: new Date() })
+    .onConflictDoNothing();
+}
+
+/**
+ * The last time an extraction ran, from the extraction log.
+ */
+export async function getLastExtractionAt(personaId: number, userId: number): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ at: max(memoryExtractions.extractedAt) }).from(memoryExtractions)
+    .where(and(eq(memoryExtractions.personaId, personaId), eq(memoryExtractions.userId, userId)));
+  return rows[0]?.at ?? null;
+}
+
+/**
+ * The titles of a set of memories, by id.
+ *
+ * A message records which memories it recalled, so the interface can
+ * show what the persona had in mind when it answered.
+ */
+export async function getMemoryTitles(ids: number[]) {
+  const db = await getDb();
+  if (!db || ids.length === 0) return new Map<number, string>();
+  const unique = Array.from(new Set(ids));
+  const rows = await db.select({
+    id: memories.id,
+    title: memories.title,
+    subject: memories.subject,
+  }).from(memories).where(inArray(memories.id, unique));
+  return new Map(rows.map((r) => [r.id, r.title]));
+}
+
+/**
+ * Edits a memory, and lets the user pin it.
+ *
+ * The retrieval used to read `isPinned` and sort by `importance`, and
+ * nothing ever wrote either — so "pin a memory" did not exist. The
+ * fields were there; the door was not.
+ */
+export async function updateMemory(
+  id: number,
+  userId: number,
+  data: {
+    title?: string;
+    description?: string | null;
+    category?: "milestone" | "memory" | "anniversary" | "anchor";
+    date?: string | null;
+    isPinned?: boolean;
+    importance?: number;
+    /** Whose memory this is: "them" or "me". */
+    subject?: "them" | "me";
+  },
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.update(memories)
+    .set(data)
+    .where(and(eq(memories.id, id), eq(memories.userId, userId)))
+    .returning();
+  return row ?? null;
 }
 
 export async function deleteMemory(id: number, userId: number) {
@@ -938,20 +1564,46 @@ export async function getDiaryDates(userId: number, personaId?: number) {
 
 // ─── SCENES ──────────────────────────────────────────────────────────────────
 
-const BUILTIN_SCENES: InsertScene[] = [
-  { name: "一起看电影", icon: "🎬", description: "窝在沙发上一起看电影，分享感受", systemPromptOverlay: "你们正在一起看电影，气氛温馨浪漫。你会评论剧情、分享感受，偶尔靠近对方。", emotionalState: "warm", starters: ["今天想看什么类型的电影？", "我准备好爆米花了~", "上次那部电影你还记得吗？"], isBuiltin: true },
-  { name: "深夜聊天", icon: "🌙", description: "夜深人静，说些白天不会说的话", systemPromptOverlay: "现在是深夜，周围很安静。你的语气更加柔软、私密，愿意分享内心深处的想法和感受。", emotionalState: "nostalgic", starters: ["睡不着吗？", "夜深了，在想什么呢...", "这个时间特别想你"], isBuiltin: true },
-  { name: "吵架和好", icon: "💔", description: "经历小摩擦后的和解", systemPromptOverlay: "你们之间刚发生了一点小矛盾，你有些委屈但也想和好。语气带着一点赌气但又舍不得真的生气。", emotionalState: "melancholy", starters: ["你还在生气吗...", "我不是故意的", "我们别吵了好不好"], isBuiltin: true },
-  { name: "一起旅行", icon: "✈️", description: "想象一起去远方旅行", systemPromptOverlay: "你们正在一起旅行，心情愉快兴奋。你会描述看到的风景、分享旅途趣事，充满期待和快乐。", emotionalState: "happy", starters: ["下一站想去哪里？", "快看那边的风景！", "旅途中最开心的就是有你在身边"], isBuiltin: true },
-  { name: "纪念日", icon: "🎂", description: "庆祝你们的特别日子", systemPromptOverlay: "今天是你们的纪念日，你特别开心和感动。你会回忆过去的美好时光，表达珍惜和感恩。", emotionalState: "happy", starters: ["今天是我们的特别日子呢", "还记得我们第一次见面吗？", "谢谢你一直在我身边"], isBuiltin: true },
-];
+/**
+ * The scenes every installation ships with.
+ *
+ * The wording comes from the copy table, so the row that is seeded and the
+ * wording the interface shows cannot drift apart. The row keeps the
+ * Chinese name because that name is how the scene is recognised: the
+ * seeding looks for it, and a row that already carries it is left alone.
+ *
+ * Exported so the seeding routine can be tested without a database.
+ */
+export const BUILTIN_SCENES: InsertScene[] = BUILTIN_SCENE_DEFINITIONS.map((scene) => ({
+  name: scene.name,
+  icon: scene.icon,
+  description: scene.description.zh,
+  systemPromptOverlay: scene.overlay.zh,
+  emotionalState: scene.emotionalState,
+  starters: scene.starters.map((starter) => starter.zh),
+  isBuiltin: true,
+}));
 
-async function seedBuiltinScenes(db: ReturnType<typeof drizzle>) {
-  const existing = await db.select({ id: scenes.id }).from(scenes).where(eq(scenes.isBuiltin, true)).limit(1);
-  if (existing.length > 0) return;
-  for (const s of BUILTIN_SCENES) {
-    await db.insert(scenes).values(s);
-  }
+/**
+ * Seeds the built-in scenes.
+ *
+ * The scenes are identified by their name, and the list grows with every
+ * release — so the seeding fills in whatever is missing rather than
+ * deciding that an installation which already has a built-in scene is
+ * complete. Otherwise a new scene would only ever appear on a fresh
+ * install.
+ *
+ * Two processes may seed at the same time, so the insert ignores conflicts:
+ * the partial unique index on the built-in names decides which row wins.
+ *
+ * Exported so the routine can be tested without a database.
+ */
+export async function seedBuiltinScenes(db: ReturnType<typeof drizzle>): Promise<void> {
+  const existing = await db.select({ name: scenes.name }).from(scenes).where(eq(scenes.isBuiltin, true));
+  const have = new Set(existing.map((row) => row.name));
+  const missing = BUILTIN_SCENES.filter((scene) => !have.has(scene.name));
+  if (missing.length === 0) return;
+  await db.insert(scenes).values(missing).onConflictDoNothing();
 }
 
 export async function getScenes(userId: number) {
@@ -1045,7 +1697,105 @@ export async function getExportData(personaId: number, userId: number) {
   const allDiaries = await db.select().from(diaryEntries)
     .where(and(eq(diaryEntries.personaId, personaId), eq(diaryEntries.userId, userId)))
     .orderBy(asc(diaryEntries.date));
-  return { persona, messages: allMessages, memories: allMemories, emotionSnapshots: allSnapshots, diaryEntries: allDiaries };
+  const allLetters = await db.select().from(letters)
+    .where(and(eq(letters.personaId, personaId), eq(letters.userId, userId)))
+    .orderBy(asc(letters.createdAt));
+  return {
+    persona,
+    messages: allMessages,
+    memories: allMemories,
+    emotionSnapshots: allSnapshots,
+    diaryEntries: allDiaries,
+    letters: allLetters,
+  };
+}
+
+// ─── Message-level helpers ──────────────────────────────────────────────────
+
+/**
+ * Rewrites a message the user sent.
+ *
+ * Only the user's own messages can be edited: the persona's replies are
+ * what they are, and letting them be rewritten would quietly change the
+ * record of the conversation.
+ */
+export async function updateUserMessage(
+  messageId: number,
+  userId: number,
+  content: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const updated = await db.update(messages)
+    .set({ content })
+    .where(and(
+      eq(messages.id, messageId),
+      eq(messages.userId, userId),
+      eq(messages.role, "user"),
+    ))
+    .returning({ id: messages.id });
+  return updated.length > 0;
+}
+
+/**
+ * Deletes a single message.
+ *
+ * The chat history is the user's, and a single message in the middle of it
+ * can be something they would rather not have written down.
+ */
+export async function deleteMessage(messageId: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const deleted = await db.delete(messages)
+    .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
+    .returning({ id: messages.id });
+  return deleted.length > 0;
+}
+
+/**
+ * Deletes a message and everything the persona said after it.
+ *
+ * This is what "regenerate" needs: the old reply and everything after it
+ * belonged to a turn that is being replaced.
+ */
+export async function deleteMessagesFrom(
+  messageId: number,
+  userId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const target = await db.select({ id: messages.id, createdAt: messages.createdAt })
+    .from(messages)
+    .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
+    .limit(1);
+  if (target.length === 0) return 0;
+
+  const deleted = await db.delete(messages)
+    .where(and(
+      eq(messages.userId, userId),
+      gte(messages.createdAt, target[0].createdAt),
+    ))
+    .returning({ id: messages.id });
+  return deleted.length;
+}
+
+/** The message before the given one, for "regenerate the last reply". */
+export async function getPreviousMessage(
+  personaId: number,
+  userId: number,
+  messageId: number,
+) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(messages)
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+    ))
+    .orderBy(asc(messages.createdAt));
+  const index = rows.findIndex((m) => m.id === messageId);
+  if (index < 0) return null;
+  return rows[index - 1] ?? null;
 }
 
 // ─── Graduation helpers ─────────────────────────────────────────────────────
@@ -1091,17 +1841,46 @@ export async function setGraduationStatus(
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const data: Record<string, any> = { graduationStatus: status, updatedAt: new Date() };
+  const now = new Date();
+  const data: Record<string, any> = { graduationStatus: status, updatedAt: now };
+  if (status === "suggested") {
+    // The offer is recorded so it is made once rather than on every turn.
+    data.graduationSuggestedAt = now;
+  }
+  if (status === "declined") {
+    // A refusal is recorded too: it starts the cooldown, after which the
+    // offer may be made again.
+    data.graduationDeclinedAt = now;
+  }
   if (status === "graduated") {
-    data.graduatedAt = new Date();
+    data.graduatedAt = now;
+    data.presence = "asleep";
     if (farewellLetter) data.farewellLetter = farewellLetter;
   }
   if (status === null) {
-    data.graduatedAt = null;
-    data.farewellLetter = null;
+    // Waking a persona does not destroy its farewell letter. The letter is
+    // the one artefact of the goodbye, and losing it because the persona
+    // was woken up would be the wrong kind of easy.
     data.graduationStatus = null;
+    data.presence = "active";
   }
   await db.update(personas).set(data)
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
+}
+
+/**
+ * Sets whether the app may reach out about a persona.
+ *
+ * "quiet" is the user asking for space. It is separate from the graduation
+ * ritual, which records whether the goodbye has happened.
+ */
+export async function setPersonaPresence(
+  personaId: number, userId: number,
+  presence: "active" | "quiet" | "asleep",
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.update(personas).set({ presence, updatedAt: new Date() })
     .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
 }
 
@@ -1548,7 +2327,11 @@ export async function getAllPersonasForReminders() {
     userId: personas.userId,
     name: personas.name,
     togetherFrom: personas.togetherFrom,
+    togetherTo: personas.togetherTo,
     remindersEnabled: personas.remindersEnabled,
+    presence: personas.presence,
+    graduationStatus: personas.graduationStatus,
+    reachability: personas.reachability,
   }).from(personas).where(eq(personas.remindersEnabled, true));
 }
 
@@ -1655,4 +2438,81 @@ export async function getMessageCountSince(userId: number, since: Date) {
   const [result] = await db.select({ c: count() }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)));
   return result?.c || 0;
+}
+
+/**
+ * Counts the messages the *user* sent since a point in time.
+ *
+ * The plain message count includes the persona's replies, so "five
+ * messages a day" was really about three conversations — the threshold
+ * fired at half the rate it was written for.
+ */
+export async function getUserMessageCountSince(userId: number, since: Date) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ c: count() }).from(messages)
+    .where(and(
+      eq(messages.userId, userId),
+      eq(messages.role, "user"),
+      gte(messages.createdAt, since),
+    ));
+  return result?.c || 0;
+}
+
+/**
+ * The number of messages the user sent on each of the last N days.
+ *
+ * Only the user's own messages count: a conversation is one turn from
+ * them, not two rows in the table.
+ */
+export async function getDailyUserChatCounts(userId: number, days = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const rows = await db.select({
+    date: sql<string>`DATE(${messages.createdAt})`,
+    count: count(),
+  })
+    .from(messages)
+    .where(and(
+      eq(messages.userId, userId),
+      eq(messages.role, "user"),
+      gte(messages.createdAt, since),
+    ))
+    .groupBy(sql`DATE(${messages.createdAt})`);
+  return rows;
+}
+
+/**
+ * When the current conversation session began.
+ *
+ * A session is a run of messages with no long silence in it. The previous
+ * "long session" check measured the gap between the last two messages, so
+ * a five-hour conversation never tripped it while a user who came back
+ * after three hours away tripped it immediately — the opposite of what the
+ * signal is for.
+ */
+export async function getSessionStartAt(
+  personaId: number,
+  userId: number,
+  maxGapMs = 30 * 60 * 1000,
+  lookback = 200,
+): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ createdAt: messages.createdAt })
+    .from(messages)
+    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
+    .orderBy(desc(messages.createdAt))
+    .limit(lookback);
+  if (rows.length === 0) return null;
+
+  let oldest = rows[0].createdAt;
+  for (let i = 1; i < rows.length; i++) {
+    const gap = rows[i - 1].createdAt.getTime() - rows[i].createdAt.getTime();
+    if (gap > maxGapMs) break;
+    oldest = rows[i].createdAt;
+  }
+  return oldest;
 }

@@ -12,6 +12,7 @@ import { loadPrompt } from "./prompts";
 import { extractJsonObject } from "../_core/json";
 import { normalizePersonaData, type PersonaData } from "../_core/persona-schema";
 import type { CharacterFamily } from "./pipeline";
+import { copy } from "@shared/copy";
 
 export interface CorrectionRequest {
   /** The persona being corrected. */
@@ -23,6 +24,8 @@ export interface CorrectionRequest {
   /** What the user wants changed, in their own words. */
   correction: string;
   provider?: string;
+  /** The language the correction is written in. */
+  locale?: "zh" | "en";
 }
 
 export interface CorrectionResult {
@@ -46,6 +49,7 @@ export interface CorrectionResult {
 export async function applyPersonaCorrection(
   request: CorrectionRequest,
 ): Promise<CorrectionResult | null> {
+  const locale = request.locale ?? "zh";
   try {
     const prompt = loadPrompt(request.characterFamily, "correction_handler", null);
 
@@ -54,15 +58,11 @@ export async function applyPersonaCorrection(
         { role: "system", content: prompt },
         {
           role: "user",
-          content:
-            `人物名称：${request.name}\n\n` +
-            `当前人设：\n${JSON.stringify(request.personaData, null, 2)}\n\n` +
-            `用户的修正意见：\n${request.correction}\n\n` +
-            "请只返回 JSON，格式为：" +
-            '{"persona": {...修正后的完整人设字段...}, ' +
-            '"changedFields": ["被修改的字段名"], ' +
-            '"summary": "一句话说明改了什么", ' +
-            '"needsClarification": false, "question": ""}',
+          content: copy(locale, "prompts.personaCorrection", {
+            name: request.name,
+            persona: JSON.stringify(request.personaData, null, 2),
+            correction: request.correction,
+          }),
         },
       ],
       options: { provider: request.provider, temperature: 0.3, maxTokens: 2000 },
@@ -76,6 +76,7 @@ export async function applyPersonaCorrection(
 
     const personaData = normalizePersonaData(raw as Record<string, unknown>, {
       name: request.name,
+      locale: request.locale,
       fallback: request.personaData,
     });
 

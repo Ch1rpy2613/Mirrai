@@ -18,6 +18,7 @@ import os from "os";
 import path from "path";
 import { encryptSecret } from "../_core/crypto";
 import { normaliseCollectorOutput, parseNormalisedPayload, runCollector } from "./runner";
+import { copy } from "@shared/copy";
 
 export type CollectorSourceId = "feishu" | "dingtalk" | "slack" | "email" | "wechat_export";
 
@@ -74,7 +75,16 @@ export interface CollectInput {
 
 export interface SourceConnector {
   id: CollectorSourceId;
+  /** The name of the source, in the language it is listed in. */
   label: string;
+  /**
+   * The name of the source, in the language asked for.
+   *
+   * The source is picked by name, so the name has to be readable by the
+   * person picking it. A source that cannot say its own name in the
+   * language of the interface is a source nobody finds.
+   */
+  labelForLocale?(locale: "zh" | "en"): string;
   /** True when the source needs Playwright + a Chromium download. */
   requiresBrowser?: boolean;
   /** Python tool this connector drives, relative to skill-engine/tools/. */
@@ -282,7 +292,8 @@ const FEISHU_CREDENTIAL_KEYS = [
 
 const feishuConnector: SourceConnector = {
   id: "feishu",
-  label: "飞书 / Feishu",
+  label: copy("zh", "labels.collector.feishu"),
+  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.feishu"),
   requiresBrowser: false,
   tool: "feishu_auto_collector.py",
   credentialKeys: FEISHU_CREDENTIAL_KEYS,
@@ -314,9 +325,7 @@ const feishuConnector: SourceConnector = {
     }
     return {
       ok: false,
-      message:
-        "未找到飞书应用凭据，请运行：python3 tools/feishu_auto_collector.py --setup " +
-        "（或通过 options 传入 app_id / app_secret）",
+      message: copy("zh", "collectors.feishuNeedsCredentials"),
       requiresInteraction: true,
     };
   },
@@ -344,7 +353,8 @@ const DINGTALK_CREDENTIAL_KEYS = ["app_key", "app_secret"];
 
 const dingtalkConnector: SourceConnector = {
   id: "dingtalk",
-  label: "钉钉 / DingTalk",
+  label: copy("zh", "labels.collector.dingtalk"),
+  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.dingtalk"),
   requiresBrowser: true,
   tool: "dingtalk_auto_collector.py",
   credentialKeys: DINGTALK_CREDENTIAL_KEYS,
@@ -367,15 +377,13 @@ const dingtalkConnector: SourceConnector = {
     if (!credentials.app_key || !credentials.app_secret) {
       return {
         ok: false,
-        message:
-          "未找到钉钉应用凭据，请运行：python3 tools/dingtalk_auto_collector.py --setup " +
-          "（或通过 options 传入 app_key / app_secret）",
+        message: copy("zh", "collectors.dingtalkNeedsCredentials"),
         requiresInteraction: true,
       };
     }
     return {
       ok: true,
-      message: "钉钉消息采集依赖 Playwright：pip3 install playwright && playwright install chromium",
+      message: copy("zh", "collectors.dingtalkNeedsPlaywright"),
     };
   },
   async exportCredentials(input: CollectInput): Promise<string | null> {
@@ -396,7 +404,8 @@ const SLACK_CREDENTIAL_KEYS = ["bot_token"];
 
 const slackConnector: SourceConnector = {
   id: "slack",
-  label: "Slack",
+  label: copy("zh", "collectors.slack"),
+  labelForLocale: (locale: "zh" | "en") => copy(locale, "collectors.slack"),
   requiresBrowser: false,
   tool: "slack_auto_collector.py",
   credentialKeys: SLACK_CREDENTIAL_KEYS,
@@ -418,9 +427,7 @@ const slackConnector: SourceConnector = {
     if (!credentials.bot_token) {
       return {
         ok: false,
-        message:
-          "未找到 Slack Bot Token，请运行：python3 tools/slack_auto_collector.py --setup " +
-          "（或通过 options 传入 bot_token）",
+        message: copy("zh", "collectors.slackNeedsToken"),
         requiresInteraction: true,
       };
     }
@@ -447,7 +454,8 @@ const slackConnector: SourceConnector = {
  */
 const emailConnector: SourceConnector = {
   id: "email",
-  label: "邮件 / E-mail",
+  label: copy("zh", "labels.collector.email"),
+  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.email"),
   requiresBrowser: false,
   tool: "email_parser.py",
   credentialKeys: [],
@@ -460,7 +468,7 @@ const emailConnector: SourceConnector = {
   async checkAuth(): Promise<CollectorAuthState> {
     return {
       ok: true,
-      message: "邮件解析无需凭据，请在 options.file 中提供 .eml / .mbox / .txt 文件路径",
+      message: copy("zh", "collectors.emailNeedsNoCredentials"),
     };
   },
   async exportCredentials(): Promise<string | null> {
@@ -502,7 +510,8 @@ const emailConnector: SourceConnector = {
  */
 const wechatExportConnector: SourceConnector = {
   id: "wechat_export",
-  label: "微信导出 / WeChat export",
+  label: copy("zh", "labels.collector.wechatExport"),
+  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.wechatExport"),
   requiresBrowser: false,
   tool: "feishu_parser.py",
   credentialKeys: [],
@@ -518,7 +527,7 @@ const wechatExportConnector: SourceConnector = {
   async checkAuth(): Promise<CollectorAuthState> {
     return {
       ok: true,
-      message: "微信导出解析无需凭据，请在 options.file 中提供导出的 JSON / TXT 文件路径",
+      message: copy("zh", "collectors.wechatNeedsNoCredentials"),
     };
   },
   async collect(input: CollectInput): Promise<CollectResult> {
@@ -554,3 +563,13 @@ export const COLLECTOR_SOURCES: SourceConnector[] = [
   emailConnector,
   wechatExportConnector,
 ];
+
+/**
+ * The name of a collection source, in the language asked for.
+ *
+ * The label a source carries is the name it is listed under; the person
+ * reading the list may be reading in the other language.
+ */
+export function sourceLabel(source: SourceConnector, locale: "zh" | "en" = "zh"): string {
+  return source.labelForLocale ? source.labelForLocale(locale) : source.label;
+}

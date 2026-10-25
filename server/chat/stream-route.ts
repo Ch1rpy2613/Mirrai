@@ -19,6 +19,7 @@ import { authenticateRequest } from "../_core/auth";
 import { RATE_LIMITS, rateLimiter, resolveRateLimitKey } from "../_core/rate-limit";
 import * as db from "../db";
 import { runConversation } from "./service";
+import { copy } from "@shared/copy";
 
 const inputSchema = z.object({
   personaId: z.number(),
@@ -26,6 +27,9 @@ const inputSchema = z.object({
   // The interface language — it decides which emotion triggers the
   // heuristic uses and which language the prompt is written in.
   locale: z.enum(["zh", "en"]).default("zh"),
+  // The message being replied to, so the persona answers the thing that
+  // was actually said rather than whatever came last.
+  replyToId: z.number().optional(),
 });
 
 function writeEvent(res: Response, event: string, data: unknown): void {
@@ -43,7 +47,7 @@ export function registerChatStreamRoute(app: Express): void {
       return;
     }
 
-    const limit = rateLimiter.check(
+    const limit = await rateLimiter.check(
       resolveRateLimitKey(req, RATE_LIMITS.llm, user.id),
       RATE_LIMITS.llm,
     );
@@ -61,11 +65,16 @@ export function registerChatStreamRoute(app: Express): void {
 
     const persona = await db.getPersonaById(parsed.data.personaId, user.id);
     if (!persona) {
-      res.status(404).json({ error: "Persona not found" });
+      // 410, not 404. A 404 here means "this route does not exist", and
+      // the client uses that to decide the server is too old to stream and
+      // to fall back to the ordinary request. A persona that is gone is
+      // not an old server, and the fallback only produced a second,
+      // confusing failure.
+      res.status(410).json({ error: "Persona not found" });
       return;
     }
     if (persona.analysisStatus !== "ready") {
-      res.status(400).json({ error: "分身还未准备好，请先完成 AI 解析" });
+      res.status(400).json({ error: copy(parsed.data.locale, "errors.personaNotReady") });
       return;
     }
 
@@ -92,6 +101,7 @@ export function registerChatStreamRoute(app: Express): void {
         providerName: (persona as any).llmProvider || undefined,
         mode: "stream",
         locale: parsed.data.locale,
+        replyToId: parsed.data.replyToId,
         signal: controller.signal,
       })) {
         if (controller.signal.aborted) break;

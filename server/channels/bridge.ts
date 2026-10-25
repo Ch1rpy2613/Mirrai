@@ -9,6 +9,7 @@
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { runConversation } from "../chat/service";
+import { copy } from "@shared/copy";
 
 export type ChannelId = "wechat" | "feishu";
 
@@ -45,6 +46,7 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
   if (!persona || persona.analysisStatus !== "ready") return null;
 
   let reply: string | null = null;
+  let graduationSuggested = false;
 
   for await (const event of runConversation({
     persona: persona as Persona,
@@ -57,7 +59,18 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
   })) {
     if (event.type === "delta") {
       reply = (reply ?? "") + event.text;
+    } else if (event.type === "done") {
+      graduationSuggested = event.graduationSuggested;
     }
+  }
+
+  // The app may have decided that a farewell is due. On the web that opens
+  // a card; on a channel there is nowhere to open one, so the suggestion
+  // was simply dropped — which meant the one place the user is least
+  // surrounded by the rest of the interface was the one place the
+  // suggestion never reached.
+  if (graduationSuggested && reply) {
+    reply += copy(params.locale ?? "zh", "channels.graduationNote");
   }
 
   return reply;

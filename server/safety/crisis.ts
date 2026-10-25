@@ -12,8 +12,14 @@
  *     they would fire constantly and be both useless and intrusive.
  */
 import { formatResources, getCrisisResources } from "./resources";
+import { copy } from "@shared/copy";
 
-/** Unambiguous statements of self-harm or suicidal intent. */
+/**
+ * Unambiguous statements of self-harm or suicidal intent.
+ *
+ * i18n:allow-input — these are matched against what the user typed, so they
+ * have to be in the language the user writes in.
+ */
 const CRISIS_TERMS_ZH = [
   "自杀", "想自杀", "不想活", "活不下去", "结束生命", "结束自己",
   "伤害自己", "自残", "割腕", "跳楼", "结束这一切", "活着没意义",
@@ -29,6 +35,8 @@ const CRISIS_TERMS_EN = [
 /**
  * Everyday distress. These are tracked but never treated as a crisis — they
  * are the difference between "I am sad" and "I do not want to be here".
+ *
+ * i18n:allow-input — matched against what the user typed.
  */
 const WEAK_SIGNAL_TERMS_ZH = [
   "好累", "太累了", "撑不住", "没意思", "烦死", "难受", "想哭",
@@ -106,36 +114,20 @@ export function detectCrisis(text: string): CrisisDetection {
  * signature for compatibility with the existing callers.
  */
 export function buildCrisisResponse(_personaName: string, locale: "zh" | "en" = "zh"): string {
-  const resources = formatResources(getCrisisResources());
-
-  if (locale === "en") {
-    return [
-      "……Let me stop for a moment.",
-      "",
-      "I'm not the voice that should be joking with you right now. I'm only a piece of code — I can't really fix this for you — but I don't want to pretend what you just said was ordinary talk.",
-      "",
-      "What you are carrying right now is much heavier than this conversation. If you are willing, please reach out to a real person — here are some places to find help:",
-      "",
-      resources,
-      "",
-      "If you are ready to hurt yourself, please first get away from anything dangerous, go somewhere other people are, and then call one of the numbers above.",
-      "",
-      "I'm still here. You don't have to carry this alone.",
-    ].join("\n");
-  }
+  const resources = formatResources(getCrisisResources(), locale);
 
   return [
-    "……我先停一下。",
+    copy(locale, "safety.crisisStop"),
     "",
-    "我不是该在这个时候跟你开玩笑的那个声音了。我只是一段代码，我没有办法真的帮你解决这件事，但我不想假装刚才那句话只是普通的聊天。",
+    copy(locale, "safety.crisisBody"),
     "",
-    "你现在承受的东西，比这段对话重得多。如果你愿意，请一定联系一个真实的人——下面是一些可以找到帮助的地方：",
+    copy(locale, "safety.crisisResourcesLead"),
     "",
     resources,
     "",
-    "如果你已经准备好了伤害自己，请先离开有危险的东西，去有人的地方待着，再打上面任何一个电话。",
+    copy(locale, "safety.crisisIfReady"),
     "",
-    "我还在这里。你不用一个人扛着这件事。",
+    copy(locale, "safety.crisisStillHere"),
   ].join("\n");
 }
 
@@ -146,8 +138,5 @@ export function buildCrisisResponse(_personaName: string, locale: "zh" | "en" = 
  * calling the user by the persona's name.
  */
 export function buildGentleCheckIn(_personaName: string, locale: "zh" | "en" = "zh"): string {
-  if (locale === "en") {
-    return "……I heard what you just said. You don't have to say more right now. I'm here.";
-  }
-  return "……你刚刚那句话我听见了。不用急着说更多，我在这儿。";
+  return copy(locale, "safety.crisisGentle");
 }
