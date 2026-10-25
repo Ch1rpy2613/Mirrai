@@ -17,3 +17,6 @@ live-wechat-qr.png
 live-wechat-qr-url.txt
 __pycache__/
 *.py[cod]
+
+# The installers that are built for a release.
+build-artifacts/
