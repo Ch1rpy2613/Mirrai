@@ -58,7 +58,7 @@ Name: "chinese"; MessagesFile: "compiler:Default.isl"
 chinese.CreateDesktopIcon=创建桌面快捷方式
 chinese.LaunchProgram=启动 {#MyAppName}
 chinese.LaunchProgramAfter=启动 {#MyAppName}
-chinese.WelcomeLabel2=这会安装 Mirrai 和它自带的运行环境（Node.js 与 PostgreSQL）。不需要管理员权限。
+chinese.WelcomeLabel2=这会安装 Mirrai 和它自带的运行环境（Node.js、PostgreSQL 与 Redis）。不需要管理员权限，也不需要另外下载什么。
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"

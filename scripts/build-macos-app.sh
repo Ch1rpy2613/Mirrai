@@ -100,35 +100,86 @@ collect_homebrew_deps() {
   otool -L "$1" 2>/dev/null | awk '{print $1}' | grep -E "^/opt/homebrew|^/usr/local/(opt|Cellar)" || true
 }
 
-# Iteratively resolve until no new deps are found
-PREV_COUNT=0
-for round in 1 2 3 4 5; do
-  ALL_FILES=("$PG_DEST/bin/"* "$PG_DEST/lib/"*.dylib)
-  DEPS=""
-  for f in "${ALL_FILES[@]}"; do
+# Copies a directory's binaries and the libraries they need into itself, so
+# that the bundle carries no path back to the build machine.
+#
+# It is used for PostgreSQL and for Redis, which have the same shape: the
+# executables in `bin/`, the libraries in `lib/`, and the library paths
+# rewritten to `@executable_path/../lib/…` and `@loader_path/…`.
+bundle_binaries() {
+  local dest="$1"
+
+  # Iteratively resolve until no new deps are found
+  local PREV_COUNT=0
+  for round in 1 2 3 4 5; do
+    local ALL_FILES=("$dest/bin/"* "$dest/lib/"*.dylib)
+    local DEPS=""
+    for f in "${ALL_FILES[@]}"; do
+      [ -f "$f" ] || continue
+      DEPS="$DEPS $(collect_homebrew_deps "$f")"
+    done
+
+    local COPIED=0
+    for dep in $(echo "$DEPS" | tr ' ' '\n' | sort -u); do
+      [ -f "$dep" ] || continue
+      libname=$(basename "$dep")
+      if [ ! -f "$dest/lib/$libname" ]; then
+        cp "$dep" "$dest/lib/"
+        chmod +w "$dest/lib/$libname"
+        COPIED=$((COPIED + 1))
+        log "  Round $round: copied $libname"
+      fi
+    done
+
+    local CUR_COUNT=$(ls "$dest/lib/"*.dylib 2>/dev/null | wc -l)
+    [ "$CUR_COUNT" -eq "$PREV_COUNT" ] && break
+    PREV_COUNT=$CUR_COUNT
+  done
+
+  # ─── Fix ALL library paths ────────────────────────────────────────────────
+  log "Fixing library paths (binaries)..."
+  for bin in "$dest/bin/"*; do
+    [ -f "$bin" ] || continue
+    for lib in $(otool -L "$bin" 2>/dev/null | awk '{print $1}' | grep -E "^/opt/homebrew|^/usr/local/(opt|Cellar)"); do
+      libname=$(basename "$lib")
+      install_name_tool -change "$lib" "@executable_path/../lib/$libname" "$bin" 2>/dev/null || true
+    done
+  done
+
+  log "Fixing library paths (dylibs)..."
+  for dylib in "$dest/lib/"*.dylib; do
+    [ -f "$dylib" ] || continue
+    libname=$(basename "$dylib")
+    install_name_tool -id "@loader_path/$libname" "$dylib" 2>/dev/null || true
+    for dep in $(otool -L "$dylib" 2>/dev/null | awk '{print $1}' | grep -E "^/opt/homebrew|^/usr/local/(opt|Cellar)"); do
+      depname=$(basename "$dep")
+      install_name_tool -change "$dep" "@loader_path/$depname" "$dylib" 2>/dev/null || true
+    done
+  done
+
+  # Verify no Homebrew paths remain
+  log "Verifying library paths..."
+  local REMAINING=$(for f in "$dest/bin/"* "$dest/lib/"*.dylib; do otool -L "$f" 2>/dev/null; done | grep -E "^\s+/opt/homebrew|^\s+/usr/local/(opt|Cellar)" || true)
+  if [ -n "$REMAINING" ]; then
+    log "WARNING: Some Homebrew paths still unresolved:"
+    echo "$REMAINING"
+  else
+    log "All library paths resolved."
+  fi
+
+  # Re-sign all modified binaries (install_name_tool invalidates adhoc signatures)
+  log "Re-signing binaries..."
+  for f in "$dest/bin/"* "$dest/lib/"*.dylib; do
     [ -f "$f" ] || continue
-    DEPS="$DEPS $(collect_homebrew_deps "$f")"
+    codesign --force --sign - "$f" 2>/dev/null || true
   done
+}
 
-  COPIED=0
-  for dep in $(echo "$DEPS" | tr ' ' '\n' | sort -u); do
-    [ -f "$dep" ] || continue
-    libname=$(basename "$dep")
-    if [ ! -f "$PG_DEST/lib/$libname" ]; then
-      cp "$dep" "$PG_DEST/lib/"
-      chmod +w "$PG_DEST/lib/$libname"
-      COPIED=$((COPIED + 1))
-      log "  Round $round: copied $libname"
-    fi
-  done
+bundle_binaries "$PG_DEST"
 
-  CUR_COUNT=$(ls "$PG_DEST/lib/"*.dylib 2>/dev/null | wc -l)
-  [ "$CUR_COUNT" -eq "$PREV_COUNT" ] && break
-  PREV_COUNT=$CUR_COUNT
-done
-
-# ─── Step 3c: Fix ALL library paths ─────────────────────────────────────────
-# Also ensure ICU data library is present (loaded via dlopen, not in otool -L)
+# ─── Step 3c: ICU data ─────────────────────────────────────────────────────
+# The ICU data library is loaded with dlopen rather than linked, so the
+# dependency walk above never sees it.
 for icudir in "$(brew --prefix icu4c@78 2>/dev/null)/lib" "$(brew --prefix icu4c 2>/dev/null)/lib"; do
   [ -d "$icudir" ] || continue
   for f in "$icudir"/libicudata*.dylib; do
@@ -137,50 +188,47 @@ for icudir in "$(brew --prefix icu4c@78 2>/dev/null)/lib" "$(brew --prefix icu4c
     if [ ! -f "$PG_DEST/lib/$libname" ]; then
       cp "$f" "$PG_DEST/lib/"
       chmod +w "$PG_DEST/lib/$libname"
-      log "  Copied ICU data: $libname"
+      log "Copied ICU data: $libname"
     fi
   done
   break
 done
 
-log "Fixing library paths (binaries)..."
-for bin in "$PG_DEST/bin/"*; do
-  [ -f "$bin" ] || continue
-  for lib in $(otool -L "$bin" 2>/dev/null | awk '{print $1}' | grep -E "^/opt/homebrew|^/usr/local/(opt|Cellar)"); do
-    libname=$(basename "$lib")
-    install_name_tool -change "$lib" "@executable_path/../lib/$libname" "$bin" 2>/dev/null || true
-  done
-done
+log "PostgreSQL binaries ready."
 
-log "Fixing library paths (dylibs)..."
-for dylib in "$PG_DEST/lib/"*.dylib; do
-  [ -f "$dylib" ] || continue
-  libname=$(basename "$dylib")
-  install_name_tool -id "@loader_path/$libname" "$dylib" 2>/dev/null || true
-  for dep in $(otool -L "$dylib" 2>/dev/null | awk '{print $1}' | grep -E "^/opt/homebrew|^/usr/local/(opt|Cellar)"); do
-    depname=$(basename "$dep")
-    install_name_tool -change "$dep" "@loader_path/$depname" "$dylib" 2>/dev/null || true
-  done
-done
-
-# Verify no Homebrew paths remain
-log "Verifying library paths..."
-REMAINING=$(for f in "$PG_DEST/bin/"* "$PG_DEST/lib/"*.dylib; do otool -L "$f" 2>/dev/null; done | grep -E "^\s+/opt/homebrew|^\s+/usr/local/(opt|Cellar)" || true)
-if [ -n "$REMAINING" ]; then
-  log "WARNING: Some Homebrew paths still unresolved:"
-  echo "$REMAINING"
-else
-  log "All library paths resolved."
+# ─── Step 3d: Redis ────────────────────────────────────────────────────────
+# The rate limiter and the scheduler lock live in Redis, so a person who
+# installs Mirrai has to end up with one. Bundling it here is what makes
+# that true: the app finds this binary and starts it itself, and the
+# person never has to install, download or configure anything.
+#
+# The same shape as PostgreSQL — the executables in `bin/`, the libraries
+# in `lib/` — so the server looks for it in the same place.
+log "Copying Redis binaries..."
+REDIS_PREFIX="$(brew --prefix redis 2>/dev/null || true)"
+if [ -z "$REDIS_PREFIX" ] || [ ! -d "$REDIS_PREFIX/bin" ]; then
+  log "Redis not found. Installing via Homebrew..."
+  brew install redis
+  REDIS_PREFIX="$(brew --prefix redis)"
 fi
 
-# Re-sign all modified binaries (install_name_tool invalidates adhoc signatures)
-log "Re-signing binaries..."
-for f in "$PG_DEST/bin/"* "$PG_DEST/lib/"*.dylib; do
-  [ -f "$f" ] || continue
-  codesign --force --sign - "$f" 2>/dev/null || true
+REDIS_DEST="$RESOURCES/redis"
+mkdir -p "$REDIS_DEST/bin" "$REDIS_DEST/lib"
+
+for bin in redis-server redis-cli; do
+  if [ -f "$REDIS_PREFIX/bin/$bin" ]; then
+    cp "$REDIS_PREFIX/bin/$bin" "$REDIS_DEST/bin/"
+    chmod +x "$REDIS_DEST/bin/$bin"
+  else
+    log "Warning: $bin not found, skipping"
+  fi
 done
 
-log "PostgreSQL binaries ready."
+[ -f "$REDIS_DEST/bin/redis-server" ] || die "redis-server not found at $REDIS_PREFIX/bin"
+
+bundle_binaries "$REDIS_DEST"
+
+log "Redis binaries ready."
 
 # ─── Step 4: Assemble app code ───────────────────────────────────────────────
 log "Copying application code..."
@@ -233,6 +281,9 @@ Mirrai — AI Digital Persona Platform
 Installation:
   Drag Mirrai.app to the Applications folder.
 
+  Everything Mirrai needs is inside the app: Node.js, PostgreSQL and Redis.
+  There is nothing else to download and nothing to configure.
+
 First Launch:
   1. Double-click Mirrai in Applications
   2. If macOS blocks it: System Settings → Privacy & Security → Open Anyway
@@ -249,6 +300,11 @@ Configuration:
 
 To Stop:
   Close the terminal window, or press Ctrl+C.
+
+Notes:
+  - Redis comes with Mirrai. It is started automatically when the app starts
+    and stopped when it stops; it is what makes the rate limits mean the same
+    thing when you run more than one copy.
 EOF
 
 hdiutil create \

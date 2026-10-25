@@ -328,22 +328,77 @@ async function startManagedInstance(): Promise<RedisHandle | null> {
 }
 
 /**
+ * Where a Redis that ships with the app would be.
+ *
+ * The installers bundle one, so that a person who installed Mirrai has a
+ * Redis without installing a Redis. The two layouts are:
+ *
+ *   - **macOS**: `Mirrai.app/Contents/Resources/redis/bin/redis-server`,
+ *     with its libraries in `redis/lib` beside it;
+ *   - **Windows**: `redis/redis-server.exe` in the folder the archive was
+ *     unpacked into, with its DLLs beside it.
+ *
+ * The search walks up from the running executable, because that is the
+ * only thing that knows where the app was put.
+ */
+export function bundledRedisCandidates(execPath: string): string[] {
+  const candidates: string[] = [];
+  let directory = path.dirname(execPath);
+
+  // The macOS bundle keeps the libraries in their own directory; the
+  // Windows one keeps them next to the executable.
+  for (let level = 0; level < 5; level++) {
+    candidates.push(path.join(directory, "redis", "bin", "redis-server"));
+    candidates.push(path.join(directory, "redis", "redis-server.exe"));
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  return candidates;
+}
+
+/**
  * Finds a redis-server binary, if the machine has one.
  *
- * The `PATH` is searched first, because that is where a package manager
- * puts it. But an app started from a launcher — a dock icon, a desktop
- * shortcut, a service manager — often has a much smaller `PATH` than the
- * one a person has in a terminal, and on macOS the Homebrew binary lives
- * outside the default set. So the places a package manager actually uses
- * are checked too.
+ * A Redis that ships **with the app** comes first, because that is the one
+ * the installer promised and it is known to work with this build. Then the
+ * `PATH`, because that is where a package manager puts it — but an app
+ * started from a launcher (a dock icon, a desktop shortcut, a service
+ * manager) often has a much smaller `PATH` than the one a person has in a
+ * terminal, and on macOS the Homebrew binary lives outside the default
+ * set. So the places a package manager actually uses are checked too.
  *
  * The point is that the app starts a Redis on its own. A user who
- * installed Redis and then started the app from an icon should not have to
- * know that.
+ * installed Mirrai should not have to know that Redis is involved at all.
+ *
+ * The executable path is a parameter so that the search can be tested
+ * without installing anything.
  */
-function findRedisServer(): string | null {
+export function findRedisServer(execPath?: string): string | null {
   const explicit = process.env.REDIS_SERVER_BIN?.trim();
   if (explicit && existsSync(explicit)) return explicit;
+
+  // The one that came with the app.
+  //
+  // Two starting points, because they are not always the same: `execPath`
+  // is the executable after symlinks have been resolved, and `argv[0]` is
+  // the path it was actually started from. A bundle reached through a
+  // symlink — which is what a launcher on some systems does — is only
+  // visible from the second one.
+  const starts = execPath
+    ? [execPath]
+    : [process.execPath, process.argv[0]].filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      );
+  for (const start of starts) {
+    for (const candidate of bundledRedisCandidates(start)) {
+      try {
+        if (existsSync(candidate)) return candidate;
+      } catch {
+        /* an unreadable directory is not a redis */
+      }
+    }
+  }
 
   const pathEnv = process.env.PATH ?? "";
   const directories = pathEnv.split(path.delimiter).filter(Boolean);

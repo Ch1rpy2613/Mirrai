@@ -24,6 +24,14 @@ $NodeUrl = "https://nodejs.org/dist/v${NodeVersion}/${NodeZip}"
 $PgVersion = "16.4"
 $PgUrl = "https://get.enterprisedb.com/postgresql/postgresql-${PgVersion}-1-windows-x64-binaries.zip"
 
+# Redis has no official Windows build. This is the community port that has
+# been the Windows Redis for years; the version and the checksum are pinned,
+# and the build stops if the archive does not match.
+$RedisVersion = "5.0.14.1"
+$RedisZip = "Redis-x64-${RedisVersion}.zip"
+$RedisUrl = "https://github.com/tporadowski/redis/releases/download/v${RedisVersion}/${RedisZip}"
+$RedisSha256 = "018ea18a35876383cbb5f4cd0258adfc87747cf9d619bce1cf73a2e36f720ccf"
+
 function Log($msg) { Write-Host "==> $msg" }
 function Die($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 
@@ -139,6 +147,57 @@ Remove-Item (Join-Path $BuildDir "pg-tmp") -Recurse -Force
 Remove-Item $PgZipPath -Force
 Log "PostgreSQL binaries ready."
 
+# ─── Step 3b: Redis ──────────────────────────────────────────────────────────
+# The rate limiter and the scheduler lock live in Redis, so a person who
+# installs Mirrai has to end up with one. Bundling it here is what makes that
+# true: the app finds this binary and starts it itself, and the person never
+# has to install, download or configure anything.
+#
+# Redis has no official Windows build, so this is the community port that
+# has been the Windows Redis for years. The version and the checksum are
+# pinned: the archive is only unpacked if it hashes to exactly this, so a
+# changed or substituted download stops the build rather than shipping.
+Log "Downloading Redis ${RedisVersion} (${NodeArch})..."
+$RedisZipPath = Join-Path $BuildDir "redis-win.zip"
+if (-not (Test-Path $RedisZipPath)) {
+    Invoke-WebRequest -Uri $RedisUrl -OutFile $RedisZipPath
+}
+
+Log "Checking the Redis archive..."
+$RedisHash = (Get-FileHash -Path $RedisZipPath -Algorithm SHA256).Hash.ToLower()
+if ($RedisHash -ne $RedisSha256) {
+    Die "The Redis archive does not match the pinned checksum.`n  expected: $RedisSha256`n  actual:   $RedisHash"
+}
+Log "Redis archive verified (sha256 $RedisHash)."
+
+Log "Extracting Redis..."
+$RedisTmp = Join-Path $BuildDir "redis-tmp"
+Expand-Archive -Path $RedisZipPath -DestinationPath $RedisTmp -Force
+
+$RedisDest = Join-Path $DistDir "redis"
+New-Item -ItemType Directory -Force -Path $RedisDest | Out-Null
+
+# Only the two executables that are actually used are kept, plus the DLLs
+# they load. The .pdb files are debug symbols — fifteen megabytes of nothing
+# a person will ever look at — and the other tools (benchmark, check-aof,
+# check-rdb) are not something a person running a companion app needs.
+foreach ($exe in @("redis-server.exe", "redis-cli.exe")) {
+    $from = Get-ChildItem -Path $RedisTmp -Filter $exe -File -Recurse | Select-Object -First 1
+    if (-not $from) { Die "$exe is missing from the Redis archive." }
+    Copy-Item -Path $from.FullName -Destination $RedisDest -Force
+}
+foreach ($dll in Get-ChildItem -Path $RedisTmp -Filter "*.dll" -File -Recurse) {
+    Copy-Item -Path $dll.FullName -Destination $RedisDest -Force
+}
+
+if (-not (Test-Path (Join-Path $RedisDest "redis-server.exe"))) {
+    Die "redis-server.exe is missing from the Redis archive."
+}
+
+Remove-Item $RedisTmp -Recurse -Force
+Remove-Item $RedisZipPath -Force
+Log "Redis binaries ready."
+
 # ─── Step 4: Assemble app code ───────────────────────────────────────────────
 Log "Copying application code..."
 $AppDest = Join-Path $DistDir "app"
@@ -192,6 +251,8 @@ Mirrai - AI Digital Persona Platform
 Installation:
   Unpack this folder anywhere you like (for example C:\Mirrai).
   Nothing is installed system-wide and no administrator rights are needed.
+  Everything Mirrai needs is in this folder: Node.js, PostgreSQL and Redis.
+  There is nothing else to download and nothing to configure.
 
 First Launch:
   1. Double-click Mirrai.cmd
@@ -211,6 +272,9 @@ To Stop:
   Press Ctrl+C in the console window, or just close it.
 
 Notes:
+  - Redis comes with Mirrai. It is started automatically when the app starts
+    and stopped when it stops; it is what makes the rate limits mean the same
+    thing when you run more than one copy.
   - PostgreSQL refuses to run under an Administrator account on Windows.
     If you launched Mirrai.cmd from an elevated prompt, run it as a normal user.
   - The data (database, uploads, logs) lives in %APPDATA%\Mirrai, so
