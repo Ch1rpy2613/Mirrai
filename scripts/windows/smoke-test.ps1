@@ -59,6 +59,19 @@ foreach ($exe in @("postgres.exe", "initdb.exe", "pg_ctl.exe", "psql.exe", "crea
 }
 Log "PostgreSQL binaries load their DLLs."
 
+# The Redis that travels with the package. It has to be there, it has to
+# run on this machine, and the app has to find *this* one rather than
+# something else that happens to be listening.
+Log "Checking the bundled Redis..."
+$RedisExe = Join-Path $DistDir "redis\redis-server.exe"
+if (-not (Test-Path $RedisExe)) { Die "redis-server.exe is missing from the bundle." }
+$redisVersion = & $RedisExe --version 2>&1
+if ($LASTEXITCODE -ne 0) { Die "redis-server.exe failed to run: $redisVersion" }
+Log "redis-server.exe $redisVersion"
+if (-not (Test-Path (Join-Path $DistDir "redis\redis-cli.exe"))) {
+    Die "redis-cli.exe is missing from the bundle."
+}
+
 # ─── 3. Run the database and the server as a standard user ───────────────────
 if (Get-LocalUser -Name $TestUser -ErrorAction SilentlyContinue) {
     Remove-LocalUser -Name $TestUser
@@ -84,6 +97,7 @@ $log = $args[1]
 $workRoot = $args[2]
 $nodeBin = Join-Path $dist "node\node.exe"
 $pgBin = Join-Path $dist "pgsql\bin"
+$redisExe = Join-Path $dist "redis\redis-server.exe"
 $pgData = Join-Path $workRoot "pgdata"
 $uploads = Join-Path $workRoot "uploads"
 $pgLog = Join-Path $workRoot "pg.log"
@@ -145,6 +159,10 @@ try {
     $env:DATABASE_URL = "postgresql://mirrai@localhost:$port/mirrai"
     $env:NODE_ENV = "production"
     $env:PORT = 3111
+    # Managed, so the app starts the Redis that came with the package
+    # rather than finding one that happens to be listening.
+    $env:MIRRAI_REDIS = "managed"
+    $env:MIRRAI_DATA_ROOT = $workRoot
     $env:JWT_SECRET = "smoke-test-secret-not-for-production-use-0123456789"
     $env:UPLOAD_DIR = $uploads
 
@@ -191,7 +209,13 @@ try {
 
     Say "starting the server..."
     Push-Location $appDir
-    $server = Start-Process -FilePath $nodeBin -ArgumentList "dist\index.js" -WorkingDirectory $appDir -PassThru -NoNewWindow
+    # The server's own words are captured: the line about Redis is how we
+    # know the app found the Redis that came with the package rather than
+    # something else that happened to be listening.
+    $serverOut = Join-Path $workRoot "server.out"
+    $serverErr = Join-Path $workRoot "server.err"
+    $server = Start-Process -FilePath $nodeBin -ArgumentList "dist\index.js" -WorkingDirectory $appDir -PassThru -NoNewWindow `
+        -RedirectStandardOutput $serverOut -RedirectStandardError $serverErr
     Pop-Location
 
     $up = $false
@@ -210,6 +234,26 @@ try {
     }
     if (-not $up) { Say "the server did not answer on port 3111"; exit 1 }
     Say "the server answered on http://localhost:3111"
+
+    # The Redis that came with the package has to be the one the app used.
+    Say "checking which Redis the app used..."
+    $serverLog = ""
+    if (Test-Path $serverOut) { $serverLog += (Get-Content $serverOut -Raw -ErrorAction SilentlyContinue) }
+    if (Test-Path $serverErr) { $serverLog += (Get-Content $serverErr -Raw -ErrorAction SilentlyContinue) }
+    $redisLine = ($serverLog -split "`n" | Where-Object { $_ -match "\[redis\]" } | Select-Object -First 1)
+    if (-not $redisLine) {
+        Say "the server did not say anything about Redis:"
+        Say $serverLog
+        Say "expected it to start the Redis that came with the package"
+        exit 1
+    }
+    Say "the app says: $redisLine"
+    if ($redisLine -notmatch [regex]::Escape($redisExe)) {
+        Say "the app did not use the bundled Redis — it used something else:"
+        Say $redisLine
+        exit 1
+    }
+    Say "the app is using the Redis that came with the package."
 
     Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
     & (Join-Path $pgBin "pg_ctl.exe") -D $pgData -m fast stop 2>&1 | Out-File -FilePath $log -Append

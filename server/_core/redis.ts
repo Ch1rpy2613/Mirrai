@@ -314,7 +314,7 @@ async function startManagedInstance(): Promise<RedisHandle | null> {
       const connected = await tryConnect(`redis://127.0.0.1:${port}`);
       if (!connected) return null;
       console.log(
-        `[redis] Started a Redis on port ${port} for this machine. ` +
+        `[redis] Started a Redis on port ${port} for this machine, using ${binary}. ` +
           "Nothing to configure — it stops when the app stops.",
       );
       return { ...connected, managed: true };
