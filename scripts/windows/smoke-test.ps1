@@ -249,7 +249,7 @@ try {
     }
     Say "the app says: $redisLine"
     if ($redisLine -notmatch [regex]::Escape($redisExe)) {
-        Say "the app did not use the bundled Redis — it used something else:"
+        Say "the app did not use the bundled Redis; it used something else:"
         Say $redisLine
         exit 1
     }
@@ -266,7 +266,11 @@ try {
 }
 '@
 
-Set-Content -Path $WorkerScript -Value $worker -Encoding UTF8
+# The worker is run by Windows PowerShell, which reads a file with no byte
+# order mark as ANSI. One em dash in a message then becomes a quotation
+# mark, the script stops parsing, and the test fails with nothing to look
+# at. The mark makes it read as UTF-8.
+[System.IO.File]::WriteAllText($WorkerScript, $worker, [System.Text.UTF8Encoding]::new($true))
 Remove-Item $WorkerLog -ErrorAction SilentlyContinue
 $cred = New-Object System.Management.Automation.PSCredential($TestUser, $secure)
 Log "Running the bundle as '$TestUser'..."
