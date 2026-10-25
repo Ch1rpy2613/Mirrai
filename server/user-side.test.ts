@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildReachabilityNote,
   buildRelationshipSection,
   buildUserContextBlock,
   isUserMood,
@@ -164,5 +165,34 @@ describe("the prompt", () => {
       relationshipPhase: "reunion",
     });
     expect(prompt).toContain("你们又在一起了");
+  });
+});
+
+/**
+ * The note about not being able to reach each other.
+ *
+ * It used to be written as an ordinary string with the line breaks
+ * escaped twice, so what the model was given was the two characters
+ * "\\n" instead of a line break — the three lines of the note ran
+ * together on one. It is in the copy table now, where a real line break
+ * is what a line break means, and this test is what keeps it that way.
+ */
+describe("the note about not being able to reach each other", () => {
+  it("is three lines, not one line with two backslashes", () => {
+    const note = buildReachabilityNote("unreachable", "zh");
+    expect(note).not.toContain("\\n");
+    expect(note.split("\n")).toHaveLength(3);
+    expect(note).toContain("【你们现在联系不上】");
+  });
+
+  it("says the same thing in English", () => {
+    const note = buildReachabilityNote("unreachable", "en");
+    expect(note).not.toContain("\\n");
+    expect(note.split("\n")).toHaveLength(3);
+    expect(note).toContain("【You cannot reach each other right now】");
+  });
+
+  it("says nothing when they can reach each other", () => {
+    expect(buildReachabilityNote("reachable", "zh")).toBe("");
   });
 });
