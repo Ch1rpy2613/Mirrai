@@ -127,27 +127,28 @@ keeps its own counters** — so the effective limit grows with the number of ins
 scheduler has the same problem: two copies of Mirrai would deliver the same anniversary
 reminder twice.
 
-Both are now Redis's problem, and **you do not have to configure anything**. The app looks
-for Redis in this order:
+Both are now Redis's problem, and **you do not have to configure anything, or download
+anything either**. The app looks for Redis in this order:
 
 1. `REDIS_URL`, if you set it
 2. a Redis already listening on the default port
-3. **one it starts itself** — it finds the `redis-server` binary, starts a server on a port
-   of its own choosing, and writes the port down under `MIRRAI_DATA_ROOT`, so the other
-   copies of Mirrai on this machine share it (run two instances and the budget is still one)
+3. **the one that came with the app** (see the table below)
+4. **one it starts itself** — it starts a server on a port of its own choosing, and writes
+   the port down under `MIRRAI_DATA_ROOT`, so the other copies of Mirrai on this machine
+   share it (run two instances and the budget is still one)
+
+**Redis ships inside the installer.**
+
+| How you install it | Where Redis comes from |
+|---|---|
+| The macOS `.dmg` | Bundled in `Mirrai.app` (`Contents/Resources/redis/`); the app starts it and stops it with itself |
+| The Windows `.zip` / `.exe` | Bundled in the `redis\` folder next to the app; same arrangement |
+| Docker | The image installs `redis-server`; `docker compose` additionally runs a `redis` container |
+| From source | `pnpm setup:redis` — one command, and it works out whether it is brew, apt, apk, dnf or yum |
 
 A machine without `redis-server` still starts: the limiter falls back to counting in
 process, and the log says so. Redis makes the limits mean the same thing in every process;
 it is not what makes the app run.
-
-To install one:
-
-```bash
-pnpm setup:redis     # works out whether it is brew, apt, apk, dnf or yum
-```
-
-Docker users do not have to think about it: `docker compose` already runs a `redis`
-container and points `REDIS_URL` at it.
 
 To turn the shared store off, put `MIRRAI_REDIS=off` in `.env`.
 

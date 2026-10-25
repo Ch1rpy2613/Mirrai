@@ -280,25 +280,27 @@ Redis 是可选的：不装也能跑，限流会退回进程内计数。想让�
 但**多实例部署时每个进程各有一份计数** —— 实际限额会随实例数放大。调度器也有同样的
 问题：两份 Mirrai 会把同一封纪念日提醒送两遍。
 
-两件事现在都由 Redis 解决，而**你什么都不用配**。应用会按这个顺序找 Redis：
+两件事现在都由 Redis 解决，而**你什么都不用配，也不用另外下载**。
+
+**安装包里已经带着 Redis 了。**
+
+| 安装方式 | Redis 从哪来 |
+|---|---|
+| macOS `.dmg` | 打包在 `Mirrai.app` 里（`Contents/Resources/redis/`），应用自己起、自己停 |
+| Windows `.zip` / `.exe` | 打包在安装目录的 `redis\` 里，同上 |
+| Docker | 镜像里就装了 `redis-server`；`docker compose` 还额外跑了一个 `redis` 容器 |
+| 源码运行 | `pnpm setup:redis` 一条命令装上（自动认 brew / apt / apk / dnf / yum） |
+
+应用会按这个顺序找 Redis：
 
 1. `REDIS_URL`（如果你填了）
 2. 已经在默认端口上跑着的 Redis
-3. **应用自己起的一个** —— 找到 `redis-server` 二进制，在自己挑的端口上起一个，
-   并把端口记在 `MIRRAI_DATA_ROOT` 下，让这台机器上别的 Mirrai 进程用同一个
-   （多开一份 Mirrai，额度依然是共享的）
+3. **跟着应用一起装的那一个**（macOS / Windows / Docker）
+4. **应用自己起的一个** —— 在自己挑的端口上起一个，并把端口记在 `MIRRAI_DATA_ROOT`
+   下，让这台机器上别的 Mirrai 进程用同一个（多开一份 Mirrai，额度依然是共享的）
 
-机器上没有 `redis-server` 也不影响启动：限流退回进程内计数，日志里会写明
+机器上一个 `redis-server` 都找不到也不影响启动：限流退回进程内计数，日志里会写明
 「每进程各算各的」。Redis 让限额在多份进程之间算数，它不是应用能不能跑的前提。
-
-想装一个 Redis：
-
-```bash
-pnpm setup:redis     # 自动识别 brew / apt / apk / dnf / yum
-```
-
-Docker 用户不用管：`docker compose` 里已经带了一个 `redis` 容器，
-`REDIS_URL` 已经指过去了。
 
 想关掉共享存储，把 `MIRRAI_REDIS=off` 写进 `.env`。
 

@@ -148,14 +148,48 @@ expect(rows.map((r) => r.id)).toEqual([7, 8, 9]);          // 旧的在前
 
 1. `REDIS_URL`（填了才用）
 2. 默认端口上已经跑着的 Redis
-3. **应用自己起的一个**——找到 `redis-server` 二进制，在自己挑的端口上起一个，
-   把端口记在 `MIRRAI_DATA_ROOT` 下，让这台机器上别的 Mirrai 进程用同一个
+3. **跟着应用一起装的那一个**（macOS / Windows / Docker 的安装包里都带着）
+4. **应用自己起的一个**——在自己挑的端口上起一个，把端口记在 `MIRRAI_DATA_ROOT`
+   下，让这台机器上别的 Mirrai 进程用同一个
 
-第 3 条才是「开箱即用」的意思：不用装、不用填、不用选端口、不用改文件。
+第 3、4 条才是「开箱即用」的意思：不用装、不用填、不用选端口、不用改文件。
 机器上**没有** `redis-server` 也不影响启动——限流退回进程内计数，日志里会写明。
 
-**装 Redis**：`pnpm setup:redis`（自动认 brew / apt / apk / dnf / yum）。
-Docker 用户不用管：`docker compose` 里已经带了一个 `redis` 容器。
+### 7b. Redis 必须打包在安装包里 — ✅ 做完了
+
+> 补上的一条要求：「redis 也要包含在咱们的安装包里啊，不能让用户自己下载，
+> 否则就不算开箱即用了。」
+
+**这句话是对的**：如果装完 Mirrai 还要用户自己去下载 Redis，那「开箱即用」就是
+一句空话。所以 Redis 现在**跟着安装包一起走**：
+
+| 安装方式 | Redis 从哪来 | 怎么做的 |
+|---|---|---|
+| macOS `.dmg` | `Mirrai.app/Contents/Resources/redis/` | 从 Homebrew 取 `redis-server` 和 `redis-cli`，把 `libssl`/`libcrypto` 一起拷进去，用 `install_name_tool` 把库路径改成 `@executable_path/../lib/…`，再重新签名 |
+| Windows `.zip` / `.exe` | 安装目录下的 `redis\` | 下载社区版 Windows Redis，**校验 SHA-256** 之后才解包；只留 `redis-server.exe`、`redis-cli.exe` 和 DLL，`.pdb` 调试符号不带 |
+| Docker | 镜像里 `apk add redis` | `docker compose` 另外还跑一个 `redis` 容器，`REDIS_URL` 指过去 |
+| 源码运行 | `pnpm setup:redis` | 一条命令，自动认 brew / apt / apk / dnf / yum |
+
+**应用怎么找到随包的那个**：从**正在运行的可执行文件**往上找。macOS 是
+`Contents/Resources/node/bin/node` → `Contents/Resources/redis/bin/redis-server`；
+Windows 是 `node\node.exe` → `redis\redis-server.exe`。找不到别的办法——
+只有运行中的程序知道自己被放在哪儿。
+
+`process.execPath` 和 `process.argv[0]` 都要看：前者在符号链接被解析之后，
+后者是**启动时**的路径。经过符号链接启动的应用（某些启动器会这么做）只有从
+后者才看得见。
+
+**实测过**（不是推测）：
+
+- 把 Homebrew 的 `redis-server` 按上面的方式打成一个 `.app` 的目录结构，
+  改完库路径后**直接跑起来并答 `PONG`**；
+- 模拟一个完整的 macOS 包（`Resources/node/bin/node` + `Resources/redis/`），
+  启动应用，`ps` 显示它起的是**包里的那个**
+  （`…/Mirrai.app/Contents/Resources/redis/bin/redis-server`），
+  不是系统里那个；应用停，它也停。
+
+**怎么守住**：`server/_core/redis-bundled.test.ts` 测两种包结构的查找、
+「包里的优先于 PATH 上的」以及找不到时的回退。
 
 **怎么守住**：`server/_core/redis-managed.test.ts` 真的会**起一个真的 Redis**，
 然后验它答话、验限流器记在它上面、验锁只有一个人拿得到、验它跟着应用一起停。
@@ -246,7 +280,8 @@ README（中文）和 README.en.md 都有「文档」一节，链出去了。
 **清单空了。**
 
 真正做完的，是三件以前没做的事：**服务端会说两种语言了**（468 条文案，
-一条测试守住），**Redis 零配置**（用户什么都不用填，应用自己起一个），
+一条测试守住），**Redis 零配置而且打包在安装包里**（用户什么都不用填、
+不用下载，macOS / Windows / Docker 三种包装都带着它），
 **界面的组件有测试了**（8 个组件文件）。
 
 外加两处真 bug：调度器在没有 Redis 时让人什么都收不到；

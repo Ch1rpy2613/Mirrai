@@ -11,6 +11,11 @@
  * say when there is a Redis, and a Redis that the app starts on its own
  * (see `server/_core/redis.ts`) needs a `redis-server` binary to exist.
  *
+ * **The installers do not need this script.** The macOS app, the Windows
+ * bundle and the Docker image all carry a Redis already, and the app
+ * starts that one by itself. This is for the one case they do not cover:
+ * running from a checkout.
+ *
  * So this script installs one, if the machine does not have it yet:
  *
  *     pnpm setup:redis
