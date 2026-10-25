@@ -13,6 +13,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
 
+# Redis, so the rate limits mean the same thing in every process and the
+# scheduler does not deliver the same reminder twice. The app finds this
+# binary and starts a Redis itself when it needs one, so nothing has to be
+# configured for it to work.
+RUN apk add --no-cache redis
+
 # Server bundle + client static assets (dist/), dependencies (drizzle-kit kept
 # for schema push on boot), and drizzle schema for migrations
 COPY --from=build /app/dist ./dist

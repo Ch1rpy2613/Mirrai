@@ -1,13 +1,22 @@
 /**
- * In-process rate limiting.
+ * Rate limiting, shared across every process that runs the app.
  *
- * Mirrai is a self-hosted app that normally runs as a single process, so an
- * in-memory limiter is enough for the common case. The `RateLimiter` interface
- * exists so a shared-store implementation (Redis, Postgres) can be dropped in
- * later without touching call sites — see the note in `RATE_LIMITS` about
- * multi-instance deployments.
+ * Mirrai is normally a single process, so an in-memory limiter is enough
+ * for the common case. It is *not* enough when a second copy runs — the
+ * two copies each enforce their own budget and the effective limit is
+ * the sum, so a limit of 30 a minute quietly becomes 60.
+ *
+ * That is what the Redis store is for. The limiter asks Redis for the
+ * bucket, and Redis does the arithmetic, so every copy counts against
+ * the same number. The interface is unchanged, so a call site does not
+ * know or care which store is behind it.
+ *
+ * When Redis is not there, the app falls back to the in-memory limiter
+ * and says so once in the log. Redis makes the limits correct across
+ * processes; it is not what makes the app run.
  */
 import type { Request } from "express";
+import { connectRedis, type RedisClient } from "./redis";
 
 export interface RateLimitRule {
   /** Stable name, used for logging and for resetting a bucket. */
@@ -28,8 +37,8 @@ export interface RateLimitResult {
 }
 
 export interface RateLimiter {
-  check(key: string, rule: RateLimitRule): RateLimitResult;
-  reset(key?: string): void;
+  check(key: string, rule: RateLimitRule): Promise<RateLimitResult>;
+  reset(key?: string): void | Promise<void>;
 }
 
 interface Bucket {
@@ -47,7 +56,7 @@ export class MemoryRateLimiter implements RateLimiter {
 
   constructor(private maxBuckets = 10_000) {}
 
-  check(key: string, rule: RateLimitRule): RateLimitResult {
+  async check(key: string, rule: RateLimitRule): Promise<RateLimitResult> {
     const now = Date.now();
     const bucketKey = `${rule.name}:${key}`;
     let bucket = this.buckets.get(bucketKey);
@@ -100,14 +109,118 @@ export class MemoryRateLimiter implements RateLimiter {
   }
 }
 
-export const rateLimiter: RateLimiter = new MemoryRateLimiter();
+/**
+ * The token bucket, as a Lua script.
+ *
+ * It has to be one script: reading the bucket and writing it back is two
+ * round trips, and between them another process can read the same number.
+ *
+ * The clock is Redis's own. Two copies of the app on two machines can
+ * have their clocks a second apart, and a second is a visible fraction of
+ * a 30-request-a-minute budget. Asking Redis what time it is costs
+ * nothing and is the same answer for everybody.
+ */
+const TOKEN_BUCKET_SCRIPT = `
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+
+-- Effects replication, so the script may read the clock. Redis 7 does this
+-- by default; older versions need to be told.
+if redis.replicate_commands then pcall(redis.replicate_commands) end
+
+local now = redis.call('TIME')
+local ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+
+local state = redis.call('HMGET', key, 'tokens', 'updatedAt')
+local tokens = tonumber(state[1])
+local updatedAt = tonumber(state[2])
+if tokens == nil then
+  tokens = limit
+  updatedAt = ms
+end
+
+local refill = limit / window
+local elapsed = ms - updatedAt
+if elapsed < 0 then elapsed = 0 end
+tokens = math.min(limit, tokens + elapsed * refill)
+
+local allowed = 0
+if tokens >= 1 then
+  tokens = tokens - 1
+  allowed = 1
+end
+
+redis.call('HSET', key, 'tokens', tokens, 'updatedAt', ms)
+redis.call('PEXPIRE', key, math.ceil(window * 2))
+
+local retry = 0
+if allowed == 0 then
+  retry = math.ceil((1 - tokens) / refill)
+end
+return { allowed, tostring(math.floor(tokens)), tostring(retry) }
+`;
+
+/**
+ * The token bucket, counted by Redis.
+ *
+ * Every process that runs the app counts against the same bucket, so a
+ * limit of 30 a minute means 30 a minute.
+ */
+export class RedisRateLimiter implements RateLimiter {
+  constructor(private client: RedisClient) {}
+
+  async check(key: string, rule: RateLimitRule): Promise<RateLimitResult> {
+    const bucketKey = `mirrai:ratelimit:${rule.name}:${key}`;
+    const raw = (await this.client.eval(TOKEN_BUCKET_SCRIPT, {
+      keys: [bucketKey],
+      arguments: [String(rule.limit), String(rule.windowMs)],
+    })) as Array<string | number>;
+
+    const allowed = Number(raw?.[0] ?? 0) === 1;
+    const remaining = Number(raw?.[1] ?? 0);
+    const retryAfterMs = Number(raw?.[2] ?? 0);
+    return { allowed, retryAfterMs, remaining };
+  }
+
+  async reset(key?: string): Promise<void> {
+    if (key === undefined) return;
+    const keys = await this.client.keys(`mirrai:ratelimit:*:${key}`);
+    if (keys.length > 0) await this.client.del(keys);
+  }
+}
+
+/**
+ * The limiter the app uses.
+ *
+ * It starts as the in-memory one and is replaced at startup if Redis is
+ * reachable. A call site never sees the difference.
+ */
+export let rateLimiter: RateLimiter = new MemoryRateLimiter();
+
+/**
+ * Puts the shared limiter in place, if there is one to be had.
+ *
+ * Returns true when the limits are now shared across processes.
+ */
+export async function initRateLimiter(): Promise<boolean> {
+  const redis = await connectRedis();
+  if (!redis) {
+    console.warn(
+      "[rate-limit] No shared store — the limits count per process. " +
+        "That is fine for one copy of Mirrai; two copies would each allow the full budget.",
+    );
+    return false;
+  }
+  rateLimiter = new RedisRateLimiter(redis.client);
+  console.log(
+    "[rate-limit] Counting against the shared store — the limits mean the same thing in every process.",
+  );
+  return true;
+}
 
 /**
  * Rate limit buckets used by the app.
- *
- * NOTE: these are per-process. A multi-instance deployment would need a
- * shared store, otherwise each instance enforces its own budget and the
- * effective limit is multiplied by the instance count.
  */
 export const RATE_LIMITS = {
   /** Registration and login — keyed by IP, to slow credential stuffing. */
@@ -118,6 +231,14 @@ export const RATE_LIMITS = {
   llmHeavy: { name: "llm-heavy", limit: 10, windowMs: 60_000, scope: "user" } as RateLimitRule,
   /** File uploads — keyed by user id. */
   upload: { name: "upload", limit: 20, windowMs: 3_600_000, scope: "user" } as RateLimitRule,
+  /**
+   * Text-to-speech — keyed by user id.
+   *
+   * Its own bucket, because listening to a reply is not a model call and
+   * sharing the "llm" bucket meant that pressing play on three messages
+   * used up the allowance for three whole conversations.
+   */
+  tts: { name: "tts", limit: 30, windowMs: 60_000, scope: "user" } as RateLimitRule,
 };
 
 /** Best-effort client IP, honouring a single proxy hop. */

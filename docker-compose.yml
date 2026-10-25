@@ -14,6 +14,19 @@ services:
       timeout: 5s
       retries: 12
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # The limits and the scheduler lock live here, so every copy of the app
+    # counts against the same numbers. The app talks to it without anybody
+    # having to write down an address.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   app:
     build: .
     restart: unless-stopped
@@ -22,10 +35,13 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://mirrai:mirrai@db:5432/mirrai
+      REDIS_URL: redis://redis:6379
     volumes:
       - uploads:/app/uploads
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

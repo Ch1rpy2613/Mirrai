@@ -4,32 +4,32 @@ import { MemoryRateLimiter, RATE_LIMITS, type RateLimitRule } from "./rate-limit
 const rule: RateLimitRule = { name: "test", limit: 3, windowMs: 60_000, scope: "user" };
 
 describe("MemoryRateLimiter", () => {
-  it("allows requests up to the limit", () => {
+  it("allows requests up to the limit", async () => {
     const limiter = new MemoryRateLimiter();
     for (let i = 0; i < 3; i++) {
-      expect(limiter.check("user-1", rule).allowed).toBe(true);
+      expect((await limiter.check("user-1", rule)).allowed).toBe(true);
     }
-    expect(limiter.check("user-1", rule).allowed).toBe(false);
+    expect((await limiter.check("user-1", rule)).allowed).toBe(false);
   });
 
-  it("keeps separate buckets per key", () => {
+  it("keeps separate buckets per key", async () => {
     const limiter = new MemoryRateLimiter();
-    for (let i = 0; i < 3; i++) limiter.check("user-1", rule);
-    expect(limiter.check("user-1", rule).allowed).toBe(false);
-    expect(limiter.check("user-2", rule).allowed).toBe(true);
+    for (let i = 0; i < 3; i++) await limiter.check("user-1", rule);
+    expect((await limiter.check("user-1", rule)).allowed).toBe(false);
+    expect((await limiter.check("user-2", rule)).allowed).toBe(true);
   });
 
-  it("keeps separate buckets per rule name", () => {
+  it("keeps separate buckets per rule name", async () => {
     const limiter = new MemoryRateLimiter();
     const other: RateLimitRule = { ...rule, name: "other" };
-    for (let i = 0; i < 3; i++) limiter.check("user-1", rule);
-    expect(limiter.check("user-1", other).allowed).toBe(true);
+    for (let i = 0; i < 3; i++) await limiter.check("user-1", rule);
+    expect((await limiter.check("user-1", other)).allowed).toBe(true);
   });
 
-  it("reports how long to wait when it refuses", () => {
+  it("reports how long to wait when it refuses", async () => {
     const limiter = new MemoryRateLimiter();
-    for (let i = 0; i < 3; i++) limiter.check("user-1", rule);
-    const result = limiter.check("user-1", rule);
+    for (let i = 0; i < 3; i++) await limiter.check("user-1", rule);
+    const result = await limiter.check("user-1", rule);
     expect(result.allowed).toBe(false);
     expect(result.retryAfterMs).toBeGreaterThan(0);
   });
@@ -37,32 +37,32 @@ describe("MemoryRateLimiter", () => {
   it("refills once the window has passed", async () => {
     const limiter = new MemoryRateLimiter();
     const fastRule: RateLimitRule = { name: "fast", limit: 1, windowMs: 40, scope: "user" };
-    expect(limiter.check("user-1", fastRule).allowed).toBe(true);
-    expect(limiter.check("user-1", fastRule).allowed).toBe(false);
+    expect((await limiter.check("user-1", fastRule)).allowed).toBe(true);
+    expect((await limiter.check("user-1", fastRule)).allowed).toBe(false);
 
     await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(limiter.check("user-1", fastRule).allowed).toBe(true);
+    expect((await limiter.check("user-1", fastRule)).allowed).toBe(true);
   });
 
-  it("resets a single key", () => {
+  it("resets a single key", async () => {
     const limiter = new MemoryRateLimiter();
-    for (let i = 0; i < 3; i++) limiter.check("user-1", rule);
-    limiter.reset("user-1");
-    expect(limiter.check("user-1", rule).allowed).toBe(true);
+    for (let i = 0; i < 3; i++) await limiter.check("user-1", rule);
+    await limiter.reset("user-1");
+    expect((await limiter.check("user-1", rule)).allowed).toBe(true);
   });
 
-  it("resets everything", () => {
+  it("resets everything", async () => {
     const limiter = new MemoryRateLimiter();
-    for (let i = 0; i < 3; i++) limiter.check("user-1", rule);
-    limiter.reset();
-    expect(limiter.check("user-1", rule).allowed).toBe(true);
+    for (let i = 0; i < 3; i++) await limiter.check("user-1", rule);
+    await limiter.reset();
+    expect((await limiter.check("user-1", rule)).allowed).toBe(true);
   });
 
-  it("evicts old buckets once the cap is reached", () => {
+  it("evicts old buckets once the cap is reached", async () => {
     const limiter = new MemoryRateLimiter(10);
-    for (let i = 0; i < 50; i++) limiter.check(`user-${i}`, rule);
+    for (let i = 0; i < 50; i++) await limiter.check(`user-${i}`, rule);
     // The limiter keeps working; it just stops growing without bound.
-    expect(limiter.check("user-0", rule).allowed).toBe(true);
+    expect((await limiter.check("user-0", rule)).allowed).toBe(true);
   });
 });
 
@@ -76,11 +76,11 @@ describe("the shipped rate limits", () => {
     expect(RATE_LIMITS.llmHeavy.scope).toBe("user");
   });
 
-  it("allows a burst then refuses", () => {
+  it("allows a burst then refuses", async () => {
     const limiter = new MemoryRateLimiter();
     let allowed = 0;
     for (let i = 0; i < RATE_LIMITS.llm.limit + 5; i++) {
-      if (limiter.check("user-1", RATE_LIMITS.llm).allowed) allowed++;
+      if ((await limiter.check("user-1", RATE_LIMITS.llm)).allowed) allowed++;
     }
     expect(allowed).toBe(RATE_LIMITS.llm.limit);
   });
