@@ -169,6 +169,7 @@ export const zh = {
     failed: "发送失败：{{message}}",
     interrupted: "生成中断：{{message}}",
     voiceMessage: "（语音消息）",
+    imageMessage: "[图片]",
     silence: "（沉默）",
     record: "录音",
     recording: "录音中 {{seconds}}s",

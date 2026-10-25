@@ -18,6 +18,8 @@
  * six states. The persona's moods are what the app infers from the
  * conversation; these are what the user says about themselves.
  */
+import { copy } from "./copy";
+
 export type UserMood = "great" | "okay" | "low" | "down" | "anxious" | "numb";
 
 export const USER_MOODS: readonly UserMood[] = [
@@ -128,35 +130,18 @@ export function buildUserContextBlock(
   const address = context.addressStyle?.trim();
   const boundaries = context.boundaries?.trim();
 
-  if (locale === "en") {
-    if (name) parts.push(`The person you are talking to is ${name}.`);
-    if (address) parts.push(`Call them "${address}".`);
-    if (boundaries) {
-      parts.push(`They have asked you not to bring up: ${boundaries}. Respect that even if it comes up.`);
-    }
-    if (options.mood) {
-      const label = USER_MOOD_LABELS[options.mood].en;
-      parts.push(
-        `They recently said they are feeling ${label}. Let it colour how you speak — do not make a production of it, and do not offer advice unless they ask.`,
-      );
-    }
-  } else {
-    if (name) parts.push(`你现在在和 ${name} 说话。`);
-    if (address) parts.push(`称呼对方「${address}」。`);
-    if (boundaries) {
-      parts.push(`对方说过不要提起这些：${boundaries}。即使话题绕到那里，也避开。`);
-    }
-    if (options.mood) {
-      const label = USER_MOOD_LABELS[options.mood].zh;
-      parts.push(
-        `对方最近说自己${label}。让这一点影响你的语气——但别把这件事变成一个话题，也别主动给建议，除非对方开口问。`,
-      );
-    }
+  if (name) parts.push(copy(locale, "userSide.talkingTo", { name }));
+  if (address) parts.push(copy(locale, "userSide.address", { address }));
+  if (boundaries) {
+    parts.push(copy(locale, "userSide.boundaries", { boundaries }));
+  }
+  if (options.mood) {
+    const label = USER_MOOD_LABELS[options.mood][locale];
+    parts.push(copy(locale, "userSide.mood", { label }));
   }
 
   if (parts.length === 0) return "";
-  const heading = locale === "en" ? "【About the person you are talking to】" : "【关于对话者】";
-  return `${heading}\n${parts.join("\n")}`;
+  return `${copy(locale, "userSide.heading")}\n${parts.join("\n")}`;
 }
 
 /**
@@ -246,19 +231,13 @@ export function buildRelationshipSection(
   }
 
   if (phase) {
-    const heading = locale === "en"
-      ? "Where things stand now"
-      : "现在的关系状态";
-    const phaseLine = locale === "en"
-      ? PHASE_LABELS_EN[phase]
-      : PHASE_LABELS_ZH[phase];
+    const heading = copy(locale, "userSide.phaseHeading");
+    const phaseLine = copy(locale, `userSide.phase.${phase}`);
     parts.push(`（${heading}：${phaseLine}）`);
   }
 
-  const title = locale === "en" ? "【What has been happening】" : "【最近发生的事】";
-  const note = locale === "en"
-    ? "- These are things the user told you. You know them, and you do not have to be told twice."
-    : "- 这些是对方告诉你的事。你已经知道了，不用对方再说一遍。";
+  const title = copy(locale, "userSide.eventsTitle");
+  const note = copy(locale, "userSide.eventsNote");
 
   /**
    * The instruction for a trigger.
@@ -277,50 +256,28 @@ export function buildRelationshipSection(
     const days = (now.getTime() - then) / 86_400_000;
     return days <= TRIGGER_FRESHNESS_DAYS;
   });
-  const restraint = triggered
-    ? locale === "en"
-      ? "- The user is hurting. Acknowledge it and stop there. Do not ask what happened, do not offer advice, do not encourage them to let go, and do not bring the past up yourself."
-      : "- 用户现在难受。只承认这件事，就到这里。不要追问细节，不要给建议，不要劝放下，也不要自己把话题拉回过去。"
-    : "";
+  const restraint = triggered ? copy(locale, "userSide.triggeredRestraint") : "";
 
   return `${title}\n${parts.join("\n")}\n${note}${restraint ? `\n${restraint}` : ""}`;
 }
 
-const PHASE_LABELS_ZH: Record<RelationshipEventKind, string> = {
-  together: "你们在一起",
-  apart: "你们暂时分开",
-  reunion: "你们复合了",
-  breakup: "你们分手了",
-  conflict: "你们还在闹别扭",
-  reconciliation: "你们和好了",
-  news: "你们之间有新的消息",
-  meetup: "你们最近见过面",
-  triggered: "有些事还没有过去",
-};
 
-const PHASE_LABELS_EN: Record<RelationshipEventKind, string> = {
-  together: "you are together",
-  apart: "you are apart for a while",
-  reunion: "you got back together",
-  breakup: "you broke up",
-  conflict: "there is still a fight between you",
-  reconciliation: "you made up",
-  news: "there is news between you",
-  meetup: "you met up recently",
-  triggered: "some things have not been settled",
-};
 
 /** A short, human date for an event. */
 function formatWhen(value: Date | string, locale: "zh" | "en"): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
-  if (days === 0) return locale === "en" ? "today" : "今天";
-  if (days === 1) return locale === "en" ? "yesterday" : "昨天";
-  if (days < 7) return locale === "en" ? `${days} days ago` : `${days} 天前`;
+  if (days === 0) return copy(locale, "userSide.when.today");
+  if (days === 1) return copy(locale, "userSide.when.yesterday");
+  if (days < 7) return copy(locale, "userSide.when.daysAgo", { days });
   if (days < 30) {
     const weeks = Math.floor(days / 7);
-    return locale === "en" ? `${weeks} week${weeks > 1 ? "s" : ""} ago` : `${weeks} 周前`;
+    return copy(
+      locale,
+      weeks > 1 ? "userSide.when.weeksAgo" : "userSide.when.weekAgo",
+      { weeks },
+    );
   }
   return date.toISOString().slice(0, 10);
 }
@@ -356,9 +313,7 @@ export function buildReachabilityNote(
   locale: "zh" | "en" = "zh",
 ): string {
   if (reachability !== "unreachable") return "";
-  return locale === "en"
-    ? "【You cannot reach each other right now】\\n- The two of you are out of touch. Write like a letter, not a text message: more considered, fewer questions, and no assumption that anything was read.\\n- Do not ask when they will be back. They will come back when they come back."
-    : "【你们现在联系不上】\\n- 你们暂时联系不上。说话要像写信，不像发消息：多想一点，少问几句，不要假设对方已经看到了。\\n- 不要问 TA 什么时候回来。TA 回来的时候自然会回来。";
+  return copy(locale, "userSide.unreachable");
 }
 
 /**

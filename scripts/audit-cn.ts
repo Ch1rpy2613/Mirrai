@@ -4,6 +4,10 @@
  * It answers the question the guard test in `server/i18n.test.ts` asks:
  * which files still hold Chinese that has no English counterpart?
  *
+ * It scans the whole app — the server, the interface and the shared code
+ * — because the interface had its own version of the same problem, and a
+ * scan that only watched the server would never have seen it.
+ *
  * Usage:
  *   pnpm audit:i18n                # the summary
  *   pnpm audit:i18n -- --list      # every offending line
@@ -17,7 +21,7 @@ const ROOT = join(import.meta.dirname, "..");
 const args = process.argv.slice(2);
 const list = args.includes("--list");
 const roots = args.filter((arg) => !arg.startsWith("--"));
-const targets = roots.length ? roots : ["server"];
+const targets = roots.length ? roots : ["server", "client", "shared"];
 
 let total = 0;
 /** Every hit, so the listing does not have to scan a second time. */

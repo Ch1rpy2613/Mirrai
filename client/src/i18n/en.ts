@@ -6,7 +6,16 @@
  */
 export const en = {
   landing: {
-    nav: { login: "Login", register: "Sign Up", language: "中文", toggleTheme: "Switch theme" },
+    nav: {
+      login: "Login",
+      register: "Sign Up",
+      // The button offers the language you would switch to, written in
+      // that language's own script — so this one says "中文" and the
+      // Chinese dictionary says "EN".
+      // i18n:allow-identifier
+      language: "中文",
+      toggleTheme: "Switch theme",
+    },
     brand: { kicker: "An emotional memory operating system" },
     hero: {
       tagline: "Where Missing Meets Mirrai",
@@ -168,6 +177,7 @@ export const en = {
     failed: "Could not send: {{message}}",
     interrupted: "Generation stopped: {{message}}",
     voiceMessage: "(voice message)",
+    imageMessage: "[image]",
     silence: "(silence)",
     record: "Record",
     recording: "Recording {{seconds}}s",
@@ -212,7 +222,7 @@ export const en = {
     searchPlaceholder: "Search messages…",
     closeSearch: "Close search",
     noResults: "No matching messages",
-    channelWechat: "微信",
+    channelWechat: "WeChat",
     copy: "Copy",
     quote: "Reply to this",
     recalled: "They remembered {{count}} things",
@@ -702,7 +712,11 @@ export const en = {
         reqPublishEmphasis: "published and approved by an administrator",
         reqPublishTail: ", otherwise the permissions and event subscription do not take effect.",
         reqEventsLead: "For event subscription pick ",
-        reqEventsEmphasis: "「使用长连接接收事件」",
+        // The option is in the Feishu console, which is Chinese, so the
+        // Chinese is quoted — with a translation, because the person
+        // reading this may not read it.
+        // i18n:allow-identifier
+        reqEventsEmphasis: "「使用长连接接收事件」 (Use long connection to receive events)",
         reqEventsTail: " and add the event ",
         reqEventsEnd: ".",
         reqPermissionsLead: "Permissions to enable: ",

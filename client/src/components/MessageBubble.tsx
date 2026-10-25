@@ -192,7 +192,7 @@ export function MessageBubble({
         <>
           <img src={msg.mediaUrl} alt="" onClick={() => setImgExpanded(true)}
             className="max-w-[200px] max-h-[200px] rounded-md cursor-pointer hover:opacity-90 transition-opacity" />
-          {msg.content !== "[图片]" && <p className="mt-1.5 text-sm">{msg.content}</p>}
+          {msg.content !== t("chat.imageMessage") && <p className="mt-1.5 text-sm">{msg.content}</p>}
           {/* Portal：祖先的 animate-fade-in-up 以 forwards 保留 transform，会把 fixed 定位锚定到气泡上 */}
           {imgExpanded && createPortal(
             <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 animate-fade-in"
@@ -208,7 +208,7 @@ export function MessageBubble({
       return (
         <div className="flex flex-col gap-1">
           <VoicePlayer url={msg.mediaUrl} duration={msg.mediaDuration} />
-          {msg.content && msg.content !== "（语音消息）" && (
+          {msg.content && msg.content !== t("chat.voiceMessage") && (
             <p className="text-xs opacity-60 mt-1">{msg.content}</p>
           )}
         </div>

@@ -11,6 +11,8 @@
  * only has a chat box.
  */
 
+import { copy } from "./copy";
+
 export type LetterStatus = "private" | "waiting" | "answered";
 
 export const LETTER_STATUSES: readonly LetterStatus[] = ["private", "waiting", "answered"];
@@ -88,20 +90,11 @@ export function buildLetterReplyInstruction(params: {
   relationshipEnded?: boolean;
 }): string {
   const locale = params.locale ?? "zh";
-  if (locale === "en") {
-    return [
-      `Someone you know has written you a letter. It is not a message — it is a letter, and it was written carefully.`,
-      "",
-      params.letterBody,
-      "",
-      `Answer it as ${params.personaName}, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter.`,
-    ].join("\n");
-  }
   return [
-    `有人给你写了一封信。这不是一条消息——是一封信，是认真写下来的。`,
+    copy(locale, "letters.inboundPrompt"),
     "",
     params.letterBody,
     "",
-    `请以${params.personaName}的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。`,
+    copy(locale, "letters.answerPrompt", { personaName: params.personaName }),
   ].join("\n");
 }

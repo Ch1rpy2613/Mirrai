@@ -10,6 +10,7 @@
  * understand. A missing or unknown zone falls back to the local time — the
  * old behaviour — rather than throwing.
  */
+import { copy } from "./copy";
 
 /** The hour of the day (0-23) in a given time zone. */
 export function zonedHour(date: Date, timeZone?: string | null): number {
@@ -68,10 +69,18 @@ export function formatZonedClock(
   if (!timeZone) {
     const hours = date.getHours();
     const minutes = String(date.getMinutes()).padStart(2, "0");
-    const period = hours < 6 ? "凌晨" : hours < 12 ? "上午" : hours < 18 ? "下午" : "晚上";
-    return locale === "en"
-      ? `${String(hours).padStart(2, "0")}:${minutes}`
-      : `${period} ${hours}:${minutes}`;
+    if (locale === "en") {
+      return `${String(hours).padStart(2, "0")}:${minutes}`;
+    }
+    const period =
+      hours < 6
+        ? copy(locale, "labels.time.dawn")
+        : hours < 12
+          ? copy(locale, "labels.time.morning")
+          : hours < 18
+            ? copy(locale, "labels.time.afternoon")
+            : copy(locale, "labels.time.evening");
+    return `${period} ${hours}:${minutes}`;
   }
   try {
     return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "zh-CN", {

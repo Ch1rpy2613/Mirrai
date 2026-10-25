@@ -15,6 +15,11 @@ export interface PersonaOption {
   labelKey: string;
 }
 
+// The values below are stored, not displayed: they are what the rows in
+// the database say, and the label the user sees comes from the dictionary.
+// They are Chinese because that is what the rows say, so they are marked
+// as identifiers rather than as text.
+// i18n:allow-identifier
 export const ATTACHMENT_STYLES: PersonaOption[] = [
   { value: "安全型", labelKey: "personaOptions.attachmentStyles.secure" },
   { value: "焦虑型", labelKey: "personaOptions.attachmentStyles.anxious" },
@@ -22,6 +27,7 @@ export const ATTACHMENT_STYLES: PersonaOption[] = [
   { value: "混乱型", labelKey: "personaOptions.attachmentStyles.disorganized" },
 ];
 
+// i18n:allow-identifier
 export const LOVE_LANGUAGES: PersonaOption[] = [
   { value: "精心时刻", labelKey: "personaOptions.loveLanguages.qualityTime" },
   { value: "肯定的言辞", labelKey: "personaOptions.loveLanguages.words" },

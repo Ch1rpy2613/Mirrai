@@ -31,6 +31,7 @@ import { PROMPTS } from "./prompts";
 import { LABELS } from "./labels";
 import { SAFETY } from "./safety";
 import { SCENES_COPY, BUILTIN_SCENE_SLUGS, BUILTIN_SCENE_DEFINITIONS } from "./scenes";
+import { USER_SIDE } from "./user-side";
 
 export type CopyEntry = { zh: string; en: string };
 export type CopyTable = Record<string, CopyEntry>;
@@ -46,6 +47,7 @@ export const COPY: CopyTable = {
   ...LABELS,
   ...SAFETY,
   ...SCENES_COPY,
+  ...USER_SIDE,
 };
 
 export type CopyKey = keyof typeof COPY;

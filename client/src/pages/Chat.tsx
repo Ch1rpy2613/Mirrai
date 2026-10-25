@@ -628,7 +628,7 @@ export default function Chat() {
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
       const localUrl = URL.createObjectURL(file);
-      const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: "[图片]", messageType: "image", mediaUrl: localUrl, createdAt: new Date() };
+      const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: t("chat.imageMessage"), messageType: "image", mediaUrl: localUrl, createdAt: new Date() };
       setMessages(prev => [...prev, userMsg]);
       const streamId = `stream-${Date.now()}`;
       setMessages(prev => [...prev, { id: streamId, role: "assistant", content: "", isStreaming: true, emotionalState: currentState }]);
@@ -685,7 +685,7 @@ export default function Chat() {
           setIsSending(true);
 
           const localUrl = URL.createObjectURL(blob);
-          const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: "（语音消息）", messageType: "voice", mediaUrl: localUrl, mediaDuration: duration, createdAt: new Date() };
+          const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: t("chat.voiceMessage"), messageType: "voice", mediaUrl: localUrl, mediaDuration: duration, createdAt: new Date() };
           setMessages(prev => [...prev, userMsg]);
           const streamId = `stream-${Date.now()}`;
           setMessages(prev => [...prev, { id: streamId, role: "assistant", content: "", isStreaming: true, emotionalState: currentState }]);
@@ -698,7 +698,7 @@ export default function Chat() {
             );
             setMessages(prev => prev.map(m => {
               if (m.id === streamId) return { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false };
-              if (m === userMsg) return { ...m, content: result.transcription || "（语音消息）" };
+              if (m === userMsg) return { ...m, content: result.transcription || t("chat.voiceMessage") };
               return m;
             }));
             setCurrentState(result.emotionalState);
