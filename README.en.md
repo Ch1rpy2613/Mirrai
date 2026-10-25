@@ -23,7 +23,10 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 |---|---|
 | 🧬 **Multi-stage persona distillation** | A real pipeline (intake → persona analysis → structured build → merge) produces a 7-layer persona: personality, speaking style, catchphrases, attachment style, love language, conflict style, touching moments. Not a "paste logs into a prompt" wrapper. |
 | 🎭 **Dynamic emotion state machine** | 6 emotional states (warm / playful / nostalgic / melancholic / happy / distant) drift with the conversation and change reply tone in real time. The state is inferred by the LLM reading the exchange, with a keyword heuristic as fallback. |
-| 🎓 **Graduation mechanism** | Intimacy grows through conversation. When the system detects you're at peace, it offers "graduation": an AI-written farewell letter, then the persona sleeps. Success is measured by graduation rate, not retention. |
+| 🎓 **Graduation mechanism** | Intimacy grows through conversation. When the system detects you're at peace, it offers "graduation": an AI-written farewell letter, then the persona sleeps. Success is measured by graduation rate, not retention. The mechanism is only ever a suggestion — you choose whether the app may raise it (suggest / manual only / off), globally or per persona. An offer is made once and then goes quiet for a while; a refusal is not a closed door. After graduation the persona stops receiving reminders, stops being recommended, and stops answering — but the letter is kept, and waking the persona does not destroy it. There is a third state too: **take a break**, for when you want neither a goodbye nor a conversation. |
+| 🧠 **Memory that grows on its own** | After enough has been said, the persona extracts what was worth keeping on its own — no button, and pressing a button twice no longer stores everything twice. Every reply shows which memories it recalled, so a detail from three months ago is visibly *recalled* rather than invented. Memories about you and memories about them are kept apart. |
+| ✉️ **Letters, and the distance** | Some things cannot be said into a chat box. Write one and keep it forever, or hand it over — it is answered about a day later, because a person does not reply in three seconds. There is also a list of things to say "when they come back", and a **"we can't reach each other right now"** state that is deliberately *not* a breakup: the reminders stop and the register turns to a letter's. |
+| 💬 **They can speak first** | Off by default. The frequency is yours to set, and zero is a real value: an app that speaks first is something you buy, not something you are given. When it is on, it goes out over the channel you have already bound — WeChat, Feishu — and it respects your quiet hours. |
 | 🔌 **12 LLM providers** | OpenAI, Claude, DeepSeek, Kimi, Qwen, Doubao, 302.ai, Atlas Cloud, Cheaper Inference, Dify, Xunfei — and Ollama for fully local inference. |
 | 💬 **WeChat via official ClawBot** | Connect to WeChat through the official "ClawBot" plugin (Tencent iLink protocol) — scan a QR code, authorize, and chat with your persona in WeChat. Shares persona and memory with the web app. **No ban risk**: this is a first-party WeChat channel, not a third-party protocol. | |
 | 🔒 **Local-first** | Uploads stay in `./uploads/`. With Ollama, nothing ever leaves your machine. |
@@ -63,9 +66,13 @@ pnpm install
 pip3 install -r skill-engine/requirements.txt   # optional
 cp .env.example .env                            # configure DATABASE_URL, JWT_SECRET, an LLM key
 createdb mirrai
-pnpm db:push
+pnpm db:push                                    # a fresh install; use pnpm db:migrate to upgrade
 pnpm dev
 ```
+
+Redis is optional: without it the app still runs and the rate limiter counts in process.
+To have the limits mean the same thing across instances, `pnpm setup:redis` installs one
+and the app takes care of the rest.
 
 ### macOS one-click
 
@@ -100,6 +107,9 @@ The channel is 1:1 private chat (an official limit: it cannot be added by other 
 | `/当前分身` | Show the active persona |
 | `/毕业` | Generate the farewell letter and complete graduation |
 
+Each command also has an English spelling — `/use`, `/personas`, `/current`, `/graduate`
+and `/help` — and the reply comes back in the language of the command you typed.
+
 Commands never consume a model call. A switch applies to the current session only; the default persona is restored after a restart.
 
 ## Ethics & boundaries
@@ -109,15 +119,56 @@ Commands never consume a model call. A switch applies to the current session onl
 - **AI transparency**: by default, a persona admits it's an AI when asked in earnest (set `PERSONA_AI_TRANSPARENCY=false` for full immersion mode).
 - **Not a substitute for professional help**. If you're struggling, please talk to a professional.
 
-### Known limitation: the rate limiter is per-process
+### Rate limiting and multiple instances: Redis works out of the box
 
-Request rate limiting (`server/_core/rate-limit.ts`) uses in-memory token buckets. That is
-enough for a single self-hosted instance, but with **multiple instances each process keeps
-its own counters** — so the effective limit grows with the number of instances.
+Request rate limiting (`server/_core/rate-limit.ts`) uses in-memory token buckets by default.
+That is enough for a single self-hosted instance, but with **multiple instances each process
+keeps its own counters** — so the effective limit grows with the number of instances. The
+scheduler has the same problem: two copies of Mirrai would deliver the same anniversary
+reminder twice.
 
-The limiter is an interface (`RateLimiter`), so a shared store (Redis, say) can replace it.
-That means a new external dependency, which is beyond this project's default dependency
-set and needs an explicit decision first.
+Both are now Redis's problem, and **you do not have to configure anything**. The app looks
+for Redis in this order:
+
+1. `REDIS_URL`, if you set it
+2. a Redis already listening on the default port
+3. **one it starts itself** — it finds the `redis-server` binary, starts a server on a port
+   of its own choosing, and writes the port down under `MIRRAI_DATA_ROOT`, so the other
+   copies of Mirrai on this machine share it (run two instances and the budget is still one)
+
+A machine without `redis-server` still starts: the limiter falls back to counting in
+process, and the log says so. Redis makes the limits mean the same thing in every process;
+it is not what makes the app run.
+
+To install one:
+
+```bash
+pnpm setup:redis     # works out whether it is brew, apt, apk, dnf or yum
+```
+
+Docker users do not have to think about it: `docker compose` already runs a `redis`
+container and points `REDIS_URL` at it.
+
+To turn the shared store off, put `MIRRAI_REDIS=off` in `.env`.
+
+### Database migrations: which command to use
+
+- **A fresh installation**: `pnpm db:push`. It pushes the current schema straight to the
+  database, which is the fastest way in.
+- **An existing installation you are upgrading**: `pnpm db:migrate`. It runs the migration
+  files in `drizzle/` in order.
+
+`db:migrate` only works on an installation that has already been `db:push`ed: the tool
+skips the `0000`/`0001` whole-database dumps, because they assume the base tables are
+already there. A fresh installation has no base tables, so the migrations would give you
+an empty database — use `db:push` there.
+
+## Documentation
+
+- [docs/roadmap-v2.md](docs/roadmap-v2.md) — the acceptance checklist for the second stage (making the *user* and the *relationship* first-class citizens)
+- [docs/open-items.md](docs/open-items.md) — what is still unfinished, why, and how much work it would be
+- [docs/product-concept.md](docs/product-concept.md) — the product concept and its principles
+- [docs/creation-story.md](docs/creation-story.md) — the story behind it (in Chinese)
 
 ## Roadmap
 
