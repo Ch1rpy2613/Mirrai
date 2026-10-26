@@ -952,7 +952,7 @@ async function* runConversationTurn(
   // only when there is enough new conversation to be worth extracting.
   // It runs in the background: the reply is already written, and nobody
   // should wait for it.
-  maybeExtractMemories(persona, userId, locale).catch((e) =>
+  maybeExtractMemories(persona, userId, locale, now).catch((e) =>
     console.warn("[Chat] The memory extraction failed:", e.message));
 
   yield {
@@ -972,6 +972,11 @@ async function* runConversationTurn(
  * The cost of a model call is real, so this is throttled hard: once a
  * day, and only when there are enough new messages to extract from.
  */
+/**
+ * How long there is between two extraction runs.
+ */
+const EXTRACTION_INTERVAL_MS = 24 * 3_600_000;
+
 async function maybeExtractMemories(
   persona: Persona,
   userId: number,
@@ -979,6 +984,16 @@ async function maybeExtractMemories(
   now = new Date(),
 ): Promise<void> {
   const last = await db.getLastExtractionAt(persona.id, userId);
+  /**
+   * The interval comes first.
+   *
+   * A count is a query, and the answer is "not yet" for a whole day
+   * after every run. So the count is only asked for when the interval
+   * has passed — the turn itself does not pay for it.
+   */
+  if (last && now.getTime() - new Date(last).getTime() < EXTRACTION_INTERVAL_MS) {
+    return;
+  }
   /**
    * The messages the extraction would read.
    *
