@@ -193,6 +193,31 @@ export const ERRORS = {
     zh: "这个请求没法处理。",
     en: "That request could not be handled.",
   },
+  /**
+   * The chat stream's own errors.
+   *
+   * The stream answered with an English string, and the interface
+   * showed it inside its own message: "generation failed: Streaming
+   * request failed with status 429". So the one error the user was
+   * most likely to hit — they typed too fast — was the one they could
+   * read least.
+   */
+  "errors.streamUnauthorized": {
+    zh: "请先登录。",
+    en: "Please sign in first.",
+  },
+  "errors.streamTooManyRequests": {
+    zh: "你说得太快了——等一下再试。",
+    en: "You are sending too fast — wait a moment and try again.",
+  },
+  "errors.streamInvalidRequest": {
+    zh: "这个请求不完整。",
+    en: "That request was not complete.",
+  },
+  "errors.streamNoBody": {
+    zh: "服务器没有返回内容。",
+    en: "The server sent nothing back.",
+  },
   "errors.code.unauthorized": {
     zh: "请先登录。",
     en: "Please sign in first.",

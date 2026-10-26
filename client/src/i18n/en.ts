@@ -1649,7 +1649,9 @@ export const en = {
     notFoundBodyLine2: "But the light is still on, and so is the way back.",
     boundaryBodyLong: "The page hit an unexpected error — a refresh usually fixes it.",
     reload: "Reload",
-    unknown: "Unknown error",
+    unknown: "Unknown error",    streamNoBody: "The server sent nothing back.",
+    streamFailed: "The request failed ({{status}}).",
+
   },
 } as const;
 

@@ -39,11 +39,28 @@ function writeEvent(res: Response, event: string, data: unknown): void {
 
 export function registerChatStreamRoute(app: Express): void {
   app.post("/api/chat/stream", async (req: Request, res: Response) => {
+    /**
+     * The language the answer is in.
+     *
+     * The errors used to be English strings, and the interface showed
+     * them inside its own message: "generation failed: Streaming
+     * request failed with status 429". So the one error the user was
+     * most likely to hit — they typed too fast — was the one they could
+     * read least.
+     *
+     * The body is read leniently, because the request has not been
+     * checked yet and the check needs the locale.
+     */
+    const askedLocale = (() => {
+      const body = (req.body ?? {}) as { locale?: unknown };
+      return body.locale === "en" ? "en" : "zh";
+    })();
+
     let user;
     try {
       user = await authenticateRequest(req);
     } catch {
-      res.status(401).json({ error: "Authentication required" });
+      res.status(401).json({ error: copy(askedLocale, "errors.streamUnauthorized") });
       return;
     }
 
@@ -53,13 +70,13 @@ export function registerChatStreamRoute(app: Express): void {
     );
     if (!limit.allowed) {
       res.setHeader("Retry-After", Math.ceil(limit.retryAfterMs / 1000));
-      res.status(429).json({ error: "Too many requests" });
+      res.status(429).json({ error: copy(askedLocale, "errors.streamTooManyRequests") });
       return;
     }
 
     const parsed = inputSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Invalid request" });
+      res.status(400).json({ error: copy(askedLocale, "errors.streamInvalidRequest") });
       return;
     }
 

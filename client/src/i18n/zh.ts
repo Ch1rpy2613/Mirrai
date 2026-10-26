@@ -1642,6 +1642,8 @@ export const zh = {
     boundaryBodyLong: "页面遇到了意外错误，刷新一次通常就能恢复。",
     reload: "重新加载",
     unknown: "未知错误",
+    streamNoBody: "服务器没有返回内容。",
+    streamFailed: "请求失败了（{{status}}）。",
   },
 } as const;
 

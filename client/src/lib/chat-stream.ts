@@ -12,6 +12,8 @@
  * once a complete frame (terminated by a blank line) is available.
  */
 
+import { translate } from "@/i18n";
+
 export interface StreamDoneInfo {
   messageId: number;
   emotionalState: string;
@@ -112,6 +114,30 @@ export function parseFrame(frame: string): { event: string; data: unknown } | nu
 /**
  * Sends a message and streams the reply.
  */
+/**
+ * The sentence the server sent with the failure.
+ *
+ * The server answers with `{"error":"…"}` in the reader's language. It
+ * used to answer with an English technical string, and the interface
+ * showed it inside its own message.
+ */
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text) return "";
+    try {
+      const parsed = JSON.parse(text) as { error?: unknown; message?: unknown };
+      const message = parsed.error ?? parsed.message;
+      return typeof message === "string" ? message : "";
+    } catch {
+      // Not JSON — the body is the message.
+      return text.slice(0, 300);
+    }
+  } catch {
+    return "";
+  }
+}
+
 export async function streamChat(options: StreamChatOptions): Promise<void> {
   const { personaId, message, locale, replyToId, signal, callbacks } = options;
 
@@ -124,7 +150,18 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
   });
 
   if (!response.ok) {
-    const error = new Error(`Streaming request failed with status ${response.status}`) as Error & {
+    /**
+     * The server's own sentence.
+     *
+     * The client used to make its own: "Streaming request failed with
+     * status 429". So the interface showed an English technical string
+     * inside its own Chinese message — for the one error the user was
+     * most likely to hit.
+     */
+    const message = await readErrorMessage(response);
+    const error = new Error(
+      message || translate(locale, "errors.streamFailed", { status: response.status }),
+    ) as Error & {
       status?: number;
     };
     error.status = response.status;
@@ -133,7 +170,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
 
   const body = response.body;
   if (!body) {
-    throw new Error("Streaming response has no body");
+    throw new Error(translate(locale, "errors.streamNoBody"));
   }
 
   const reader = body.getReader();
