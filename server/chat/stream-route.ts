@@ -88,9 +88,18 @@ export function registerChatStreamRoute(app: Express): void {
 
     // If the client goes away, stop the upstream call — there is no point
     // paying for tokens nobody will read.
+    //
+    // The response is what knows the connection is gone. The *request*
+    // emits `close` as soon as its body has been read, which — because
+    // the JSON parser reads it before this handler runs — happens before
+    // a single token has been produced. Listening to it aborted every
+    // stream before it began, and the client got an empty reply.
     const controller = new AbortController();
-    const onClose = () => controller.abort();
-    req.on("close", onClose);
+    const onClose = () => {
+      // The response was ended normally; nothing to cancel.
+      if (res.writableEnded) return;
+      if (!controller.signal.aborted) controller.abort();
+    };
     res.on("close", onClose);
 
     try {
@@ -133,7 +142,6 @@ export function registerChatStreamRoute(app: Express): void {
         // The connection may already be gone.
       }
     } finally {
-      req.off("close", onClose);
       res.off("close", onClose);
       res.end();
     }

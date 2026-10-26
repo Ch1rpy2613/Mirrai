@@ -42,16 +42,42 @@ export function readLocale(req: { headers?: Record<string, unknown> }): "zh" | "
  * The streaming route has its own abort handling; the ordinary request
  * path did not, so pressing "stop" on a reply that was being generated
  * left the model running to the end and the answer stored anyway.
+ *
+ * The subtlety is *which* event means "the client is gone".
+ *
+ * A request object emits `close` as soon as its body has been read — and
+ * the body is read by the JSON parser before the route handler runs at
+ * all. Listening to `req`'s `close` therefore aborted every request the
+ * instant it arrived, which meant every reply was cancelled before the
+ * model was ever called. `req`'s `aborted` event is the honest one: it
+ * fires when a request is cut off in flight, and not when it finishes.
+ *
+ * The response is the other half of the answer. It emits `close` when the
+ * connection is torn down, and `writableEnded` says whether the response
+ * had already been finished when that happened — a reply that was written
+ * out normally is not a cancellation.
  */
-export function requestAbortSignal(req: TrpcContext["req"]): AbortSignal {
+export function requestAbortSignal(
+  req: TrpcContext["req"],
+  res?: TrpcContext["res"],
+): AbortSignal {
   const controller = new AbortController();
   const anyReq = req as any;
-  const onClose = () => {
+  const anyRes = res as any;
+
+  const onGone = () => {
+    // The response was finished — this is not a cancellation.
+    if (anyRes?.writableEnded) return;
     if (!controller.signal.aborted) controller.abort();
   };
+
   if (typeof anyReq?.on === "function") {
-    anyReq.on("aborted", onClose);
-    anyReq.on("close", onClose);
+    // A request that is cut off mid-flight says so with `aborted`.
+    anyReq.on("aborted", onGone);
+  }
+  if (typeof anyRes?.on === "function") {
+    // The connection went away before the response was finished.
+    anyRes.on("close", onGone);
   }
   return controller.signal;
 }

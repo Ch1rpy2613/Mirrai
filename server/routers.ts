@@ -1140,7 +1140,7 @@ export const appRouter = router({
           providerName: (persona as any).llmProvider || undefined,
           mode: "once",
           locale: input.locale,
-          signal: requestAbortSignal(ctx.req),
+          signal: requestAbortSignal(ctx.req, ctx.res),
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
@@ -1218,7 +1218,7 @@ export const appRouter = router({
           replyToId: input.replyToId,
           // Pressing "stop" has to stop the model too, not just the
           // waiting.
-          signal: requestAbortSignal(ctx.req),
+          signal: requestAbortSignal(ctx.req, ctx.res),
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
@@ -1279,7 +1279,7 @@ export const appRouter = router({
           mode: "once",
           locale: input.locale,
           media: { url, type: "image", mimeType: input.mimeType },
-          signal: requestAbortSignal(ctx.req),
+          signal: requestAbortSignal(ctx.req, ctx.res),
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
@@ -1343,7 +1343,7 @@ export const appRouter = router({
           mode: "once",
           locale: input.locale,
           media: { url, type: "voice" },
-          signal: requestAbortSignal(ctx.req),
+          signal: requestAbortSignal(ctx.req, ctx.res),
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
