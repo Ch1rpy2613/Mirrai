@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { getBuiltinTemplates } from "./index";
+
+const ROOT = path.resolve(__dirname, "..", "..");
 
 /**
  * The templates that ship with the app.
@@ -31,6 +33,26 @@ describe("the templates that ship with the app", () => {
     const besideTheModule = path.join(moduleDir, "builtin");
     const besideTheBundle = path.resolve(moduleDir, "..", "..", "server", "templates", "builtin");
     expect(existsSync(besideTheModule) || existsSync(besideTheBundle)).toBe(true);
+  });
+
+  it("are looked for where the packaging puts them", () => {
+    // The test above resolves to the source tree, so it says nothing
+    // about the shipped layout.
+    //
+    // The Docker image and the desktop bundle both put the templates
+    // beside the bundle's own folder: `<app>/server/templates/builtin`.
+    // That place has to be one of the candidates — it was found only
+    // because the server happened to be started from that folder, and
+    // a systemd unit or a `docker run -w` would have had an empty
+    // template library.
+    const dockerfile = readFileSync(path.join(ROOT, "Dockerfile"), "utf-8");
+    expect(dockerfile).toContain("server/templates/builtin");
+    const macos = readFileSync(path.join(ROOT, "scripts/build-macos-app.sh"), "utf-8");
+    expect(macos).toContain("server/templates/builtin");
+
+    // And the lookup has to include that place.
+    const source = readFileSync(path.join(ROOT, "server/templates/index.ts"), "utf-8");
+    expect(source).toContain('path.resolve(moduleDir, "..", inServer)');
   });
 
   it("all have a name and an id", () => {

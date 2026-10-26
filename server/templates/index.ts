@@ -35,6 +35,14 @@ function builtinDirs(): string[] {
     path.resolve(moduleDir, "builtin"),
     // The bundled layout: <repo>/dist/index.js → <repo>/server/templates/builtin
     path.resolve(moduleDir, "..", "..", inServer),
+    // The packaged layout: <app>/dist/index.js → <app>/server/templates/builtin
+    //
+    // The Docker image and the desktop bundle both put the templates
+    // beside the bundle's own folder. It was found only because the
+    // server happened to be started from that folder — and a systemd
+    // unit, or a `docker run -w`, would have had an empty template
+    // library.
+    path.resolve(moduleDir, "..", inServer),
     // The working directory, for a server started from the repository root.
     path.resolve(cwd, inServer),
     // A packaged layout that ships the directory beside the bundle.
