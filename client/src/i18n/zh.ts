@@ -1386,6 +1386,8 @@ export const zh = {
     disclaimer: "这份画像来自聊天记录，是模型的理解，不是 TA 本人。",
   },
   commandPalette: {
+    title: "搜索",
+    searching: "正在找…",
     placeholder: "找一个人，或找一句话…",
     personas: "分身",
     messages: "你说过的",

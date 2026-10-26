@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Search, MessageSquare, User, X, Bookmark, BookOpen } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 /**
  * The command palette.
@@ -60,22 +61,32 @@ export default function CommandPalette() {
 
   const matchingMessages = (results.data ?? []) as any[];
 
-  if (!open) return null;
-
   const go = (path: string) => {
     setOpen(false);
     navigate(path);
   };
 
+  /**
+   * A real dialog.
+   *
+   * The palette used to be two plain `div`s over the page: it was not
+   * announced as a dialog, it did not trap the focus, and a keyboard
+   * user tabbed straight out of it and landed on the page behind the
+   * overlay. Radix gives all of that, and gives the focus back to
+   * where it was when the palette closes.
+   */
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-[12vh] px-4"
-      onClick={() => setOpen(false)}
-    >
-      <div
-        className="w-full max-w-lg surface shadow-xl overflow-hidden animate-fade-in"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-lg gap-0 p-0 overflow-hidden animate-fade-in"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }}
       >
+        {/* The name of the dialog, for a screen reader. */}
+        <DialogTitle className="sr-only">{t("commandPalette.title")}</DialogTitle>
         <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <input
@@ -83,6 +94,7 @@ export default function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("commandPalette.placeholder")}
+            aria-label={t("commandPalette.placeholder")}
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
           />
           <button
@@ -157,7 +169,18 @@ export default function CommandPalette() {
             </div>
           )}
 
-          {query.trim() && matchingPersonas.length === 0 && matchingMessages.length === 0 && (
+          {/* The search is still running.
+              The data is `undefined` while the query key changes, so the
+              palette flashed "no results" before the first results
+              arrived — and again on every keystroke. A wrong answer
+              where a pending one belongs. */}
+          {query.trim() && results.isFetching && (
+            <p className="text-xs text-muted-foreground text-center py-6" role="status">
+              {t("commandPalette.searching")}
+            </p>
+          )}
+
+          {query.trim() && !results.isFetching && matchingPersonas.length === 0 && matchingMessages.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-6">
               {t("commandPalette.noResults")}
             </p>
@@ -167,7 +190,7 @@ export default function CommandPalette() {
         <div className="px-4 py-2 border-t border-border text-[0.625rem] text-muted-foreground/70">
           {t("commandPalette.hint")}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

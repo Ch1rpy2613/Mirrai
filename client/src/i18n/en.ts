@@ -1393,6 +1393,8 @@ export const en = {
     disclaimer: "This portrait was read out of a chat history. It is the model's understanding, not them.",
   },
   commandPalette: {
+    title: "Search",
+    searching: "Searching…",
     placeholder: "Find a person, or something you said…",
     personas: "Personas",
     messages: "Things you said",
