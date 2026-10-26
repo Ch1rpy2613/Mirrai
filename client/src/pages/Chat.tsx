@@ -1576,12 +1576,29 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
   const { t } = useLocale();
   const { data: memories, refetch } = trpc.memory.list.useQuery({ personaId });
   const memoryItems = memories?.items ?? [];
-  const createMutation = trpc.memory.create.useMutation({ onSuccess: () => { refetch(); setShowAdd(false); } });
-  const deleteMutation = trpc.memory.delete.useMutation({ onSuccess: () => refetch() });
+  /**
+   * The three writes say what happened.
+   *
+   * They had no `onError`, so a rejected write left the row unchanged
+   * with no message at all: the user believed they had saved a memory,
+   * or removed a pinned one, and the pinned memory — which is injected
+   * into every prompt — was still there.
+   */
+  const createMutation = trpc.memory.create.useMutation({
+    onSuccess: () => { refetch(); setShowAdd(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteMutation = trpc.memory.delete.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
   /* Pinning a memory: a pinned one is injected into every prompt. The
      field and the retrieval have always been there; there was just no
      way to set it. */
-  const updateMutation = trpc.memory.update.useMutation({ onSuccess: () => refetch() });
+  const updateMutation = trpc.memory.update.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
   const extractMutation = trpc.memory.autoExtract.useMutation({
     onSuccess: (data) => { refetch(); toast.success(t("chat.memory.extracted", { count: data.extracted.length })); },
     onError: (e: any) => toast.error(e.message),
