@@ -1,0 +1,204 @@
+# Mirrai — 全量缺陷审计与修复任务书（Agent Mission）
+
+> 本文档是本仓库的**长期目标锚点**。任何上下文压缩、会话重启、子代理交接之后，都必须先读本文档，
+> 再读本文件末尾的 `## 进度日志`，然后继续未完成的工作。
+
+---
+
+## 1. 原始需求（用户原话，勿改写）
+
+> 请你一个功能一个功能的看，把这个工程里面所有的问题都抓出来然后修复。我不怕浪费token，我需要你找到所有bug，
+> 所有的功能缺失，所有的UI问题，所有的UX问题，所有的可能会影响用户使用的问题。找到了就修复，修复一个commit一个，
+> 防止你checkout把所有的都还原了。我需要你找到所有的问题，遍历所有代码，枚举所有功能，梳理一切结构，
+> 然后把所有问题全部解决。你可以同时开多个子代理来帮助你，但如果子代理一直没有完成工作就需要你把它主动停止，
+> 否则会影响你的工作。过程中你需要联网你就自己联网，需要搜索你就自己搜索，需要下载东西你就下载东西，
+> 我批准你的一切操作，你的一切行为我都批准，你不用问我。你必须一直循环工作，直到你找到了所有的问题并解决了所有的
+> 问题之后才可以宣告目标达成。不要试图欺骗我，不要试图假装找到了所有问题，不要试图假装修好了所有的问题，
+> 因为所有操作都将被人类审查。
+
+---
+
+## 2. 不可协商的规则
+
+| # | 规则 | 说明 |
+|---|------|------|
+| R1 | **一个修复一个 commit** | 每次修复后立即 `git add` + `git commit`，message 写清问题与修复。**严禁**用 `git checkout -- .` / `git restore .` 之类会还原全部改动的命令。 |
+| R2 | **诚实** | 不许假装修好了。不许写 "TODO" 敷衍。不许把测试改弱来让测试通过。每条发现都要有证据（文件+行号）。 |
+| R3 | **必须验证** | 改动后跑 `pnpm check`（tsc）、`pnpm test`（vitest）、相关 lint/build。改坏了就修好再提交。 |
+| R4 | **子代理管理** | 可以并行开子代理；若某子代理长时间无进展/卡死/重复劳动 → 主动 `interrupt_agent` 停掉它。 |
+| R5 | **联网自由** | 需要搜索/查文档/装依赖 → 直接做，不询问。 |
+| R6 | **循环到底** | 只有当"遍历全部代码 + 枚举全部功能 + 修完所有已发现问题 + 复检"都完成，才可宣告目标达成。 |
+
+---
+
+## 3. 工程结构地图
+
+```
+Mirrai/
+├── client/                  React 19 + Vite + tRPC 前端
+│   ├── src/App.tsx          路由表
+│   ├── src/pages/           Landing/Login/Onboarding/Questionnaire/Upload/Chat/
+│   │                        Diary/Lobby/PersonaEdit/PersonaProfile/Graduation/
+│   │                        Analytics/Settings/NotFound
+│   ├── src/components/      业务组件（MessageBubble、LetterBox、FidelityPanel…）
+│   ├── src/components/ui/   shadcn/ui 基础组件
+│   ├── src/i18n/            zh.ts / en.ts 双语
+│   ├── src/lib/             chat-stream / trpc / emotions / pwa …
+│   ├── src/contexts/        LocaleContext / ThemeContext
+│   └── public/sw.js         Service Worker（PWA）
+├── server/                  Express + tRPC 后端
+│   ├── _core/               auth/crypto/csrf/rate-limit/redis/uploads/…
+│   ├── routers.ts           ★ 3291 行，tRPC 主路由
+│   ├── db.ts                ★ 2770 行，Drizzle 数据层
+│   ├── chat/                service/prompt/retrieval/memory-extract/proactive/
+│   │                        outbound/letters/farewell/streaming
+│   ├── llm/                 provider registry + openai/claude/ollama/dify/xunfei
+│   ├── skill-engine/        distillation pipeline / micro-rules / celebrity
+│   ├── channels/            wechat + feishu 适配器
+│   ├── wechat/              ilink 客户端（登录/轮询/发消息）
+│   ├── safety/              crisis / trajectory / resources / usage-monitor
+│   ├── scheduler/           reminders
+│   ├── collectors/          导入流水线
+│   ├── persona-cards/       PNG 卡片生成
+│   ├── eval/                评测
+│   ├── templates/           内置人格模板 + 问卷
+│   └── bootstrap/           首启引导
+├── shared/                  前后端共享类型/常量/文案
+├── drizzle/                 迁移
+├── scripts/                 构建/迁移/审计/评测脚本
+└── docs/                    文档
+```
+
+---
+
+## 4. 审计方法论（每轮都要重跑）
+
+1. **建立功能清单**：从 `App.tsx` 路由 + `server/routers.ts` 端点 + `shared/` 枚举全部用户可见功能。
+2. **逐功能深审**：前端页面/组件 → 对应后端端点 → DB 字段 → i18n key，四层对齐检查。
+3. **静态检查**：`pnpm check`、`pnpm test`、`pnpm build`。
+4. **UI/UX 扫描**：空状态、加载态、错误态、禁用态、键盘可达性、响应式、深浅色、i18n 漏译、
+   长文本溢出、触达区尺寸、焦点陷阱、`aria` 标注。
+5. **边界与竞态**：并发、分页、越权、时区、时序（时间戳单位 ms/s）、空数组、空字符串。
+6. **记录 → 修复 → commit → 继续**。
+
+---
+
+## 5. 缺陷台账（Issue Ledger）
+
+> 每发现一个问题就在这里加一行，状态从 `OPEN` → `FIXED` → `VERIFIED`。
+> 修复时补上 commit hash。
+
+| ID | 区域 | 严重度 | 问题描述 | 位置 | 状态 | Commit |
+|----|------|--------|----------|------|------|--------|
+| — | — | — | （审计进行中） | — | OPEN | — |
+
+---
+
+## 6. 进度日志（Progress Log）
+
+> 每次上下文压缩后，先读这里。最新条目在最上面。
+
+### 2026-10-26 — Round 1 启动
+
+- 已建立本文档（任务锚点）。
+- 已摸清工程结构：client(React19/Vite/tRPC) + server(Express/tRPC) + shared + drizzle + skill-engine。
+- 下一步：跑通 `pnpm check` / `pnpm test` 拿到基线，然后按功能清单逐个审。
+
+### 2026-10-26 — Round 1 审计结果（5 个子代理 + 自查）
+
+**基线**：`tsc` 干净；`vitest` 122 文件 / 1593 测试全绿；`vite build` 通过。
+（注：`node_modules` 里的 rollup 原生模块与 DSH 自带 Node v24 的 Team ID 不匹配，
+构建/测试请用 `~/.nvm/versions/node/v22.22.2/bin/node`。）
+
+**已修复并提交（每个一个 commit）**：
+
+| Commit | 严重度 | 问题 |
+|---|---|---|
+| `5a55aa9` | CRITICAL | `req.on("close")` 在 body 读完就触发 → **每一次聊天回复都在模型被调用前就被取消**（SSE 流为空，tRPC 路径 fetch 直接 AbortError） |
+| `cfc3a2b` | HIGH | "回复某条消息"的状态用完不清 → **下一条消息仍带着旧的 replyToId**，分身答错了问题 |
+| `7b831b3` | HIGH | 语音时长永远是 0（`onstop` 读到的是开始录制时的闭包值） |
+| `a6ba096` | MEDIUM | "加载更早的消息"会把视图甩回底部 |
+| `3d863d5` | MEDIUM | 中断的回复被整段丢弃（catch 里读的是陈旧的 `messages`） |
+| `c42f18a` | HIGH | `chat.sendImage`/`sendVoice` 绕过扩展名白名单 → **可在自己的源上植入 HTML 页面**；同时给 base64 载荷加了上限 |
+| `6072b80` | CRITICAL | `deleteUserAccount`/`deletePersona` 漏删三张有外键的表 → **删除账号/删除分身必然失败并回滚**；守护测试的正则看不见 4 空格缩进的表 |
+| `f4be899` | CRITICAL | 上传的聊天记录被截到 **2000 字符** → 分身只听过前 40 句话 |
+| `f2437c0` | HIGH | `deleteMessagesFrom` 没有 persona 过滤 → **"重新生成"会删掉其他分身的历史** |
+| `8e959a1` | CRITICAL | `Streamdown` 默认链带 `rehype-raw` → **分身的回复可以在应用源上执行 JavaScript** |
+
+**未修（排队中，按严重度）**：
+- CRITICAL：危机词表漏掉"我想死"；信件回复路径没有危机兜底；`consecutiveDays` 混用本地/UTC 日界 → **毕业门槛永远达不到**
+- CRITICAL：`HomePage` 的 `hasLlmProvider` 只看环境变量 → **用界面配置了模型的用户被永远重定向到 onboarding**
+- CRITICAL：Chat 的"重新生成"把用户的提问覆盖成 AI 的回答
+- HIGH：`collector.start` 不校验 `personaId` 归属（IDOR）；`X-Forwarded-For` 无条件信任 → 登录限流可绕过；Redis 挂掉会让整个应用 500；LLM 失败仍然记成"（沉默）"并计数；Doubao base URL 为空；Claude 不传 temperature；限流器 `KEYS` 阻塞；调度器 tick 可重入/锁 TTL 过期；导出不设上限；`persona.checkGraduation` 是会写库的 query
+- MEDIUM：scheduler 忽略时区；letter 回复永远中文；proactive 长度 4 倍上限；SSE `done` 丢了 `recalled`；导出 HTML 未转义 `date`；信件段落被渲染两遍；prompt 里用户内容未加围栏
+
+**方法论备注**：子代理只做只读分析并给出 `file:line` 证据；所有修复由主代理逐条落地、逐条提交、逐条验证。
+
+### 2026-10-26 — Round 1 第二批修复
+
+| Commit | 严重度 | 问题 |
+|---|---|---|
+| `f0c0291` | CRITICAL | 危机词表漏掉"我想死"；**信件路径完全没有危机兜底**；信件回复永远中文 |
+| `d2f31c9` | CRITICAL | `DATE(...)` ��服务端返回成 JS Date 而非字符串 → 连续天数**恒为 0** → 亲密度封顶 900 → **毕业门槛永远达不到**；活跃热力图/连续天数/统计全空；日期算的是服务器日而不是用户日 |
+| `07cad78` | CRITICAL | 界面配了模型的用户被**永远重定向到 onboarding**（`setup` 只看环境变量） |
+| `ac85c8c` | HIGH | "重新生成"把**用户的提问**覆盖成 AI 的回答；`collector.start` 的 IDOR |
+| `5d4efca` | HIGH | Doubao 的 base URL 为空 → 每次请求 `Failed to parse URL`；302AI 没有 model；Claude **从不发送 temperature**；失败的回合被记成"（沉默）"并计入亲密度/毕业门槛 |
+| `890efcd` | HIGH | `X-Forwarded-For` 无条件信任 → **登录限流可绕过**；Redis 挂掉 → 整个应用 500 |
+| `d987fc1` | HIGH | 关闭毕业弹窗的 ✕/背景**不记录拒绝** → 下一轮继续追问；弹窗状态跨次保留 |
+| `c44eefd` | HIGH | 创建分身的两个日期**从未被存下**（字段名对不上，zod 静默丢弃）；轮询**删掉刚加载的历史**；中文输入法回车发半句 |
+| `b0260c9` | HIGH | Service Worker 缓存名是常量 → **图标/manifest/字体永远停在第一次安装的版本**；离线兜底 `respondWith(undefined)` |
+| `b62b6f1` | HIGH | 导出**无上限** → OOM；导出 HTML 里 `date` **未转义** → 导出文件里能执行脚本；信件段落渲染两遍 |
+| `7ddffa3` | HIGH | 分身人格等用户/聊天记录内容**无围栏地拼进 system prompt** → 提示注入 |
+| `e1b7d11` | MEDIUM | `persona.checkGraduation` 是会写库的 query（GET 可被 prefetch 触发 → 冷却 7 天） |
+
+### 2026-10-26 — Round 1 第三批修复（子代理审计后）
+
+两轮新审计（前端页面/组件、后端 llm/chat/channels/collectors/bootstrap/_core）共报 53 条，
+已全部逐条落地为独立 commit。
+
+| Commit | 严重度 | 问题 |
+|---|---|---|
+| `53b7f65` | HIGH | 调度器 tick 可重入；提醒的 dedup 行在**发送之后**才写 → 同一条提醒发两次；提醒按 **UTC 日历**算，"安静时段"按服务器时钟算 |
+| `ff36baf` | MEDIUM | SSE `done` 事件丢了 `recalled` → "这一轮想起了什么"永远不显示；proactive 消息被截到 4 倍上限 |
+| `df21386` | HIGH | 语音在离开页面后继续播；语音菜单不关闭；复制按钮**什么都不说**且失败被吞；图标对比度 40%（低于规范）；「数字分身」写死在组件里（英文界面显示中文）；分身的名字对读屏软件不可见 |
+| `d3fa089` | MEDIUM | 触发词输入框**吃掉刚输入的字符**（每敲一键就重新切分再拼接）；英文界面出现全角冒号；"标为已处理"的失败只进控制台 |
+| `f8870ac` | MEDIUM | "恢复默认"恢复的是**用户保存的值**（按钮完全无效）；全角分号进了英文界面 |
+| `0e0d122` | MEDIUM | 六个面板在数据还在路上时就显示"这里什么都没有"；保真度面板跑完评估**不刷新数字**；开关是 `<span>`（键盘不可达）；外发信件改写失败**丢掉用户写的字** |
+| `4e56bec` | HIGH | Postgres 的原始报错**逐字回给客户端**（暴露表名、约束名） |
+| `67c0052` | HIGH | 微信登录轮询和消息轮询**无间隔热循环**打上游；外部 abort 信号被丢弃 → `stopWeChatBot()` 挂住；sleep 不摘监听器 |
+| `c3840d8` | HIGH | 采集器子进程**继承服务器全部环境变量**（会话密钥、凭据加密密钥、数据库 URL、厂商密钥）→ 第三方 Python 脚本可以外传；输出缓冲无上限 |
+| `527966d` | MEDIUM | 删掉一个**永远不会被引用**的第二入口 `server/index.ts`；docker 重建会丢掉首次管理员密码；vite `allowedHosts: true`（关掉 DNS rebinding 防护）；迁移排序比较器不自洽 |
+| `4854443` | MEDIUM | `getMemoryTitles` **不校验归属**（全文件唯一一个）；两个模板 id 用 `Date.now()` → 同毫秒碰撞 |
+| `971636d` | MEDIUM | 爱的语言有**三套取值表**（其中一套拼错 → 礼物图标从不出现）；问卷写入的是**本地化字符串** → 问卷建的分身在编辑器里显示空白；在一起天数**少一天**（UTC 解析） |
+| `14d88ce` | HIGH | 一键清空对话**不确认**；分身不存在时**永远转圈**；Lobby 两个 hook 在提前 return 之后（rules-of-hooks） |
+| `c73ee2d` | MEDIUM | 日记生成失败被抛出到无人接的地方；logout 的 promise 被丢弃；图片/语音的 blob URL **从不释放**（内存泄漏） |
+| `1f798f8` | HIGH | 角色卡 PNG 的 `inflateSync` **无上限** → 一个元数据块就能让服务器耗尽内存 |
+| `5fa500c` | HIGH | Dify **丢掉了 system prompt 和整个对话历史** → 用 Dify 的分身没有性格、没有关系记忆、没有安全线 |
+| `7587f97` | CRITICAL | 配了自己模型的用户，其私密对话会**回落到运营方的账号和密钥**上 |
+| `2c87e5d` | CRITICAL | 存储一条"只有地址没有密钥"的记录，就能让**运营方的 API Key 被发到用户自己写的地址**上 |
+| `0103756` | CRITICAL | 采集器凭据只按 source 做 key → **A 用户的飞书密钥被用来采集 B 用户的聊天记录** |
+| `a7b5ea0` | MEDIUM | 告别信里每条记忆被注入两次（普通记忆被当作"不可违背的事实"）；记忆抽取的"上次抽取时间"取错来源 → 消息**被跳过**或**被重复发送**；抽取绕过重试策略；Dify 把问题发两遍 |
+| `092b3fc` | HIGH | provider 调用**没有应用层超时**（最多挂 15 分钟）；上游 body 只 release 不 cancel → socket 不归还 |
+| `e84c349` | HIGH | 刚写好的日记**不显示**（`getByDate` 从不刷新）；情绪弧线是对象而客户端只认数组 → **永远不渲染**；日期打印成原始 ISO |
+| `e293b7c` | HIGH | 导出时 blob URL **同一 tick 就被 revoke** → 浏览器可能一个文件都没写（toast 却说导出成功）；切换平台后**上一个平台的密钥**留在框里并被写进另一个平台；邮箱**清不掉** |
+| `65a9483` | MEDIUM | "Base URL"/二维码 alt/角色 三处未翻译；删除确认短语与**本地化字符串**比较 → 改语言后按钮永久禁用 |
+| `05f0574` | MEDIUM | 取消的备注**仍然被保存**；错误边界自己会抛（localStorage 被禁 → 白屏无退路）；拖放区**执行两次**；同一文件选两次第二次无反应；分析页在加载时显示"全是 0"；英文界面出现「、」 |
+| `260b886` | MEDIUM | 命令面板**不是 dialog**（键盘 tab 直接跑到背后的页面）；搜索中显示"没找到"；搜索框没有可访问名称 |
+| `a34245c` | MEDIUM | 登录/注册接口**硬编码英文报错** → 中文用户看到 "invalid credentials" |
+| `9df79ad` | HIGH | 登录路由**解析 50MB JSON**（未认证即可放大内存/CPU） |
+| `db973da` | HIGH | 采集队列**无上限**且 `collector.start` **无限流**（每个任务起一个 Python 进程，钉钉还要开浏览器） |
+| `0f87794` | MEDIUM | 每轮对话都把**所有上传的聊天记录全文**读进内存；**所有 anchor** 都进 prompt |
+| `889fbcc` | HIGH | 飞书消息风暴 → **无上限的并发对话**；分身覆盖只按会话 id → 两个用户撞 id 就串了 |
+| `7fc937b` | MEDIUM | 采集去重要**把整行历史读进内存**；重启后只对账**最新 20 个任务** → 旧任务永远"运行中"（转圈不结束） |
+| `2bb9cf6` | MEDIUM | 保存采集源会**删掉已存的凭据** |
+| `1640f64` | LOW | provider 的**错误文本**决定要不要重试（401 被当成版本错误、500 被重试 3 次）；graduation 的 Set 无上限 |
+| `8cb9b23` | HIGH | 讯飞 Spark 的 WebSocket **可以永远等下去**（socket 不关 → 上游继续计费） |
+
+### 待办（下一批）
+
+- 前端无障碍：Settings 的 27 个 `<Label>` 没有 `htmlFor`；滑块没有可访问名称；设置页 tab 不是 tablist；
+  问卷选项 chip 没有 `aria-pressed`；毕业模式 `<select>` 没有名称；日记日历格子没有日期上下文；
+  Settings 的 `role="button"` div 里套着真按钮；上传拖放区里套着文件输入。
+- 日历的"今天"客户端按浏览器本地算、服务端按 UTC → 东八区凌晨会提示"不能为未来的一天写日记"。
+- 服务端：user_moods / personaData JSON 无上限；`extraConfig` 未校验；`setDefaultLlmConfig`；`DATABASE_URL` 校验；
+  密码最大长度；`findContrastPairs` O(n²)；分身纠正会删掉 `customInstructions`；记忆抽取失败会永久丢弃那一段。
