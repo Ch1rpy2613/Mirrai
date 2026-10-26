@@ -130,7 +130,22 @@ export default function Questionnaire() {
       if (!saved) return;
       const parsed = JSON.parse(saved) as { step?: number; answers?: Answers };
       if (parsed.answers && typeof parsed.answers === "object") {
-        setAnswers({ ...EMPTY, ...parsed.answers });
+        /**
+         * The shape is checked.
+         *
+         * The saved answers were spread over the empty ones without
+         * being looked at — so a stored `communicationStyles` that was
+         * not an array made the page throw when it drew the chips, and
+         * the persist effect then overwrote the saved answers with the
+         * broken ones.
+         */
+        const merged = { ...EMPTY, ...parsed.answers };
+        setAnswers({
+          ...merged,
+          communicationStyles: Array.isArray(merged.communicationStyles)
+            ? merged.communicationStyles.filter((v): v is string => typeof v === "string")
+            : [],
+        });
       }
       if (typeof parsed.step === "number" && parsed.step > 0 && parsed.step < STEP_KEYS.length) {
         setStep(parsed.step);
