@@ -4108,6 +4108,28 @@ export async function getLastMessageAt(personaId: number, userId: number) {
   return rows[0]?.createdAt;
 }
 
+/**
+ * When the *user* last spoke to this persona.
+ *
+ * The plain "last message" is the last message of any kind — and after
+ * the app has spoken first, that is the app's own message. So the
+ * persona that said "ten days without a word from you" said it once,
+ * and every message after it counted from itself: "zero days", while
+ * the user had still not said a word.
+ */
+export async function getLastUserMessageAt(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select({ createdAt: messages.createdAt }).from(messages)
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      eq(messages.role, "user"),
+    ))
+    .orderBy(desc(messages.createdAt)).limit(1);
+  return rows[0]?.createdAt;
+}
+
 
 /**
  * Counts the messages the *user* sent since a point in time.

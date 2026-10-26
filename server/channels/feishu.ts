@@ -536,14 +536,38 @@ export class FeishuAdapter implements ChannelAdapter {
     if (!connection) {
       throw new Error(copy(locale, "errors.feishuNotConnected"));
     }
-    await connection.client.im.v1.message.create({
+    /**
+     * The code in the answer is read.
+     *
+     * The SDK does not throw for a business error — it hands back the
+     * body Feishu sent, with HTTP 200 and a `code` in it. So a
+     * message Feishu refused — a revoked permission, a chat that is
+     * gone, the bot taken out of the room — looked exactly like a
+     * delivered one.
+     *
+     * The inbound sender above has always checked it. Only the
+     * outbound path was missed, and three callers use "did it throw?"
+     * as the delivery test: the proactive sweep marked the message as
+     * sent (and advanced the clock, so it was never tried again), the
+     * reminders kept the claim and vanished, and the app told the
+     * owner they had been notified.
+     */
+    const result = (await connection.client.im.v1.message.create({
       params: { receive_id_type: "chat_id" },
       data: {
         receive_id: targetId,
         msg_type: "text",
         content: JSON.stringify({ text }),
       },
-    });
+    })) as { code?: number; msg?: string } | undefined;
+    const code = result?.code;
+    if (typeof code === "number" && code !== 0) {
+      throw new Error(
+        copy(locale, "errors.feishuSendFailed", {
+          message: result?.msg || String(code),
+        }),
+      );
+    }
   }
 
   async setDefaultPersona(

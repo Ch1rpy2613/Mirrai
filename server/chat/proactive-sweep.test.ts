@@ -7,6 +7,7 @@ const updateMessageChannel = vi.fn();
 const updatePersona = vi.fn();
 const getChannelBindingsByUserId = vi.fn();
 const getLastMessageAt = vi.fn();
+const getLastUserMessageAt = vi.fn();
 const getRecentUserMood = vi.fn();
 const getUserById = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
@@ -21,6 +22,7 @@ vi.mock("../db", () => ({
   updatePersona: (...a: unknown[]) => updatePersona(...a),
   getChannelBindingsByUserId: (...a: unknown[]) => getChannelBindingsByUserId(...a),
   getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
+  getLastUserMessageAt: (...a: unknown[]) => getLastUserMessageAt(...a),
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
   getUserById: (...a: unknown[]) => getUserById(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
@@ -87,6 +89,7 @@ describe("the sweep that lets the persona speak first", () => {
     getRecentUserMood.mockResolvedValue(null);
     getMemoriesByPersonaId.mockResolvedValue([]);
     getLastMessageAt.mockResolvedValue(null);
+    getLastUserMessageAt.mockResolvedValue(null);
     getChannelBindingsByUserId.mockResolvedValue([]);
     getLastExtractionAt.mockResolvedValue(null);
     getUserMessageCountForPersonaSince.mockResolvedValue(0);
@@ -193,6 +196,49 @@ describe("the sweep that lets the persona speak first", () => {
     expect(sent).toBe(0);
     expect(createMessage).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("writes one message, not one a minute, for ever", async () => {
+    /**
+     * The flood.
+     *
+     * The sweep measured the silence from the user's last message, and
+     * wrote its own message into a *different* column — so the moment
+     * it measured from never moved. The deadline stayed in the past,
+     * the persona was due again on the very next tick, and it wrote
+     * again: a fresh model call, a fresh message, every minute, for
+     * ever.
+     *
+     * The rule it broke is the one the purchase states: the app may
+     * not speak first more often than the window the user bought.
+     */
+    const row: any = {
+      id: 1,
+      userId: 1,
+      name: "小A",
+      // The user spoke a long time ago.
+      lastUserMessageAt: new Date("2026-05-01T12:00:00Z"),
+      // The app has not spoken for even longer.
+      lastChatAt: new Date("2026-04-01T12:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      proactiveFrequencyHours: 24,
+    };
+    getProactivePersonas.mockResolvedValue([row]);
+    // The sweep writes the moment it spoke into the persona's row.
+    updatePersona.mockImplementation(async (_id: number, _userId: number, patch: any) => {
+      if (patch.lastChatAt) row.lastChatAt = patch.lastChatAt;
+    });
+
+    // Ten ticks, a minute apart.
+    let written = 0;
+    for (let i = 0; i < 10; i++) {
+      written += await runProactiveSweep(new Date(Date.UTC(2026, 5, 1, 12, i)));
+    }
+
+    // One message, not ten.
+    expect(written).toBe(1);
+    expect(createMessage).toHaveBeenCalledTimes(1);
   });
 
   it("does not use a channel that carries a different persona", async () => {

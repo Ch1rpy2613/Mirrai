@@ -72,6 +72,38 @@ const failedAttempts = new Map<number, number>();
 /** How long a persona waits after a failed attempt. */
 const FAILURE_BACKOFF_MS = 60 * 60 * 1000;
 
+/**
+ * The moment the silence began.
+ *
+ * The later of the two: the last time the *user* spoke, and the last
+ * time the app spoke first.
+ *
+ * The user's silence is what the message is about — but the app's own
+ * voice is what the window is counted from, because the rule is "the
+ * app may not speak first more often than the window the user bought".
+ * Measuring the window from the user's silence alone meant the app's
+ * own message never reset it: the persona was due again on the next
+ * tick, and the next, writing a fresh message — and paying for a fresh
+ * model call — every minute.
+ *
+ * The old column is the fallback, for the personas that have not been
+ * spoken to since the column was added.
+ */
+function silenceStart(row: {
+  lastChatAt: Date | null;
+  lastUserMessageAt: Date | null;
+}): Date | null {
+  const user = row.lastUserMessageAt ? new Date(row.lastUserMessageAt) : null;
+  const app = row.lastChatAt ? new Date(row.lastChatAt) : null;
+  if (user && app) {
+    const later = user.getTime() >= app.getTime() ? user : app;
+    return Number.isNaN(later.getTime()) ? null : later;
+  }
+  const only = user ?? app;
+  if (!only) return null;
+  return Number.isNaN(only.getTime()) ? null : only;
+}
+
 export async function runProactiveSweep(now: Date = new Date()): Promise<number> {
   let sent = 0;
 
@@ -113,17 +145,23 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
       if (!isProactiveDue({
         frequencyHours: row.proactiveFrequencyHours,
         /**
-         * The user's silence, not the app's.
+         * The silence, measured from the later of the two.
          *
-         * The sweep measured it from the last thing of any kind — and
-         * the app's own nightly message reset it. So the persona could
-         * never reach out to a user who had gone quiet: every night it
-         * wrote, and every morning the clock started again.
+         * There are two clocks, and they are not the same question.
+         * "How long has the *user* been quiet" is one; "when did the
+         * app last speak first" is the other. The persona may not speak
+         * first more often than the window the user bought — and the
+         * window is counted from the later of the two, or the app
+         * would speak first every tick: the sweep wrote a message, the
+         * column it measured from never moved, the deadline stayed in
+         * the past, and the persona was due again on the very next
+         * minute. A fresh model call, a fresh message, for ever.
          *
-         * The old column is the fallback, for the personas that have
-         * not been spoken to since the column was added.
+         * The user's own column is the one that matters for the
+         * *content* of the message — and `collectProactiveContext`
+         * measures that from the user's silence, not from the app's.
          */
-        lastChatAt: row.lastUserMessageAt ?? row.lastChatAt,
+        lastChatAt: silenceStart(row),
         presence,
         now,
         // The persona's own timing, when it has been measured. Without

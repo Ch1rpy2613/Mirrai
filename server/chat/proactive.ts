@@ -69,9 +69,18 @@ export async function collectProactiveContext(params: {
 }): Promise<ProactiveContext> {
   const now = params.now ?? new Date();
   const user = await db.getUserById(params.userId).catch(() => null);
-  const lastMessage = await db.getLastMessageAt(params.persona.id, params.userId);
-  const daysSinceLastChat = lastMessage
-    ? Math.floor((now.getTime() - new Date(lastMessage).getTime()) / 86_400_000)
+  /**
+   * The user's silence.
+   *
+   * It used to be measured from the last message of any kind — and
+   * after the app has spoken first, that is the app's own message. So
+   * the persona said "ten days without a word from you" once, and every
+   * message after that said "zero days", while the user had still not
+   * said a word at all.
+   */
+  const lastUserMessage = await db.getLastUserMessageAt(params.persona.id, params.userId);
+  const daysSinceLastChat = lastUserMessage
+    ? Math.floor((now.getTime() - new Date(lastUserMessage).getTime()) / 86_400_000)
     : 0;
   const mood = await db.getRecentUserMood(params.userId).catch(() => null);
 

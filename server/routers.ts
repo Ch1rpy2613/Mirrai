@@ -76,7 +76,14 @@ import type { personas as personasTable } from "../drizzle/schema";
 import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
 import { getCrisisResources } from "./safety/resources";
-import { dayShiftMinutes, isRealDayKey, isValidTimeZone, previousDateKey, zonedDateKey } from "@shared/timezone";
+import {
+  dayShiftMinutes,
+  isRealDayKey,
+  isRealStartKey,
+  isValidTimeZone,
+  previousDateKey,
+  zonedDateKey,
+} from "@shared/timezone";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
@@ -782,8 +789,22 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().min(1).max(100),
         relationshipDesc: z.string().max(200).optional(),
-        togetherFrom: z.string().max(50).optional(),
-        togetherTo: z.string().max(50).optional(),
+        /**
+         * The start of the relationship.
+         *
+         * It was any string of up to fifty characters — so "去年" was
+         * stored, and the card then said "together for 1 day" and "today
+         * is the anniversary!", both of them false.
+         *
+         * A month key ("2021-05") or a day key ("2021-05-20") is
+         * accepted; both are what the app asks for.
+         */
+        togetherFrom: z.string().max(50).refine(isRealStartKey, {
+          message: "Not a date.",
+        }).optional(),
+        togetherTo: z.string().max(50).refine(isRealStartKey, {
+          message: "Not a date.",
+        }).optional(),
         // Where the persona came from. "upload" is the default — the persona
         // is built from uploaded chat logs.
         source: z.enum(["upload", "questionnaire", "card", "sandbox"]).default("upload"),

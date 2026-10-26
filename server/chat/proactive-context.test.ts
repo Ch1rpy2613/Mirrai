@@ -10,11 +10,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  */
 const getUserById = vi.fn();
 const getLastMessageAt = vi.fn();
+const getLastUserMessageAt = vi.fn();
 const getRecentUserMood = vi.fn();
 
 vi.mock("../db", () => ({
   getUserById: (...a: unknown[]) => getUserById(...a),
   getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
+  getLastUserMessageAt: (...a: unknown[]) => getLastUserMessageAt(...a),
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
 }));
 
@@ -33,11 +35,12 @@ describe("the context behind a proactive message", () => {
     vi.clearAllMocks();
     getUserById.mockResolvedValue({ timezone: "Asia/Shanghai" });
     getLastMessageAt.mockResolvedValue(null);
+    getLastUserMessageAt.mockResolvedValue(null);
     getRecentUserMood.mockResolvedValue(null);
   });
 
   it("counts the days since the last conversation", async () => {
-    getLastMessageAt.mockResolvedValue(new Date("2026-05-30T12:00:00Z"));
+    getLastUserMessageAt.mockResolvedValue(new Date("2026-05-30T12:00:00Z"));
     const context = await collectProactiveContext({
       persona,
       userId: 1,
@@ -47,7 +50,7 @@ describe("the context behind a proactive message", () => {
   });
 
   it("counts zero when they have never spoken", async () => {
-    getLastMessageAt.mockResolvedValue(null);
+    getLastUserMessageAt.mockResolvedValue(null);
     const context = await collectProactiveContext({
       persona,
       userId: 1,
