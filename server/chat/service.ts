@@ -680,12 +680,42 @@ async function* runConversationTurn(
        * A half-answer is different: the client keeps that, and so does
        * the transcript.
        */
-      if (storedUserMessageId && !replyText) {
+      /**
+       * The half-answer is kept.
+       *
+       * The client keeps it — it says so, and it shows it on screen —
+       * but the transcript did not have it. So the next poll wiped it
+       * off the screen: the user pressed stop, saw their question and
+       * half an answer, and twenty seconds later both were gone.
+       *
+       * And the user's own message stays: they stopped the *answer*,
+       * not their own words.
+       */
+      if (replyText) {
+        const messageId = await db.createMessage({
+          personaId: persona.id,
+          userId,
+          role: "assistant",
+          content: replyText,
+          emotionalState: persona.emotionalState,
+          channel: options.channel ?? "web",
+        });
+        yield {
+          type: "done",
+          messageId,
+          emotionalState: persona.emotionalState,
+          graduationSuggested: false,
+          careNote: null,
+          crisis: false,
+        };
+        return;
+      }
+      if (storedUserMessageId) {
         await db
           .deleteMessage(storedUserMessageId, userId, persona.id)
           .catch(() => false);
       }
-      yield { type: "error", message: "aborted", partial: replyText.length > 0 };
+      yield { type: "error", message: "aborted", partial: false };
       return;
     }
     console.error("[Chat] LLM call failed:", e);

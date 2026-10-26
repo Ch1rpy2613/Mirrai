@@ -625,7 +625,27 @@ export default function Chat() {
         setMessages(prev => prev.map((m) => (m.id === streamId ? { ...m, isStreaming: false } : m)));
         toast.error(t("chat.interrupted", { message: (err as Error)?.message ?? "" }));
       } else {
-        setMessages(prev => prev.filter(m => m.id !== streamId));
+        /**
+         * The bubbles go, and the text goes back into the composer.
+         *
+         * The server did not store the message, so a bubble would be a
+         * claim that it was sent — and the next poll would take it away
+         * anyway, twenty seconds later, with no explanation.
+         */
+        setMessages(prev => prev.filter(m => m.id !== streamId && m.id !== userMsg.id));
+        /**
+         * The text goes back into the composer.
+         *
+         * The composer was emptied before the request — and the most
+         * common failure is the one the user hits by accident: the rate
+         * limit, "you are sending too fast". So the message was typed,
+         * sent, refused, and gone: the user had to write it again.
+         *
+         * The message itself is not put back as a bubble: the server
+         * did not store it, so a bubble would be a claim that the
+         * message was sent.
+         */
+        setInput(text);
         toast.error(t("chat.failed", { message: (err as Error)?.message ?? t("errors.unknown") }));
       }
     } finally {
