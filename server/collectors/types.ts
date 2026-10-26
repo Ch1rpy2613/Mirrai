@@ -746,10 +746,15 @@ const wechatExportConnector: SourceConnector = {
   tool: "feishu_parser.py",
   credentialKeys: [],
   args(input: CollectInput): string[] {
-    // No `--format json` here: `feishu_parser.py` is a generic export parser
-    // that does not implement the normalised exit, so the legacy transcript
-    // parsers stay the path for this source.
-    const argv: string[] = [];
+    /**
+     * The normalised JSON, not the Markdown report.
+     *
+     * The report is the only output the parser used to have — and the
+     * report writes the first hundred daily messages and drops the
+     * rest. So a WeChat export of five thousand short messages reached
+     * the server as a hundred, and nothing said the rest were gone.
+     */
+    const argv: string[] = ["--format", "json"];
     if (input.options?.file) argv.push("--file", input.options.file);
     if (input.target) argv.push("--target", input.target);
     return argv;

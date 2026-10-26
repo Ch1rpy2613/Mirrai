@@ -213,11 +213,43 @@ def format_output(target_name: str, extracted: dict) -> str:
     return "\n".join(lines)
 
 
+def to_normalised_json(messages: list[dict], source: str = "wechat_export") -> str:
+    """统一 JSON 输出，供服务端解析。
+
+    之前这个脚本只有 Markdown 报告一种输出，而报告里只写前 100 条
+    日常消息——所以一份五千条短消息的导出，服务端只拿到一百条，
+    而且没有任何地方说剩下的没了。
+
+    统一 JSON 把全部消息交出去，由服务端按上限截断，并且能说清楚
+    到底有多少条、是不是被截断了。
+    """
+    payload = {
+        "messages": [
+            {
+                "role": "assistant",
+                "content": msg.get("content", ""),
+                "timestamp": msg.get("timestamp") or None,
+                "source": source,
+            }
+            for msg in messages
+            if (msg.get("content") or "").strip()
+        ],
+        "meta": {"source": source, "total": len(messages)},
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def main():
     parser = argparse.ArgumentParser(description="解析飞书消息导出文件")
     parser.add_argument("--file", required=True, help="输入文件路径（.json 或 .txt）")
     parser.add_argument("--target", required=True, help="目标人物姓名（只提取此人发出的消息）")
     parser.add_argument("--output", default=None, help="输出文件路径（默认打印到 stdout）")
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="输出格式：text（默认，Markdown 报告）/ json（统一 JSON，供服务端解析）",
+    )
 
     args = parser.parse_args()
 
@@ -236,8 +268,11 @@ def main():
         print(f"警告：未找到 '{args.target}' 发出的消息", file=sys.stderr)
         print("提示：请检查目标姓名是否与文件中的发送人名称一致", file=sys.stderr)
 
-    extracted = extract_key_content(messages)
-    output = format_output(args.target, extracted)
+    if args.format == "json":
+        output = to_normalised_json(messages)
+    else:
+        extracted = extract_key_content(messages)
+        output = format_output(args.target, extracted)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
