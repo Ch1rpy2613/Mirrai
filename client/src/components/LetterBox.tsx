@@ -64,12 +64,17 @@ export default function LetterBox({ personaId }: { personaId: number }) {
          * was told "the letter is written. It will not be answered —
          * that is your choice." Which is true of the letter, and
          * nonsense of the note.
+         *
+         * And a persona that has said goodbye does not answer: the
+         * letter is kept, and the user is told that is why.
          */
         data.letter?.kind === "todo"
           ? t("letters.noteSaved")
-          : data.letter?.status === "waiting"
-            ? t("letters.delivered")
-            : t("letters.kept"),
+          : (data as any)?.asleep
+            ? t("letters.personaAsleep")
+            : data.letter?.status === "waiting"
+              ? t("letters.delivered")
+              : t("letters.kept"),
       );
     },
     onError: (e) => toast.error(e.message),

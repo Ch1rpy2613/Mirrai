@@ -47,10 +47,24 @@ export async function writeLetter(params: {
 }) {
   const now = params.now ?? new Date();
 
-  // A note for later is never delivered and never answered. It is a
-  // thing to say when the two of them are in touch again.
-  if (params.kind === "todo" || !params.deliver) {
-    return db.createLetter({
+  /**
+   * A persona that has said goodbye does not answer.
+   *
+   * The letter was accepted, delivered, and shown as "waiting for a
+   * reply" — and the reply never came, because the sweep defers the
+   * letter an hour at a time, for ever. The toast said "the letter is
+   * written and has been given to TA", which was true of the hand-over
+   * and false of the answer.
+   *
+   * So the letter is kept rather than delivered, and the caller is told
+   * why.
+   */
+  const presence = getEffectivePresence({
+    personaPresence: params.persona.presence,
+    graduationStatus: params.persona.graduationStatus,
+  });
+  if (params.kind !== "todo" && params.deliver && presence === "asleep") {
+    const letter = await db.createLetter({
       userId: params.userId,
       personaId: params.persona.id,
       body: params.body,
@@ -59,6 +73,24 @@ export async function writeLetter(params: {
       status: "private",
       replyAt: null,
     });
+    return { letter, asleep: true } as const;
+  }
+
+  // A note for later is never delivered and never answered. It is a
+  // thing to say when the two of them are in touch again.
+  if (params.kind === "todo" || !params.deliver) {
+    return {
+      letter: await db.createLetter({
+        userId: params.userId,
+        personaId: params.persona.id,
+        body: params.body,
+        kind: params.kind ?? "letter",
+        mood: params.mood ?? null,
+        status: "private",
+        replyAt: null,
+      }),
+      asleep: false,
+    } as const;
   }
 
   const replyAt = resolveReplyAt({ now });
@@ -94,7 +126,7 @@ export async function writeLetter(params: {
     },
   );
 
-  return letter;
+  return { letter, asleep: false } as const;
 }
 
 /**

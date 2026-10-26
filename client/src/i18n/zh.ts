@@ -1392,6 +1392,14 @@ export const zh = {
     moreCount: "还有 {{count}} 封更早的信没有显示。",
     loadOlder: "看更早的信",
     delivered: "信写好了，已经交给 TA。",
+    /**
+     * The letter to a persona that has said goodbye.
+     *
+     * The letter was handed over and the reply never came — the sweep
+     * deferred it an hour at a time, for ever — and the box said
+     * "waiting for a reply" all along.
+     */
+    personaAsleep: "TA 已经睡着了，这封信只写下来了，不会被回答。",
     statusPrivate: "只写下来了",
     statusWaiting: "等回信",
     reply: "TA 的回信",

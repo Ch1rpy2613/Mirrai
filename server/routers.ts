@@ -3725,7 +3725,7 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const letter = await writeLetter({
+        const { letter, asleep } = await writeLetter({
           persona,
           userId: ctx.user.id,
           body: input.body,
@@ -3734,7 +3734,7 @@ export const appRouter = router({
           kind: input.kind,
           locale: input.locale,
         });
-        return { success: true, letter };
+        return { success: true, letter, asleep };
       }),
 
     /** The notes the user kept for later. */

@@ -1398,6 +1398,7 @@ export const en = {
     moreCount: "{{count}} older letters are not shown.",
     loadOlder: "Show older letters",
     delivered: "The letter is written, and it has been handed over.",
+    personaAsleep: "They have gone to sleep, so this letter is kept and will not be answered.",
     statusPrivate: "Kept",
     statusWaiting: "Waiting for an answer",
     reply: "Their answer",
