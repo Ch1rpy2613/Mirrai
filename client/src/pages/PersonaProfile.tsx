@@ -31,7 +31,7 @@ export default function PersonaProfile() {
   const { isAuthenticated } = useAuth();
   const { t, locale } = useLocale();
 
-  const { data: persona, isLoading } = trpc.persona.get.useQuery(
+  const { data: persona, isLoading, isError, error } = trpc.persona.get.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && personaId > 0 },
   );
@@ -44,6 +44,22 @@ export default function PersonaProfile() {
     { enabled: isAuthenticated && personaId > 0 },
   );
 
+  // The spinner used to spin for ever.
+  //
+  // A persona that is gone — a stale link, a persona deleted on another
+  // device — made the query fail, `persona` stayed undefined and
+  // `isLoading` became false, so the page showed a loader with no way
+  // back and no explanation.
+  if (isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-foreground/80">{t("errors.notFound")}</p>
+          <p className="text-xs text-muted-foreground">{(error as any)?.message ?? ""}</p>
+        </div>
+      </div>
+    );
+  }
   if (isLoading || !persona) return <PageLoader />;
 
   const data = (persona.personaData as any) || {};

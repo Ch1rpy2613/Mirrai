@@ -201,6 +201,7 @@ export const en = {
     sceneMode: "Scene mode",
     moreActions: "More actions",
     clear: "Clear conversation",
+    clearConfirm: "Clear this conversation? Every message is deleted, and it cannot be undone.",
     cleared: "Conversation cleared",
     sceneActivated: "Scene activated",
     sceneDeactivated: "Left the scene",
@@ -1612,6 +1613,7 @@ export const en = {
   },
 
   errors: {
+    notFound: "This persona could not be found.",
     notFoundBody: "There is nothing at this address.",
     backHome: "Back to the lobby",
     boundaryTitle: "Something broke",

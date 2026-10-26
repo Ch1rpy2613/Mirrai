@@ -910,7 +910,9 @@ export default function Chat() {
                   </span>
                 )}
               </div>
-              <p className="app-nav-subtitle truncate">{persona?.relationshipDesc || "TA"}</p>
+              {/* "TA" is a Chinese internet abbreviation. The dictionary
+                  already has the right word for it. */}
+              <p className="app-nav-subtitle truncate">{persona?.relationshipDesc || t("common.them")}</p>
             </div>
           </div>
 
@@ -1002,7 +1004,13 @@ export default function Chat() {
                         <HeartCrack className="w-4 h-4 text-muted-foreground" />{t("graduation.manualMoment")}
                       </button>
                     )}
-                    <button onClick={() => clearMutation.mutate({ personaId })}
+                    {/* Clearing the conversation is a single click that
+                        deletes the whole transcript, for good. The page
+                        asks before it deletes a scene; this one did not. */}
+                    <button onClick={() => {
+                      if (!window.confirm(t("chat.clearConfirm"))) return;
+                      clearMutation.mutate({ personaId });
+                    }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors">
                       <Trash2 className="w-4 h-4" />{t("chat.clear")}
                     </button>
@@ -1384,6 +1392,14 @@ function SearchPanel({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The panel is closed by the unmount as often as by the button, and a
+  // timer that fires afterwards sets state on a component that is gone
+  // and starts a query for a panel that is not there.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const { data: results } = trpc.chat.search.useQuery(
     { personaId, query: debouncedQuery },
@@ -1518,12 +1534,12 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
                         onClick={() => updateMutation.mutate({ id: m.id, isPinned: !m.isPinned })}
                         aria-label={t("chat.memory.pin")}
                         title={m.isPinned ? t("chat.memory.unpin") : t("chat.memory.pin")}
-                        className={`md:opacity-0 md:group-hover:opacity-100 transition-all ${m.isPinned ? "text-cinnabar opacity-100" : "text-muted-foreground hover:text-foreground"}`}
+                        className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-all ${m.isPinned ? "text-cinnabar opacity-100" : "text-muted-foreground hover:text-foreground"}`}
                       >
                         <Pin className="w-3.5 h-3.5" />
                       </button>
                       <button onClick={() => deleteMutation.mutate({ id: m.id })} aria-label={t("chat.memory.delete")}
-                        className="md:opacity-0 md:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0">
+                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>

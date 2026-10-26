@@ -1613,20 +1613,27 @@ export default function Lobby() {
     [filteredPersonas],
   );
 
+  /* A persona the user can talk to without uploading anything. The first
+     thing the app asks for is somebody else's chat history, and that is
+     the step most people never get past.
+
+     These two hooks are above the early return on purpose: they used to
+     be below it, which is a rules-of-hooks violation — React would have
+     thrown "rendered fewer hooks than expected" the first time the
+     lobby re-rendered with `loading` true, which it does whenever the
+     logout request is in flight. */
+  const [sandboxPending, setSandboxPending] = useState(false);
+  const createSandbox = trpc.persona.createSandbox.useMutation({
+    onSuccess: (data) => { navigate(`/chat/${data.personaId}`); },
+    onError: (e: any) => { toast.error(e.message); setSandboxPending(false); },
+  });
+
   if (loading) {
     return <PageLoader />;
   }
 
   const hasPersonas = personas && personas.length > 0;
 
-  /* A persona the user can talk to without uploading anything. The first
-     thing the app asks for is somebody else's chat history, and that is
-     the step most people never get past. */
-  const [sandboxPending, setSandboxPending] = useState(false);
-  const createSandbox = trpc.persona.createSandbox.useMutation({
-    onSuccess: (data) => { navigate(`/chat/${data.personaId}`); },
-    onError: (e: any) => { toast.error(e.message); setSandboxPending(false); },
-  });
   const handleTryIt = () => {
     if (sandboxPending) return;
     setSandboxPending(true);

@@ -199,6 +199,7 @@ export const zh = {
     sceneMode: "场景模式",
     moreActions: "更多操作",
     clear: "清空对话",
+    clearConfirm: "清空这段对话？所有消息都会被删掉，救不回来。",
     cleared: "对话已清空",
     sceneActivated: "场景已激活",
     sceneDeactivated: "已退出场景",
@@ -1604,6 +1605,7 @@ export const zh = {
   },
 
   errors: {
+    notFound: "这里没有找到这个分身。",
     notFoundBody: "这个地址没有对应的页面。",
     backHome: "回到大厅",
     boundaryTitle: "出了点问题",
