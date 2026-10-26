@@ -20,22 +20,65 @@ import { mayReachOut } from "@shared/graduation-mode";
 import { copy, detectLocale, type Locale } from "@shared/copy";
 import { CHANNEL_COMMANDS } from "@shared/copy/channels";
 
-/** Session-scoped persona override, keyed by conversation id. */
+/**
+ * Session-scoped persona overrides.
+ *
+ * Keyed by the user as well as the conversation. They were keyed by the
+ * conversation alone, and the conversation id is the counterpart's id on
+ * the channel — so two users whose ids collided shared an override.
+ * The downstream ownership check stops the data leak, but the state was
+ * still one user's.
+ *
+ * The map is also bounded: an entry was added for every conversation
+ * that ever used the command, and it was only ever removed by the
+ * command that set it, so it grew for the life of the process.
+ */
 const activePersonaOverrides = new Map<string, number>();
 
+/** How many overrides are kept. */
+const MAX_ACTIVE_OVERRIDES = 500;
+
+/** The key an override is held under. */
+function overrideKey(userId: number, conversationKey: string): string {
+  return `${userId}:${conversationKey}`;
+}
+
 /** Returns the persona id currently in effect for a conversation. */
-export function getActivePersonaId(conversationKey: string, defaultPersonaId: number): number {
-  return activePersonaOverrides.get(conversationKey) ?? defaultPersonaId;
+export function getActivePersonaId(
+  conversationKey: string,
+  defaultPersonaId: number,
+  userId?: number,
+): number {
+  if (userId === undefined) {
+    // A caller that does not know whose conversation it is.
+    for (const [key, value] of activePersonaOverrides) {
+      if (key.endsWith(`:${conversationKey}`)) return value;
+    }
+    return defaultPersonaId;
+  }
+  return activePersonaOverrides.get(overrideKey(userId, conversationKey)) ?? defaultPersonaId;
 }
 
 /** Clears any session-scoped override for a conversation. */
-export function clearActivePersona(conversationKey: string): void {
-  activePersonaOverrides.delete(conversationKey);
+export function clearActivePersona(conversationKey: string, userId?: number): void {
+  if (userId === undefined) {
+    for (const key of Array.from(activePersonaOverrides.keys())) {
+      if (key.endsWith(`:${conversationKey}`)) activePersonaOverrides.delete(key);
+    }
+    return;
+  }
+  activePersonaOverrides.delete(overrideKey(userId, conversationKey));
 }
 
 /** Clears every session-scoped override (used on account disconnect). */
-export function clearAllActivePersonas(): void {
-  activePersonaOverrides.clear();
+export function clearAllActivePersonas(userId?: number): void {
+  if (userId === undefined) {
+    activePersonaOverrides.clear();
+    return;
+  }
+  for (const key of Array.from(activePersonaOverrides.keys())) {
+    if (key.startsWith(`${userId}:`)) activePersonaOverrides.delete(key);
+  }
 }
 
 export type CommandResult = {
@@ -163,7 +206,15 @@ export async function handleCommand(params: {
         };
       }
 
-      activePersonaOverrides.set(params.conversationKey, match.persona.id);
+      const key = overrideKey(params.userId, params.conversationKey);
+      // The oldest entry is let go when the map is full: an override
+      // that has not been touched in a long time is not worth keeping
+      // for ever.
+      if (activePersonaOverrides.size >= MAX_ACTIVE_OVERRIDES && !activePersonaOverrides.has(key)) {
+        const oldest = activePersonaOverrides.keys().next();
+        if (!oldest.done) activePersonaOverrides.delete(oldest.value);
+      }
+      activePersonaOverrides.set(key, match.persona.id);
       return { handled: true, reply: copy(locale, "channels.switchedPersona", { name: match.persona.name }) };
     }
 
@@ -173,7 +224,7 @@ export async function handleCommand(params: {
       if (all.length === 0) {
         return { handled: true, reply: copy(locale, "channels.noPersonas") };
       }
-      const activeId = getActivePersonaId(params.conversationKey, params.defaultPersonaId);
+      const activeId = getActivePersonaId(params.conversationKey, params.defaultPersonaId, params.userId);
       const lines = all.map((p) => {
         const marker = p.id === activeId ? copy(locale, "channels.personaListCurrent") : "";
         const ready = p.analysisStatus === "ready" ? "" : copy(locale, "channels.personaListAnalysing");
@@ -185,7 +236,7 @@ export async function handleCommand(params: {
     case CHANNEL_COMMANDS.current.zh:
     case CHANNEL_COMMANDS.current.en: {
       const all = await getPersonasByUserId(params.userId);
-      const activeId = getActivePersonaId(params.conversationKey, params.defaultPersonaId);
+      const activeId = getActivePersonaId(params.conversationKey, params.defaultPersonaId, params.userId);
       const persona = all.find((p) => p.id === activeId);
       return {
         handled: true,
@@ -225,7 +276,7 @@ async function handleGraduationCommand(
   },
   locale: Locale,
 ): Promise<CommandResult> {
-  const personaId = getActivePersonaId(params.conversationKey, params.defaultPersonaId);
+  const personaId = getActivePersonaId(params.conversationKey, params.defaultPersonaId, params.userId);
   const all = await getPersonasByUserId(params.userId);
   const persona = all.find((p) => p.id === personaId);
   if (!persona) {

@@ -88,6 +88,24 @@ export function extractMessageText(message: {
  *
  * Exported so the behaviour can be tested without a live Feishu connection.
  */
+/**
+ * The conversations that are running, per chat.
+ *
+ * A message started a conversation and returned immediately, so a burst
+ * of messages — or a bot echoing itself back — started an unbounded
+ * number of conversations at once. Each one is a model call that writes
+ * to the same persona, so the replies interleaved and the bill grew
+ * without limit.
+ *
+ * One conversation per chat at a time: the next message waits for the
+ * one before it, and the order the user wrote them in is the order they
+ * are answered in.
+ */
+const conversationChains = new Map<string, Promise<unknown>>();
+
+/** How many conversations may run at once across all chats of a user. */
+const MAX_CONCURRENT_CONVERSATIONS = 4;
+
 export async function handleFeishuEvent(params: {
   userId: number;
   event: {
@@ -230,11 +248,26 @@ export class FeishuAdapter implements ChannelAdapter {
         // Feishu expects a reply within three seconds. The conversation takes
         // far longer than that, so it is started in the background and the
         // callback returns immediately.
-        void handleFeishuEvent({
-          userId,
-          event: data?.event ?? {},
-          sendText,
-        }).catch((e) => console.error("[Feishu] Failed to handle event:", e));
+        const chatId = data?.event?.chat_id;
+        const previous = chatId ? conversationChains.get(chatId) : undefined;
+        const run = (async () => {
+          // The previous message in this chat is answered first.
+          if (previous) await previous.catch(() => undefined);
+          await handleFeishuEvent({
+            userId,
+            event: data?.event ?? {},
+            sendText,
+          });
+        })().catch((e) => console.error("[Feishu] Failed to handle event:", e));
+
+        if (chatId) {
+          conversationChains.set(chatId, run);
+          // The chain is let go of once it has settled, so the map does
+          // not grow for the life of the process.
+          void run.finally(() => {
+            if (conversationChains.get(chatId) === run) conversationChains.delete(chatId);
+          });
+        }
       },
     });
 
