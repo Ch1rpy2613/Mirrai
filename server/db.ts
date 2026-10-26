@@ -189,6 +189,15 @@ export async function getProactivePersonas() {
     userId: personas.userId,
     name: personas.name,
     lastChatAt: personas.lastChatAt,
+    /**
+     * When the user last spoke.
+     *
+     * The proactive sweep measures the *user's* silence — and it used
+     * to measure it from the last thing of any kind, which the app's
+     * own nightly message reset. So a persona could never reach out to
+     * a user who had gone quiet.
+     */
+    lastUserMessageAt: personas.lastUserMessageAt,
     presence: personas.presence,
     graduationStatus: personas.graduationStatus,
     proactiveFrequencyHours: personas.proactiveFrequencyHours,
@@ -235,6 +244,19 @@ export async function createLetterWithMessage(
       channel: message.channel ?? "web",
       origin: message.origin ?? "letter",
     });
+    /**
+     * A letter is the user speaking.
+     *
+     * So the moment the user last spoke moves — it used not to, and
+     * the counter said the user had gone quiet on a day they had
+     * written a letter.
+     */
+    await tx.update(personas)
+      .set({ lastUserMessageAt: new Date() })
+      .where(and(
+        eq(personas.id, message.personaId),
+        eq(personas.userId, message.userId),
+      ));
     return row;
   });
 }

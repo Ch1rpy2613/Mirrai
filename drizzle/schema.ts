@@ -111,6 +111,17 @@ export const personas = pgTable("personas", {
   emotionalState: emotionalStateEnum().default("warm").notNull(),
   chatCount: integer("chatCount").default(0).notNull(),
   lastChatAt: timestamp("lastChatAt"),
+  /**
+   * When the *user* last spoke to this persona.
+   *
+   * The same field was used for two different things: "the last time
+   * anything was written" and "the last time the user spoke". The
+   * app's own nightly message reset the second one — so "you have not
+   * spoken for N days" read 0 while the user had not spoken for a
+   * week, and the persona never reached out to a user who had gone
+   * quiet.
+   */
+  lastUserMessageAt: timestamp("lastUserMessageAt"),
   skillJobId: integer("skillJobId"),
   llmProvider: varchar("llmProvider", { length: 64 }),
   intimacyScore: integer("intimacyScore").default(0).notNull(),

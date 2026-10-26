@@ -989,6 +989,16 @@ async function* runConversationTurn(
      * from the wrong moment.
      */
     lastChatAt: now,
+    /**
+     * The moment the user spoke.
+     *
+     * It is its own column because "the last time anything was
+     * written" and "the last time the *user* spoke" are two different
+     * questions — and the app's own nightly message answered the second
+     * one too. So "you have not spoken for N days" read 0 while the
+     * user had not spoken for a week.
+     */
+    lastUserMessageAt: now,
     emotionalState: newEmotionalState as any,
   });
 

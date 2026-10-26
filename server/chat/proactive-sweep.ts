@@ -112,7 +112,18 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
       );
       if (!isProactiveDue({
         frequencyHours: row.proactiveFrequencyHours,
-        lastChatAt: row.lastChatAt,
+        /**
+         * The user's silence, not the app's.
+         *
+         * The sweep measured it from the last thing of any kind — and
+         * the app's own nightly message reset it. So the persona could
+         * never reach out to a user who had gone quiet: every night it
+         * wrote, and every morning the clock started again.
+         *
+         * The old column is the fallback, for the personas that have
+         * not been spoken to since the column was added.
+         */
+        lastChatAt: row.lastUserMessageAt ?? row.lastChatAt,
         presence,
         now,
         // The persona's own timing, when it has been measured. Without

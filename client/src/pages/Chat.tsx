@@ -315,8 +315,15 @@ export default function Chat() {
   /* How long since you last spoke. A number, because that is what the
      question is: "how long has it been". */
   const daysSinceTalk = useMemo(
-    () => daysSinceContact((persona as any)?.lastChatAt),
-    [(persona as any)?.lastChatAt],
+    /**
+     * The days since the *user* spoke.
+     *
+     * It used to read the last time anything was written — and the
+     * app's own nightly message reset it, so the counter read 0 while
+     * the user had not spoken for a week.
+     */
+    () => daysSinceContact((persona as any)?.lastUserMessageAt ?? (persona as any)?.lastChatAt),
+    [(persona as any)?.lastUserMessageAt, (persona as any)?.lastChatAt],
   );
 
   const { data: intimacy } = trpc.persona.getIntimacy.useQuery(

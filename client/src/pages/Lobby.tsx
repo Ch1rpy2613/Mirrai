@@ -1027,7 +1027,15 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
       ? getDaysUntilAnniversary(persona.togetherFrom)
       : null;
   const catchphrases: string[] = pd.catchphrases || [];
-  const missLevel = getMissYouLevel(persona.lastChatAt);
+  /**
+   * The "missing you" badge.
+   *
+   * It used to read the last time *anything* was written — so a
+   * persona that messages the user every night made the badge say the
+   * user had been gone for zero days, and the badge could never
+   * appear. It reads the moment the *user* spoke now.
+   */
+  const missLevel = getMissYouLevel(persona.lastUserMessageAt ?? persona.lastChatAt);
   const compatibility = isReady ? getCompatibilityScore(persona) : null;
 
   const [showLetter, setShowLetter] = useState(false);
