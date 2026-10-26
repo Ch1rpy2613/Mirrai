@@ -851,6 +851,15 @@ export async function runCelebrityResearch(
   );
 
   const notes: string[] = [];
+  /**
+   * The tracks that produced something.
+   *
+   * A track that failed wrote a file with its heading and nothing else
+   * — so the run carried on with six empty notes, and the quality gate
+   * passed on them. The count is what tells an empty research from a
+   * real one.
+   */
+  let tracksWithContent = 0;
   for (const dimension of researchDimensions(locale)) {
     const userContent = [
       copy(locale, "skillPrompts.research.personName", { name: input.name }),
@@ -874,6 +883,7 @@ export async function runCelebrityResearch(
       });
       const normalized = ensureResearchSections(normalizeResearchNote(note, locale), locale);
       writeFile(path.join(rawDir, dimension.file), `${normalized.trim()}\n`);
+      if (normalized.trim().length > 40) tracksWithContent += 1;
       notes.push(normalized);
     } catch (e) {
       console.warn(`[SkillEngine] Research track ${dimension.track} failed:`, e);
@@ -1110,9 +1120,26 @@ export async function runCelebrityResearch(
     .join("\n")
     .trim();
 
+  /**
+   * The status.
+   *
+   * It was "complete" when nothing had failed — and a track that failed
+   * was written to the errors ✓, so that was honest ✓. But a track that
+   * *answered* with nothing at all was not a failure ✗: six empty notes
+   * were a complete run, and the quality gate passed on them.
+   *
+   * So a research with nothing in it has failed.
+   */
+  const status: "complete" | "partial" | "failed" =
+    tracksWithContent === 0
+      ? "failed"
+      : errors.length === 0
+        ? "complete"
+        : "partial";
+
   return {
     profile: input.profile,
-    status: errors.length === 0 ? "complete" : "partial",
+    status,
     digest,
     audit,
     synthesis,
