@@ -1601,8 +1601,45 @@ export default function Chat() {
               </Button>
             </div>
           ) : (
+            /**
+             * The notices are a row of their own.
+             *
+             * The "replying to…" strip and the "it is the middle of the
+             * night where they are" notice were flex siblings of the
+             * textarea — so they took their content width out of the
+             * row, and the textarea was squeezed to a few characters.
+             * On a 375-pixel phone the input was two or three characters
+             * wide, exactly at the hours when a partner abroad is
+             * asleep — which is a normal evening for the user.
+             */
+            <div className="space-y-1.5 mb-1.5">
+              {/* The message being replied to. */}
+              {replyTo && (
+                <div className="flex items-center gap-2 rounded-md border-l-2 border-primary/40 bg-muted/40 px-2.5 py-1.5">
+                  <CornerUpLeft className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground line-clamp-1 flex-1 min-w-0">
+                    {replyTo.content}
+                  </span>
+                  <button
+                    onClick={() => setReplyTo(null)}
+                    aria-label={t("common.cancel")}
+                    className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {/* It is the middle of the night where they are. Saying so
+                  is the whole difference between a message that lands and
+                  one that does not. */}
+              {theyAreAsleep && (
+                <p className="text-[0.625rem] text-muted-subtle flex items-center gap-1">
+                  <Moon className="w-3 h-3" /> {t("chat.theyAreAsleep")}
+                </p>
+              )}
+            </div>
             <div className="flex gap-2 items-end">
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <button onClick={() => setShowAttach(!showAttach)} aria-label={t("chat.attach")}
                   className={`h-11 w-11 flex items-center justify-center rounded-md border transition-colors ${showAttach ? "text-foreground bg-muted border-border" : "text-muted-foreground hover:text-foreground hover:bg-muted border-transparent"}`}>
                   <Plus className={`w-5 h-5 transition-transform ${showAttach ? "rotate-45" : ""}`} />
@@ -1625,30 +1662,6 @@ export default function Chat() {
                   </>
                 )}
               </div>
-              {/* The message being replied to. */}
-              {replyTo && (
-                <div className="mb-1.5 flex items-center gap-2 rounded-md border-l-2 border-primary/40 bg-muted/40 px-2.5 py-1.5">
-                  <CornerUpLeft className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <span className="text-xs text-muted-foreground line-clamp-1 flex-1">
-                    {replyTo.content}
-                  </span>
-                  <button
-                    onClick={() => setReplyTo(null)}
-                    aria-label={t("common.cancel")}
-                    className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-              {/* It is the middle of the night where they are. Saying so
-                  is the whole difference between a message that lands and
-                  one that does not. */}
-              {theyAreAsleep && (
-                <p className="text-[0.625rem] text-muted-subtle flex items-center gap-1 mb-1.5">
-                  <Moon className="w-3 h-3" /> {t("chat.theyAreAsleep")}
-                </p>
-              )}
               {/**
                * The composer is named.
                *
@@ -1658,7 +1671,7 @@ export default function Chat() {
               <Label className="sr-only" htmlFor="chat-composer">{t("chat.placeholder", { name: persona?.name || t("common.them") })}</Label>
               <Textarea id="chat-composer" ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown} placeholder={t("chat.placeholder", { name: persona?.name || t("common.them") })}
-                rows={1} className="flex-1 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-foreground/50 rounded-md min-h-[44px] max-h-32 px-4 py-3" />
+                rows={1} className="flex-1 min-w-0 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-foreground/50 rounded-md min-h-[44px] max-h-32 px-4 py-3" />
               {isSending ? (
                 <Button onClick={handleStopStreaming} aria-label={t("chat.stop")}
                   className="h-11 w-11 p-0 rounded-md flex-shrink-0">
