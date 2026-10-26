@@ -819,6 +819,39 @@ export async function getFileSummariesByPersonaId(
 }
 
 /**
+ * The photos of a persona, and the date each of them was taken.
+ *
+ * The sweep runs once a minute, and it used to read every uploaded file
+ * in full — the extracted text is up to half a megabyte each — only to
+ * look for a date. So the whole table was read every minute, for ever,
+ * and the answer was thrown away.
+ *
+ * The date is now found by the database, and only the columns that are
+ * used come back.
+ */
+export async function getPhotoReminderCandidates(
+  personaId: number,
+  userId: number,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: personaFiles.id,
+    originalName: personaFiles.originalName,
+    createdAt: personaFiles.createdAt,
+    // The first date in the extracted text, if there is one.
+    dateHint: sql<string | null>`substring(${personaFiles.extractedMemory} from '[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}-[0-9]{2}')`,
+  })
+    .from(personaFiles)
+    .where(and(
+      eq(personaFiles.personaId, personaId),
+      eq(personaFiles.userId, userId),
+      eq(personaFiles.fileType, "image"),
+    ))
+    .orderBy(desc(personaFiles.createdAt));
+}
+
+/**
  * The titles of the files whose summaries were recalled.
  *
  * A file summary carries a negative id — it lives in another table, and

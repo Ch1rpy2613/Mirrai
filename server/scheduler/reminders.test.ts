@@ -8,7 +8,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const getAllPersonasForReminders = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
-const getFilesByPersonaId = vi.fn();
+const getPhotoReminderCandidates = vi.fn();
 const getChannelBindingsByUserId = vi.fn();
 const hasReminderDelivery = vi.fn();
 const recordReminder = vi.fn();
@@ -22,7 +22,7 @@ vi.mock("../db", () => ({
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getAllPersonasForReminders: (...a: unknown[]) => getAllPersonasForReminders(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
-  getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
+  getPhotoReminderCandidates: (...a: unknown[]) => getPhotoReminderCandidates(...a),
   getChannelBindingsByUserId: (...a: unknown[]) => getChannelBindingsByUserId(...a),
   hasReminderDelivery: (...a: unknown[]) => hasReminderDelivery(...a),
   recordReminder: (...a: unknown[]) => recordReminder(...a),
@@ -203,7 +203,7 @@ describe("collectReminders", () => {
         {
           id: 7,
           originalName: "sea.png",
-          extractedMemory: "2019-05-20 在海边",
+          dateHint: "2019-05-20",
           createdAt: new Date(2019, 4, 20),
         },
       ],
@@ -222,7 +222,7 @@ describe("collectReminders", () => {
         {
           id: 8,
           originalName: "sea.png",
-          extractedMemory: "2019-06-01 在海边",
+          dateHint: "2019-06-01",
           createdAt: new Date(2019, 5, 1),
         },
       ],
@@ -234,7 +234,7 @@ describe("collectReminders", () => {
 
 describe("extractPhotoDate", () => {
   it("reads a date out of the extracted text", () => {
-    expect(extractPhotoDate("2019-05-20 在海边", new Date(2020, 0, 1))).toBe(
+    expect(extractPhotoDate("2019-05-20", new Date(2020, 0, 1))).toBe(
       "2019-05-20",
     );
   });
@@ -255,7 +255,7 @@ describe("deliverReminder", () => {
     for (const fn of [
       getAllPersonasForReminders,
       getMemoriesByPersonaId,
-      getFilesByPersonaId,
+      getPhotoReminderCandidates,
       getChannelBindingsByUserId,
       hasReminderDelivery,
       recordReminder,
@@ -342,7 +342,7 @@ describe("runReminderSweep", () => {
     for (const fn of [
       getAllPersonasForReminders,
       getMemoriesByPersonaId,
-      getFilesByPersonaId,
+      getPhotoReminderCandidates,
       getChannelBindingsByUserId,
       hasReminderDelivery,
       recordReminder,
@@ -356,7 +356,7 @@ describe("runReminderSweep", () => {
     getChannelAdapter.mockReturnValue({ send });
     getUserLocale.mockResolvedValue("zh");
     getMemoriesByPersonaId.mockResolvedValue([]);
-    getFilesByPersonaId.mockResolvedValue([]);
+    getPhotoReminderCandidates.mockResolvedValue([]);
     getAllPersonasForReminders.mockResolvedValue([persona()]);
   });
 

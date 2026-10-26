@@ -95,7 +95,14 @@ export function collectReminders(params: {
   };
   anniversaries: Array<{ id: number; title: string; date: string | null }>;
   /** Photos the user shared, each with whatever was extracted from it. */
-  photos?: Array<{ id: number; originalName: string; extractedMemory: string | null; createdAt: Date }>;
+  /**
+   * The photos.
+   *
+   * The date the photo was taken is passed in rather than the whole
+   * extracted text: the sweep runs once a minute, and the extracted
+   * text is up to half a megabyte per file.
+   */
+  photos?: Array<{ id: number; originalName: string; dateHint?: string | null; createdAt: Date }>;
   /**
    * The language the reminder is written in.
    *
@@ -205,7 +212,7 @@ export function collectReminders(params: {
   // round again, the persona has something to say about it.
   for (const photo of params.photos ?? []) {
     const label = photo.originalName?.trim() || copy(locale, "reminders.photoFallbackLabel");
-    const date = extractPhotoDate(photo.extractedMemory, photo.createdAt);
+    const date = extractPhotoDate(photo.dateHint, photo.createdAt);
     if (!date) continue;
 
     const matches =
@@ -236,11 +243,11 @@ export function collectReminders(params: {
  * not, the upload date is the best guess available.
  */
 export function extractPhotoDate(
-  extractedMemory: string | null | undefined,
+  dateHint: string | null | undefined,
   createdAt: Date,
 ): string | null {
-  if (extractedMemory) {
-    const match = extractedMemory.match(/\d{4}-\d{2}-\d{2}|\d{2}-\d{2}/);
+  if (dateHint) {
+    const match = dateHint.match(/\d{4}-\d{2}-\d{2}|\d{2}-\d{2}/);
     if (match) return match[0];
   }
   if (!(createdAt instanceof Date) || Number.isNaN(createdAt.getTime())) return null;
@@ -345,8 +352,25 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
   try {
     const personas = await db.getAllPersonasForReminders();
     for (const persona of personas) {
+      /**
+       * One persona at a time.
+       *
+       * The try/catch used to wrap the whole loop, so one bad persona
+       * meant the rest were skipped for that tick — and since the
+       * anniversary is only ever delivered on its own day, their
+       * anniversary was silently missed for the year.
+       */
+      try {
       const anniversaries = await db.getMemoriesByPersonaId(persona.id, persona.userId);
-      const files = await db.getFilesByPersonaId(persona.id, persona.userId);
+      /**
+       * The photos.
+       *
+       * Only the columns that are used, and only the photos. The whole
+       * file table used to be read — with the extracted text, up to
+       * half a megabyte each — once a minute, for ever, to look for a
+       * date.
+       */
+      const files = await db.getPhotoReminderCandidates(persona.id, persona.userId);
       const locale = await db.getUserLocale(persona.userId);
       /**
        * The *reader's* clock.
@@ -379,36 +403,40 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
         anniversaries: anniversaries
           .filter((m) => m.category === "anniversary")
           .map((m) => ({ id: m.id, title: m.title, date: m.date })),
-        photos: files
-          .filter((f) => f.fileType === "image")
-          .map((f) => ({
-            id: f.id,
-            originalName: f.originalName,
-            extractedMemory: f.extractedMemory,
-            createdAt: f.createdAt,
-          })),
+        photos: files.map((f) => ({
+          id: f.id,
+          originalName: f.originalName,
+          dateHint: f.dateHint,
+          createdAt: f.createdAt,
+        })),
         now,
       });
 
-      for (const reminder of reminders) {
-        const bindings = await db.getChannelBindingsByUserId(persona.userId);
-        // A reminder about 小A should not be pushed into the conversation
-        // that is set up for 小B. Prefer the binding for this persona; fall
-        // back to the web card rather than to the wrong conversation.
-        const binding =
-          bindings.find((b) => b.isActive && b.personaId === reminder.personaId) ??
-          null;
+        for (const reminder of reminders) {
+          const bindings = await db.getChannelBindingsByUserId(persona.userId);
+          // A reminder about 小A should not be pushed into the conversation
+          // that is set up for 小B. Prefer the binding for this persona; fall
+          // back to the web card rather than to the wrong conversation.
+          const binding =
+            bindings.find((b) => b.isActive && b.personaId === reminder.personaId) ??
+            null;
 
-        const sent = await deliverReminder({
-          userId: persona.userId,
-          reminder,
-          channel: binding?.channel ?? null,
-          targetId: binding?.targetId ?? null,
-          locale,
-          timezone,
-          now,
-        });
-        if (sent) delivered++;
+          const sent = await deliverReminder({
+            userId: persona.userId,
+            reminder,
+            channel: binding?.channel ?? null,
+            targetId: binding?.targetId ?? null,
+            locale,
+            timezone,
+            now,
+          });
+          if (sent) delivered++;
+        }
+      } catch (e) {
+        console.warn(
+          `[Reminders] Persona ${persona.id} failed:`,
+          (e as Error)?.message ?? e,
+        );
       }
     }
   } catch (e) {
