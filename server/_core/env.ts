@@ -1,4 +1,4 @@
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -110,6 +110,40 @@ function resolveSkillEngineDir(): string {
   return fromCwd;
 }
 
+/**
+ * The version the app reports itself as.
+ *
+ * It used to be written out by hand — "1.0.0" — while `package.json`
+ * said "1.3.0" and the installer said "1.3.0". So the WeChat channel
+ * told Tencent "Mirrai/1.0.0" on every release, and the two desktop
+ * builds disagreed about which release they were.
+ *
+ * The package file is the one place the version is written down, so
+ * it is read from there. The environment still wins, so an operator
+ * can say otherwise.
+ */
+function resolveAppVersion(): string {
+  const configured = process.env.APP_VERSION?.trim();
+  if (configured) return configured;
+
+  // dist/index.js -> the package root is one level up; the source is
+  // two.
+  const candidates = [
+    path.resolve(fileURLToPath(import.meta.url), "..", "..", "package.json"),
+    path.resolve(fileURLToPath(import.meta.url), "..", "..", "..", "package.json"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (!existsSync(candidate)) continue;
+      const parsed = JSON.parse(readFileSync(candidate, "utf-8")) as { version?: string };
+      if (parsed.version) return parsed.version;
+    } catch {
+      // The next candidate.
+    }
+  }
+  return "0.0.0";
+}
+
 export const ENV = {
   cookieSecret: resolveJwtSecret(),
   databaseUrl: resolveDatabaseUrl(),
@@ -175,7 +209,7 @@ export const ENV = {
   wechatRouteTag: process.env.WECHAT_ROUTE_TAG ?? "",
 
   /** Application version, reported to the iLink backend as channel_version. */
-  appVersion: process.env.APP_VERSION ?? "1.0.0",
+  appVersion: resolveAppVersion(),
 
   pythonPath: process.env.PYTHON_PATH ?? "python3",
   skillEngineDir: resolveSkillEngineDir(),

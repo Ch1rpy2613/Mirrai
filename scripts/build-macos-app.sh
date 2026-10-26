@@ -272,6 +272,21 @@ tar -cf - -C "$PROJECT_DIR" \
 log "Writing Info.plist..."
 cp "$SCRIPT_DIR/macos/Info.plist" "$CONTENTS/Info.plist"
 
+# The version comes from the package file — the one place it is written
+# down.
+#
+# The plist carried its own copy, and it was a different one: the
+# bundle said "1.0.0" while the package file said "1.3.0" and the
+# installer said "1.3.0". So the two desktop builds disagreed about
+# which release they were.
+APP_VERSION_NUM="$("$RESOURCES/node/bin/node" -p "require('$PROJECT_DIR/package.json').version" 2>/dev/null || echo "")"
+if [ -n "$APP_VERSION_NUM" ]; then
+  # The two version keys: the one the shop shows and the one the
+  # system compares builds by.
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION_NUM" "$CONTENTS/Info.plist" 2>/dev/null || true
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_VERSION_NUM" "$CONTENTS/Info.plist" 2>/dev/null || true
+fi
+
 # ─── Step 6: Launcher + start script ─────────────────────────────────────────
 log "Writing launcher and start scripts..."
 cp "$SCRIPT_DIR/macos/launcher.sh" "$CONTENTS/MacOS/Mirrai"

@@ -16,10 +16,11 @@
     <string>Mirrai</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <!-- The build writes the version from package.json over these two. -->
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>0.0.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>0.0.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
