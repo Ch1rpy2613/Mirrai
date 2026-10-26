@@ -792,7 +792,24 @@ function PersonaConstellation({ personas, onChat }: { personas: any[]; onChat: (
         <circle cx={cx} cy={cy} r="8" fill="var(--color-foreground)" opacity="0.12" />
         <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize="8" fill="var(--color-foreground)" fontWeight="600">{t("lobby.constellation.me")}</text>
         {nodes.map((n) => (
-          <g key={n.id} onClick={() => onChat(n.id)} className="cursor-pointer">
+          /**
+           * The node is reachable by keyboard.
+           *
+           * It used to be a `<g>` with a click handler: no role, no
+           * tab stop, and no way to reach a persona with a keyboard.
+           */
+          <g key={n.id}
+            onClick={() => onChat(n.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onChat(n.id);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label={n.name}
+            className="cursor-pointer focus-visible:outline-none focus-visible:[&>circle]:stroke-[3]">
             <line x1={cx} y1={cy} x2={n.x} y2={n.y}
               stroke={emotionColor(n.emotionalState)} strokeWidth="1.5" opacity="0.3" />
             <circle cx={n.x} cy={n.y} r="16" fill="var(--color-card)" stroke={emotionColor(n.emotionalState)} strokeWidth="2" opacity="0.9" />
