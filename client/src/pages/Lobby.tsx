@@ -453,7 +453,13 @@ function RemindersPanel({ personas }: { personas: any[] }) {
             <button
               type="button"
               onClick={() => dismiss.mutate({ id: reminder.id })}
-              className="text-[11px] text-muted-foreground hover:text-foreground shrink-0"
+              /**
+               * The button is put out of reach while the dismissal is
+               * running — so a double click does not send two, and the
+               * second does not fail after the first reported success.
+               */
+              disabled={dismiss.isPending}
+              className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 disabled:opacity-50"
             >
               {t("reminders.dismiss")}
             </button>
@@ -1893,7 +1899,12 @@ export default function Lobby() {
                   </span>
                   <div className="app-nav-spacer" />
                   <Button size="sm" variant="outline" className="text-xs h-7 px-3 bg-transparent"
-                    disabled={selected.length === 0}
+                    /**
+                     * The button is put out of reach while the writes
+                     * are running — so a second click does not fire
+                     * every one of them again.
+                     */
+                    disabled={selected.length === 0 || updateMutation.isPending}
                     onClick={() => {
                       selected.forEach(id => updateMutation.mutate({ id, isPinned: true }));
                       setSelected([]);
