@@ -257,7 +257,15 @@ export async function saveCollectionSource(params: {
       .set({
         label: params.label ?? null,
         authState,
-        config,
+        /**
+         * The credentials that are already stored are kept.
+         *
+         * The config was written unconditionally, so a call without
+         * credentials — which happens whenever the credential set
+         * resolves to empty — silently deleted them and the user had to
+         * authorise the source again with no explanation.
+         */
+        config: config ?? existing[0].config,
         status: params.status ?? existing[0].status,
         lastSyncedAt: new Date(),
       })
