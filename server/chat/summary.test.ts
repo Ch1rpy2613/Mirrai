@@ -261,7 +261,10 @@ describe("composeMessages — history compaction", () => {
     expect(String(messages[0].content)).toContain("上次已经聊到他们最近常聊旅行计划。");
   });
 
-  it("summarises again once ten messages have arrived since the last summary", async () => {
+  it("summarises again once ten messages have fallen out of the window", async () => {
+    // The window holds the newest nineteen messages, so the eleven
+    // oldest have fallen out of it. The previous summary covered only
+    // the first of them — so ten are new to it.
     getMessagesByPersonaId.mockResolvedValue(history(30));
     getLatestChatSummary.mockResolvedValue({
       id: 1,
@@ -269,7 +272,7 @@ describe("composeMessages — history compaction", () => {
       userId: 1,
       summary: "上次已经聊到他们最近常聊旅行计划。",
       fromMessageId: 1,
-      toMessageId: 20,
+      toMessageId: 1,
       createdAt: new Date(NOW.getTime() - 60 * 60 * 1000),
     });
 
@@ -283,7 +286,47 @@ describe("composeMessages — history compaction", () => {
 
     expect(invokeWithProvider).toHaveBeenCalledTimes(1);
     expect(createChatSummary).toHaveBeenCalledTimes(1);
+    // The previous summary is carried forward, not thrown away.
     expect(String(messages[0].content)).toContain("他们最近常聊旅行计划。");
+  });
+
+  it("carries the previous summary forward instead of rebuilding it", async () => {
+    // The summary is the only carrier of the old conversation. It used
+    // to be rebuilt from the sliding window alone, so the oldest
+    // summarised content was dropped for ever: the new summary covered
+    // only the last hundred and eighty messages, and the first sixty
+    // turns of the relationship were in no summary at all.
+    getMessagesByPersonaId.mockResolvedValue(history(40));
+    getLatestChatSummary.mockResolvedValue({
+      id: 1,
+      personaId: 1,
+      userId: 1,
+      summary: "他们第一次一起看的电影是《星际穿越》。",
+      fromMessageId: 1,
+      toMessageId: 11,
+      createdAt: new Date(NOW.getTime() - 60 * 60 * 1000),
+    });
+
+    await composeMessages({
+      persona: persona(),
+      userId: 1,
+      userMessage: "在吗",
+      contextLimit: 20,
+      now: NOW,
+    });
+
+    // The model is given the old summary *and* what has arrived since.
+    const sent = invokeWithProvider.mock.calls[0][1] as {
+      messages: Array<{ content: string }>;
+    };
+    const transcript = sent.messages[1].content as string;
+    expect(transcript).toContain("他们第一次一起看的电影是《星际穿越》。");
+    expect(transcript).toContain("第 12 条消息");
+
+    // And the new summary's range starts where the old one did, so the
+    // coverage grows instead of sliding.
+    const saved = createChatSummary.mock.calls[0][0];
+    expect(saved.fromMessageId).toBe(1);
   });
 
   it("summarises again once the previous summary is a day old", async () => {
@@ -294,7 +337,7 @@ describe("composeMessages — history compaction", () => {
       userId: 1,
       summary: "上次已经聊到他们最近常聊旅行计划。",
       fromMessageId: 1,
-      toMessageId: 28,
+      toMessageId: 1,
       createdAt: new Date(NOW.getTime() - 25 * 60 * 60 * 1000),
     });
 

@@ -159,28 +159,60 @@ async function maybeCompactHistory(params: {
   if (evicted.length < 10) return "";
 
   const latest = await db.getLatestChatSummary(params.persona.id, params.userId);
+
+  /**
+   * The part of the conversation the previous summary has not seen.
+   *
+   * The summary is rebuilt from the sliding window alone — so the
+   * oldest summarised content was dropped for ever: the new summary
+   * covered only the last hundred and eighty messages, and the first
+   * sixty turns of the relationship were in no summary at all. The
+   * persona forgot the beginning of the story, two messages at a time.
+   *
+   * So the previous summary stands in for everything it covered, and
+   * only the messages that have fallen out of the window since are
+   * added to it.
+   */
+  const covered = latest?.toMessageId ?? 0;
+  const fresh = evicted.filter((m) => m.id > covered);
+
   if (latest) {
     const age = params.now.getTime() - new Date(latest.createdAt).getTime();
-    // The stored summary knows which message it covered, so the number of
-    // messages that arrived since then is simply the ones after it.
-    const sinceLastSummary = params.history.filter(
-      (m) => m.id > (latest.toMessageId ?? 0),
-    ).length;
-    if (age < SUMMARY_MAX_AGE_MS && sinceLastSummary < SUMMARY_MIN_NEW_MESSAGES) {
+    /**
+     * The throttle.
+     *
+     * It used to count the messages after the summary's last message —
+     * but the summary only covers the *evicted* slice, so the
+     * twenty-odd newest messages were counted as well. The count was
+     * therefore always over the threshold, and the throttle never
+     * fired: a long conversation paid for a fresh summarisation on
+     * every single turn.
+     *
+     * What matters is how much has fallen out of the window since —
+     * that is what the new summary would add.
+     */
+    if (age < SUMMARY_MAX_AGE_MS && fresh.length < SUMMARY_MIN_NEW_MESSAGES) {
       // Summarised recently — do not pay for another LLM call.
+      return latest.summary;
+    }
+    if (fresh.length === 0) {
+      // Nothing new to say — the summary still stands.
       return latest.summary;
     }
   }
 
   // The transcript is read by the model, so the names in it are in the
   // language the persona is speaking.
-  const transcript = evicted
-    .map((m) => {
+  const transcript = [
+    latest?.summary ?? "",
+    ...fresh.map((m) => {
       const speaker = m.role === "user"
         ? copy(locale, "prompt.speakerUser")
         : copy(locale, "prompt.speakerPersona");
       return `${speaker}${m.content}`;
-    })
+    }),
+  ]
+    .filter((part) => part.trim())
     .join("\n");
 
   try {
@@ -213,7 +245,9 @@ async function maybeCompactHistory(params: {
       personaId: params.persona.id,
       userId: params.userId,
       summary: trimmed,
-      fromMessageId: evicted[0]?.id ?? null,
+      // The range grows: the new summary covers everything the old one
+      // covered, and everything that arrived since.
+      fromMessageId: latest?.fromMessageId ?? evicted[0]?.id ?? null,
       toMessageId: evicted[evicted.length - 1]?.id ?? null,
     });
 
