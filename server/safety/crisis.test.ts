@@ -40,6 +40,40 @@ describe("detectCrisis", () => {
     const result = detectCrisis("我很累，也不想活了");
     expect(result.crisis).toBe(true);
   });
+
+  it("detects the way it is actually said", () => {
+    // "我想死" is the most ordinary sentence in the language for saying
+    // it, and the list did not carry it: "不想活" is a different string.
+    // A user who typed this got a normal in-character reply and no
+    // support resources at all.
+    expect(detectCrisis("我想死").crisis).toBe(true);
+    expect(detectCrisis("我不想活了，真的").crisis).toBe(true);
+    expect(detectCrisis("有点想死").crisis).toBe(true);
+    expect(detectCrisis("我不想再这样活下去了").crisis).toBe(true);
+    expect(detectCrisis("轻生").crisis).toBe(true);
+  });
+
+  it("detects the English ways of saying it", () => {
+    expect(detectCrisis("I wish I were dead").crisis).toBe(true);
+    expect(detectCrisis("I don't want to live anymore").crisis).toBe(true);
+    expect(detectCrisis("I want to end it all").crisis).toBe(true);
+    expect(detectCrisis("I'd be better off without me").crisis).toBe(true);
+    expect(detectCrisis("there's no reason to live").crisis).toBe(true);
+  });
+
+  it("does not mind a typographic apostrophe", () => {
+    // A phone keyboard writes ’, not '. The phrase is the same phrase.
+    expect(detectCrisis("I don’t want to live").crisis).toBe(true);
+  });
+
+  it("does not mind full-width punctuation", () => {
+    // A Chinese keyboard writes the full-width forms.
+    expect(detectCrisis("我想死，真的").crisis).toBe(true);
+  });
+
+  it("does not mind a line break inside the phrase", () => {
+    expect(detectCrisis("我想\n死").crisis).toBe(true);
+  });
 });
 
 describe("buildCrisisResponse", () => {

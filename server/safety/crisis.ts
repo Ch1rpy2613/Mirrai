@@ -24,12 +24,26 @@ const CRISIS_TERMS_ZH = [
   "自杀", "想自杀", "不想活", "活不下去", "结束生命", "结束自己",
   "伤害自己", "自残", "割腕", "跳楼", "结束这一切", "活着没意义",
   "活着没有意义", "一了百了", "解脱了算了", "消失算了",
+  // The most ordinary way a person says it.
+  //
+  // "我想死" is how it is actually written, and the list above did not
+  // carry it: the two forms are different strings, and only "不想活" was
+  // covered. A user who typed the most common sentence in the language
+  // got a normal in-character reply and no support resources at all.
+  "想死", "轻生", "没脸活了", "活够了", "不想再活", "不想再这样活",
+  // A method is a strong signal, so the wording is specific enough not
+  // to fire on a story about someone else.
+  "要跳河", "想跳河", "去跳河", "要上吊", "想上吊", "要跳楼", "想跳楼",
 ];
 
 const CRISIS_TERMS_EN = [
   "suicide", "suicidal", "kill myself", "killing myself", "end my life",
   "want to die", "self harm", "self-harm", "harm myself", "cut myself",
   "not worth living", "better off dead", "take my own life",
+  // The ordinary ways of saying it, which the list above did not carry.
+  "wish i was dead", "wish i were dead", "don't want to live",
+  "do not want to live", "end it all", "better off without me",
+  "no reason to live", "hurt myself", "hang myself", "overdose",
 ];
 
 /**
@@ -58,6 +72,30 @@ export interface CrisisDetection {
 }
 
 /**
+ * Puts the text into the shape the word lists are written in.
+ *
+ * The lists are written with straight apostrophes and ASCII punctuation,
+ * because that is how the words are typed on a normal keyboard. A phone
+ * keyboard produces a typographic apostrophe, a Chinese keyboard produces
+ * full-width punctuation, and both of them turn a phrase the list does
+ * carry into one it does not.
+ */
+function normalise(text: string): string {
+  return (text ?? "")
+    .toLowerCase()
+    // A typographic apostrophe is the same character to the person who
+    // typed it.
+    .replace(/[’‘`´]/g, "'")
+    // Full-width punctuation, mapped back to the ASCII the lists use.
+    .replace(/[！-～]/g, (ch) =>
+      String.fromCharCode(ch.charCodeAt(0) - 0xfee0),
+    )
+    // Runs of whitespace are one space, so a line break inside a phrase
+    // does not hide it.
+    .replace(/\s+/g, " ");
+}
+
+/**
  * Inspects a user message for crisis language.
  *
  * Only the *user's* message is inspected. The persona's own reply may
@@ -65,13 +103,23 @@ export interface CrisisDetection {
  * interrupt itself.
  */
 export function detectCrisis(text: string): CrisisDetection {
-  const haystack = (text ?? "").toLowerCase();
+  const haystack = normalise(text);
   if (!haystack.trim()) return { crisis: false, weakSignal: false, matched: [] };
+
+  /**
+   * The same text with no whitespace in it at all.
+   *
+   * Chinese is written without spaces, so a space inside a phrase is
+   * something the writer typed and not part of the word: "我想 死" is the
+   * same sentence as "我想死". The English list is matched against the
+   * spaced text, because its phrases *do* have spaces in them.
+   */
+  const compact = haystack.replace(/\s+/g, "");
 
   const matched: string[] = [];
 
   for (const term of CRISIS_TERMS_ZH) {
-    if (haystack.includes(term)) {
+    if (compact.includes(term)) {
       matched.push(term);
       break;
     }
@@ -88,7 +136,7 @@ export function detectCrisis(text: string): CrisisDetection {
   }
 
   for (const term of WEAK_SIGNAL_TERMS_ZH) {
-    if (haystack.includes(term)) {
+    if (compact.includes(term)) {
       return { crisis: false, weakSignal: true, matched: [term] };
     }
   }

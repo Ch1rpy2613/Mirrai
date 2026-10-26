@@ -17,6 +17,7 @@ import {
   REPLY_DELAY_HOURS,
 } from "@shared/letters";
 import { buildUserContextBlock } from "@shared/user-side";
+import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
 
 /**
  * Writes a letter.
@@ -111,10 +112,17 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
         continue;
       }
 
+      // The answer is written in the language the user reads.
+      //
+      // It used to be written in Chinese, always: the letter itself may
+      // have been written in English, and the answer came back in
+      // Chinese with no way for the user to ask for anything else.
+      const locale = await db.getUserLocale(letter.userId).catch(() => "zh" as const);
+
       const replyText = await composeLetterReply({
         persona,
         letterBody: letter.body,
-        locale: "zh",
+        locale,
       });
       if (!replyText) {
         await db.markLetterUnanswered(letter.id, letter.userId);
@@ -158,6 +166,30 @@ export async function composeLetterReply(params: {
 }): Promise<string> {
   const { persona } = params;
   const locale = params.locale ?? "zh";
+
+  /**
+   * The safety layer comes first.
+   *
+   * A letter is the most personal thing the app holds — and the one a
+   * person writes when they cannot say it any other way. The chat path
+   * has always checked the user's words for crisis language before the
+   * model saw them; this path did not, so a user who wrote the same
+   * sentence into a letter instead of into the conversation got a warm
+   * in-character letter and no support resources at all.
+   */
+  const crisis = detectCrisis(params.letterBody);
+  if (crisis.crisis) {
+    await db
+      .createSafetyEvent({
+        userId: (persona as any).userId,
+        personaId: persona.id,
+        type: "crisis",
+        severity: "critical",
+        excerpt: crisis.matched.join(", "),
+      })
+      .catch((e) => console.warn("[Safety] Failed to record crisis event:", e));
+    return buildCrisisResponse(persona.name, locale);
+  }
 
   const memories = await retrieveMemories({
     personaId: persona.id,

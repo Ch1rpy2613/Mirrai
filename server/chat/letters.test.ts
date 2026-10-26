@@ -10,6 +10,7 @@ const createMessage = vi.fn();
 const getPersonaById = vi.fn();
 const getUserById = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
+const getUserLocale = vi.fn();
 
 vi.mock("../db", () => ({
   createLetter: (...a: unknown[]) => createLetter(...a),
@@ -22,6 +23,8 @@ vi.mock("../db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getUserById: (...a: unknown[]) => getUserById(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
+  getUserLocale: (...a: unknown[]) => getUserLocale(...a),
+  createSafetyEvent: vi.fn(async () => undefined),
 }));
 
 const invokeWithProvider = vi.fn();
@@ -156,6 +159,7 @@ describe("answering the letters that are due", () => {
     getUserById.mockResolvedValue(null);
     getMemoriesByPersonaId.mockResolvedValue([]);
     getLastLetterReplyAt.mockResolvedValue(null);
+    getUserLocale.mockResolvedValue("zh");
   });
 
   it("writes the answer into the conversation, marked as an answer", async () => {
@@ -180,6 +184,55 @@ describe("answering the letters that are due", () => {
       content: "我知道了。",
       origin: "letter",
     }));
+  });
+
+  it("answers a letter in the language the user reads", async () => {
+    getUserLocale.mockResolvedValue("en");
+    getPersonaById.mockResolvedValue({ ...persona, name: "Alex" });
+    getDueLetters.mockResolvedValue([{
+      id: 7,
+      userId: 1,
+      personaId: 1,
+      body: "There is something I never said.",
+      kind: "letter",
+      status: "waiting",
+      replyAt: new Date("2026-06-01T00:00:00Z"),
+      createdAt: new Date("2026-05-31T00:00:00Z"),
+    }]);
+
+    await answerDueLetters(new Date("2026-06-02T12:00:00Z"));
+
+    // The answer used to be written in Chinese, always.
+    expect(invokeWithProvider).toHaveBeenCalled();
+    const messages = invokeWithProvider.mock.calls[0][0].messages;
+    const system = messages.find((m: any) => m.role === "system");
+    expect(system.content).not.toMatch(/[一-鿿]/);
+  });
+
+  it("does not answer a letter that says something it cannot answer", async () => {
+    // A letter is the most personal thing the app holds, and the one a
+    // person writes when they cannot say it any other way. The chat path
+    // has always checked the words first; this one did not, so the same
+    // sentence got a warm in-character letter and no support resources.
+    getDueLetters.mockResolvedValue([{
+      id: 7,
+      userId: 1,
+      personaId: 1,
+      body: "我想死。",
+      kind: "letter",
+      status: "waiting",
+      replyAt: new Date("2026-06-01T00:00:00Z"),
+      createdAt: new Date("2026-05-31T00:00:00Z"),
+    }]);
+
+    const answered = await answerDueLetters(new Date("2026-06-02T12:00:00Z"));
+
+    expect(answered).toBe(1);
+    // The model was never asked.
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    // The answer carries the resources instead of the persona's voice.
+    const reply = answerLetter.mock.calls[0][2] as string;
+    expect(reply).toContain("12356");
   });
 
   it("holds a letter back when the last answer was too recent", async () => {
