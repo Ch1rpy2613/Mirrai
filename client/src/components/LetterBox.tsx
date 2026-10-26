@@ -26,7 +26,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
-  const { data, isLoading } = trpc.letter.list.useQuery({ personaId });
+  const { data, isLoading, isError } = trpc.letter.list.useQuery({ personaId });
   const { data: todosData } = trpc.letter.todos.useQuery({ personaId });
   const [showWrite, setShowWrite] = useState(false);
   const [body, setBody] = useState("");
@@ -72,7 +72,14 @@ export default function LetterBox({ personaId }: { personaId: number }) {
         <p className="text-xs text-muted-foreground leading-relaxed">
           {/* "No letters yet" while the letters are still on their way
               is a false statement about the user's own data. */}
-          {isLoading ? t("common.loading") : t("letters.empty")}
+          {isLoading
+            ? t("common.loading")
+            // A failed request leaves the list empty — so "you have no
+            // letters" was a claim about the user's own data, and it
+            // was simply false.
+            : isError
+              ? t("common.error")
+              : t("letters.empty")}
         </p>
       )}
 

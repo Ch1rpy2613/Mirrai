@@ -24,7 +24,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
-  const { data, isLoading } = trpc.relationship.list.useQuery({ personaId });
+  const { data, isLoading, isError } = trpc.relationship.list.useQuery({ personaId });
   const invalidate = () => utils.relationship.list.invalidate({ personaId });
 
   const addEvent = trpc.relationship.add.useMutation({
@@ -51,7 +51,14 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
               that nothing had been recorded — a false statement about
               the user's own data, made a moment before the real thing
               appeared. */}
-          {isLoading ? t("common.loading") : t("relationship.empty")}
+          {isLoading
+            ? t("common.loading")
+            // A failed request leaves the list empty — so "nothing has
+            // happened between you" was a claim about the user's own
+            // record, and it was simply false.
+            : isError
+              ? t("common.error")
+              : t("relationship.empty")}
         </p>
       ) : (
         <ol className="space-y-3">
