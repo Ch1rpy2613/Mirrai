@@ -27,9 +27,19 @@ vi.mock("./db", () => ({
 }));
 
 const runConversation = vi.fn();
+const withPersonaTurn = vi.fn(async (_personaId: number, work: () => Promise<unknown>) => work());
 
 vi.mock("./chat/service", () => ({
   runConversation: (...a: unknown[]) => runConversation(...a),
+  /**
+   * The turn holder.
+   *
+   * The regenerate takes the persona's turn before it takes the old
+   * turn away — so the delete and the new turn cannot interleave with
+   * another turn of the same persona. The mock runs the work straight
+   * away, which is what the real one does when nobody else is waiting.
+   */
+  withPersonaTurn: (...a: unknown[]) => withPersonaTurn(...a),
 }));
 
 import { appRouter } from "./routers";

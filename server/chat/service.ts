@@ -415,14 +415,39 @@ async function takeTurn(personaId: number): Promise<() => void> {
 }
 
 /**
+ * Runs something while the persona's turn is held.
+ *
+ * The queue is what keeps two turns of one persona from interleaving.
+ * A regenerate *replaces* a turn, so its destructive part — taking the
+ * old turn away — has to happen under the same lock as the new one:
+ * otherwise it can take away the message of a turn that is in flight
+ * right now, and leave an answer with nothing above it.
+ */
+export async function withPersonaTurn<T>(
+  personaId: number,
+  work: () => Promise<T>,
+): Promise<T> {
+  const release = await takeTurn(personaId);
+  try {
+    return await work();
+  } finally {
+    release();
+  }
+}
+
+/**
  * A conversation with a persona.
  *
  * The turns of one persona are one after the other.
+ *
+ * `turnHeld` says the caller already holds the turn — so the
+ * conversation does not wait for a turn that is already its own. The
+ * queue is not re-entrant: taking it twice would wait for ever.
  */
 export async function* runConversation(
-  options: ConversationOptions & { mode: ChatMode },
+  options: ConversationOptions & { mode: ChatMode; turnHeld?: boolean },
 ): AsyncGenerator<ChatEvent> {
-  const release = await takeTurn(options.persona.id);
+  const release = options.turnHeld ? () => undefined : await takeTurn(options.persona.id);
   try {
     for await (const event of runConversationTurn(options)) {
       yield event;
