@@ -1587,7 +1587,23 @@ export async function deleteWechatBinding(id: number, userId: number): Promise<b
   if (!db) throw new Error("DB not available");
   const rows = await db.delete(wechatBindings)
     .where(and(eq(wechatBindings.id, id), eq(wechatBindings.userId, userId)))
-    .returning({ id: wechatBindings.id });
+    .returning({ id: wechatBindings.id, wechatUserId: wechatBindings.wechatUserId });
+  /**
+   * The mirror goes with it.
+   *
+   * Every WeChat binding also has a row in `channel_bindings` — and
+   * that is the row the scheduler reads. So unbinding in the settings
+   * removed the row from the WeChat tab, and the anniversary reminders
+   * and the proactive messages kept being pushed into the very
+   * conversation the user had just unbound.
+   */
+  for (const row of rows) {
+    await db.delete(channelBindings).where(and(
+      eq(channelBindings.userId, userId),
+      eq(channelBindings.channel, "wechat"),
+      eq(channelBindings.targetId, row.wechatUserId),
+    ));
+  }
   return rows.length > 0;
 }
 
