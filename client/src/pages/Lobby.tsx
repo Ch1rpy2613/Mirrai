@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useRef, useId, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
@@ -920,6 +921,14 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
   const compatibility = isReady ? getCompatibilityScore(persona) : null;
 
   const [showLetter, setShowLetter] = useState(false);
+  /**
+   * The letter is a dialog.
+   *
+   * The focus goes into it when it opens and comes back when it
+   * closes, Tab walks inside it, and Escape closes it.
+   */
+  const letterDialogRef = useDialogFocus<HTMLDivElement>(showLetter, () => setShowLetter(false));
+  const letterTitleId = useId();
   const awakenMutation = trpc.persona.awaken.useMutation({
     onSuccess: () => { toast.success(t("lobby.card.awakened", { name: persona.name })); window.location.reload(); },
     onError: (e: any) => toast.error(e.message),
@@ -1181,13 +1190,29 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
       {showLetter && persona.farewellLetter && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowLetter(false)}>
           <div className="absolute inset-0 bg-black/40" />
-          <div className="relative bg-card border border-border rounded-lg w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in" onClick={e => e.stopPropagation()}>
+          {/**
+           * A window that covers the page is a dialog.
+           *
+           * It used to be a hand-rolled overlay: the focus stayed on
+           * the button behind it, Tab walked into the page under the
+           * window, Escape did nothing, and the close button had no
+           * name for a screen reader to read out. The chat's own
+           * overlays already do all of this — see `useDialogFocus`.
+           */}
+          <div
+            ref={letterDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={letterTitleId}
+            className="relative bg-card border border-border rounded-lg w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between p-5 border-b border-border/60">
               <div>
                 <div className="kicker mb-1">{t("lobby.card.farewell")}</div>
-                <h3 className="card-title">{t("lobby.card.letterTitle", { name: persona.name })}</h3>
+                <h3 id={letterTitleId} className="card-title">{t("lobby.card.letterTitle", { name: persona.name })}</h3>
               </div>
-              <button onClick={() => setShowLetter(false)} className="app-nav-icon">
+              <button onClick={() => setShowLetter(false)} className="app-nav-icon" aria-label={t("common.close")}>
                 <X className="w-4 h-4" />
               </button>
             </div>
