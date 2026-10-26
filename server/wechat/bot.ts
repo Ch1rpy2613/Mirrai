@@ -34,7 +34,7 @@ import {
   pollQrLogin,
   startQrLogin,
 } from "./ilink/login";
-import { parseInboundMessage } from "./ilink/parse";
+import { parseInboundMessage, type ParsedInbound } from "./ilink/parse";
 import { sendTextMessage } from "./ilink/send";
 import { handleWeixinMessage } from "./message-handler";
 import { copy } from "@shared/copy";
@@ -815,6 +815,20 @@ async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
         );
       }
 
+      /**
+       * The batch is handled one conversation at a time.
+       *
+       * The comment here said "process messages from the same
+       * conversation sequentially so the context window stays ordered"
+       * — and the code started them all at once. So a user who sent
+       * two messages in a row got two answers that interleaved: the
+       * second answer could arrive before the first, and the persona
+       * answered the second question twice.
+       *
+       * A command like "/毕业" is the worst case: two of them in the
+       * same batch meant two graduations.
+       */
+      const byConversation = new Map<string, ParsedInbound[]>();
       for (const raw of resp.msgs ?? []) {
         const parsed = parseInboundMessage(raw);
         if (!parsed) continue;
@@ -826,16 +840,26 @@ async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
 
         await db.touchWechatLastInbound(userId).catch(() => {});
 
-        // Process messages from the same conversation sequentially so the
-        // context window stays ordered; different conversations may interleave.
-        const work = handleWeixinMessage(userId, parsed).catch((e) =>
-          logError(`消息处理失败: ${String(e)}`),
-        );
-        pendingWork.push(work);
-        work.finally(() => {
-          const idx = pendingWork.indexOf(work);
-          if (idx >= 0) pendingWork.splice(idx, 1);
-        });
+        const key = `${parsed.isGroup ? "g" : "d"}:${parsed.fromUserId}`;
+        const list = byConversation.get(key);
+        if (list) list.push(parsed);
+        else byConversation.set(key, [parsed]);
+      }
+
+      for (const list of byConversation.values()) {
+        for (const parsed of list) {
+          const work = handleWeixinMessage(userId, parsed)
+            .catch((e) => logError(`消息处理失败: ${String(e)}`))
+            .finally(() => {
+              const idx = pendingWork.indexOf(work);
+              if (idx >= 0) pendingWork.splice(idx, 1);
+            });
+          pendingWork.push(work);
+          // The next message of the same conversation waits for this
+          // one — the answers have to be in the order the messages
+          // were sent.
+          await work;
+        }
       }
     } catch (err) {
       if (signal.aborted) {
