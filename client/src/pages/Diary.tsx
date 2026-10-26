@@ -50,10 +50,34 @@ function MoodChip({ mood, small }: { mood: string; small?: boolean }) {
   );
 }
 
+/**
+ * The moods of an emotional arc, in the order they happened.
+ *
+ * The server stores the arc as an object — `{ start, end, dominant }` —
+ * and the client only ever looked for an array, so the whole section was
+ * discarded. An array is accepted too, for the rows that hold one.
+ */
+function emotionalArcValues(arc: unknown): string[] {
+  if (Array.isArray(arc)) return arc.map(String).filter(Boolean);
+  if (arc && typeof arc === "object") {
+    const record = arc as Record<string, unknown>;
+    return [record.start, record.dominant, record.end]
+      .filter((value): value is string => typeof value === "string" && value.length > 0);
+  }
+  return [];
+}
+
 function DiaryCard({ entry, onDelete }: { entry: any; onDelete: (id: number) => void }) {
   const { t } = useLocale();
   const [confirming, setConfirming] = useState(false);
-  const arcs: string[] = Array.isArray(entry.emotionalArc) ? entry.emotionalArc.map(String) : [];
+  /**
+   * The emotional arc.
+   *
+   * It is an *object* on the server — `{ start, end, dominant }` — and
+   * the client only ever looked for an array, so the arc was discarded
+   * and the section never appeared. For any diary. Ever.
+   */
+  const arcs: string[] = emotionalArcValues(entry.emotionalArc);
   const highlights: string[] = Array.isArray(entry.highlights) ? entry.highlights.map(String) : [];
   const quotes: string[] = Array.isArray(entry.quotes) ? entry.quotes.map(String) : [];
 
@@ -147,13 +171,24 @@ export default function Diary() {
     { personaId: selectedPersonaId || 0 },
     { enabled: isAuthenticated && !!selectedPersonaId }
   );
-  const { data: dayEntry } = trpc.diary.getByDate.useQuery(
+  const { data: dayEntry, refetch: refetchDay } = trpc.diary.getByDate.useQuery(
     { personaId: selectedPersonaId || 0, date: selectedDate || "" },
     { enabled: isAuthenticated && !!selectedPersonaId && !!selectedDate }
   );
 
   const generateMutation = trpc.diary.generate.useMutation({
-    onSuccess: () => { toast.success(t("diary.generateSuccess")); refetchDates(); refetchEntries(); },
+    onSuccess: () => {
+      toast.success(t("diary.generateSuccess"));
+      refetchDates();
+      refetchEntries();
+      // The day's own entry is refetched as well.
+      //
+      // It was not, and it is the query the page decides what to show:
+      // so after the diary was written the page still offered to write
+      // it, and a second tap failed with "there is already a diary for
+      // this day". The user was told it was written, and saw nothing.
+      refetchDay();
+    },
     onError: (e: any) => toast.error(t("diary.generateFailed", { message: e.message })),
   });
 
@@ -304,14 +339,25 @@ export default function Diary() {
                   <button key={entry.id} onClick={() => setSelectedDate(entry.date)}
                     className="surface surface-interactive w-full text-left p-5">
                     <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                      <span className="font-display text-base font-semibold text-foreground">{entry.date}</span>
+                      {/* The date, in the interface's language.
+                          The one list a user scans was the only place on
+                          the page that printed the raw ISO date, while
+                          the header formatted the very same date
+                          properly a few lines above. */}
+                      <span className="font-display text-base font-semibold text-foreground">
+                        {parseLocalDate(entry.date).toLocaleDateString(locale, {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </span>
                       <span className="text-xs text-muted-foreground">{entry.personaName || ""}</span>
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{entry.summary}</p>
-                    {Array.isArray(entry.emotionalArc) && entry.emotionalArc.length > 0 && (
+                    {emotionalArcValues(entry.emotionalArc).length > 0 && (
                       <div className="flex gap-1.5 mt-3 flex-wrap">
-                        {entry.emotionalArc.slice(0, 5).map((e: unknown, i: number) => (
-                          <MoodChip key={i} mood={String(e)} small />
+                        {emotionalArcValues(entry.emotionalArc).slice(0, 5).map((e, i) => (
+                          <MoodChip key={i} mood={e} small />
                         ))}
                       </div>
                     )}
