@@ -7,6 +7,9 @@ skill-engine/skills/
 *.log
 .DS_Store
 drizzle/meta/
+# The migrations drizzle-kit generates. They are proposals: the app
+# applies the hand-written files beside them.
+drizzle/generated/
 *.tsbuildinfo
 .vite/
 build-macos/

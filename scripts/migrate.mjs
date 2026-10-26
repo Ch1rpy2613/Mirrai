@@ -56,6 +56,9 @@ function loadMigrationFiles() {
   }
 
   const files = entries
+    // Only the files. The `generated` folder — where drizzle-kit writes
+    // what it generates — is a folder, and its contents are proposals,
+    // not migrations.
     .filter((name) => name.endsWith(".sql"))
     // The order the migrations are applied in.
     //
