@@ -1144,12 +1144,35 @@ export async function upsertLlmConfig(userId: number, data: Partial<InsertLlmCon
   return result.id;
 }
 
-export async function setDefaultLlmConfig(userId: number, providerName: string) {
+/**
+ * Makes one of the user's provider configurations the default.
+ *
+ * The name is matched without regard to case: the provider names come
+ * from the registry, where they are written "OpenAI", while a row the
+ * user saved by hand can hold "openai". The old comparison was exact,
+ * so a case difference matched nothing — and because the defaults were
+ * cleared first, the user was left with *no* default provider at all.
+ *
+ * Returns false when the user has no row for that provider, so the
+ * defaults are left alone rather than cleared for nothing.
+ */
+export async function setDefaultLlmConfig(userId: number, providerName: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.select({
+    id: llmConfigs.id,
+    providerName: llmConfigs.providerName,
+  }).from(llmConfigs).where(eq(llmConfigs.userId, userId));
+  const wanted = rows.find(
+    (row) => row.providerName.toLowerCase() === providerName.trim().toLowerCase(),
+  );
+  if (!wanted) return false;
+
   await withTransaction(async (tx) => {
     await tx.update(llmConfigs).set({ isDefault: false }).where(eq(llmConfigs.userId, userId));
-    await tx.update(llmConfigs).set({ isDefault: true })
-      .where(and(eq(llmConfigs.userId, userId), eq(llmConfigs.providerName, providerName)));
+    await tx.update(llmConfigs).set({ isDefault: true }).where(eq(llmConfigs.id, wanted.id));
   });
+  return true;
 }
 
 export async function getDefaultLlmConfig(userId: number) {

@@ -2405,7 +2405,18 @@ export const appRouter = router({
         apiKey: z.string().max(512).optional(),
         baseUrl: z.string().max(512).optional(),
         model: z.string().max(128).optional(),
-        extraConfig: z.record(z.string(), z.any()).optional(),
+        /**
+         * The provider's own settings.
+         *
+         * Bounded: the record was accepted in any shape and any size,
+         * and it is stored in a JSON column that every read of the
+         * configuration brings back.
+         */
+        extraConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).refine(
+          (value) => Object.keys(value).length <= 50 &&
+            JSON.stringify(value).length <= 16_000,
+          "The extra configuration is too large",
+        ).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         assertKnownProvider(input.providerName, ctx.locale);
