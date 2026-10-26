@@ -127,7 +127,19 @@ export async function buildPromptForPersona(
     timeZone: (persona as any).timezone ?? (await db.getUserTimezone(userId)),
     userContext,
     quotedSection: context.quotedSection ?? null,
-    relationshipEvents: buildRelationshipSection(events as any, phase, locale),
+    /**
+     * The turn's own time.
+     *
+     * The section is given the time the turn happened at — so the
+     * relative dates it writes ("three days ago") and the rule that a
+     * trigger stops being a trigger after three days are measured
+     * against the same clock as everything else in the prompt.
+     *
+     * It was given the wall clock instead, so the two could disagree:
+     * a prompt built for a turn that happened at 23:59 said a trigger
+     * from four days ago was two days old.
+     */
+    relationshipEvents: buildRelationshipSection(events as any, phase, locale, now),
     relationshipPhase: phase,
     reachability: (persona as any).reachability ?? "reachable",
     microRules: context.microRules,
