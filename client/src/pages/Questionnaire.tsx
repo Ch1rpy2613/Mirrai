@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +47,9 @@ const LOVE_LANGUAGES = [
   { key: "touch", labelKey: "questionnaire.loveLanguages.touch" },
   { key: "service", labelKey: "questionnaire.loveLanguages.service" },
 ] as const;
+
+/** Where the answers are kept while the questionnaire is open. */
+const QUESTIONNAIRE_STORAGE_KEY = "mirrai-questionnaire";
 
 /* The step titles already live in the dictionary. */
 const STEP_KEYS = [
@@ -105,8 +108,47 @@ export default function Questionnaire() {
    * and the mutation failed with "not authorised", with the answer lost.
    */
   useAuth({ redirectOnUnauthenticated: true });
+  /**
+   * The step and the answers, kept in the session.
+   *
+   * The questionnaire asks for long free-text answers — the memories,
+   * the catchphrases, the boundaries, how the two of them met — across
+   * ten steps. It used to keep them in memory only, so a reload, a
+   * crash, a browser "restore tab", or the sign-in redirect threw the
+   * whole thing away with no warning.
+   */
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>(EMPTY);
+
+  // Restored once, on the first render.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    try {
+      const saved = sessionStorage.getItem(QUESTIONNAIRE_STORAGE_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { step?: number; answers?: Answers };
+      if (parsed.answers && typeof parsed.answers === "object") {
+        setAnswers({ ...EMPTY, ...parsed.answers });
+      }
+      if (typeof parsed.step === "number" && parsed.step > 0 && parsed.step < STEP_KEYS.length) {
+        setStep(parsed.step);
+      }
+    } catch {
+      // A broken saved answer is not worth a crash.
+    }
+  }, []);
+
+  // And kept up to date from then on.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(QUESTIONNAIRE_STORAGE_KEY, JSON.stringify({ step, answers }));
+    } catch {
+      // A browser that will not keep it is not a problem: the answers
+      // are still in the page.
+    }
+  }, [step, answers]);
 
   const createPersona = trpc.persona.createFromQuestionnaire.useMutation();
 
@@ -139,6 +181,13 @@ export default function Questionnaire() {
           nickname: answers.nickname || undefined,
         },
       });
+      // The answers have become a persona, so they are not kept for the
+      // next questionnaire.
+      try {
+        sessionStorage.removeItem(QUESTIONNAIRE_STORAGE_KEY);
+      } catch {
+        // A browser that will not keep it is not a problem.
+      }
       toast.success(t("questionnaire.created"));
       navigate(`/chat/${result.personaId}`);
     } catch (e: any) {
