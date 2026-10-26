@@ -341,12 +341,25 @@ export async function extractMemories(params: {
    * marking it means the same messages are not sent again on every
    * later run. An answer that could not be parsed is not.
    */
-  if (understood && !fromUpload) {
-    await db.markMemoryExtracted(
-      persona.id,
-      userId,
-      coveredAt ? new Date(coveredAt) : new Date(),
-    );
+  if (!fromUpload) {
+    if (understood) {
+      await db.markMemoryExtracted(
+        persona.id,
+        userId,
+        coveredAt ? new Date(coveredAt) : new Date(),
+      );
+    } else {
+      /**
+       * The attempt is recorded even when it failed.
+       *
+       * The window only moves when the answer could be read — so a
+       * model that answers with prose instead of JSON left it where it
+       * was, and the next turn paid for another call. And the next.
+       * A failing extraction is retried once per interval now, not
+       * once per message.
+       */
+      await db.markMemoryAttempted(persona.id, userId);
+    }
   }
   return { added, skipped };
 }
@@ -360,7 +373,17 @@ export async function extractMemories(params: {
  */
 function speakerName(role: string, personaName: string, locale: "zh" | "en"): string {
   if (role === "user") return copy(locale, "prompt.roleUser");
-  if (role === "persona" || !role) return personaName;
+  /**
+   * The persona.
+   *
+   * The role of the other side is "assistant" — the message table has
+   * no third role — so the branch that named the persona was never
+   * reached, and the transcript the extraction model reads said
+   * "assistant: …" where the persona should be. The model is asked to
+   * work out whose memory each fact is ("them" or "me"), and the
+   * persona was not named in it.
+   */
+  if (role === "persona" || role === "assistant" || !role) return personaName;
   return role;
 }
 

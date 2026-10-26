@@ -1943,11 +1943,49 @@ export async function markMemoryExtracted(
    * the whole history.
    */
   await db.insert(memoryExtractions)
-    .values({ personaId, userId, extractedAt })
+    .values({ personaId, userId, extractedAt, lastAttemptAt: extractedAt })
     .onConflictDoUpdate({
       target: [memoryExtractions.personaId, memoryExtractions.userId],
-      set: { extractedAt },
+      set: { extractedAt, lastAttemptAt: extractedAt },
     });
+}
+
+/**
+ * Records that an extraction *tried*, whether or not it worked.
+ *
+ * The window only moves when the answer could be read — so a model
+ * that answers with prose instead of JSON left it where it was, and
+ * the next turn paid for another call. The attempt is a separate
+ * column, so a failing extraction is retried at most once per
+ * interval.
+ */
+export async function markMemoryAttempted(
+  personaId: number,
+  userId: number,
+  attemptedAt: Date = new Date(),
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(memoryExtractions)
+    .values({ personaId, userId, extractedAt: attemptedAt, lastAttemptAt: attemptedAt })
+    .onConflictDoUpdate({
+      target: [memoryExtractions.personaId, memoryExtractions.userId],
+      set: { lastAttemptAt: attemptedAt },
+    });
+}
+
+/**
+ * When the extraction last tried, whether or not it worked.
+ */
+export async function getLastExtractionAttemptAt(
+  personaId: number,
+  userId: number,
+): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ at: max(memoryExtractions.lastAttemptAt) }).from(memoryExtractions)
+    .where(and(eq(memoryExtractions.personaId, personaId), eq(memoryExtractions.userId, userId)));
+  return rows[0]?.at ?? null;
 }
 
 /**

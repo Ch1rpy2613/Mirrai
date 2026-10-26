@@ -1092,15 +1092,23 @@ async function maybeExtractMemories(
   locale: "zh" | "en" = "zh",
   now = new Date(),
 ): Promise<void> {
-  const last = await db.getLastExtractionAt(persona.id, userId);
   /**
    * The interval comes first.
    *
    * A count is a query, and the answer is "not yet" for a whole day
    * after every run. So the count is only asked for when the interval
    * has passed — the turn itself does not pay for it.
+   *
+   * And the interval is measured from the last *attempt*, not the last
+   * success: an extraction whose answer could not be read used to leave
+   * the mark where it was, so every turn after it paid for another
+   * model call.
    */
-  if (last && now.getTime() - new Date(last).getTime() < EXTRACTION_INTERVAL_MS) {
+  const lastAttempt = await db.getLastExtractionAttemptAt(persona.id, userId);
+  if (
+    lastAttempt &&
+    now.getTime() - new Date(lastAttempt).getTime() < EXTRACTION_INTERVAL_MS
+  ) {
     return;
   }
   /**

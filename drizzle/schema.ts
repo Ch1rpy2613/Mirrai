@@ -434,6 +434,16 @@ export const memoryExtractions = pgTable("memory_extractions", {
   personaId: integer("personaId").notNull(),
   userId: integer("userId").notNull(),
   extractedAt: timestamp("extractedAt").defaultNow().notNull(),
+  /**
+   * When the extraction last *tried*.
+   *
+   * `extractedAt` moves only when the answer could be read — so a
+   * model that answers with prose instead of JSON left it where it
+   * was, and the next turn paid for another call. The attempt is
+   * recorded separately, so a failing extraction is retried at most
+   * once per interval.
+   */
+  lastAttemptAt: timestamp("lastAttemptAt").defaultNow().notNull(),
 }, (table) => ({
   /**
    * The index the migration creates.
