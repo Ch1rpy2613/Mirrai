@@ -1147,6 +1147,33 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        /**
+         * There has to be something to read.
+         *
+         * A run with no material at all — no upload, no collection —
+         * went through anyway: the model was asked to describe a
+         * person it had heard nothing about, it invented one, and the
+         * invention *replaced* the persona the user already had. So a
+         * person who pressed "import into the persona" on a persona
+         * with no material lost the personality they had built.
+         */
+        const material = await getFilesByPersonaId(input.id, ctx.user.id, {
+          withExtractedMemory: true,
+        });
+        const uploadedText = material
+          .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
+          .map((f) => f.extractedMemory || "")
+          .join("\n")
+          .trim();
+        const hasPhotos = material.some((f) => f.fileType === "image" && f.fileUrl);
+        const collected = await getCollectedMessagesForPersona(input.id, ctx.user.id);
+        if (!uploadedText && !hasPhotos && collected.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.nothingToDistil"),
+          });
+        }
+
         startPersonaDistillation({
           locale: ctx.locale,
           personaId: input.id,

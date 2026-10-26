@@ -45,6 +45,17 @@ export const ERRORS = {
     zh: "还没有可以用的模型服务：请先在设置里配置一个",
     en: "There is no model service to use yet: configure one in the settings first",
   },
+  /**
+   * There is nothing to distil.
+   *
+   * A run with no material went through anyway: the model was asked to
+   * describe a person it had heard nothing about, it invented one, and
+   * the invention replaced the persona the user already had.
+   */
+  "errors.nothingToDistil": {
+    zh: "还没有可以分析的材料：请先上传聊天记录，或先收集一些。",
+    en: "There is nothing to analyse yet: upload some chat logs, or collect some first.",
+  },
   "errors.collectorFileMismatch": {
     zh: "这个文件不属于所选的分身",
     en: "That file does not belong to the chosen persona",
