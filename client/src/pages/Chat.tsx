@@ -339,11 +339,20 @@ export default function Chat() {
     // being written. Replacing the list would wipe the half-written
     // message, so the local ones the server does not know about yet are
     // kept.
+    //
+    // The older pages the user loaded are kept too. They are the last
+    // fifty messages' predecessors, so the server does not send them
+    // again — and the poll used to delete them, which meant the history
+    // the user had just asked for was gone twenty seconds later.
     setMessages((prev) => {
       const known = new Set(fromServer.map((m) => m.id));
+      // Messages with a real id that the server has not sent: the
+      // earlier pages.
+      const older = prev.filter((m) => !known.has(m.id) && typeof m.id === "number");
+      // The ones still being written.
       const pending = prev.filter((m) => !known.has(m.id) && m.isStreaming);
-      if (pending.length === 0) return fromServer;
-      return [...fromServer, ...pending];
+      if (older.length === 0 && pending.length === 0) return fromServer;
+      return [...older, ...fromServer, ...pending];
     });
     // A full page of history means there is probably more behind it.
     setHasOlder(history.length >= 50);
@@ -823,7 +832,17 @@ export default function Chat() {
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    // While an input method is composing, Enter is the key that picks
+    // the candidate — not the key that sends. Sending on it meant that
+    // typing Chinese sent the text half way through, which is the
+    // primary way this app is used.
+    const composing =
+      (e.nativeEvent as unknown as { isComposing?: boolean }).isComposing ||
+      e.keyCode === 229;
+    if (e.key === "Enter" && !e.shiftKey && !composing) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   const mood = EMOTIONS[currentState as keyof typeof EMOTIONS] || EMOTIONS.warm;

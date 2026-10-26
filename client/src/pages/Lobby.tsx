@@ -1435,7 +1435,18 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-md">{t("common.cancel")}</Button>
-          <Button onClick={() => { if (!name.trim()) return; createMutation.mutate({ name: name.trim(), relationshipDesc: relationshipDesc.trim() || undefined, togetherSince: togetherSince || undefined, endDate: showEndDate && endDate ? endDate : undefined } as any); }}
+          <Button onClick={() => { if (!name.trim()) return; createMutation.mutate({
+            name: name.trim(),
+            relationshipDesc: relationshipDesc.trim() || undefined,
+            // The names the server knows. The dialog used to send
+            // `togetherSince` and `endDate`, which the schema does not
+            // have: zod strips the keys it does not recognise, so both
+            // dates were dropped on the floor — the "together since" and
+            // "separated on" the user filled in were never stored, and
+            // the `as any` is what hid the mismatch from the compiler.
+            togetherFrom: togetherSince || undefined,
+            togetherTo: showEndDate && endDate ? endDate : undefined,
+          }); }}
             disabled={!name.trim() || createMutation.isPending}
             className="rounded-md">
             {createMutation.isPending ? t("common.creating") : t("common.create")}
