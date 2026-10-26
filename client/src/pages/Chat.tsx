@@ -353,13 +353,6 @@ export default function Chat() {
     }
   );
 
-  const sendMutation = trpc.chat.send.useMutation({
-    onError: (e: any) => {
-      toast.error(t("chat.failed", { message: e.message }));
-      setIsSending(false);
-    },
-  });
-
   const clearMutation = trpc.chat.clear.useMutation({
     onSuccess: () => { setMessages([]); toast.success(t("chat.cleared")); setShowMenu(false); },
     onError: (e: any) => toast.error(e.message),
@@ -367,7 +360,6 @@ export default function Chat() {
 
   /* The message-level operations. Without them a conversation is a
      transcript: nothing can be repeated, fixed or taken back. */
-  const regenerateMutation = trpc.chat.regenerate.useMutation();
   const updateMessageMutation = trpc.chat.updateMessage.useMutation();
   const deleteMessageMutation = trpc.chat.deleteMessage.useMutation();
   const utils = trpc.useUtils();
@@ -460,14 +452,6 @@ export default function Chat() {
       toast.error(e.message);
       setCurrentState(persona?.emotionalState || "warm");
     },
-  });
-
-  const sendImageMutation = trpc.chat.sendImage.useMutation({
-    onError: (e: any) => { toast.error(t("chat.imageFailed", { message: e.message })); setIsSending(false); },
-  });
-
-  const sendVoiceMutation = trpc.chat.sendVoice.useMutation({
-    onError: (e: any) => { toast.error(t("chat.voiceFailed", { message: e.message })); setIsSending(false); },
   });
 
   const exportMutation = trpc.chat.export.useMutation();
@@ -1098,7 +1082,7 @@ export default function Chat() {
         if (controller.signal.aborted) {
           toast.info(t("chat.interrupted", { message: "" }));
         } else {
-          toast.error(t("chat.failed", { message: (err as Error)?.message ?? t("errors.unknown") }));
+          toast.error(t("chat.imageFailed", { message: (err as Error)?.message ?? t("errors.unknown") }));
         }
       }
       finally {
