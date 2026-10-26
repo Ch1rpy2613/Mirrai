@@ -12,6 +12,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const invoke = vi.fn();
 const invokeForUser = vi.fn();
+const resolveProviderForUser = vi.fn();
 const updateSkillJob = vi.fn();
 const updatePersona = vi.fn();
 const createSkillJob = vi.fn();
@@ -36,6 +37,17 @@ vi.mock("../db", () => ({
 
 vi.mock("./runner", () => ({
   runPythonTool: (...a: unknown[]) => runPythonTool(...a),
+}));
+
+/**
+ * The provider.
+ *
+ * The photo stage asks whether the model can see images — a provider
+ * that cannot drops the picture parts and answers the text, so the
+ * model would invent a description of a photo it had never seen.
+ */
+vi.mock("../llm/user-provider", () => ({
+  resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
 }));
 
 vi.mock("./prompts", () => ({
@@ -116,10 +128,15 @@ function describedPhotos(): number {
 }
 
 beforeEach(() => {
-  for (const fn of [invoke, invokeForUser, updateSkillJob, updatePersona, createSkillJob, runPythonTool, loadPrompt]) {
+  for (const fn of [invoke, invokeForUser, resolveProviderForUser, updateSkillJob, updatePersona, createSkillJob, runPythonTool, loadPrompt]) {
     fn.mockReset();
   }
   invokeForUser.mockImplementation(async (...a: unknown[]) => invoke(...a));
+  // A model that can see.
+  resolveProviderForUser.mockResolvedValue({
+    name: "test",
+    capabilities: { streaming: true, vision: true, tools: true, jsonMode: true },
+  });
   createSkillJob.mockResolvedValue(7);
   updateSkillJob.mockResolvedValue(undefined);
   updatePersona.mockResolvedValue(undefined);
@@ -198,6 +215,21 @@ describe("the pipeline and the presets", () => {
     const imageUrls = Array.from({ length: 12 }, (_, i) => `https://example.test/${i}.png`);
     await runSkillPipeline({ ...baseInput, mode: "deep", imageUrls });
     expect(describedPhotos()).toBe(12);
+  }, 20_000);
+
+  it("does not ask a model that cannot see to describe the photos", async () => {
+    // A provider that cannot read images drops the picture parts and
+    // answers the text — so the model was asked "these are photos of X
+    // and me, please describe them" and it *invented* a description of
+    // a photo it had never seen. The invention was stored as a memory
+    // of the persona.
+    resolveProviderForUser.mockResolvedValue({
+      name: "blind",
+      capabilities: { streaming: true, vision: false, tools: false, jsonMode: false },
+    });
+    const imageUrls = Array.from({ length: 3 }, (_, i) => `https://example.test/${i}.png`);
+    await runSkillPipeline({ ...baseInput, imageUrls });
+    expect(describedPhotos()).toBe(0);
   }, 20_000);
 
   it("describes fewer photos in the quick preset", async () => {

@@ -22,6 +22,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { invokeForUser } from "../llm";
+import { resolveProviderForUser } from "../llm/user-provider";
 import type { LLMMessage, LLMOptions } from "../llm/types";
 import { loadPrompt } from "./prompts";
 import { asMaterial } from "./material";
@@ -241,13 +242,37 @@ export function skillBaseDir(characterFamily: CharacterFamily): string {
 async function describeImages(
   name: string,
   imageUrls: string[],
-  provider: string | undefined,
+  providerName: string | undefined,
   maxImages: number = 6,
   locale: Locale = "zh",
   /** Whose pictures these are — and whose key they go to. */
   userId?: number,
 ): Promise<string> {
   if (imageUrls.length === 0) return "";
+
+  /**
+   * The model has to be able to see.
+   *
+   * It was never checked — and a provider that cannot read images
+   * simply drops the picture parts and answers the text. So the model
+   * was asked "these are photos of X and me, please describe them" and
+   * it *invented* a description of a photo it had never seen — and the
+   * invention was stored as a memory of the persona, shown in the
+   * persona's editor and fed back into the prompt.
+   *
+   * The chat path has this check ("this model cannot see images"); the
+   * distillation did not.
+   */
+  const resolved = await resolveProviderForUser({
+    userId: userId ?? 0,
+    providerName: providerName,
+  });
+  if (resolved && !resolved.capabilities.vision) {
+    console.warn(
+      `[SkillEngine] The photos were not described: ${resolved.name} cannot see images.`,
+    );
+    return "";
+  }
 
   try {
     const content: Array<{ type: "text"; text: string } | { type: "image_url"; url: string }> = [
@@ -262,9 +287,9 @@ async function describeImages(
 
     const response = await invokePipeline({
       userId: userId ?? 0,
-      providerName: provider,
+      providerName: providerName,
       messages: [{ role: "user", content }],
-      options: { provider, maxTokens: 500 },
+      options: { provider: providerName, maxTokens: 500 },
     });
     return response?.trim() || "";
   } catch (e) {
