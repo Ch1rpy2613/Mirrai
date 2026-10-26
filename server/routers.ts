@@ -1974,6 +1974,14 @@ export const appRouter = router({
         const intimacyData = await getIntimacyData(input.personaId, ctx.user.id);
         const intimacy = computeIntimacy(intimacyData);
         const { generateChatExportHTML } = await import("./_core/export-html");
+        /**
+         * The moments the user marked.
+         *
+         * They were missing from this export — so the keepsake of a
+         * relationship had the conversations and the memories and none
+         * of the moments. The "export everything" bundle had them.
+         */
+        const events = await getRelationshipEvents(input.personaId, ctx.user.id, 1000);
         const html = generateChatExportHTML({
           persona: data.persona,
           messages: data.messages,
@@ -1981,6 +1989,7 @@ export const appRouter = router({
           emotionSnapshots: data.emotionSnapshots,
           diaryEntries: data.diaryEntries,
           letters: data.letters,
+          events,
           intimacy,
         }, input.locale);
         const fileName = input.locale === "en"

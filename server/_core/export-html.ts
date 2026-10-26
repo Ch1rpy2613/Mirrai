@@ -24,6 +24,7 @@ const EMOTION_LABELS: Record<string, { zh: string; en: string }> = {
 const COPY = {
   zh: {
     milestones: "记忆里程碑",
+    events: "关系大事记",
     diaries: "对话日记",
     emotions: "情感时间线",
     letter: "告别信",
@@ -53,6 +54,7 @@ const COPY = {
   },
   en: {
     milestones: "Milestones",
+    events: "The moments you marked",
     diaries: "Diaries",
     emotions: "Emotional timeline",
     letter: "The farewell letter",
@@ -93,6 +95,20 @@ interface ExportParams {
   memories: Array<{ title: string; description?: string | null; category: string; date?: string | null; createdAt: Date }>;
   emotionSnapshots: Array<{ emotionalState: string; messageCount: number; date: string; createdAt: Date }>;
   diaryEntries: Array<{ date: string; summary: string | null; reflection?: string | null }>;
+  /**
+   * The relationship events.
+   *
+   * They were missing from the per-persona export — so the keepsake of
+   * a relationship had the conversations and the memories and none of
+   * the moments the user marked. The "export everything" bundle had
+   * them; the one from the chat page did not.
+   */
+  events?: Array<{
+    kind: string;
+    title: string;
+    detail?: string | null;
+    happenedAt: Date;
+  }>;
   /** The letters — what was written, and what came back. */
   letters?: Array<{
     body: string;
@@ -258,6 +274,22 @@ export function generateChatExportHTML(
     </div>`).join("\n")}
   </section>` : "";
 
+  /**
+   * The moments the user marked.
+   *
+   * They were missing from this export — the "export everything"
+   * bundle had them, and the keepsake of a relationship had the
+   * conversations and the memories and none of the moments.
+   */
+  const eventsHtml = (params.events ?? []).length > 0 ? `<section class="section">
+    <h2>${copy.events}</h2>
+    ${(params.events ?? []).map((e) => `<div class="diary-entry">
+      <span class="diary-date">${formatDate(e.happenedAt, locale)}</span>
+      <p><strong>${escapeHtml(e.title)}</strong></p>
+      ${e.detail ? `<p class="reflection">${escapeHtml(e.detail)}</p>` : ""}
+    </div>`).join("\n")}
+  </section>` : "";
+
   const letterHtml = persona.farewellLetter ? `<section class="section">
     <h2>${copy.letter}</h2>
     <div class="farewell">
@@ -326,6 +358,7 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:12px;padding-bottom:8px;border
 ${emotionSection}
 ${memoriesHtml}
 ${letterHtml}
+${eventsHtml}
 ${lettersHtml}
 <section class="section">
   <h2>${copy.transcript}</h2>
