@@ -346,41 +346,52 @@ export function buildSystemPrompt(
   const sections: Array<string | null | undefined> = [
     identityRule,
     hardRules,
+    // Everything below is material, and the material says so.
+    copy(locale, "prompt.materialIsData"),
     identitySection,
-    p.personality ? `${copy(locale, "prompt.personalityHeading")}\n${p.personality}` : "",
-    p.speakingStyle
-      ? `${copy(locale, "prompt.speakingStyleHeading")}\n${p.speakingStyle}\n${copy(
-          locale,
-          "prompt.catchphrases",
-          {
-            value:
-              (p.catchphrases || []).join(locale === "en" ? ", " : "、") ||
-              copy(locale, "prompt.noCatchphrases"),
-          },
-        )}\n${copy(locale, "prompt.nickname", {
-          value: p.nickname || copy(locale, "prompt.noNickname"),
-        })}`
+    p.personality
+      ? asMaterial(copy(locale, "prompt.personalityHeading"), p.personality)
       : "",
-    microRulesSection,
-    options.userContext || "",
-    options.quotedSection || "",
-    options.relationshipEvents || "",
+    p.speakingStyle
+      ? asMaterial(
+          copy(locale, "prompt.speakingStyleHeading"),
+          `${p.speakingStyle}\n${copy(
+            locale,
+            "prompt.catchphrases",
+            {
+              value:
+                (p.catchphrases || []).join(locale === "en" ? ", " : "、") ||
+                copy(locale, "prompt.noCatchphrases"),
+            },
+          )}\n${copy(locale, "prompt.nickname", {
+            value: p.nickname || copy(locale, "prompt.noNickname"),
+          })}`,
+        )
+      : "",
+    // These already carry their own heading.
+    microRulesSection ? asMaterial(microRulesSection) : "",
+    options.userContext ? asMaterial(options.userContext) : "",
+    options.quotedSection ? asMaterial(options.quotedSection) : "",
+    options.relationshipEvents ? asMaterial(options.relationshipEvents) : "",
     buildReachabilityNote(
       (options.reachability as Reachability) ?? "reachable",
       locale,
     ),
-    options.anchorSection || "",
-    options.memorySection || "",
-    options.summarySection || "",
-    p.memories ? `${copy(locale, "prompt.memoriesHeading")}\n${p.memories}` : "",
+    options.anchorSection ? asMaterial(options.anchorSection) : "",
+    options.memorySection ? asMaterial(options.memorySection) : "",
+    options.summarySection ? asMaterial(options.summarySection) : "",
+    p.memories ? asMaterial(copy(locale, "prompt.memoriesHeading"), p.memories) : "",
     p.attachmentStyle
-      ? `${copy(locale, "prompt.attachmentHeading")}\n${copy(locale, "prompt.attachmentStyle", {
-          value: p.attachmentStyle,
-        })}\n${copy(locale, "prompt.loveLanguage", {
-          value: p.loveLanguage || copy(locale, "prompt.unknown"),
-        })}\n${copy(locale, "prompt.conflictStyle", {
-          value: p.conflictStyle || copy(locale, "prompt.unknown"),
-        })}`
+      ? asMaterial(
+          copy(locale, "prompt.attachmentHeading"),
+          `${copy(locale, "prompt.attachmentStyle", {
+            value: p.attachmentStyle,
+          })}\n${copy(locale, "prompt.loveLanguage", {
+            value: p.loveLanguage || copy(locale, "prompt.unknown"),
+          })}\n${copy(locale, "prompt.conflictStyle", {
+            value: p.conflictStyle || copy(locale, "prompt.unknown"),
+          })}`,
+        )
       : "",
     [
       `${copy(locale, "prompt.emotionalStateHeading")}\n${
@@ -391,7 +402,9 @@ export function buildSystemPrompt(
       .filter(Boolean)
       .join("\n"),
     buildTimeAwareness(timeOfDay, togetherDays, locale, isOver),
-    options.sceneOverlay ? `${copy(locale, "prompt.sceneHeading")}\n${options.sceneOverlay}` : "",
+    options.sceneOverlay
+      ? asMaterial(copy(locale, "prompt.sceneHeading"), options.sceneOverlay)
+      : "",
     buildRealismRules(
       options.realismLevel ?? (p.realismLevel as number | undefined) ?? 70,
       locale,
@@ -399,11 +412,42 @@ export function buildSystemPrompt(
     buildRelationshipPhase(p.relationshipPhase, locale),
     copy(locale, "prompt.conversationPrinciples", { name }),
     p.customInstructions
-      ? `${copy(locale, "prompt.customInstructionsHeading")}\n${p.customInstructions}`
+      ? asMaterial(copy(locale, "prompt.customInstructionsHeading"), p.customInstructions)
       : "",
   ];
 
   return sections.filter(Boolean).join("\n\n");
+}
+
+/**
+ * The tag that says "this is material".
+ *
+ * The persona's personality is distilled from an uploaded chat log, and a
+ * chat log is full of words the user did not write. The model reads
+ * everything in its instructions as instructions, and the section
+ * headings are plain text — so a log that contained the heading could
+ * write a section of its own.
+ */
+const MATERIAL_OPEN = "<persona_data>";
+const MATERIAL_CLOSE = "</persona_data>";
+
+/**
+ * Wraps a block of material that came from the user or from the chat log.
+ *
+ * The heading goes outside the tag, so the tag is the only thing that
+ * says where the material begins and ends — and the closing tag cannot
+ * appear inside the block, because the material is the user's own and a
+ * chat log that contained it could close the block early.
+ */
+function asMaterial(body: string): string;
+function asMaterial(heading: string, body: string): string;
+function asMaterial(headingOrBody: string, body?: string): string {
+  const hasHeading = body !== undefined;
+  const text = hasHeading ? body : headingOrBody;
+  const heading = hasHeading ? headingOrBody : "";
+  const cleaned = String(text ?? "").split(MATERIAL_CLOSE).join("");
+  const head = heading ? `${heading}\n` : "";
+  return `${head}${MATERIAL_OPEN}\n${cleaned}\n${MATERIAL_CLOSE}`;
 }
 
 function buildTimeAwareness(
