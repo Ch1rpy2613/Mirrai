@@ -365,7 +365,64 @@ export async function composeMessages(params: {
  * (plus optional `emotion`); in `"stream"` mode the reply text is emitted as
  * `delta` events as it arrives.
  */
+/**
+ * The turns of one persona, one after the other.
+ *
+ * Two turns for the same persona could run at once: the web interface
+ * and a chat window on WeChat, or two tabs, or a turn overlapping with
+ * the proactive sweep.
+ *
+ * They both read the same history, so the transcript ended up as "user
+ * A, user B, reply A, reply B" — the reply to A was written without
+ * seeing B's message, and B's message was answered by a reply that
+ * knew nothing about it.
+ */
+const personaQueues = new Map<number, Promise<void>>();
+
+/**
+ * Waits for the persona's turn, and takes the next one.
+ *
+ * Returns the function that gives the turn back.
+ */
+async function takeTurn(personaId: number): Promise<() => void> {
+  const previous = personaQueues.get(personaId) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const chain = previous.then(() => gate);
+  personaQueues.set(personaId, chain);
+  await previous;
+  return () => {
+    release();
+    // Nothing is waiting any more: the queue is free.
+    if (personaQueues.get(personaId) === chain) personaQueues.delete(personaId);
+  };
+}
+
+/**
+ * A conversation with a persona.
+ *
+ * The turns of one persona are one after the other.
+ */
 export async function* runConversation(
+  options: ConversationOptions & { mode: ChatMode },
+): AsyncGenerator<ChatEvent> {
+  const release = await takeTurn(options.persona.id);
+  try {
+    for await (const event of runConversationTurn(options)) {
+      yield event;
+    }
+  } finally {
+    release();
+  }
+}
+
+/**
+ * One turn: the user's message, the persona's answer, and everything
+ * that is written down around it.
+ */
+async function* runConversationTurn(
   options: ConversationOptions & { mode: ChatMode },
 ): AsyncGenerator<ChatEvent> {
   const { persona, userId, message } = options;
@@ -388,7 +445,20 @@ export async function* runConversation(
 
   const defaultConfig = await db.getDefaultLlmConfig(userId);
   const extraConfig = (defaultConfig?.extraConfig as any) ?? {};
-  const contextLimit = extraConfig.contextLimit || 20;
+  /**
+   * How many messages of history the turn carries.
+   *
+   * The number is read from the user's own settings, and the settings
+   * accept any shape — so a value that is not a number made the limit
+   * NaN, and `history.slice(-(NaN - 1))` is `slice(NaN)`, which is the
+   * whole history. Every turn then sent two hundred messages to the
+   * provider, the provider answered "context length exceeded", and the
+   * bill went up on every turn.
+   *
+   * The settings are checked when they are written, but a row written
+   * before that — or one written by hand — is checked here too.
+   */
+  const contextLimit = clampContextLimit(extraConfig.contextLimit);
 
   // The user's turn is stored first so the history and any summarisation see it.
   if (!options.alreadyPersisted) {
@@ -625,8 +695,16 @@ export async function* runConversation(
 
   yield { type: "emotion", state: newEmotionalState, reason: emotion.reason };
 
+  /**
+   * The count goes up by one.
+   *
+   * It used to be read at the start of the turn and written back as an
+   * absolute number — so two turns that overlapped both read N and both
+   * wrote N+1, and one turn was never counted. The count is a gate on
+   * the graduation.
+   */
+  const chatCount = await db.incrementChatCount(persona.id, userId);
   await db.updatePersona(persona.id, userId, {
-    chatCount: (persona.chatCount || 0) + 1,
     lastChatAt: new Date(),
     emotionalState: newEmotionalState as any,
   });
@@ -686,7 +764,7 @@ export async function* runConversation(
     persona,
     userId,
     intimacyLevel: intimacy.level,
-    chatCount: (persona.chatCount || 0) + 1,
+    chatCount,
   });
 
   // The streaming path already emitted the reply text; the check-in and the

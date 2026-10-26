@@ -709,6 +709,28 @@ export async function getPersonaById(id: number, userId: number) {
   return result[0];
 }
 
+/**
+ * Adds one to a persona's chat count.
+ *
+ * The count used to be read at the start of the turn and written back
+ * as an absolute number — so two turns that overlapped both read N and
+ * both wrote N+1, and one turn was never counted. The count is a gate
+ * on the graduation, so a persona could reach the ritual with fewer
+ * conversations than it had.
+ *
+ * The increment is done by the database, so it cannot be lost.
+ */
+export async function incrementChatCount(id: number, userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .update(personas)
+    .set({ chatCount: sql`"chatCount" + 1` })
+    .where(and(eq(personas.id, id), eq(personas.userId, userId)))
+    .returning({ chatCount: personas.chatCount });
+  return rows[0]?.chatCount ?? 0;
+}
+
 export async function updatePersona(id: number, userId: number, data: Partial<InsertPersona>) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");

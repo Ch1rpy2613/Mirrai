@@ -7,6 +7,7 @@ const createEmotionSnapshot = vi.fn();
 const getIntimacyData = vi.fn();
 const updateIntimacy = vi.fn();
 const updatePersona = vi.fn();
+const incrementChatCount = vi.fn();
 const getPersonaById = vi.fn();
 const getMessagesByPersonaId = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
@@ -42,6 +43,7 @@ vi.mock("../db", () => ({
   getIntimacyData: (...a: unknown[]) => getIntimacyData(...a),
   updateIntimacy: (...a: unknown[]) => updateIntimacy(...a),
   updatePersona: (...a: unknown[]) => updatePersona(...a),
+  incrementChatCount: (...a: unknown[]) => incrementChatCount(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getMessagesByPersonaId: (...a: unknown[]) => getMessagesByPersonaId(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
@@ -479,6 +481,42 @@ describe("runConversation", () => {
     expect(assistantCall.content).not.toContain("12356");
   });
 
+  it("runs the turns of one persona one after the other", async () => {
+    // Two turns for the same persona used to run at once — the web
+    // interface and a chat window, or two tabs. They both read the same
+    // history, so the transcript ended up as "user A, user B, reply A,
+    // reply B": the reply to A was written without seeing B's message.
+    const order: string[] = [];
+    invokeWithProvider.mockImplementation(async () => {
+      order.push("start");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      order.push("end");
+      return "在的。";
+    });
+
+    const first = (async () => {
+      for await (const _ of runConversation({
+        persona: persona(),
+        userId: 1,
+        message: "在吗",
+        mode: "once",
+      })) { /* drain */ }
+    })();
+    const second = (async () => {
+      for await (const _ of runConversation({
+        persona: persona(),
+        userId: 1,
+        message: "在吗",
+        mode: "once",
+      })) { /* drain */ }
+    })();
+
+    await Promise.all([first, second]);
+
+    // The two turns did not overlap.
+    expect(order).toEqual(["start", "end", "start", "end"]);
+  });
+
   it("assesses the emotional trajectory and lets it suggest graduation earlier", async () => {
     getMessagesSince.mockResolvedValue(
       Array.from({ length: 8 }, (_, i) => ({
@@ -514,6 +552,10 @@ describe("runConversation", () => {
         windowEnd: new Date("2026-01-15T12:00:00Z"),
         createdAt: new Date("2026-01-15T12:00:00Z"),
       });
+
+    // The count is now read back from the database after the
+    // increment, so it is the mock that says what it is.
+    incrementChatCount.mockResolvedValue(26);
 
     const events = [];
     for await (const event of runConversation({
