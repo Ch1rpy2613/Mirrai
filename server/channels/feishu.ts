@@ -337,6 +337,18 @@ export class FeishuAdapter implements ChannelAdapter {
 
     const lark = await loadSdk(locale);
 
+    /**
+     * The app id is checked before anything is started.
+     *
+     * The SDK checks it too — and when it does not match, it writes an
+     * error to its own log and *returns*, without connecting. So the
+     * channel said "connected" and nothing was behind it, and the only
+     * trace was a line in the server's log that nobody reads.
+     */
+    if (!/^cli_[0-9a-fA-F]{16}$/.test(credentials.appId)) {
+      throw new Error(copy(locale, "errors.feishuInvalidAppId"));
+    }
+
     const client = new lark.Client({
       appId: credentials.appId,
       appSecret: credentials.appSecret,
@@ -394,8 +406,31 @@ export class FeishuAdapter implements ChannelAdapter {
       },
     });
 
-    ws.start({ eventDispatcher: dispatcher });
+    /**
+     * The connection is started, and what happened is looked at.
+     *
+     * `start` resolves as soon as it has *begun* — it does not wait
+     * for the socket, and it never fails, because the failure happens
+     * in the socket. So the status was set to "connected" before
+     * anything was connected, and a Feishu that refused the connection
+     * showed "connected" for ever.
+     *
+     * The state is read from the client instead: "connected" is only
+     * written when the socket is really up.
+     */
+    await ws.start({ eventDispatcher: dispatcher });
     connections.set(userId, { client, ws });
+
+    const state = ws.getConnectionStatus?.();
+    if (state && state.state !== "connected") {
+      connections.delete(userId);
+      const message = copy(locale, "errors.feishuNotConnected");
+      await db.upsertChannelState(userId, CHANNEL_ID, {
+        status: "error",
+        lastError: message,
+      }).catch(() => {});
+      throw new Error(message);
+    }
 
     await db.upsertChannelState(userId, CHANNEL_ID, {
       status: "connected",

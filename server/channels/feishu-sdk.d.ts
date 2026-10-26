@@ -30,8 +30,10 @@ declare module "@larksuiteoapi/node-sdk" {
   }
 
   export interface FeishuWSClient {
-    start(config: { eventDispatcher: FeishuEventDispatcher }): void;
+    start(config: { eventDispatcher: FeishuEventDispatcher }): Promise<void>;
     close?(): void;
+    /** The state of the socket, when the SDK is new enough to have it. */
+    getConnectionStatus?(): { state: string; reconnectAttempts?: number };
   }
 
   export class Client {
@@ -50,8 +52,9 @@ declare module "@larksuiteoapi/node-sdk" {
 
   export class WSClient {
     constructor(config: { appId: string; appSecret: string });
-    start(config: { eventDispatcher: FeishuEventDispatcher }): void;
+    start(config: { eventDispatcher: FeishuEventDispatcher }): Promise<void>;
     close?(): void;
+    getConnectionStatus?(): { state: string; reconnectAttempts?: number };
   }
 
   export const AppType: { SelfBuild: unknown; ISV: unknown };

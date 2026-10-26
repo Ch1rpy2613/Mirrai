@@ -317,6 +317,11 @@ export const ERRORS = {
     zh: "飞书通道尚未连接。",
     en: "The Feishu channel is not connected yet.",
   },
+  /** The App ID does not look like a Feishu App ID, so nothing can connect. */
+  "errors.feishuInvalidAppId": {
+    zh: "这个 App ID 不像是飞书的 App ID（应以 cli_ 开头，后面是十六位十六进制字符），通道没有连接。",
+    en: "That App ID does not look like a Feishu App ID (it should start with cli_ and be followed by sixteen hexadecimal characters), so the channel did not connect.",
+  },
   "errors.feishuNoBinding": {
     zh: "还没有绑定任何飞书会话。",
     en: "No Feishu conversation is bound yet.",
