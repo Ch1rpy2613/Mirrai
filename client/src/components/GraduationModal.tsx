@@ -68,7 +68,15 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
     if (phase === "letter") { onClose(); return; }
     if (!declinesOnCancel(variant)) { onClose(); return; }
     if (declineMutation.isPending) return;
-    declineMutation.mutate({ id: personaId }, { onSettled: onClose });
+    /**
+     * The window closes when the refusal is recorded.
+     *
+     * It closed on "settled" — which is either "done" or "failed". So
+     * a refusal that did not go through still closed the window, and
+     * the user was left with the offer gone and the app offering it
+     * again on the next turn.
+     */
+    declineMutation.mutate({ id: personaId }, { onSuccess: onClose });
   });
 
   // The window is always mounted — the chat page passes `open` rather
