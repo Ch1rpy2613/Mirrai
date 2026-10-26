@@ -6,7 +6,7 @@
 > 状态：✅ 已实现并有测试 · 🟡 已实现但没有专门的测试 · ⬜ 未做 · 🔒 暂不排期
 >
 > **执行记录：2026-10-26** · Phase 0–5 全部实现 ·
-> `pnpm check` 干净 · **121 个测试文件 / 1583 个测试全绿**（连跑三遍无抖动）·
+> `pnpm check` 干净 · **122 个测试文件 / 1593 个测试全绿**（连跑三遍无抖动）·
 > `pnpm audit:i18n` 0 命中 · `vite build` 通过 ·
 > 三条新迁移在真实 PostgreSQL 上跑通（`drizzle-kit push` + `scripts/migrate.mjs`），
 > 评测与行为画像各在真实数据库上端到端验过。
@@ -281,9 +281,23 @@ pnpm eval -- --persona <id> --user <id> --gate   # 基线不得回归
 | 时间习惯 | `measureAndSaveBehaviorProfile` | 量出 `replyGapMedianSec≈42s`、`activeHours=[20,21]`——记录写的是 12:00 UTC，换成 TA 自己的 Asia/Shanghai 就是 20 点。**时区换算是真的在起作用** |
 | 兜底 | `writeFarewellLetterWithStatus` | 两遍生成不可用时退回单遍，并返回 `degraded: true`；`personas.farewellDegraded` 落库，界面会标明「这是简化版」 |
 
+**第五轮补上的**（CI 上真的会跑的那些）：
+
+| | 验了什么 | 结果 |
+|---|---|---|
+| 结构闸门 | 逐条破坏它检查的东西，看它抓不抓得到 | 五个变异**全被抓到**：规则不读了、候选混进去了、jsonb 往返丢规则、不完美不跟状态走、Layer 0 底线被删 |
+| 闸门自己的测试 | `server/_core/fidelity-gate.test.ts` | 10 条，**每次 CI 都跑**——闸门的牙自己也得有人看 |
+| 闸门的工作流 | `.github/workflows/fidelity.yml` 在真实 push 上 | 20 秒，绿色，不需要任何 secret |
+| 闸门的噪声 | 用真实的 `ngramOverlap` 模拟「同一个分身、两次独立采样」 | **什么都没改，第二次比第一次差 0.02 以上的概率 42%**——噪声是容差的 5.7 倍。这就是闸门换成结构闸门的原因（附录 E 第 33 条） |
+| 记录恢复 | `pg_dump` → base64 → 解码 → 恢复（按 CI 的写法本地跑） | 8 个分身、5 个用户，一个不少。**并且发现 `pg_dump` 18 写的 `\restrict` 是 psql 18 的命令，CI 上的 psql 会当场报错**——已修 |
+
 **还没有在真实环境验过的**（需要真人）：E4 的人工盲测、F5 的告别信人工验收、
 以及 `docs/eval/baseline.md` 里的基线数字——它们需要真实的聊天记录，
 仓库里没有，也不该有。
+
+**也还没验的**：保真测量在**真** provider 上的噪声。上面那个 42% 是用真实的
+指标函数、拿「改写」当采样代理估出来的，量级可信，绝对值要等有记录、有
+provider 之后用 `--calibrate` 量。
 
 ## 附录 D — 一句话总结这一阶段
 

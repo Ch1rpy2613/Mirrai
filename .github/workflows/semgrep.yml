@@ -46,4 +46,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
+          # Its own category, so Semgrep's findings and CodeQL's cannot
+          # overwrite each other in the code scanning dashboard. Both
+          # upload SARIF, and the default category is the same for both.
+          category: semgrep
         if: always()
