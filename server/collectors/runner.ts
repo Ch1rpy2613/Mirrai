@@ -57,6 +57,58 @@ function killChild(child: ChildProcess): void {
 }
 
 /**
+ * The environment a collector is given.
+ *
+ * Only what a script needs to run: where Python is, where the operating
+ * system's binaries are, the user's home directory and the language.
+ * Everything else — the session key, the credential key, the database
+ * URL, every provider key — belongs to the app and not to a script that
+ * collects chat logs.
+ */
+function collectorEnvironment(): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH ?? "",
+    HOME: process.env.HOME ?? "",
+    USERPROFILE: process.env.USERPROFILE,
+    LANG: process.env.LANG ?? "C.UTF-8",
+    LC_ALL: process.env.LC_ALL ?? process.env.LANG ?? "C.UTF-8",
+    PYTHONIOENCODING: "utf-8",
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
+    // The browsers the collectors read from live in the user's profile,
+    // and the scripts find them through these.
+    LOCALAPPDATA: process.env.LOCALAPPDATA,
+    APPDATA: process.env.APPDATA,
+    // A proxy setting is sometimes the only way a script can reach the
+    // network at all, and it says nothing about the secrets.
+    HTTP_PROXY: process.env.HTTP_PROXY,
+    HTTPS_PROXY: process.env.HTTPS_PROXY,
+    NO_PROXY: process.env.NO_PROXY,
+  };
+}
+
+/**
+ * How much of a collector's output is kept.
+ *
+ * The buffers grew for the whole run — up to half an hour — so a
+ * chatty or looping collector could exhaust the server's heap, and the
+ * heap is the process: the whole server goes down, not just the job.
+ */
+const MAX_COLLECTOR_OUTPUT_CHARS = 1024 * 1024;
+
+/**
+ * Keeps the first part of what a collector said.
+ *
+ * The beginning is what matters: it is where the progress lines and the
+ * first error are.
+ */
+function appendCapped(buffer: string, chunk: string): string {
+  if (buffer.length >= MAX_COLLECTOR_OUTPUT_CHARS) return buffer;
+  return (buffer + chunk).slice(0, MAX_COLLECTOR_OUTPUT_CHARS);
+}
+
+/**
  * Runs `python3 tools/<tool>` inside the skill-engine directory.
  *
  * stdin is closed on purpose: the collectors' `--setup` flow asks for
@@ -79,7 +131,16 @@ export async function runCollector(
 
   const child = spawn(ENV.pythonPath, [`tools/${tool}`, ...args], {
     cwd: ENV.skillEngineDir,
-    env: process.env,
+    // The child is given a small environment of its own.
+    //
+    // It used to inherit the server's whole environment: the session
+    // signing key, the key the stored credentials are encrypted with,
+    // the database URL and every provider key. The collectors are
+    // third-party Python scripts that the operator may not have
+    // audited, and one careless script could exfiltrate the whole
+    // instance's secrets — including the ability to forge a session
+    // and to decrypt the stored credentials.
+    env: collectorEnvironment(),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -98,7 +159,7 @@ export async function runCollector(
 
     child.stdout?.setEncoding("utf-8");
     child.stdout?.on("data", (chunk: string) => {
-      stdout += chunk;
+      stdout = appendCapped(stdout, chunk);
       stdoutBuffer += chunk;
       const lines = stdoutBuffer.split("\n");
       stdoutBuffer = lines.pop() ?? "";
@@ -109,7 +170,7 @@ export async function runCollector(
 
     child.stderr?.setEncoding("utf-8");
     child.stderr?.on("data", (chunk: string) => {
-      stderr += chunk;
+      stderr = appendCapped(stderr, chunk);
       stderrBuffer += chunk;
       const lines = stderrBuffer.split("\n");
       stderrBuffer = lines.pop() ?? "";
