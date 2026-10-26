@@ -192,14 +192,28 @@ export async function handleFeishuEvent(params: {
    * It happens to be safe only because the chat ids are unique.
    */
   const personaId = getActivePersonaId(chatId, defaultPersonaId, userId);
-  const reply = await handleChannelChat({
-    userId,
-    conversationKey: chatId,
-    personaId,
-    messageText: text,
-    channel: CHANNEL_ID,
-    locale,
-  });
+  let reply: string | null = null;
+  try {
+    reply = await handleChannelChat({
+      userId,
+      conversationKey: chatId,
+      personaId,
+      messageText: text,
+      channel: CHANNEL_ID,
+      locale,
+    });
+  } catch (e) {
+    /**
+     * The user is told.
+     *
+     * The failure used to be swallowed: the pipeline reports it as an
+     * event, so it arrived here as an empty reply and the message was
+     * dropped without a word.
+     */
+    console.warn("[Feishu] Could not answer:", (e as Error).message);
+    await sendText(chatId, copy(locale, "channels.replyFailed"));
+    return;
+  }
 
   if (!reply) return;
 

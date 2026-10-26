@@ -8,6 +8,7 @@ import type { ParsedInbound } from "./ilink/parse";
 import { getActivePersonaId, handleCommand } from "./commands";
 import { handlePersonaChat } from "./persona-bridge";
 import * as db from "../db";
+import { copy } from "@shared/copy";
 
 export async function handleWeixinMessage(
   userId: number,
@@ -54,12 +55,27 @@ export async function handleWeixinMessage(
   // wrong persona id is then looked up with the caller's id, finds
   // nothing, and the message is never answered.
   const personaId = getActivePersonaId(parsed.fromUserId, defaultPersonaId, userId);
-  const reply = await handlePersonaChat({
-    userId,
-    wechatUserId: parsed.fromUserId,
-    personaId,
-    messageText: text,
-  });
+  let reply: string | null = null;
+  try {
+    reply = await handlePersonaChat({
+      userId,
+      wechatUserId: parsed.fromUserId,
+      personaId,
+      messageText: text,
+    });
+  } catch (e) {
+    /**
+     * The user is told.
+     *
+     * The failure used to be swallowed: the pipeline reports it as an
+     * event, so it arrived here as an empty reply and the message was
+     * dropped without a word. The user watched their message sit there
+     * unanswered.
+     */
+    console.warn("[WeChat] Could not answer:", (e as Error).message);
+    await sendText(userId, parsed, copy(await db.getUserLocale(userId), "channels.replyFailed"));
+    return;
+  }
 
   if (!reply) return;
 

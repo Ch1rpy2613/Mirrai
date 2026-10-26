@@ -9,6 +9,10 @@
 import type { CopyTable } from "./index";
 
 export const ERRORS = {
+  "errors.replyFailed": {
+    zh: "这次没能说出话来，请再试一次",
+    en: "The reply could not be produced this time — please try again",
+  },
   "errors.regenerateFailed": {
     zh: "这次没能重新生成回答，原来的回答还在",
     en: "The reply could not be generated this time — the old one is still there",

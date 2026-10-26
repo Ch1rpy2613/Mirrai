@@ -1429,6 +1429,7 @@ export const appRouter = router({
         let graduationSuggested = false;
         let careNote = null;
         let crisis = false;
+        let failure: string | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -1444,11 +1445,27 @@ export const appRouter = router({
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
+          else if (event.type === "error") failure = event.message;
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
             crisis = event.crisis;
           }
+        }
+        /**
+         * A failure is a failure.
+         *
+         * The pipeline reports one as an event rather than as an
+         * exception, so it used to arrive here as an empty reply — and
+         * the mutation reported success. The user saw an empty bubble
+         * with no message about it, and on WeChat and Feishu the message
+         * was dropped without a word.
+         */
+        if (failure) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: copy(ctx.locale, "errors.replyFailed"),
+          });
         }
 
         return { reply, emotionalState, graduationSuggested, careNote, crisis };
@@ -1505,6 +1522,7 @@ export const appRouter = router({
         let graduationSuggested = false;
         let careNote = null;
         let crisis = false;
+        let failure: string | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -1518,11 +1536,19 @@ export const appRouter = router({
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
+          else if (event.type === "error") failure = event.message;
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
             crisis = event.crisis;
           }
+        }
+        // A failure is reported, not swallowed. See the note in `send`.
+        if (failure) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: copy(ctx.locale, "errors.replyFailed"),
+          });
         }
 
         return { reply, emotionalState, imageUrl: url, graduationSuggested, careNote, crisis };
@@ -1604,6 +1630,7 @@ export const appRouter = router({
         let graduationSuggested = false;
         let careNote = null;
         let crisis = false;
+        let failure: string | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -1617,11 +1644,19 @@ export const appRouter = router({
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
+          else if (event.type === "error") failure = event.message;
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
             crisis = event.crisis;
           }
+        }
+        // A failure is reported, not swallowed. See the note in `send`.
+        if (failure) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: copy(ctx.locale, "errors.replyFailed"),
+          });
         }
 
         return { reply, emotionalState, transcription, voiceUrl: url, graduationSuggested, careNote, crisis };

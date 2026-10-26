@@ -142,6 +142,10 @@ export const CHANNELS = {
     zh: "这个通道还没有连接。",
     en: "This channel is not connected yet.",
   },
+  "channels.replyFailed": {
+    zh: "刚才没能说出话来，请再发一次。",
+    en: "The reply could not be produced just now — please send it again.",
+  },
   "channels.messageFailed": {
     zh: "消息没有发出去：{{reason}}",
     en: "The message was not sent: {{reason}}",

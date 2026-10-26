@@ -60,6 +60,16 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
     })) {
       if (event.type === "delta") {
         reply = (reply ?? "") + event.text;
+      } else if (event.type === "error") {
+        /**
+         * A failure is a failure.
+         *
+         * The pipeline reports one as an event rather than as an
+         * exception, so it used to arrive here as an empty reply — and
+         * the channel dropped the message without a word. The user saw
+         * their message sit there unanswered.
+         */
+        throw new Error(event.message || "The reply could not be produced.");
       } else if (event.type === "done") {
         graduationSuggested = event.graduationSuggested;
       }
