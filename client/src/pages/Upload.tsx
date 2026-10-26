@@ -197,11 +197,23 @@ export default function Upload() {
   // pipeline stage — "正在分析人物性格" is a summary, the job knows whether it
   // is researching, auditing or building.
   const jobId = persona?.skillJobId ?? null;
-  const { data: jobStatus } = trpc.skillEngine.getJobStatus.useQuery(
+  const { data: jobStatus, error: jobStatusError } = trpc.skillEngine.getJobStatus.useQuery(
     { jobId: jobId ?? 0 },
     {
       enabled: isAuthenticated && jobId !== null,
       refetchInterval: (query) => {
+        /**
+         * The poll stops when the run is over — and when the request
+         * itself fails.
+         *
+         * The status comes back as nothing when the job row is gone,
+         * or when the server is having a bad moment, so the stage is
+         * nothing too — and the poll went on firing every one and a
+         * half seconds for as long as the page was open. Forty
+         * requests a minute to the user's own server, and the page
+         * looked perfectly normal.
+         */
+        if (query.state.error) return false;
         const stage = query.state.data?.pipelineStage;
         return stage === "complete" || stage === "error" ? false : 1500;
       },
@@ -294,13 +306,30 @@ export default function Upload() {
 
   /**
    * A failed request is not a list that has not arrived yet.
+   *
+   * The screen has a way out: the header that carries the back button
+   * is drawn *after* this, so without one the user was stranded on a
+   * page with nothing to press but the browser's back button.
    */
   if (filesError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-6">
-        <div className="text-center space-y-3">
-          <p className="text-sm text-foreground/80">{t("common.error")}</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-40 app-header">
+          <div className="container app-nav">
+            <button onClick={() => navigate("/")}
+              className="app-nav-back -ml-1 gap-1">
+              <ArrowLeft className="w-4 h-4" /><span className="text-sm">{t("common.back")}</span>
+            </button>
+          </div>
+        </header>
+        <main className="container page-main max-w-3xl">
+          <div className="text-center space-y-4 py-16">
+            <p className="text-sm text-foreground/80">{t("common.error")}</p>
+            <Button variant="outline" size="sm" onClick={() => refetchFiles()}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        </main>
       </div>
     );
   }

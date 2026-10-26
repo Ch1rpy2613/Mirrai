@@ -41,7 +41,7 @@ export default function PersonaProfile() {
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
 
-  const { data: persona, isLoading, isError, error } = trpc.persona.get.useQuery(
+  const { data: persona, isLoading, isError, error, refetch } = trpc.persona.get.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && hasPersonaId },
   );
@@ -62,13 +62,32 @@ export default function PersonaProfile() {
   // back and no explanation.
   if (!hasPersonaId) return <NotFound />;
 
+  /**
+   * The screen has a way out.
+   *
+   * The header that carries the back button is drawn *after* this, so
+   * a failed request used to strand the user on a page with nothing to
+   * press but the browser's back button.
+   */
   if (isError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-6">
-        <div className="text-center space-y-3">
-          <p className="text-sm text-foreground/80">{t("errors.notFound")}</p>
-          <p className="text-xs text-muted-foreground">{(error as any)?.message ?? ""}</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-40 app-header">
+          <div className="container app-nav">
+            <button onClick={() => navigate(`/chat/${personaId}`)} className="app-nav-back -ml-1 gap-1">
+              <ArrowLeft className="w-4 h-4" /><span className="text-sm">{t("common.back")}</span>
+            </button>
+          </div>
+        </header>
+        <main className="container page-main max-w-3xl">
+          <div className="text-center space-y-4 py-16">
+            <p className="text-sm text-foreground/80">{t("errors.notFound")}</p>
+            <p className="text-xs text-muted-foreground">{(error as any)?.message ?? ""}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        </main>
       </div>
     );
   }

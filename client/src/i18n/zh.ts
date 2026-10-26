@@ -104,6 +104,7 @@ export const zh = {
     pageDescription: "上传聊天记录，AI 重建 TA 的数字分身。不在身边的时候，TA 还在这里。",
     loading: "加载中…",
     error: "出了点问题。",
+    retry: "重试",
     save: "保存",
     cancel: "取消",
     delete: "删除",
