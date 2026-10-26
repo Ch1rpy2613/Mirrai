@@ -939,7 +939,17 @@ export const researchProfiles = pgTable("research_profiles", {
   qualityReport: jsonb("qualityReport"),
   status: varchar("status", { length: 32 }).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * One row per persona and profile.
+   *
+   * The table says so — but the write was a plain insert, so every
+   * celebrity distillation added another row, and the table grew for
+   * the life of the instance.
+   */
+  personaProfileUnique: uniqueIndex("research_profiles_persona_profile_idx")
+    .on(table.personaId, table.userId, table.profile),
+}));
 
 export type ResearchProfile = typeof researchProfiles.$inferSelect;
 export type InsertResearchProfile = typeof researchProfiles.$inferInsert;

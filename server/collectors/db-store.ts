@@ -81,6 +81,16 @@ async function writeJobSnapshot(job: CollectorJob): Promise<void> {
    * saw a job stuck at an earlier stage.
    */
   await db.upsertCollectionJob(job.id, Number(job.userId), data);
+  /**
+   * The old jobs are forgotten.
+   *
+   * The jobs are mirrored into the database so that they survive a
+   * restart — and nothing ever deleted them, so the table grew for the
+   * life of the instance.
+   */
+  await db.pruneCollectionJobs(Number(job.userId)).catch((e) => {
+    console.warn("[Collectors] Could not prune the old jobs:", e);
+  });
 }
 
 /**

@@ -3204,10 +3204,34 @@ export async function appendPersonaCorrection(
 /**
  * Stores the artefacts of the celebrity research flow.
  */
+/**
+ * Stores the research artefacts.
+ *
+ * The row is written by (persona, profile) — so a second distillation
+ * of the same persona with the same profile *replaces* the first one.
+ *
+ * The write used to be a plain insert, so every run added another row
+ * and the table grew for the life of the instance, with the newest run
+ * and the one before it both sitting there.
+ */
 export async function createResearchProfile(data: InsertResearchProfile) {
   const db = await getDb();
   if (!db) return undefined;
-  const [result] = await db.insert(researchProfiles).values(data)
+  const [result] = await db
+    .insert(researchProfiles)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [researchProfiles.personaId, researchProfiles.userId, researchProfiles.profile],
+      set: {
+        notes: data.notes,
+        audit: data.audit,
+        synthesis: data.synthesis,
+        validation: data.validation,
+        qualityReport: data.qualityReport,
+        status: data.status,
+        createdAt: data.createdAt ?? new Date(),
+      },
+    })
     .returning({ id: researchProfiles.id });
   return result.id;
 }
@@ -3506,6 +3530,35 @@ export async function getRunningCollectionJobs(): Promise<RunningCollectionJob[]
  * user's collection jobs — their source, their status and their error
  * text.
  */
+/**
+ * Forgets the collection jobs that are old.
+ *
+ * The jobs are mirrored into the database so that they survive a
+ * restart — and nothing ever deleted them, so the table grew for the
+ * life of the instance. The in-memory store keeps the newest twenty;
+ * the database now keeps the same.
+ */
+export async function pruneCollectionJobs(userId: number, keep = 20): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const old = await db
+    .select({ id: collectionJobs.id })
+    .from(collectionJobs)
+    .where(eq(collectionJobs.userId, userId))
+    .orderBy(desc(collectionJobs.createdAt))
+    .offset(keep);
+  if (old.length === 0) return 0;
+  await db
+    .delete(collectionJobs)
+    .where(
+      inArray(
+        collectionJobs.id,
+        old.map((row) => row.id),
+      ),
+    );
+  return old.length;
+}
+
 export async function getCollectionJobs(userId: number, limit = 20) {
   const db = await getDb();
   if (!db) return [];
