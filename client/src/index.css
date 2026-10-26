@@ -38,7 +38,11 @@
   --color-secondary-foreground: oklch(0.30 0.020 240);
   --color-muted: oklch(0.945 0.008 85);
   --color-muted-foreground: oklch(0.50 0.020 240);
-  --color-accent: oklch(0.60 0.140 42);
+  /* The accent is the background of a focused option, and the text on
+     it has to reach the 4.5:1 contrast minimum. At 0.60 it was 4.08:1
+     — just under the line, and so close to it that any later tweak of
+     the hue would push it under for good. */
+  --color-accent: oklch(0.55 0.140 42);
   --color-accent-foreground: oklch(0.99 0.005 85);
   --color-destructive: oklch(0.54 0.180 27);
   --color-destructive-foreground: oklch(0.98 0.006 85);

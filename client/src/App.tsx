@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
@@ -52,10 +53,19 @@ function App() {
       <ThemeProvider defaultTheme="light" switchable>
         <LocaleProvider>
           <TooltipProvider>
-            <Toaster />
-            <TimezoneSync />
-            <CommandPalette />
-            <Router />
+            {/* The page transitions follow the operating system's motion
+                setting. Framer-motion's own default is "never" — it
+                does not consult the system at all — so a user with
+                vestibular sensitivity got full sliding and fading
+                transitions even though they had asked the system to
+                reduce motion. The stylesheet neutralises the CSS
+                animations, which made it look handled. */}
+            <MotionConfig reducedMotion="user">
+              <Toaster />
+              <TimezoneSync />
+              <CommandPalette />
+              <Router />
+            </MotionConfig>
           </TooltipProvider>
         </LocaleProvider>
       </ThemeProvider>

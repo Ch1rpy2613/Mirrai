@@ -37,12 +37,19 @@ export async function promptInstall(): Promise<boolean> {
   try {
     await deferredPrompt.prompt();
     const choice = await deferredPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      deferredPrompt = null;
-      notify(false);
-    }
+    // The prompt is used up, whichever way it went.
+    //
+    // It was only cleared when the user accepted — and the browser's
+    // `beforeinstallprompt` cannot fire again, so the second click
+    // threw and was reported as "the install was rejected". The user
+    // was told the install had failed when in fact the prompt was
+    // simply exhausted.
+    deferredPrompt = null;
+    notify(false);
     return choice.outcome === "accepted";
   } catch {
+    deferredPrompt = null;
+    notify(false);
     return false;
   }
 }
