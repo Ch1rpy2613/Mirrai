@@ -2156,15 +2156,58 @@ export async function getTodaySnapshot(
 export async function getMessageVolume(userId: number, days: number, timezone?: string | null) {
   const db = await getDb();
   if (!db) return [];
-  const since = new Date(); since.setDate(since.getDate() - days);
+  /**
+   * The window is the user's days.
+   *
+   * It was an absolute instant — "now, minus thirty days" — while the
+   * rows are bucketed by the user's day. So a thirty-day window covered
+   * thirty-*one* day keys: the oldest one held only part of a day, and
+   * the chart drew a bar the user could not account for.
+   */
+  const since = startOfUserDay(new Date(), timezone, Math.max(0, days - 1));
   // The shift is in minutes: an interval in hours cannot carry the half
   // hour that India, Adelaide, Kathmandu and Chatham are on, and a
   // rounded shift put the user's day boundary out by up to forty-five
   // minutes.
   const day = userDayColumn(timezone);
-  return db.select({ date: day, count: count() })
-    .from(messages).where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
+  const rows = await db.select({ date: day, count: count() })
+    .from(messages)
+    .where(and(
+      eq(messages.userId, userId),
+      // The user's own messages: the chart is about how much the *user*
+      // talked, and the persona always answers within seconds.
+      eq(messages.role, "user"),
+      gte(messages.createdAt, since),
+    ))
     .groupBy(day).orderBy(day);
+  return fillMissingDays(rows, days, timezone);
+}
+
+/**
+ * The days of a range, with the days that have nothing in them.
+ *
+ * The charts joined the days that had rows with a continuous line — so
+ * a user who was there on the first day of the month and on the last
+ * saw a smooth curve implying steady contact.
+ */
+function fillMissingDays(
+  rows: Array<{ date: string; count: number }>,
+  days: number,
+  timezone?: string | null,
+): Array<{ date: string; count: number }> {
+  const byDate = new Map(rows.map((row) => [row.date, Number(row.count)]));
+  const filled: Array<{ date: string; count: number }> = [];
+  const today = zonedDateKey(new Date(), timezone);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today);
+  if (!match) return rows;
+  const cursor = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  cursor.setUTCDate(cursor.getUTCDate() - Math.max(0, days - 1));
+  for (let i = 0; i < Math.max(1, days); i++) {
+    const key = cursor.toISOString().slice(0, 10);
+    filled.push({ date: key, count: byDate.get(key) ?? 0 });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return filled;
 }
 
 export async function getEmotionTimeline(userId: number, days: number) {
@@ -2203,7 +2246,8 @@ export async function getHourlyDistribution(
 ) {
   const db = await getDb();
   if (!db) return [];
-  const since = new Date(); since.setDate(since.getDate() - days);
+  // The user's days — see the message volume above.
+  const since = startOfUserDay(new Date(), timezone, Math.max(0, days - 1));
   /**
    * The hour, in the user's own calendar.
    *
@@ -2217,7 +2261,15 @@ export async function getHourlyDistribution(
     hour,
     count: count(),
   }).from(messages)
-    .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
+    .where(and(
+      eq(messages.userId, userId),
+      // The user's own messages: the chart is "when do *you* talk".
+      // The persona answers within seconds, so counting its replies
+      // made every hour look busy — and made the numbers disagree with
+      // the safety counter, which counts only the user's turns.
+      eq(messages.role, "user"),
+      gte(messages.createdAt, since),
+    ))
     .groupBy(hour);
 }
 
@@ -2228,9 +2280,15 @@ export async function getAnalyticsStats(
 ) {
   const db = await getDb();
   if (!db) return { totalMessages: 0, activeDays: 0, longestStreak: 0, avgPerDay: 0 };
-  const since = new Date(); since.setDate(since.getDate() - days);
+  // The user's days — see the message volume above.
+  const since = startOfUserDay(new Date(), timezone, Math.max(0, days - 1));
   const [msgCount] = await db.select({ c: count() }).from(messages)
-    .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)));
+    .where(and(
+      eq(messages.userId, userId),
+      // The user's own messages, like the charts beside it.
+      eq(messages.role, "user"),
+      gte(messages.createdAt, since),
+    ));
   /**
    * The days the user was active, in the user's own calendar.
    *
@@ -2240,7 +2298,11 @@ export async function getAnalyticsStats(
    */
   const day = userDayColumn(timezone);
   const activeDaysRows = await db.select({ d: day }).from(messages)
-    .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
+    .where(and(
+      eq(messages.userId, userId),
+      eq(messages.role, "user"),
+      gte(messages.createdAt, since),
+    ))
     .groupBy(day).orderBy(day);
   const activeDays = activeDaysRows.length;
   let longestStreak = 0, currentStreak = 0;
@@ -2254,7 +2316,20 @@ export async function getAnalyticsStats(
     }
     longestStreak = Math.max(longestStreak, currentStreak);
   }
-  return { totalMessages: msgCount?.c || 0, activeDays, longestStreak, avgPerDay: activeDays > 0 ? Math.round((msgCount?.c || 0) / activeDays) : 0 };
+  return {
+    totalMessages: msgCount?.c || 0,
+    activeDays,
+    longestStreak,
+    /**
+     * The average over the *range*.
+     *
+     * It was over the days the user was there — so a hundred messages
+     * over five active days in a thirty-day window read as "twenty
+     * messages a day", six times what the label implies, with the
+     * denominator never stated.
+     */
+    avgPerDay: Math.round((msgCount?.c || 0) / Math.max(1, days)),
+  };
 }
 
 // ─── Diary helpers ────────────────────────────────────────────────────────
