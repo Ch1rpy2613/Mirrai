@@ -10,6 +10,7 @@ import {
   selectImperfection,
   type ImperfectionEntry,
 } from "@shared/imperfection";
+import { normalizePersonaData } from "./persona-schema";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -215,9 +216,31 @@ export function buildSystemPrompt(
       ? { sceneOverlay: sceneOrOptions ?? null }
       : sceneOrOptions;
 
-  const p = (persona.personaData as any) || {};
+  /**
+   * The persona's own data, normalised.
+   *
+   * It used to be read raw, and the prompt calls `.join()`, `.filter()`
+   * and `.map()` on several of its fields. The data is written by a
+   * procedure that accepts any JSON shape at all, so one field with the
+   * wrong type — `catchphrases: "我准备好了"`, `microRules: "oops"` —
+   * threw a TypeError on *every* chat turn for that persona, and the
+   * user had no way to repair it.
+   *
+   * The normaliser exists to coerce exactly this, and it is applied on
+   * the distillation, the card, the questionnaire and the correction
+   * paths. It was missing here, on the path every message goes through.
+   *
+   * The fields it does not know about are kept: `customInstructions` —
+   * the user's own words to the persona — is not one of its fields, and
+   * it is read further down.
+   */
   const name = persona.name;
   const locale = options.locale ?? "zh";
+  const raw = (persona.personaData as any) || {};
+  const p = {
+    ...raw,
+    ...normalizePersonaData(raw, { name, locale }),
+  } as any;
   const rel = persona.relationshipDesc || copy(locale, "prompt.relationshipDefault");
   const from = persona.togetherFrom || "";
   const to = persona.togetherTo || "";
