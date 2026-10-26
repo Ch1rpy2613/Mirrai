@@ -1336,10 +1336,21 @@ async function syncWechatChannelBinding(params: {
   }).onConflictDoNothing();
 }
 
-export async function deleteWechatBinding(id: number, userId: number) {
+/**
+ * Removes a WeChat binding.
+ *
+ * It says whether a row was actually removed: the delete is scoped to
+ * the owner, so a row that does not exist — or belongs to somebody
+ * else — is silently not removed, and the caller used to report that
+ * as a success.
+ */
+export async function deleteWechatBinding(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.delete(wechatBindings).where(and(eq(wechatBindings.id, id), eq(wechatBindings.userId, userId)));
+  const rows = await db.delete(wechatBindings)
+    .where(and(eq(wechatBindings.id, id), eq(wechatBindings.userId, userId)))
+    .returning({ id: wechatBindings.id });
+  return rows.length > 0;
 }
 
 // ─── Skill Job helpers ──────────────────────────────────────────────────────
@@ -1719,10 +1730,18 @@ export async function updateMemory(
   return row ?? null;
 }
 
-export async function deleteMemory(id: number, userId: number) {
+/**
+ * Removes a memory.
+ *
+ * It says whether a row was actually removed — see `deleteWechatBinding`.
+ */
+export async function deleteMemory(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.delete(memories).where(and(eq(memories.id, id), eq(memories.userId, userId)));
+  const rows = await db.delete(memories)
+    .where(and(eq(memories.id, id), eq(memories.userId, userId)))
+    .returning({ id: memories.id });
+  return rows.length > 0;
 }
 
 // ─── Emotion Snapshot helpers ─────────────────────────────────────────────
@@ -1981,10 +2000,18 @@ export async function getDiaryByDate(personaId: number, userId: number, date: st
   return rows[0];
 }
 
-export async function deleteDiaryEntry(id: number, userId: number) {
+/**
+ * Removes a diary entry.
+ *
+ * It says whether a row was actually removed — see `deleteWechatBinding`.
+ */
+export async function deleteDiaryEntry(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.delete(diaryEntries).where(and(eq(diaryEntries.id, id), eq(diaryEntries.userId, userId)));
+  const rows = await db.delete(diaryEntries)
+    .where(and(eq(diaryEntries.id, id), eq(diaryEntries.userId, userId)))
+    .returning({ id: diaryEntries.id });
+  return rows.length > 0;
 }
 
 /**
@@ -2538,11 +2565,18 @@ export async function getSafetyEvents(userId: number, limit = 50) {
     .orderBy(desc(safetyEvents.createdAt)).limit(limit);
 }
 
-export async function resolveSafetyEvent(id: number, userId: number) {
+/**
+ * Marks a safety event as handled.
+ *
+ * It says whether a row was actually changed — see `deleteWechatBinding`.
+ */
+export async function resolveSafetyEvent(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
-  await db.update(safetyEvents).set({ resolvedAt: new Date(), handled: true })
-    .where(and(eq(safetyEvents.id, id), eq(safetyEvents.userId, userId)));
+  if (!db) return false;
+  const rows = await db.update(safetyEvents).set({ resolvedAt: new Date(), handled: true })
+    .where(and(eq(safetyEvents.id, id), eq(safetyEvents.userId, userId)))
+    .returning({ id: safetyEvents.id });
+  return rows.length > 0;
 }
 
 // ─── Graduation trajectory helpers ─────────────────────────────────────────
@@ -2642,11 +2676,18 @@ export async function setChannelBindingPersona(params: {
   return result.id;
 }
 
-export async function deleteChannelBinding(id: number, userId: number) {
+/**
+ * Removes a channel binding.
+ *
+ * It says whether a row was actually removed — see `deleteWechatBinding`.
+ */
+export async function deleteChannelBinding(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
-  await db.delete(channelBindings)
-    .where(and(eq(channelBindings.id, id), eq(channelBindings.userId, userId)));
+  if (!db) return false;
+  const rows = await db.delete(channelBindings)
+    .where(and(eq(channelBindings.id, id), eq(channelBindings.userId, userId)))
+    .returning({ id: channelBindings.id });
+  return rows.length > 0;
 }
 
 export async function getChannelState(userId: number, channel: string) {
@@ -3100,11 +3141,18 @@ export async function getActiveReminders(userId: number, limit = 20) {
     .orderBy(desc(reminderDeliveries.deliveredAt)).limit(limit);
 }
 
-export async function dismissReminder(id: number, userId: number) {
+/**
+ * Dismisses a reminder.
+ *
+ * It says whether a row was actually changed — see `deleteWechatBinding`.
+ */
+export async function dismissReminder(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
-  await db.update(reminderDeliveries).set({ dismissedAt: new Date() })
-    .where(and(eq(reminderDeliveries.id, id), eq(reminderDeliveries.userId, userId)));
+  if (!db) return false;
+  const rows = await db.update(reminderDeliveries).set({ dismissedAt: new Date() })
+    .where(and(eq(reminderDeliveries.id, id), eq(reminderDeliveries.userId, userId)))
+    .returning({ id: reminderDeliveries.id });
+  return rows.length > 0;
 }
 
 // ─── Memory recall helpers ─────────────────────────────────────────────────

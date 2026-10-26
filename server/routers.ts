@@ -1830,7 +1830,9 @@ export const appRouter = router({
     unbind: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await deleteWechatBinding(input.id, ctx.user.id);
+        // The binding was removed, or there was nothing there to remove.
+        const removed = await deleteWechatBinding(input.id, ctx.user.id);
+        if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
   }),
@@ -1962,7 +1964,9 @@ export const appRouter = router({
     unbind: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await deleteChannelBinding(input.id, ctx.user.id);
+        // The binding was removed, or there was nothing there to remove.
+        const removed = await deleteChannelBinding(input.id, ctx.user.id);
+        if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
   }),
@@ -2294,7 +2298,9 @@ export const appRouter = router({
     dismiss: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await dismissReminder(input.id, ctx.user.id);
+        // The reminder was dismissed, or there was nothing there.
+        const dismissed = await dismissReminder(input.id, ctx.user.id);
+        if (!dismissed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
   }),
@@ -2850,7 +2856,9 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await deleteMemory(input.id, ctx.user.id);
+        // The memory was removed, or there was nothing there to remove.
+        const removed = await deleteMemory(input.id, ctx.user.id);
+        if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
 
@@ -2981,7 +2989,9 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await deleteDiaryEntry(input.id, ctx.user.id);
+        // The entry was removed, or there was nothing there to remove.
+        const removed = await deleteDiaryEntry(input.id, ctx.user.id);
+        if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
   }),
@@ -3037,7 +3047,9 @@ export const appRouter = router({
     resolveEvent: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await resolveSafetyEvent(input.id, ctx.user.id);
+        // The event was marked as dealt with, or there was nothing there.
+        const resolved = await resolveSafetyEvent(input.id, ctx.user.id);
+        if (!resolved) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
 
