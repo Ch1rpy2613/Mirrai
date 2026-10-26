@@ -592,6 +592,19 @@ export const letters = pgTable(
     replyAt: timestamp("replyAt"),
     repliedAt: timestamp("repliedAt"),
     replyText: text("replyText"),
+    /**
+     * When a sweep claimed this letter for answering.
+     *
+     * The claim is a lock, not a state: the letter stays "waiting"
+     * until the answer is actually written, so a claim that is never
+     * completed — because the process was stopped, or the database
+     * hiccuped — does not leave the letter answered with nothing in it.
+     *
+     * A claim that is older than `LETTER_CLAIM_STALE_MS` is taken to
+     * have belonged to a process that is no longer running, and the
+     * letter is answered again.
+     */
+    claimedAt: timestamp("claimedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({

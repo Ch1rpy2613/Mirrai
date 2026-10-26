@@ -28,7 +28,15 @@ function declaredTables(src: string): Record<string, Set<string>> {
       i++;
     }
     const body = src.slice(match.index + match[0].length, i);
-    out[match[2]] = new Set(Array.from(body.matchAll(/^\s{2}(\w+):\s/gm)).map((m) => m[1]));
+    /**
+     * The columns, at whatever indent the table uses.
+     *
+     * The indent used to be fixed at two spaces, so the tables that are
+     * written with four — the letters, among others — were read as
+     * having no columns at all. A column the migrations added to one of
+     * them was then reported as missing from the schema.
+     */
+    out[match[2]] = new Set(Array.from(body.matchAll(/^\s+"?(\w+)"?:\s/gm)).map((m) => m[1]));
   }
   return out;
 }

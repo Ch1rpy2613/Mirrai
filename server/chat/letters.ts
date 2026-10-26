@@ -140,7 +140,19 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
         continue;
       }
 
-      await db.answerLetter(letter.id, letter.userId, replyText, now);
+      /**
+       * The answer is written, and the claim is given back.
+       *
+       * If anything goes wrong from here the claim is released, so the
+       * letter is answered on the next sweep rather than staying
+       * claimed — and silently lost — for five minutes.
+       */
+      try {
+        await db.answerLetter(letter.id, letter.userId, replyText, now);
+      } catch (e) {
+        await db.releaseLetterClaim(letter.id, letter.userId).catch(() => {});
+        throw e;
+      }
 
       // The answer belongs in the conversation. A reply that lives only
       // in a list is a notification; one that lands in the thread is a
@@ -160,6 +172,16 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
       answered += 1;
     } catch (e) {
       console.warn("[Letters] Could not answer a letter:", (e as Error).message);
+      /**
+       * The claim is given back.
+       *
+       * The letter was taken out of the queue before the model was
+       * asked, and an answer that could not be written must not leave
+       * it out of the queue.
+       */
+      if (letter) {
+        await db.releaseLetterClaim(letter.id, letter.userId).catch(() => {});
+      }
     }
   }
 

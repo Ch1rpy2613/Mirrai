@@ -1,4 +1,4 @@
-import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, inArray } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -259,13 +259,34 @@ export async function deferLetter(id: number, userId: number, replyAt: Date) {
 }
 
 /** The letters whose reply is due, across every user. */
+/**
+ * How long a claim on a letter is taken to belong to a process that is
+ * no longer running.
+ *
+ * The answer takes a model call, and a model call is allowed two
+ * minutes. A claim older than five minutes belongs to a process that
+ * has gone — so the letter is answered again.
+ */
+export const LETTER_CLAIM_STALE_MS = 5 * 60_000;
+
 export async function getDueLetters(now: Date, limit = 20) {
   const db = await getDb();
   if (!db) return [];
+  /**
+   * The letters that are due, and that nobody is answering right now.
+   *
+   * A letter that a sweep has claimed is skipped — until the claim has
+   * gone stale, which means the process that took it is gone.
+   */
+  const staleBefore = new Date(now.getTime() - LETTER_CLAIM_STALE_MS);
   return db.select().from(letters)
     .where(and(
       eq(letters.status, "waiting"),
       lte(letters.replyAt, now),
+      or(
+        isNull(letters.claimedAt),
+        lt(letters.claimedAt, staleBefore),
+      ),
     ))
     .orderBy(asc(letters.replyAt))
     .limit(limit);
@@ -303,7 +324,7 @@ export async function answerLetter(
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [row] = await db.update(letters)
-    .set({ status: "answered", replyText, repliedAt })
+    .set({ status: "answered", replyText, repliedAt, claimedAt: null })
     .where(and(eq(letters.id, id), eq(letters.userId, userId)))
     .returning();
   return row ?? null;
@@ -321,15 +342,48 @@ export async function claimLetter(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
+  /**
+   * The claim.
+   *
+   * The letter stays "waiting": it is only answered when the answer
+   * has been written. It used to be marked "answered" with an empty
+   * reply before the model call, so that nothing could answer it
+   * twice — but then a process that stopped during the call left it
+   * answered with nothing in it, for ever, because only "waiting"
+   * letters are picked up.
+   *
+   * A claim that has gone stale belongs to a process that is gone, so
+   * the letter is claimed again.
+   */
+  const staleBefore = new Date(Date.now() - LETTER_CLAIM_STALE_MS);
   const [row] = await db.update(letters)
-    .set({ status: "answered", replyText: "", repliedAt: new Date() })
+    .set({ claimedAt: new Date() })
     .where(and(
       eq(letters.id, id),
       eq(letters.userId, userId),
       eq(letters.status, "waiting"),
+      or(
+        isNull(letters.claimedAt),
+        lt(letters.claimedAt, staleBefore),
+      ),
     ))
     .returning({ id: letters.id });
   return Boolean(row);
+}
+
+/**
+ * Gives a letter back, so that it can be answered again.
+ *
+ * It is called when the answer could not be written — the model call
+ * failed, or the database did. Without it, the letter would stay
+ * claimed for five minutes for nothing.
+ */
+export async function releaseLetterClaim(id: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(letters)
+    .set({ claimedAt: null })
+    .where(and(eq(letters.id, id), eq(letters.userId, userId)));
 }
 
 /** Marks a letter as answered with nothing — the persona stayed quiet. */
