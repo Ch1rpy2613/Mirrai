@@ -40,7 +40,7 @@ function normaliseMetrics(raw: unknown): {
 }
 
 export default function FidelityPanel({ personaId }: { personaId: number }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
 
   /**
    * What the likelihood gap says, in words.
@@ -181,7 +181,13 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => runMutation.mutate({ personaId, variant })}
+              onClick={() => runMutation.mutate({
+                personaId,
+                variant,
+                // The evaluation is written in the language the reader
+                // reads: the procedure defaulted to Chinese.
+                locale: locale === "en" ? "en" : "zh",
+              })}
               disabled={runMutation.isPending}
             >
               <Play className="h-3.5 w-3.5" />

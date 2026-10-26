@@ -28,7 +28,7 @@ import { daysWaiting, isStale } from "@shared/outbound";
  * different thing entirely.
  */
 export default function OutboundLetters({ personaId }: { personaId: number }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { data, refetch, isLoading, isError } = trpc.outbound.list.useQuery({ personaId });
   const collectMutation = trpc.outbound.collect.useMutation({
     onSuccess: (result) => {
@@ -116,7 +116,12 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
             size="sm"
             variant="outline"
             className="rounded-md px-4"
-            onClick={() => collectMutation.mutate({ personaId })}
+            onClick={() => collectMutation.mutate({
+              personaId,
+              // The letters are written in the language the reader
+              // reads: the procedure defaulted to Chinese.
+              locale: locale === "en" ? "en" : "zh",
+            })}
             disabled={collectMutation.isPending}
           >
             <Search className="w-3.5 h-3.5" />

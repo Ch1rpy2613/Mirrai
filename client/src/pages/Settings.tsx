@@ -130,8 +130,16 @@ function SliderField({ label, value, onChange, min, max, step, unit }: {
 
 // ─── PROVIDER CONFIG ROW ─────────────────────────────────────────────────────
 
-function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
+function ProviderConfigRow({ provider, hasKey, isDefault, onSave, onSetDefault }: {
   provider: { name: string; configured: boolean };
+  /**
+   * Whether *the user* has a key for this provider.
+   *
+   * The chip used to come from the server's own environment — so it
+   * said "configured" for a provider the *installation* had a key for,
+   * while the user's own key was in a table nothing read.
+   */
+  hasKey: boolean;
   isDefault: boolean;
   onSave: (data: { providerName: string; apiKey?: string; baseUrl?: string; model?: string }) => void;
   onSetDefault: () => void;
@@ -165,8 +173,8 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
           className="flex items-center gap-2 min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded">
           <span className="text-sm text-foreground font-medium truncate">{provider.name}</span>
           {isDefault && <StatusChip tone="primary">{t("settings.ai.default")}</StatusChip>}
-          <StatusChip tone={provider.configured ? "success" : "muted"}>
-            {provider.configured ? t("settings.ai.hasKey") : t("settings.ai.noKey")}
+          <StatusChip tone={hasKey ? "success" : "muted"}>
+            {hasKey ? t("settings.ai.hasKey") : t("settings.ai.noKey")}
           </StatusChip>
         </button>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -637,6 +645,18 @@ function AISettingsTab() {
   const providers = trpc.llmConfig.listProviders.useQuery();
   const defaultConfig = trpc.llmConfig.getDefault.useQuery();
   /**
+   * The user's own provider configurations.
+   *
+   * The chip on each provider used to come from the server's
+   * environment — so it said "configured" for a provider the
+   * *installation* had a key for, and "not configured" for one the
+   * *user* had just given a key to.
+   */
+  const userConfigs = trpc.llmConfig.list.useQuery();
+  const userHasKey = new Map(
+    (userConfigs.data ?? []).map((config) => [config.providerName, config.hasKey]),
+  );
+  /**
    * The three saves say what happened.
    *
    * They had no `onError`, so a rejected save — a bad key, a network
@@ -645,7 +665,11 @@ function AISettingsTab() {
    * stored.
    */
   const upsertConfig = trpc.llmConfig.upsert.useMutation({
-    onSuccess: () => { toast.success(t("settings.ai.configSaved")); providers.refetch(); },
+    onSuccess: () => {
+      toast.success(t("settings.ai.configSaved"));
+      providers.refetch();
+      userConfigs.refetch();
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const setDefault = trpc.llmConfig.setDefault.useMutation({
@@ -704,6 +728,7 @@ function AISettingsTab() {
         <div className="space-y-2.5">
           {providers.data?.map(p => (
             <ProviderConfigRow key={p.name} provider={p}
+              hasKey={userHasKey.get(p.name) ?? false}
               isDefault={defaultConfig.data?.providerName === p.name}
               onSave={data => upsertConfig.mutate(data)}
               onSetDefault={() => setDefault.mutate({ providerName: p.name })} />

@@ -24,7 +24,17 @@ import { mergeImperfectionDefaults, type ImperfectionEntry } from "@shared/imper
  */
 export default function ImperfectionEditor({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
-  const { data, refetch } = trpc.imperfection.get.useQuery({ personaId });
+  /**
+   * The language of the content.
+   *
+   * The procedure has its own language — and it defaulted to Chinese,
+   * so an English reader was shown Chinese imperfection names and
+   * Chinese defaults.
+   */
+  const { data, refetch } = trpc.imperfection.get.useQuery({
+    personaId,
+    locale: locale === "en" ? "en" : "zh",
+  });
   const saveMutation = trpc.imperfection.save.useMutation({
     onSuccess: () => {
       toast.success(t("imperfection.saved"));

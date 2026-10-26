@@ -41,6 +41,18 @@ export default function Onboarding() {
 
   const setup = trpc.setup.useQuery(undefined, { enabled: !authLoading });
   const providers = trpc.llmConfig.listProviders.useQuery(undefined, { enabled: isAuthenticated });
+  /**
+   * The user's own provider configurations.
+   *
+   * The marker next to a provider used to come from the server's
+   * environment — so it said "configured" for a provider the
+   * *installation* had a key for, and said nothing about the key the
+   * user had just given.
+   */
+  const userConfigs = trpc.llmConfig.list.useQuery(undefined, { enabled: isAuthenticated });
+  const userHasKey = new Map(
+    (userConfigs.data ?? []).map((config) => [config.providerName, config.hasKey]),
+  );
   const upsertConfig = trpc.llmConfig.upsert.useMutation();
   const setDefault = trpc.llmConfig.setDefault.useMutation();
   const createPersona = trpc.persona.create.useMutation();
@@ -164,7 +176,7 @@ export default function Onboarding() {
                 {(providers.data ?? []).map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
-                    {p.configured ? t("onboarding.configured") : ""}
+                    {userHasKey.get(p.name) ? t("onboarding.configured") : ""}
                   </option>
                 ))}
               </select>

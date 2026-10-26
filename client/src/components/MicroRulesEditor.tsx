@@ -216,7 +216,13 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => mineMutation.mutate({ personaId })}
+              onClick={() => mineMutation.mutate({
+                personaId,
+                // The rules are written in the language the reader
+                // reads: the procedure defaulted to Chinese, so an
+                // English reader got Chinese rules.
+                locale: locale === "en" ? "en" : "zh",
+              })}
               disabled={mineMutation.isPending}
             >
               <Wand2 className="mr-1.5 h-3.5 w-3.5" />
