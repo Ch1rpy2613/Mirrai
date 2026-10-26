@@ -157,10 +157,21 @@ export async function extractMemories(params: {
   let skipped = 0;
 
   let parsed: unknown;
+  /**
+   * Whether the answer was understood.
+   *
+   * An answer that cannot be read is not an answer of "nothing to
+   * remember" — it is a failure. The two were the same thing here, so
+   * a malformed reply marked the window as extracted and those messages
+   * were never looked at again.
+   */
+  let understood = false;
   try {
     parsed = JSON.parse(extractJsonArrayText(response) ?? "[]");
+    understood = true;
   } catch {
     parsed = [];
+    console.warn("[Memories] The extraction could not be read — the messages are kept for the next run.");
   }
   const items = Array.isArray(parsed) ? parsed : [];
   const seen: Array<{ title: string; description?: string | null }> = [];
@@ -207,7 +218,14 @@ export async function extractMemories(params: {
     added.push({ id, title: title.slice(0, 200), subject });
   }
 
-  await db.markMemoryExtracted(persona.id, userId);
+  /**
+   * The window is marked as looked at only when the answer was read.
+   *
+   * An empty array is a real answer: there was nothing to remember, and
+   * marking it means the same messages are not sent again on every
+   * later run. An answer that could not be parsed is not.
+   */
+  if (understood) await db.markMemoryExtracted(persona.id, userId);
   return { added, skipped };
 }
 
