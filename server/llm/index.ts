@@ -214,16 +214,54 @@ registry.registerFactory(
 
 registry.setDefault(ENV.defaultLlmProvider);
 
+/**
+ * The HTTP status of a failed provider call, if the error carries one.
+ *
+ * The providers put the status in the message, so it is read from there
+ * — but it is read as a *number*, not as a pattern.
+ */
+function statusOf(err: unknown): number | null {
+  if (!(err instanceof Error)) return null;
+  const match = /\b(?:error|status)\s+(\d{3})\b/i.exec(err.message);
+  if (!match) return null;
+  const status = Number.parseInt(match[1], 10);
+  return Number.isFinite(status) ? status : null;
+}
+
+/**
+ * Whether the failure is worth trying again.
+ *
+ * The classification used to be a regular expression over the whole
+ * message, including the provider's raw response body — so a body that
+ * happened to contain three digits starting with a five was retried
+ * three times, and a body containing "invalid_api_key" was classified as
+ * a version error and never retried at all.
+ *
+ * The status decides. A request that was rejected (4xx) is not going to
+ * succeed the second time; a request that the provider failed to serve
+ * (5xx) or that never reached it might.
+ */
 function isTransientError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
+  const status = statusOf(err);
+  if (status !== null) {
+    // 429 is the provider asking us to slow down: worth waiting for.
+    if (status === 429) return true;
+    if (status >= 400 && status < 500) return false;
+    if (status >= 500) return true;
+  }
   const msg = err.message.toLowerCase();
-  return /econnreset|etimedout|socket hang up|5\d{2}|rate.?limit|too many requests/.test(msg);
+  return /econnreset|etimedout|socket hang up|network|fetch failed|rate.?limit|too many requests/.test(msg);
 }
 
 function isVersionError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
+  const status = statusOf(err);
+  // A request the provider rejected is not a version problem, whatever
+  // its body happens to say.
+  if (status !== null && status >= 400 && status < 500) return false;
   const msg = err.message.toLowerCase();
-  return /version|deprecated|unsupported.*model|model.*not found|invalid.*api/.test(msg);
+  return /unsupported.*model|model.*not found|unknown model|deprecated model/.test(msg);
 }
 
 /**

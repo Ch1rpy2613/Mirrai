@@ -37,6 +37,16 @@ export interface GraduationModeDetails {
 const unreadableUserModes = new Set<number>();
 
 /**
+ * How many users are remembered as unreadable.
+ *
+ * The set grew for the life of the process: one entry for every user id
+ * that ever failed the read, and it was never pruned. On an instance
+ * with many users it is a slow leak of a number per user — small, but
+ * it never stops.
+ */
+const MAX_UNREADABLE_USERS = 1_000;
+
+/**
  * Reads the user's instance default.
  *
  * The read is defensive on purpose: the module is imported by the channel
@@ -51,6 +61,11 @@ async function readUserGraduationMode(userId: number): Promise<string | null> {
     return user?.graduationMode ?? null;
   } catch (e) {
     if (!unreadableUserModes.has(userId)) {
+      if (unreadableUserModes.size >= MAX_UNREADABLE_USERS) {
+        // The oldest entry is let go, so the set stays bounded.
+        const oldest = unreadableUserModes.values().next();
+        if (!oldest.done) unreadableUserModes.delete(oldest.value);
+      }
       unreadableUserModes.add(userId);
       console.warn(
         "[Graduation] The user's graduation mode is not readable here, so the persona's own setting applies:",
