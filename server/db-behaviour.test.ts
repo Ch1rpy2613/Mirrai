@@ -139,13 +139,18 @@ class FakeQuery {
 
   /** The rows the fake answers with. */
   private rows(): any[] {
+    let rows: any[];
     if (this.log.operation === "select") {
-      return registry.select[this.log.table] ?? [];
+      rows = registry.select[this.log.table] ?? [];
+    } else if (this.log.returned) {
+      rows = registry.returning[this.log.table] ?? [];
+    } else {
+      rows = [];
     }
-    if (this.log.returned) {
-      return registry.returning[this.log.table] ?? [];
-    }
-    return [];
+    // The limit is honoured, so a query that asks for one row is given
+    // one row.
+    if (this.log.limit !== undefined) rows = rows.slice(0, this.log.limit);
+    return rows;
   }
 
   then(resolve: (value: any) => any, reject: (reason: any) => any) {
@@ -315,19 +320,24 @@ describe("a single message", () => {
   });
 
   it("finds the message before a given one", async () => {
-    registry.select.messages = [
-      { id: 1, content: "第一句" },
-      { id: 2, content: "第二句" },
-      { id: 3, content: "第三句" },
-    ];
+    // The row the database would answer with.
+    registry.select.messages = [{ id: 2, content: "第二句" }];
     const row = await db.getPreviousMessage(1, 3, 3);
 
     expect(row?.content).toBe("第二句");
-    expect(orderOf()[0].sql).toContain('"messages"."createdAt" asc');
+    // The row before the one asked for, newest first — and only one row
+    // of them: the whole history used to be read to find one message.
+    expect(orderOf()[0].sql).toContain('"messages"."createdAt" desc');
+    expect(last().limit).toBe(1);
+    const conditions = whereOf().map((c) => c.sql).join(" ");
+    expect(conditions).toContain('"createdAt" <');
+    expect(conditions).toContain('SELECT "createdAt" FROM "messages"');
   });
 
   it("has no previous message for the first one", async () => {
-    registry.select.messages = [{ id: 1, content: "第一句" }];
+    // There is nothing older than the first message, so the database
+    // answers with no rows.
+    registry.select.messages = [];
     expect(await db.getPreviousMessage(1, 3, 1)).toBeNull();
   });
 

@@ -2087,6 +2087,16 @@ export async function deleteMessagesFrom(
 }
 
 /** The message before the given one, for "regenerate the last reply". */
+/**
+ * The message before a given one.
+ *
+ * It used to read the persona's entire history — every row, with every
+ * message's text — to find one. A persona with fifty thousand messages
+ * read all of them on each "regenerate".
+ *
+ * The row before it is found in the database instead: the messages
+ * before it, newest first, one row.
+ */
 export async function getPreviousMessage(
   personaId: number,
   userId: number,
@@ -2094,15 +2104,17 @@ export async function getPreviousMessage(
 ) {
   const db = await getDb();
   if (!db) return null;
+  // The row before it is found by the database: the messages that are
+  // older than the one asked for, newest first, one row.
   const rows = await db.select().from(messages)
     .where(and(
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
+      sql`"createdAt" < (SELECT "createdAt" FROM "messages" WHERE "id" = ${messageId} AND "personaId" = ${personaId} AND "userId" = ${userId})`,
     ))
-    .orderBy(asc(messages.createdAt));
-  const index = rows.findIndex((m) => m.id === messageId);
-  if (index < 0) return null;
-  return rows[index - 1] ?? null;
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 // ─── Graduation helpers ─────────────────────────────────────────────────────
