@@ -1123,10 +1123,25 @@ export async function hasOlderMessages(
   return rows.length > 0;
 }
 
+/**
+ * Deletes every message of a conversation.
+ *
+ * The count of conversations goes back to zero with them.
+ *
+ * It used to stay, so the lobby's "total chats" counted conversations
+ * the user had just thrown away — and so did the gate on the
+ * graduation, which counts the conversations of the relationship.
+ */
 export async function clearMessagesByPersonaId(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.delete(messages).where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)));
+  await db.transaction(async (tx) => {
+    await tx.delete(messages)
+      .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)));
+    await tx.update(personas)
+      .set({ chatCount: 0 })
+      .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
+  });
 }
 
 export async function searchMessages(personaId: number, userId: number, query: string, limit = 50) {
