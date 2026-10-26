@@ -1483,6 +1483,15 @@ export const appRouter = router({
           let reply = "";
           let emotionalState: string = persona.emotionalState;
           let failure: string | null = null;
+          /**
+           * Whether the reply is a crisis reply.
+           *
+           * The flag was dropped on the way out — so regenerating a
+           * crisis reply gave an ordinary bubble, with no support
+           * resources and no card. The one moment the app exists for,
+           * and the regeneration lost it.
+           */
+          let crisis = false;
           for await (const event of runConversation({
             persona,
             userId: ctx.user.id,
@@ -1497,6 +1506,7 @@ export const appRouter = router({
             if (event.type === "delta") reply += event.text;
             else if (event.type === "emotion") emotionalState = event.state;
             else if (event.type === "error") failure = event.message;
+            else if (event.type === "done") crisis = event.crisis === true;
           }
           if (failure || !reply) {
             // Whatever the failed turn wrote is taken away, and the turn
@@ -1508,7 +1518,7 @@ export const appRouter = router({
               message: copy(ctx.locale, "errors.regenerateFailed"),
             });
           }
-          return { reply, emotionalState };
+          return { reply, emotionalState, crisis };
         });
       }),
 

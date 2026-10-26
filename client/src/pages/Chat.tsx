@@ -868,6 +868,9 @@ export default function Chat() {
         ];
       });
       setCurrentState(result.emotionalState);
+      // A crisis reply is not an ordinary bubble — the card shows the
+      // support resources.
+      if (result.crisis) setShowCrisis(true);
       await utils.chat.getHistory.invalidate({ personaId });
     } catch (e) {
       if (controller.signal.aborted) {
