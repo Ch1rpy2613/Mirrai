@@ -328,6 +328,17 @@ export const ERRORS = {
     zh: "这一天已经有日记了。",
     en: "This day already has a diary.",
   },
+  /**
+   * The credentials could not be stored.
+   *
+   * The failure was swallowed and the procedure reported success — so
+   * the user saw "authorised" and the next collection had no
+   * credentials at all, with no idea why.
+   */
+  "errors.collectorCredentialsNotSaved": {
+    zh: "凭据没有存下来，所以这次授权不算数。请再试一次。",
+    en: "The credentials could not be stored, so this authorisation did not take. Please try again.",
+  },
   "errors.collectorNeedsAuthorization": {
     zh: "这个来源还没有授权。填好凭据并点「授权」，再开始采集。",
     en: "This source has not been authorised yet. Fill in the credentials and press Authorise, then start the collection.",

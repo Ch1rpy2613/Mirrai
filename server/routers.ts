@@ -2715,14 +2715,45 @@ export const appRouter = router({
         // The credentials are stored encrypted; the auth state is a plain
         // summary of what the check found.
         const { saveConnectorSource } = await import("./collectors/db-store");
-        await saveConnectorSource({
-          userId: ctx.user.id,
-          connector,
-          input: collectInput,
-          authState,
-        }).catch((e) => {
+        try {
+          await saveConnectorSource({
+            userId: ctx.user.id,
+            connector,
+            input: collectInput,
+            authState,
+          });
+        } catch (e) {
+          /**
+           * The storage failed, so the authorisation did not happen.
+           *
+           * The failure was swallowed and the procedure reported
+           * success. So the user saw "authorised" — and the
+           * credentials lived only in the process's memory, where they
+           * were cleared when the next job finished. The next
+           * collection then had no credentials at all, and the user had
+           * no idea why.
+           */
           console.warn("[Collectors] Could not store the source:", e);
-        });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: copy(ctx.locale, "errors.collectorCredentialsNotSaved"),
+          });
+        }
+
+        /**
+         * The plaintext is not kept.
+         *
+         * The credentials are in the database, encrypted, and the job
+         * restores them from there before it runs. So the plaintext
+         * copy in the process's memory is of no use to anybody — and it
+         * sat there for the server's whole life.
+         */
+        try {
+          const { clearRestoredCredentials } = await import("./collectors/types");
+          clearRestoredCredentials(input.source, ctx.user.id);
+        } catch (e) {
+          console.warn("[Collectors] Could not clear the credentials:", e);
+        }
 
         return { authState };
       }),
