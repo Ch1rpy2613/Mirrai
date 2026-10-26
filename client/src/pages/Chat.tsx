@@ -1572,7 +1572,21 @@ export default function Chat() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      {/**
+       * The list is a log.
+       *
+       * A screen reader is told nothing when the reply arrives, when it
+       * starts streaming, or when the crisis card appears — so a person
+       * who cannot see the screen had no way of knowing that their
+       * person had answered.
+       */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-label={t("chat.conversation", { name: persona?.name || t("common.them") })}
+      >
         <div className="container py-4 sm:py-6 max-w-2xl mx-auto">
           {messages.length === 0 && (
             <motion.div

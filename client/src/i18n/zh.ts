@@ -175,6 +175,8 @@ export const zh = {
      * English user saw 「数字分身」 on every persona card.
      */
     digitalPersona: "数字分身",
+    /** The name of the conversation, for a screen reader. */
+    conversation: "和 {{name}} 的对话",
     placeholder: "对 {{name}} 说点什么...",
     send: "发送",
     stop: "停止生成",

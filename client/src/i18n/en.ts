@@ -177,6 +177,7 @@ export const en = {
 
   chat: {
     digitalPersona: "Digital persona",
+    conversation: "The conversation with {{name}}",
     placeholder: "Say something to {{name}}...",
     send: "Send",
     stop: "Stop generating",
