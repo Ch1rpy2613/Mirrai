@@ -337,20 +337,29 @@ export async function deliverReminder(params: {
       // The claim was for the channel; take it back and let the reminder
       // surface in the web client instead.
       await db.forgetReminder(userId, reminder.dedupeKey).catch(() => undefined);
+      // And the web record is a new claim.
+      return db.recordReminder({
+        userId,
+        personaId: reminder.personaId,
+        channel: "web",
+        kind: reminder.kind,
+        text: reminder.text,
+        dedupeKey: reminder.dedupeKey,
+        scheduledFor: now,
+      });
     }
   }
 
-  // Otherwise it surfaces in the web client.
-  const recorded = await db.recordReminder({
-    userId,
-    personaId: reminder.personaId,
-    channel: "web",
-    kind: reminder.kind,
-    text: reminder.text,
-    dedupeKey: reminder.dedupeKey,
-    scheduledFor: now,
-  });
-  return recorded;
+  /**
+   * Otherwise it surfaces in the web client — and the claim above was
+   * made for the web.
+   *
+   * The row used to be written twice: once to claim the slot, and once
+   * to record the delivery. The second write hit the unique index and
+   * returned false — so the reminder was delivered, the user saw it,
+   * and the sweep reported nothing.
+   */
+  return true;
 }
 
 /**
