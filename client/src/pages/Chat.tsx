@@ -351,7 +351,7 @@ export default function Chat() {
    * React Query does not poll a hidden tab, so a backgrounded window
    * costs nothing.
    */
-  const { data: history } = trpc.chat.getHistory.useQuery(
+  const { data: history, isError: historyFailed, refetch: refetchHistory } = trpc.chat.getHistory.useQuery(
     { personaId },
     {
       enabled: isAuthenticated && hasPersonaId,
@@ -1294,6 +1294,26 @@ export default function Chat() {
    * server having a bad minute showed "this page is not here" for a
    * persona that exists. The user was told their person was gone.
    */
+  /**
+   * A conversation that could not be read.
+   *
+   * The history is the whole conversation — so a failed request left
+   * the user looking at an empty thread, with no message and no way to
+   * try again. It looked exactly like a brand-new conversation.
+   */
+  if (historyFailed && !messages.length) {
+    return (
+      <div className="min-h-dvh w-full flex items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center space-y-4">
+          <p className="text-sm text-foreground/85 leading-relaxed">{t("common.error")}</p>
+          <Button variant="outline" className="rounded-md" onClick={() => refetchHistory()}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (personaFailed) {
     const status = (personaError as { data?: { code?: string } })?.data?.code;
     if (status === "NOT_FOUND") return <NotFound />;
