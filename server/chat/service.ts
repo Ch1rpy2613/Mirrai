@@ -284,8 +284,15 @@ export async function composeMessages(params: {
   // "whatever came last".
   let quotedSection = "";
   if (params.replyToId) {
+    /**
+     * The quoted message, from this conversation.
+     *
+     * It was found by the user alone, so a reply could quote a message
+     * of another persona of the same user — the wrong conversation
+     * entirely.
+     */
     const quoted = await db
-      .getMessageById(params.replyToId, params.userId)
+      .getMessageById(params.replyToId, params.userId, params.persona.id)
       .catch(() => null);
     if (quoted) {
       const who = quoted.role === "user" ? copy(locale, "prompt.roleUser") : params.persona.name;

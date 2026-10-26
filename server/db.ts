@@ -1168,11 +1168,26 @@ export async function getMessagesByPersonaId(personaId: number, userId: number, 
 /**
  * A single message, if it belongs to the user.
  */
-export async function getMessageById(messageId: number, userId: number) {
+/**
+ * One message, by its id.
+ *
+ * The persona may be named, and then the message has to be in that
+ * conversation: a reply that quotes a message of another persona of
+ * the same user quotes the wrong conversation.
+ */
+export async function getMessageById(
+  messageId: number,
+  userId: number,
+  personaId?: number,
+) {
   const db = await getDb();
   if (!db) return null;
   const rows = await db.select().from(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
+    .where(and(
+      eq(messages.id, messageId),
+      eq(messages.userId, userId),
+      ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
+    ))
     .limit(1);
   return rows[0] ?? null;
 }
