@@ -48,13 +48,32 @@ let sweeping = false;
 /** The first sweep, ten seconds after the scheduler starts. */
 let firstSweep: NodeJS.Timeout | null = null;
 
-/** Runs everything the scheduler is responsible for. */
+/**
+ * Runs everything the scheduler is responsible for.
+ *
+ * The three sweeps used to run one after the other — so a slow one held
+ * the others up: a reminder for an anniversary could go out late
+ * because a proactive message was taking a long time, and a letter's
+ * answer waited for both.
+ *
+ * They run together now, and one that fails does not stop the others.
+ */
 async function tick(): Promise<void> {
-  await runReminderSweep();
-  // The letters that were delivered and are now due for an answer.
-  await answerDueLetters();
-  // The personas that are due to speak first.
-  await runProactiveSweep();
+  const results = await Promise.allSettled([
+    runReminderSweep(),
+    // The letters that were delivered and are now due for an answer.
+    answerDueLetters(),
+    // The personas that are due to speak first.
+    runProactiveSweep(),
+  ]);
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.warn(
+        `[Scheduler] The ${["reminder", "letter", "proactive"][index]} sweep failed:`,
+        result.reason instanceof Error ? result.reason.message : String(result.reason),
+      );
+    }
+  });
 }
 
 /**
