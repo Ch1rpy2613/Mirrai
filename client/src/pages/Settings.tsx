@@ -691,6 +691,14 @@ function AISettingsTab() {
   const providers = trpc.llmConfig.listProviders.useQuery();
   const defaultConfig = trpc.llmConfig.getDefault.useQuery();
   /**
+   * A failed request says so.
+   *
+   * The list came back empty — so the tab showed no providers at all,
+   * and the user was looking at a model service that was never
+   * missing.
+   */
+  const providersFailed = providers.isError;
+  /**
    * The user's own provider configurations.
    *
    * The chip on each provider used to come from the server's
@@ -781,6 +789,14 @@ function AISettingsTab() {
               {t("settings.ai.currentDefaultLead")} <span className="text-foreground font-medium">{defaultConfig.data.providerName}</span>
             </span>
           )} />
+        {providersFailed ? (
+          <div className="space-y-2">
+            <p className="text-sm text-destructive" role="alert">{t("common.error")}</p>
+            <Button variant="ghost" size="sm" onClick={() => providers.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        ) : null}
         <div className="space-y-2.5">
           {providers.data?.map(p => (
             <ProviderConfigRow key={p.name} provider={p}
