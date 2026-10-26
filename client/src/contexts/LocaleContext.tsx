@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   translate,
@@ -26,11 +26,25 @@ type LocaleContextType = {
 
 const LocaleContext = createContext<LocaleContextType | undefined>(undefined);
 
+/**
+ * The stored language, if there is one.
+ *
+ * The storage can refuse: private mode, cookies disabled, a full quota.
+ * It used to be read without a guard, in the state initialiser — so the
+ * whole app failed to mount when it threw.
+ */
+function storedLocale(): Locale {
+  if (typeof window === "undefined") return "zh";
+  try {
+    const value = localStorage.getItem("mirrai-locale");
+    return value === "en" ? "en" : "zh";
+  } catch {
+    return "zh";
+  }
+}
+
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === "undefined") return "zh";
-    return (localStorage.getItem("mirrai-locale") as Locale) || "zh";
-  });
+  const [locale, setLocaleState] = useState<Locale>(storedLocale);
 
   /**
    * Tells the server which language the user reads.
@@ -48,7 +62,12 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   const setLocale = (l: Locale) => {
     setLocaleState(l);
-    localStorage.setItem("mirrai-locale", l);
+    try {
+      localStorage.setItem("mirrai-locale", l);
+    } catch {
+      // A browser that will not keep the choice is not a problem: the
+      // language still changes for this session.
+    }
     // The document language should follow the interface language.
     if (typeof document !== "undefined") {
       document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
@@ -57,6 +76,19 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     // reminder at midnight, a reply in a chat window — are not asked.
     setLocaleMutation.mutate({ locale: l });
   };
+
+  /**
+   * The document language follows the interface language from the start.
+   *
+   * It used to be set only when the language was *changed*, so a fresh
+   * load in English left the document saying it was Chinese — which is
+   * what a screen reader reads out.
+   */
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = locale === "en" ? "en" : "zh-CN";
+    }
+  }, [locale]);
 
   const value = useMemo<LocaleContextType>(
     () => ({
