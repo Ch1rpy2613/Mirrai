@@ -958,6 +958,7 @@ export const zh = {
   },
 
   questionnaire: {
+    startOver: "重新开始",
     step: "第 {{current}} / {{total}} 步",
     name: "TA 叫什么名字？",
     relationship: "TA 是你的谁？",

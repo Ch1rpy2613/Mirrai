@@ -963,6 +963,7 @@ export const en = {
   },
 
   questionnaire: {
+    startOver: "Start again",
     step: "Step {{current}} of {{total}}",
     name: "What is their name?",
     relationship: "Who are they to you?",

@@ -62,6 +62,17 @@ const LOVE_LANGUAGES = [
 /** Where the answers are kept while the questionnaire is open. */
 const QUESTIONNAIRE_STORAGE_KEY = "mirrai-questionnaire";
 
+/**
+ * The key, for one user.
+ *
+ * The key was the same for everybody — so two people using the same
+ * browser answered each other's questionnaire, and one of them got a
+ * persona built from the other's answers.
+ */
+function storageKeyFor(userId: number | string | null | undefined): string {
+  return userId ? `${QUESTIONNAIRE_STORAGE_KEY}:${userId}` : QUESTIONNAIRE_STORAGE_KEY;
+}
+
 /* The step titles already live in the dictionary. */
 const STEP_KEYS = [
   "questionnaire.name",
@@ -118,7 +129,8 @@ export default function Questionnaire() {
    * every question, press "finish", and be told the persona was made —
    * and the mutation failed with "not authorised", with the answer lost.
    */
-  useAuth({ redirectOnUnauthenticated: true });
+  const { user } = useAuth({ redirectOnUnauthenticated: true });
+  const storageKey = storageKeyFor((user as any)?.id);
   /**
    * The step and the answers, kept in the session.
    *
@@ -137,7 +149,7 @@ export default function Questionnaire() {
     if (restored.current) return;
     restored.current = true;
     try {
-      const saved = localStorage.getItem(QUESTIONNAIRE_STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey);
       if (!saved) return;
       const parsed = JSON.parse(saved) as { step?: number; answers?: Answers };
       if (parsed.answers && typeof parsed.answers === "object") {
@@ -177,7 +189,7 @@ export default function Questionnaire() {
        * by closing the window, and by opening the questionnaire in
        * another tab.
        */
-      localStorage.setItem(QUESTIONNAIRE_STORAGE_KEY, JSON.stringify({ step, answers }));
+      localStorage.setItem(storageKey, JSON.stringify({ step, answers }));
     } catch {
       // A browser that will not keep it is not a problem: the answers
       // are still in the page.
@@ -218,7 +230,7 @@ export default function Questionnaire() {
       // The answers have become a persona, so they are not kept for the
       // next questionnaire.
       try {
-        localStorage.removeItem(QUESTIONNAIRE_STORAGE_KEY);
+        localStorage.removeItem(storageKey);
       } catch {
         // A browser that will not keep it is not a problem.
       }
@@ -249,7 +261,35 @@ export default function Questionnaire() {
           </div>
         </div>
 
-        <h1 className="text-xl font-semibold text-foreground mb-1">{currentTitle}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-xl font-semibold text-foreground mb-1">{currentTitle}</h1>
+          {/**
+           * Start again.
+           *
+           * The answers are kept, so a reload does not throw ten steps
+           * away. But the user who answered for one person, abandoned
+           * it, and came back for another found the old name filled in
+           * and the wizard on the old step — and if they clicked
+           * through, the persona was built from the stale answers.
+           */}
+          {(step > 0 || answers.name) && (
+            <button
+              type="button"
+              onClick={() => {
+                setStep(0);
+                setAnswers(EMPTY);
+                try {
+                  localStorage.removeItem(storageKey);
+                } catch {
+                  // A browser that will not keep it is not a problem.
+                }
+              }}
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              {t("questionnaire.startOver")}
+            </button>
+          )}
+        </div>
 
         <div className="space-y-4 min-h-[220px]">
           {step === 0 && (
