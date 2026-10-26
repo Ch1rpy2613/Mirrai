@@ -29,6 +29,10 @@ export const ERRORS = {
     zh: "该分身未毕业",
     en: "This persona has not graduated",
   },
+  "errors.personaAlreadyGraduated": {
+    zh: "这个分身已经毕业了",
+    en: "This persona has already graduated",
+  },
   "errors.graduationModeOff": {
     zh: "这个分身的毕业模式已关闭",
     en: "The graduation mode is switched off for this persona",

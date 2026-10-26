@@ -1090,6 +1090,25 @@ export const appRouter = router({
     declineGraduation: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.id, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        /**
+         * A persona that has already graduated cannot be declined.
+         *
+         * The letter is written and the graduation date is set before
+         * the window is closed — and the window's escape key, its
+         * backdrop and its ✕ all meant "decline". So one Escape keypress
+         * after the most important moment of the product left the
+         * persona in a contradictory state: declined, with a farewell
+         * letter and a graduation date.
+         *
+         * It could not be un-graduated either — the "awaken" path
+         * refuses a persona that is not graduated — and the farewell
+         * could be offered again.
+         */
+        if (persona.graduationStatus === "graduated") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaAlreadyGraduated") });
+        }
         await setGraduationStatus(input.id, ctx.user.id, "declined");
         return { success: true };
       }),

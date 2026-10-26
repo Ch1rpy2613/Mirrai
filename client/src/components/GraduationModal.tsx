@@ -51,6 +51,21 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
    * were the two that did not count.
    */
   const dismiss = usePersistFn(() => {
+    /**
+     * After the letter has been written, closing is not a refusal.
+     *
+     * The window has two phases: the offer, and the letter. In the
+     * second phase `persona.graduate` has already set the persona's
+     * status to "graduated" and written the letter — and the escape
+     * key, the backdrop and the ✕ all called the same `dismiss`, which
+     * recorded a refusal.
+     *
+     * So the persona was left in a contradictory state: declined, with
+     * a farewell letter and a graduation date. It could not be
+     * un-graduated any more — the "awaken" path refuses a persona that
+     * is not graduated — and the farewell could be offered again.
+     */
+    if (phase === "letter") { onClose(); return; }
     if (!declinesOnCancel(variant)) { onClose(); return; }
     if (declineMutation.isPending) return;
     declineMutation.mutate({ id: personaId }, { onSettled: onClose });
