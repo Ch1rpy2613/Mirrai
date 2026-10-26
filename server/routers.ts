@@ -33,7 +33,7 @@ import {
   createMemory, getMemoriesByPersonaId, countMemories, getMemoryTitles, deleteMemory, updateMemory,
   getFileSummaryTitles,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
-  getCollectedMessagesForPersona,
+  getCollectedMessagesForPersona, getCollectedMessageSources,
   getIntimacyData, updateIntimacy,
   getMessageVolume, getEmotionTimeline, getPersonaEngagement, getHourlyDistribution, getAnalyticsStats,
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
@@ -2367,15 +2367,23 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const all = await getCollectedMessagesForPersona(input.personaId, ctx.user.id);
-        const filtered = input.source
-          ? all.filter((m) => m.source === input.source)
-          : all;
+        /**
+         * The sources, counted on their own.
+         *
+         * The preview asks for the sources *and* the messages, and the
+         * messages are the last few — so the whole history used to be
+         * read to answer a question about fifty lines of it.
+         */
+        const sources = await getCollectedMessageSources(input.personaId, ctx.user.id);
+        const messages = await getCollectedMessagesForPersona(input.personaId, ctx.user.id, {
+          source: input.source ?? null,
+          limit: input.limit,
+        });
 
         return {
-          total: filtered.length,
-          sources: Array.from(new Set(all.map((m) => m.source))),
-          messages: filtered
+          total: messages.length,
+          sources,
+          messages: messages
             .slice(-input.limit)
             .reverse()
             .map((m) => ({

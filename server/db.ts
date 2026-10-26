@@ -3014,9 +3014,41 @@ export async function getCollectedMessageKeys(
  * The distillation pipeline reads the whole history, not one source at a
  * time.
  */
+/**
+ * The sources a persona has collected from.
+ *
+ * It is a question about the distinct sources, so it is asked of the
+ * database — not by reading every collected message and looking at
+ * what they say.
+ */
+export async function getCollectedMessageSources(
+  personaId: number,
+  userId: number,
+): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.selectDistinct({ source: collectedMessages.source })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+    ));
+  return rows.map((r) => r.source).filter((s): s is string => !!s);
+}
+
+/**
+ * The collected messages of a persona, oldest first.
+ *
+ * The ceiling is a real one. A fifty-thousand-line imported chat log
+ * was read whole — every time the preview was opened, every time the
+ * fidelity tools ran, and every time the distillation started.
+ */
+export const MAX_COLLECTED_MESSAGES = 20_000;
+
 export async function getCollectedMessagesForPersona(
   personaId: number,
   userId: number,
+  options: { limit?: number; source?: string | null } = {},
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -3024,10 +3056,14 @@ export async function getCollectedMessagesForPersona(
   // imported. Two imports of two different conversations used to be
   // laid end to end, and the ruler cut cases across the seam — a case
   // whose context was half of one conversation and half of another.
-  return db.select().from(collectedMessages).where(and(
+  const query = db.select().from(collectedMessages).where(and(
     eq(collectedMessages.personaId, personaId),
     eq(collectedMessages.userId, userId),
-  )).orderBy(asc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`));
+    ...(options.source ? [eq(collectedMessages.source, options.source)] : []),
+  ));
+  return query
+    .orderBy(asc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
+    .limit(options.limit ?? MAX_COLLECTED_MESSAGES);
 }
 
 // ─── Collection source helpers ────────────────────────────────────────────
