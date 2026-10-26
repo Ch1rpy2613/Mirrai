@@ -1572,6 +1572,19 @@ const COLLECTOR_STATUS_LABELS: Record<string, "settings.sources.jobStatus.queued
   interrupted: "settings.sources.jobStatus.interrupted",
 };
 
+/**
+ * The kind of a file a collector reads.
+ *
+ * A plain transcript is a transcript; a mail export and a WeChat
+ * export are what the export produced.
+ */
+function collectorFileType(fileName: string): "chat_txt" | "chat_csv" | "collected" {
+  const extension = fileName.toLowerCase().split(".").pop() ?? "";
+  if (extension === "txt") return "chat_txt";
+  if (extension === "csv") return "chat_csv";
+  return "collected";
+}
+
 /** A file as base64, without the data-url prefix. */
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -1838,10 +1851,20 @@ function DataSourcesTab() {
                   }
                   try {
                     const content = await fileToBase64(file);
+                    /**
+                     * The kind of the file.
+                     *
+                     * The picker offered five extensions and every one
+                     * of them was sent as "chat_txt" — and the server
+                     * only allows a `.txt` under that name. So a
+                     * `.csv`, a `.json`, an `.eml` and an `.mbox` were
+                     * all refused, after the upload, with an error the
+                     * user had no way to act on.
+                     */
                     const uploaded = await uploadSourceFile.mutateAsync({
                       personaId: Number(personaId),
                       fileName: file.name,
-                      fileType: "chat_txt",
+                      fileType: collectorFileType(file.name),
                       fileSize: file.size,
                       fileContent: content,
                       mimeType: file.type || "text/plain",

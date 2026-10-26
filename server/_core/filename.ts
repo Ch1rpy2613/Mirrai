@@ -34,8 +34,20 @@ export const ALLOWED_EXTENSIONS: Record<string, string[]> = {
   image: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif"],
   video: [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"],
   audio: [".webm", ".mp3", ".wav", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".mp4", ".amr"],
-  // Collected material keeps whatever the source produced.
-  collected: [],
+  /**
+   * The file a collector reads.
+   *
+   * It is whatever the export produced: a mail export is an `.eml` or
+   * an `.mbox`, a WeChat export is a `.json`, and a plain transcript is
+   * a `.txt` or a `.csv`.
+   *
+   * The list is a list — the picker offered five extensions and the
+   * server allowed one, so four of the five were refused after the
+   * upload. And the list is not "anything": the uploads directory is
+   * served from the app's own origin, so a file the browser would run
+   * as a page is a page on that origin.
+   */
+  collected: [".txt", ".csv", ".json", ".eml", ".mbox"],
 };
 
 /** The extension of a file name, lower-cased, including the dot. */

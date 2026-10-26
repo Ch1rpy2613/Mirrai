@@ -1248,7 +1248,7 @@ export const appRouter = router({
       .input(z.object({
         personaId: z.number(),
         fileName: z.string().min(1).max(255),
-        fileType: z.enum(["chat_txt", "chat_csv", "image", "video"]),
+        fileType: z.enum(["chat_txt", "chat_csv", "collected", "image", "video"]),
         fileSize: z.number().min(1).max(MAX_UPLOAD_BYTES),
         fileContent: z.string(),
         mimeType: z.string().max(128),
@@ -1270,6 +1270,15 @@ export const appRouter = router({
         const { url } = await storagePut(fileKey, buffer, input.mimeType);
         let extractedText: string | undefined;
         if (input.fileType === "chat_txt" || input.fileType === "chat_csv") {
+          extractedText = buffer.toString("utf-8").slice(0, MAX_EXTRACTED_CHARS);
+        } else if (input.fileType === "collected") {
+          /**
+           * A mail export is not text.
+           *
+           * It is read as text anyway — so the excerpt in the file list
+           * is readable. A binary export produces mojibake, which is
+           * better than nothing but is not what it looks like.
+           */
           extractedText = buffer.toString("utf-8").slice(0, MAX_EXTRACTED_CHARS);
         }
         // The whole transcript is stored.
