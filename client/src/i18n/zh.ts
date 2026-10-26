@@ -1470,6 +1470,7 @@ export const zh = {
       usage: "使用强度",
       dependency: "依赖倾向",
       graduation_trajectory: "情感轨迹",
+      distress: "状态不好的迹象",
     },
   },
   localFirst: {

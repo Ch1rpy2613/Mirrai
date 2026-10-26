@@ -1019,6 +1019,15 @@ export type InsertReminderDelivery = typeof reminderDeliveries.$inferInsert;
 
 export const safetyEventTypeEnum = pgEnum("safety_event_type", [
   "crisis", "usage", "dependency", "graduation_trajectory",
+  /**
+   * Ordinary distress.
+   *
+   * The safety layer notices it — the wording of a message says the
+   * person is worn out — and it changes what the persona says. But
+   * nothing was written down, so the panel that shows what the app
+   * noticed did not show it.
+   */
+  "distress",
 ]);
 
 export const safetyEventSeverityEnum = pgEnum("safety_event_severity", ["info", "warning", "critical"]);

@@ -1475,6 +1475,7 @@ export const en = {
       crisis: "A crisis signal",
       usage: "Conversation intensity",
       dependency: "A dependency signal",
+      distress: "A sign they were not doing well",
       graduation_trajectory: "Emotional trajectory",
     },
   },

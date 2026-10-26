@@ -506,6 +506,20 @@ async function* runConversationTurn(
   const now = options.now ?? new Date();
   const locale = options.locale ?? "zh";
 
+  /**
+   * The user's midnight.
+   *
+   * The safety events are filed under the user's own day, so "already
+   * said today" means "since the user's midnight" — not the server's.
+   */
+  const dayStart = new Date(now.getTime());
+  {
+    const shift = dayShiftMinutes(await db.getUserTimezone(userId), now);
+    dayStart.setMinutes(dayStart.getMinutes() + shift);
+    dayStart.setHours(0, 0, 0, 0);
+    dayStart.setMinutes(dayStart.getMinutes() - shift);
+  }
+
   // A persona that has said goodbye is asleep. It used to stay perfectly
   // chatable, which meant the "graduation" was only a badge: the app
   // announced the anniversary of a relationship the user had ended and
@@ -604,6 +618,36 @@ async function* runConversationTurn(
   // A weak signal is ordinary distress, not a crisis: the persona still
   // answers normally and checks in afterwards.
   const gentleCheckIn = crisis.weakSignal ? buildGentleCheckIn(persona.name, locale) : null;
+
+  /**
+   * The distress is written down.
+   *
+   * It changes what the persona says — but nothing was recorded, so the
+   * panel that says "what the app noticed" did not show it. The app
+   * knew the user was worn out and kept it to itself.
+   *
+   * Once a day: the wording of a message says the person is worn out
+   * for as long as they are, and a row for every one of them would be
+   * its own kind of noise.
+   */
+  if (gentleCheckIn) {
+    const alreadyToday = await db
+      .hasSafetyEventSince({
+        userId,
+        personaId: persona.id,
+        type: "distress",
+        since: dayStart,
+      })
+      .catch(() => false);
+    if (!alreadyToday) {
+      await db.createSafetyEvent({
+        userId,
+        personaId: persona.id,
+        type: "distress",
+        severity: "info",
+      }).catch((e) => console.warn("[Safety] Failed to record the distress event:", e));
+    }
+  }
 
   const { messages: llmMessages, recalled } = await composeMessages({
     persona,
@@ -763,20 +807,6 @@ async function* runConversationTurn(
    * in the user's day, not in the server's.
    */
   const usageTimezone = await db.getUserTimezone(userId);
-
-  /**
-   * The user's midnight.
-   *
-   * The safety events are filed under the user's own day, so "already
-   * said today" means "since the user's midnight" — not the server's.
-   */
-  const dayStart = new Date(now.getTime());
-  {
-    const shift = dayShiftMinutes(usageTimezone, now);
-    dayStart.setMinutes(dayStart.getMinutes() + shift);
-    dayStart.setHours(0, 0, 0, 0);
-    dayStart.setMinutes(dayStart.getMinutes() - shift);
-  }
 
   // The care note is decided before the reply is stored, so it can be part
   // of what the persona actually says — the plan asks for the persona itself

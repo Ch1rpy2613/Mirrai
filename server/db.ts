@@ -3040,7 +3040,7 @@ export async function createSafetyEvent(data: InsertSafetyEvent) {
 export async function hasSafetyEventSince(params: {
   userId: number;
   personaId: number | null;
-  type: "crisis" | "usage" | "dependency" | "graduation_trajectory";
+  type: "crisis" | "usage" | "dependency" | "graduation_trajectory" | "distress";
   since: Date;
 }): Promise<boolean> {
   const db = await getDb();
