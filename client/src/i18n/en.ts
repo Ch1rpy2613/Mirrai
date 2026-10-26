@@ -1073,6 +1073,7 @@ export const en = {
     recent: "Recent entries",
     recentKicker: "Latest",
     arc: "Emotional arc",
+    hasEntry: "Has a diary",
     deleteConfirm: "Delete this entry?",
     messageCount: "{{count}} messages",
     weekdays: ["S", "M", "T", "W", "T", "F", "S"],

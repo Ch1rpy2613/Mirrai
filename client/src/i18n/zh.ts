@@ -1068,6 +1068,7 @@ export const zh = {
     recentKicker: "近期",
     arc: "情绪弧线",
     deleteConfirm: "删除这篇日记？",
+    hasEntry: "有日记",
     messageCount: "{{count}} 条消息",
     weekdays: ["日", "一", "二", "三", "四", "五", "六"],
   },

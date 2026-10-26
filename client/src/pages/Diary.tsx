@@ -307,12 +307,12 @@ export default function Diary() {
                          screen reader announced a grid of "1", "2", "3" —
                          with no month, no year, no weekday and no word
                          about whether there is a diary there. */
-                      aria-label={parseLocalDate(dateStr).toLocaleDateString(locale, {
+                      aria-label={`${parseLocalDate(dateStr).toLocaleDateString(locale, {
                         year: "numeric",
                         month: "long",
                         day: "numeric",
                         weekday: "long",
-                      })}
+                      })}${hasDiary ? ` · ${t("diary.hasEntry")}` : ""}`}
                       aria-current={isToday ? "date" : undefined}
                       className={`cal-cell relative aspect-square flex items-center justify-center rounded-md text-sm
                         ${isSelected ? "bg-primary text-primary-foreground font-semibold" : isToday ? "border border-foreground/40 font-medium text-foreground" : "text-foreground/80 hover:bg-muted"}`}>
