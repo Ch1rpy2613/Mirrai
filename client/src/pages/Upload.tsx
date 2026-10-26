@@ -187,11 +187,34 @@ export default function Upload() {
     { personaId, limit: 1 },
     { enabled: isAuthenticated && hasPersonaId },
   );
+  /**
+   * The poll follows the run, not the status.
+   *
+   * The page polled only while the status read "analyzing" — and a new
+   * persona reads "pending". The server writes "analyzing" after
+   * several database reads, so the one refetch that follows the button
+   * press usually landed first: the poll never started, and the page
+   * sat on the "start analysis" button with no progress and no result.
+   * Only a reload recovered.
+   */
+  const [watching, setWatching] = useState(false);
   const { data: analysisStatus, refetch: refetchStatus } = trpc.persona.getAnalysisStatus.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && hasPersonaId,
-      refetchInterval: (query) => query.state.data?.status === "analyzing" ? 1500 : false }
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        if (status === "analyzing") return 1500;
+        // The run has been started and the server has not said so yet.
+        if (watching && status === "pending") return 1500;
+        return false;
+      } }
   );
+  // The run is over when it says so.
+  useEffect(() => {
+    if (analysisStatus?.status === "ready" || analysisStatus?.status === "error") {
+      setWatching(false);
+    }
+  }, [analysisStatus?.status]);
 
   // The persona carries the id of the distillation job, which knows the real
   // pipeline stage — "正在分析人物性格" is a summary, the job knows whether it
@@ -244,7 +267,13 @@ export default function Upload() {
     onError: (e) => toast.error(t("upload.uploadError", { message: e.message })),
   });
   const triggerMutation = trpc.persona.triggerAnalysis.useMutation({
-    onSuccess: () => { toast.success(t("upload.analysisStarted")); refetchStatus(); },
+    onSuccess: () => {
+      toast.success(t("upload.analysisStarted"));
+      // The poll watches the run from here, so it does not matter whether
+      // the server has written "analyzing" yet.
+      setWatching(true);
+      refetchStatus();
+    },
     onError: (e) => toast.error(t("upload.analysisFailed", { message: e.message })),
   });
   /* The preset is remembered on the persona, so a re-run of the
