@@ -28,13 +28,24 @@ export interface TrajectoryAssessment {
   note?: string;
 }
 
-function ratioOf(text: string, patterns: RegExp[]): number {
-  if (!text) return 0;
+/**
+ * The percentage of messages that carry the language.
+ *
+ * It used to count the *patterns* that appeared anywhere in the
+ * transcript — so one message saying "如果当初" and one saying "谢谢
+ * 你" gave the same number as a hundred messages of each. And the
+ * numbers are shown to the user as "percentage of messages carrying
+ * regret language".
+ *
+ * So the count is over the messages.
+ */
+function ratioOf(messages: string[], patterns: RegExp[]): number {
+  if (messages.length === 0) return 0;
   let hits = 0;
-  for (const pattern of patterns) {
-    if (pattern.test(text)) hits++;
+  for (const message of messages) {
+    if (patterns.some((pattern) => pattern.test(message))) hits++;
   }
-  return Math.round((hits / patterns.length) * 100);
+  return Math.round((hits / messages.length) * 100);
 }
 
 const REGRET_PATTERNS = [
@@ -78,8 +89,8 @@ export async function assessTrajectory(params: {
     .map((content) => copy(locale, "prompts.trajectoryTranscriptLine", { content }))
     .join("\n");
 
-  const localRegret = ratioOf(transcript, REGRET_PATTERNS);
-  const localGratitude = ratioOf(transcript, GRATITUDE_PATTERNS);
+  const localRegret = ratioOf(userMessages, REGRET_PATTERNS);
+  const localGratitude = ratioOf(userMessages, GRATITUDE_PATTERNS);
 
   let trajectory: Trajectory = "stable";
   let regretRatio = localRegret;
