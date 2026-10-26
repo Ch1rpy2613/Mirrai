@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -109,6 +110,41 @@ describe("the window that offers the farewell", () => {
 
     expect(decline).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("moves the focus into the window and gives it back on close", async () => {
+    const user = userEvent.setup();
+    // Something outside the window that had the focus.
+    const outside = document.createElement("button");
+    outside.textContent = "outside";
+    document.body.appendChild(outside);
+    outside.focus();
+    expect(document.activeElement).toBe(outside);
+
+    // The window is closed by the page, so the page is what owns it.
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <GraduationModal
+          personaId={1}
+          personaName="小A"
+          open={open}
+          onClose={() => setOpen(false)}
+          variant="suggest"
+        />
+      );
+    }
+    render(<Harness />);
+
+    // The focus is inside the window now, not on the page behind it.
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    await user.keyboard("{Escape}");
+
+    // And it goes back where it came from.
+    await waitFor(() => expect(document.activeElement).toBe(outside));
+    outside.remove();
   });
 
   it("does not record a refusal when the escape key is pressed after the letter", async () => {

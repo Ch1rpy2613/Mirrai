@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,54 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
     setLetter("");
   }, [open]);
 
+  /**
+   * The focus.
+   *
+   * The window is hand-rolled rather than built on the project's own
+   * dialog, so it had none of the focus handling a dialog needs: the
+   * focus stayed on the chat input behind the overlay, Tab walked into
+   * the chat page under the window, and on close the focus was not
+   * returned to whatever opened it.
+   */
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    // Into the window, on the first thing in it.
+    const first = dialog?.querySelector<HTMLElement>(
+      "button, [href], input, select, textarea, [tabindex]:not([tabindex=\"-1\"])",
+    );
+    (first ?? dialog)?.focus?.();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])",
+        ),
+      ).filter((el) => el.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const firstEl = focusable[0];
+      const lastEl = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === firstEl) {
+        e.preventDefault();
+        lastEl.focus();
+      } else if (!e.shiftKey && document.activeElement === lastEl) {
+        e.preventDefault();
+        firstEl.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      // And back to whatever opened the window.
+      previouslyFocused?.focus?.();
+    };
+  }, [open]);
+
   // Escape closes the window, and it counts as a refusal too.
   useEffect(() => {
     if (!open) return;
@@ -97,9 +145,11 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={dismiss} />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t("graduation.moment")}
+        tabIndex={-1}
         className="relative bg-card border border-border rounded-lg w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in"
       >
         <div className="flex items-center justify-between p-5 border-b border-border">
