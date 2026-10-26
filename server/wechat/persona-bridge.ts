@@ -5,6 +5,7 @@
  * channel shares one implementation.
  */
 import { handleChannelChat } from "../channels/bridge";
+import * as db from "../db";
 
 /**
  * Handles one inbound WeChat message against a persona.
@@ -24,5 +25,13 @@ export async function handlePersonaChat(params: {
     personaId: params.personaId,
     messageText: params.messageText,
     channel: "wechat",
+    /**
+     * The language the user reads.
+     *
+     * It was left out, so the bridge fell back to Chinese: an English
+     * user got Chinese replies, Chinese emotion descriptions and Chinese
+     * care notes on WeChat — and English on Feishu, which passes it.
+     */
+    locale: await db.getUserLocale(params.userId),
   });
 }
