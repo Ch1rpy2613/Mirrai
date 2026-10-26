@@ -79,6 +79,10 @@ export const ENV = {
   cheaperInferenceBaseUrl: process.env.CHEAPER_INFERENCE_BASE_URL ?? "https://api.cheaperinference.com/v1",
   cheaperInferenceModel: process.env.CHEAPER_INFERENCE_MODEL ?? "gpt-5.4-mini",
 
+  opperApiKey: process.env.OPPER_API_KEY ?? "",
+  opperBaseUrl: process.env.OPPER_BASE_URL ?? "https://api.opper.ai/v3/compat",
+  opperModel: process.env.OPPER_MODEL ?? "claude-sonnet-4-6",
+
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",

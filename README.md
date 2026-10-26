@@ -15,7 +15,7 @@
 
 上传聊天记录，AI 重建 TA 的数字分身 — 用 TA 的语气回你消息，用 TA 的方式撒娇，知道 TA 什么时候会突然变冷漠。
 
-所有数据本地存储，12 家 LLM 提供商即插即用，还有一个同类产品没有的东西：**毕业机制** — 它不是让你留下，是帮你好好告别。
+所有数据本地存储，13 家 LLM 提供商即插即用，还有一个同类产品没有的东西：**毕业机制** — 它不是让你留下，是帮你好好告别。
 
 ---
 
@@ -113,13 +113,14 @@ Mirrai 之前只重建了**那个人**。但很多人打开它的理由恰恰是
 - **上次联系** — 一个正经的数字。多久没说话了，就写多少天。
 - **TA 会先开口吗** — 默认是从不。开启后，TA 会在你们很久没说话时先发一条消息。主动说话的次数得是你自己买的。
 
-### 7. 12 家 LLM 提供商即插即用
+### 7. 13 家 LLM 提供商即插即用
 
 | 提供商 | 协议 | 默认模型 |
 |--------|------|---------|
 | OpenAI | REST | gpt-4o |
 | Atlas Cloud | OpenAI 兼容 | google/gemini-3-flash-preview |
 | Cheaper Inference | OpenAI 兼容 | gpt-5.4-mini |
+| Opper | OpenAI 兼容 | claude-sonnet-4-6 |
 | Claude | REST | claude-sonnet-4-6 |
 | DeepSeek | OpenAI 兼容 | deepseek-chat |
 | Kimi (月之暗面) | OpenAI 兼容 | moonshot-v1-8k |
@@ -295,7 +296,7 @@ jsonb 还在不在、Layer 0 那条底线还在不在。几秒钟跑完，不花
 | 基于真实聊天记录构建人格 | ✅ 多阶段蒸馏 | ❌ 手工填写人设 | ⚠️ 手工调 prompt |
 | 情感状态随对话动态漂移 | ✅ 6 态状态机（LLM 判定） | ⚠️ 有限 | ⚠️ 手动管理 |
 | 数据完全本地 | ✅ | ❌ 云端 | ✅ |
-| LLM 后端自由切换 | ✅ 12 家 / 本地 | ❌ 平台绑定 | ✅ |
+| LLM 后端自由切换 | ✅ 13 家 / 本地 | ❌ 平台绑定 | ✅ |
 | 微信接入 | ✅ | ❌ | ❌ |
 | 以「放下」为设计目标（毕业机制） | ✅ | ❌ | ❌ |
 | 把「像」变成「是」：判别规则 + 分态不完美 | ✅ | ❌ | ❌ |
@@ -427,7 +428,7 @@ Redis 是可选的：不装也能跑，限流会退回进程内计数。想让�
 - [x] 多阶段性格蒸馏 pipeline
 - [x] 6 态情感状态机 + 亲密度系统
 - [x] 毕业机制（告别信 + 休眠/唤醒）
-- [x] 12 家 LLM 提供商接入
+- [x] 13 家 LLM 提供商接入
 - [x] 微信机器人集成
 - [x] 对话日记 / 记忆节点 / 数据分析 / TTS 语音
 - [x] 流式对话（SSE 逐 token 输出）
@@ -483,7 +484,7 @@ Mirrai 出自一个 NLP 专业学生的手——他害怕失去身边的人，�
 │  ┌──▼───┐  ┌──▼──────┐  ┌───▼────┐  ┌──────▼────┐     │
 │  │ DB   │  │ LLM     │  │ WeChat │  │ Skill     │     │
 │  │Drizzle│  │ Service │  │ClawBot │  │ Engine    │     │
-│  │ PG   │  │ 12 提供商│  │ iLink  │  │ Pipeline  │     │
+│  │ PG   │  │ 13 提供商│  │ iLink  │  │ Pipeline  │     │
 │  └──────┘  └─────────┘  └────────┘  └───────────┘     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -562,7 +563,7 @@ letters             -- 信 (写给分身 / 等 TA 回来再说), 回信是延迟
 
 | 变量 | 说明 |
 |------|------|
-| `DEFAULT_LLM_PROVIDER` | 默认提供商名称 (`openai` / `atlas` / `cheaperinference` / `claude` / `deepseek` / `kimi` / `ollama` / `dify` / `xunfei` / `tongyi` / `doubao` / `302ai`) |
+| `DEFAULT_LLM_PROVIDER` | 默认提供商名称 (`openai` / `atlas` / `cheaperinference` / `opper` / `claude` / `deepseek` / `kimi` / `ollama` / `dify` / `xunfei` / `tongyi` / `doubao` / `302ai`) |
 | `OPENAI_API_KEY` | OpenAI API Key |
 | `OPENAI_BASE_URL` | OpenAI 接口地址 (默认 `https://api.openai.com/v1`) |
 | `OPENAI_MODEL` | 模型名称 (默认 `gpt-4o`) |
@@ -572,6 +573,9 @@ letters             -- 信 (写给分身 / 等 TA 回来再说), 回信是延迟
 | `CHEAPER_INFERENCE_API_KEY` | Cheaper Inference API Key |
 | `CHEAPER_INFERENCE_BASE_URL` | Cheaper Inference 接口地址 (默认 `https://api.cheaperinference.com/v1`) |
 | `CHEAPER_INFERENCE_MODEL` | Cheaper Inference 模型名称 (默认 `gpt-5.4-mini`) |
+| `OPPER_API_KEY` | Opper API Key |
+| `OPPER_BASE_URL` | Opper 接口地址 (默认 `https://api.opper.ai/v3/compat`) |
+| `OPPER_MODEL` | Opper 模型名称 (默认 `claude-sonnet-4-6`) |
 | `CLAUDE_API_KEY` | Anthropic API Key |
 | `CLAUDE_MODEL` | Claude 模型 (默认 `claude-sonnet-4-6`) |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
