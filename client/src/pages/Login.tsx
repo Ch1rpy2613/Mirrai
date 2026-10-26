@@ -62,7 +62,10 @@ export default function Login() {
       // query nobody is subscribed to, so the next route would still read
       // an empty cache and render the landing page. Refetch instead.
       await utils.auth.me.refetch();
-      navigate("/");
+      // The page they were trying to reach is kept in the address, so
+      // signing in brings them back to it.
+      const next = new URLSearchParams(location.split("?")[1] ?? "").get("next");
+      navigate(next && next.startsWith("/") ? next : "/");
     } catch {
       setError(t("auth.networkError"));
     } finally {
