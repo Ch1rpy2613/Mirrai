@@ -6,6 +6,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { ArrowLeft, Download, Quote, Calendar, Sprout } from "lucide-react";
 import PageLoader from "@/components/PageLoader";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
+import OutboundLetters from "@/components/OutboundLetters";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -48,6 +49,11 @@ export default function Graduation() {
   if (isLoading || !persona) return <PageLoader />;
 
   const letter = persona.farewellLetter;
+  /** Which lines the second pass kept, and which it cut. */
+  const draft = (persona as any).farewellDraft as
+    | { kept?: string[]; removed?: string[] }
+    | null
+    | undefined;
   const events = eventsData?.events ?? [];
   const memoryItems = memories?.items ?? [];
   const milestones = memoryItems.filter(
@@ -98,6 +104,45 @@ export default function Graduation() {
             <p className="text-[0.9375rem] leading-[1.9] whitespace-pre-wrap text-foreground/90">
               {letter}
             </p>
+            {persona.farewellDegraded ? (
+              <p className="text-xs text-muted-foreground/80 mt-3">
+                {t("graduationPage.simplified")}
+              </p>
+            ) : null}
+            {draft ? (
+              <details className="mt-5 border-t border-border/70 pt-4">
+                <summary className="text-xs text-muted-foreground/80 cursor-pointer">
+                  {t("graduationPage.draftNote")}
+                </summary>
+                {draft.kept?.length ? (
+                  <div className="mt-3">
+                    <p className="text-[11px] text-muted-foreground/70 mb-1">
+                      {t("graduationPage.keptHeading")}
+                    </p>
+                    {draft.kept.map((line: string, index: number) => (
+                      <p key={index} className="text-xs text-foreground/85 leading-relaxed">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                {draft.removed?.length ? (
+                  <div className="mt-3">
+                    <p className="text-[11px] text-muted-foreground/70 mb-1">
+                      {t("graduationPage.removedHeading")}
+                    </p>
+                    {draft.removed.map((line: string, index: number) => (
+                      <p
+                        key={index}
+                        className="text-xs text-muted-foreground/60 leading-relaxed line-through"
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+              </details>
+            ) : null}
             {persona.graduatedAt && (
               <p className="text-xs text-muted-foreground/70 mt-5 text-right">
                 {t("graduationPage.signed", {
@@ -210,6 +255,19 @@ export default function Graduation() {
             </div>
           </motion.section>
         )}
+
+        {/* The exit.
+
+            The farewell above is in the persona's voice. The words that
+            were actually left unsaid are the user's — the things they
+            said here and never said to the person. They get their own
+            place on this page, and the app never sends a word of them. */}
+        <motion.section
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+          className="surface p-6 sm:p-8"
+        >
+          <OutboundLetters personaId={personaId} />
+        </motion.section>
 
         <motion.section
           initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}

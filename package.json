@@ -41,6 +41,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
     "audit:i18n": "tsx scripts/audit-cn.ts",
+    "eval": "tsx scripts/eval-run.ts",
     "setup:redis": "tsx scripts/setup-redis.ts"
   },
   "dependencies": {
@@ -139,8 +140,7 @@
   },
   "pnpm": {
     "overrides": {
-      "tailwindcss>nanoid": "3.3.7",
-      "jsdom": "^30.1.3"
+      "tailwindcss>nanoid": "3.3.7"
     }
   }
 }

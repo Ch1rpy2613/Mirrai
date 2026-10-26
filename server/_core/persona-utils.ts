@@ -3,6 +3,13 @@ import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
 import { zonedHour } from "@shared/timezone";
 import { buildReachabilityNote, type Reachability } from "@shared/user-side";
 import { copy } from "@shared/copy";
+import { renderMicroRules, type MicroRule } from "@shared/micro-rules";
+import {
+  mergeImperfectionDefaults,
+  renderImperfection,
+  selectImperfection,
+  type ImperfectionEntry,
+} from "@shared/imperfection";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -175,6 +182,26 @@ export interface SystemPromptOptions {
    * what the situation actually sounds like.
    */
   reachability?: string | null;
+  /**
+   * The rules the persona discriminates by.
+   *
+   * `null` turns the rules off without removing them from the persona,
+   * which is what the evaluation harness needs: the same persona, with
+   * and without its rules, measured against the same held-out lines.
+   */
+  microRules?: MicroRule[] | null;
+  /**
+   * How this persona is imperfect in each emotional state.
+   *
+   * `null` turns it off, the same way the rules do.
+   */
+  imperfectionProfile?: ImperfectionEntry[] | null;
+  /**
+   * The emotional state the imperfection applies for.
+   *
+   * It defaults to the persona's own current state.
+   */
+  emotionalState?: string | null;
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -266,6 +293,56 @@ export function buildSystemPrompt(
       ? copy(locale, "prompt.identityTogetherAgain", { name, rel, period })
       : copy(locale, "prompt.identityNormal", { name, rel, period });
 
+  /**
+   * The rules the persona discriminates by.
+   *
+   * They sit with the persona's own instructions rather than at the end of
+   * the prompt, because a rule that arrives as a closing note is read as
+   * a closing note. A rule that arrives next to the speaking style is
+   * read as the speaking style.
+   */
+  const microRulesSection =
+    options.microRules === null
+      ? ""
+      : renderMicroRules(
+          options.microRules ?? ((p.microRules as MicroRule[]) || []),
+          locale,
+        );
+
+  /**
+   * How this persona is imperfect, right now.
+   *
+   * The imperfection is a function of the state, so it is looked up for
+   * the state the persona is actually in — not for all six at once.
+   */
+  const imperfectionProfile =
+    options.imperfectionProfile === null
+      ? null
+      : (options.imperfectionProfile ??
+        ((p.imperfectionProfile as ImperfectionEntry[]) || []));
+  /**
+   * The profile the prompt uses is the *merged* one — the same six
+   * states the interface shows the user.
+   *
+   * A persona who has opted in gets a conservative default for every
+   * state they have not written out; a persona who never opted in gets
+   * nothing at all. The distinction matters: a persona built before
+   * this field existed must not quietly gain a personality nobody
+   * chose for it, and a persona whose user did opt in must not be
+   * imperfect in one mood and perfect in the other five.
+   */
+  const appliedImperfection = imperfectionProfile?.length
+    ? mergeImperfectionDefaults(imperfectionProfile, locale)
+    : imperfectionProfile;
+  const imperfectionSection = renderImperfection(
+    selectImperfection(
+      appliedImperfection,
+      options.emotionalState ?? persona.emotionalState,
+    ),
+    options.realismLevel ?? (p.realismLevel as number | undefined) ?? 70,
+    locale,
+  );
+
   const sections: Array<string | null | undefined> = [
     identityRule,
     hardRules,
@@ -284,6 +361,7 @@ export function buildSystemPrompt(
           value: p.nickname || copy(locale, "prompt.noNickname"),
         })}`
       : "",
+    microRulesSection,
     options.userContext || "",
     options.quotedSection || "",
     options.relationshipEvents || "",
@@ -304,9 +382,14 @@ export function buildSystemPrompt(
           value: p.conflictStyle || copy(locale, "prompt.unknown"),
         })}`
       : "",
-    `${copy(locale, "prompt.emotionalStateHeading")}\n${
-      options.emotionalDesc || getEmotionalStateDesc(persona.emotionalState, locale)
-    }`,
+    [
+      `${copy(locale, "prompt.emotionalStateHeading")}\n${
+        options.emotionalDesc || getEmotionalStateDesc(persona.emotionalState, locale)
+      }`,
+      imperfectionSection,
+    ]
+      .filter(Boolean)
+      .join("\n"),
     buildTimeAwareness(timeOfDay, togetherDays, locale, isOver),
     options.sceneOverlay ? `${copy(locale, "prompt.sceneHeading")}\n${options.sceneOverlay}` : "",
     buildRealismRules(

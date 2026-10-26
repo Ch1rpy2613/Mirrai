@@ -18,6 +18,14 @@
  * how human the persona sounds, and which stage the relationship is in.
  */
 import { copy, type Locale } from "@shared/copy";
+import {
+  normalizeMicroRules,
+  type MicroRule,
+} from "@shared/micro-rules";
+import {
+  normalizeImperfectionProfile,
+  type ImperfectionEntry,
+} from "@shared/imperfection";
 
 export interface PersonaData {
   personality: string;
@@ -39,6 +47,23 @@ export interface PersonaData {
   realismLevel?: number;
   /** The stage the relationship is in. Optional for the same reason. */
   relationshipPhase?: RelationshipPhase;
+  /**
+   * The rules this person discriminates by.
+   *
+   * A persona is prose, and prose is read as *meaning* — which is how the
+   * sharpest thing anyone knows about another person gets flattened into
+   * "she gets cold when she is angry". A rule keeps the distinction: a
+   * trigger, what it means, and what the person actually does about it.
+   */
+  microRules?: MicroRule[];
+  /**
+   * How this person is imperfect in each emotional state.
+   *
+   * `realismLevel` says how imperfect they are; this says what that looks
+   * like when they are happy, and what it looks like when they are not —
+   * because nobody is imperfect at a constant rate.
+   */
+  imperfectionProfile?: ImperfectionEntry[];
 }
 
 /** The stages a relationship can be in. */
@@ -63,6 +88,8 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "summary",
   "realismLevel",
   "relationshipPhase",
+  "microRules",
+  "imperfectionProfile",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -177,6 +204,16 @@ export function normalizePersonaData(
     toRelationshipPhase(source.relationshipPhase ?? fallback.relationshipPhase) ??
     DEFAULT_RELATIONSHIP_PHASE;
 
+  // The rules and the per-state imperfection are opt-in. A persona that
+  // was distilled before either of them existed keeps behaving exactly as
+  // it did — the empty list means "nothing is said about this", which is
+  // an honest answer and not a gap.
+  const microRules = normalizeMicroRules(source.microRules ?? fallback.microRules);
+  const imperfectionProfile = normalizeImperfectionProfile(
+    source.imperfectionProfile ?? fallback.imperfectionProfile,
+    locale,
+  );
+
   return {
     personality,
     speakingStyle,
@@ -190,5 +227,7 @@ export function normalizePersonaData(
     summary,
     realismLevel,
     relationshipPhase,
+    microRules,
+    imperfectionProfile,
   };
 }

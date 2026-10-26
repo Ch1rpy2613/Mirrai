@@ -12,6 +12,8 @@ import { buildSystemPrompt } from "../_core/persona-utils";
 import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
 import { buildUserContextBlock, buildRelationshipSection, resolveRelationshipPhase, isUserMood } from "@shared/user-side";
 import { copy } from "@shared/copy";
+import type { MicroRule } from "@shared/micro-rules";
+import type { ImperfectionEntry } from "@shared/imperfection";
 
 export interface PromptContext {
   persona: Persona;
@@ -21,6 +23,16 @@ export interface PromptContext {
   now?: Date;
   /** The scene overlay, when a scene is active. */
   sceneOverlay?: string | null;
+  /**
+   * The state the prompt is describing.
+   *
+   * It is not always the persona's stored state: a scene can set the
+   * mood the persona speaks in. The imperfection follows whatever mood
+   * the prompt *states* — a prompt that says "you are distant" and then
+   * applies the deviations of "happy" is telling the model two different
+   * things at once.
+   */
+  emotionalState?: string | null;
   emotionalDesc?: string;
   /** A summary the caller already computed. */
   summarySection?: string;
@@ -28,6 +40,20 @@ export interface PromptContext {
   memories?: Parameters<typeof formatAnchorsForPrompt>[0];
   /** The message the user is replying to. */
   quotedSection?: string | null;
+  /**
+   * The rules the persona discriminates by.
+   *
+   * `null` turns them off for this prompt without touching the persona.
+   * The evaluation harness needs that: the same persona, measured with
+   * and without its rules, against the same held-out lines.
+   */
+  microRules?: MicroRule[] | null;
+  /**
+   * The per-state imperfection.
+   *
+   * `null` turns it off, the same way the rules do.
+   */
+  imperfectionProfile?: ImperfectionEntry[] | null;
 }
 
 /**
@@ -72,6 +98,7 @@ export async function buildPromptForPersona(
   return buildSystemPrompt(persona, {
     sceneOverlay: context.sceneOverlay ?? null,
     emotionalDesc: context.emotionalDesc,
+    emotionalState: context.emotionalState ?? null,
     anchorSection: formatAnchorsForPrompt(anchors, locale),
     memorySection: formatMemoriesForPrompt(ordinary, locale),
     summarySection:
@@ -84,6 +111,8 @@ export async function buildPromptForPersona(
     relationshipEvents: buildRelationshipSection(events as any, phase, locale),
     relationshipPhase: phase,
     reachability: (persona as any).reachability ?? "reachable",
+    microRules: context.microRules,
+    imperfectionProfile: context.imperfectionProfile,
     locale,
     now,
   });

@@ -41,6 +41,12 @@ import {
   createLetter, getLetters, getDueLetters, getLastLetterReplyAt,
   answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes,
   createRelationshipEvent, getRelationshipEvents, deleteRelationshipEvent,
+  saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
+  getOutboundLetters, setOutboundLetterStatus, updateOutboundLetterText,
+  markOutboundLetterStaleNotified,
+  createOutboundLetter,
+  getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
+  setPersonaBehaviorProfile, getPersonaBehaviorProfile,
 } from "./db";
 import { nanoid } from "nanoid";
 import path from "path";
@@ -58,11 +64,22 @@ import { getCrisisResources } from "./safety/resources";
 import { isValidTimeZone, zonedDateKey } from "@shared/timezone";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
+import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
+import { runEval } from "./eval/run";
+import { collectOutboundCandidates } from "./chat/outbound";
+import { measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
+import { mineMicroRules } from "./skill-engine/micro-rules";
+import { normalizeBehaviorProfile } from "@shared/behavior-profile";
+import { normalizeMicroRules } from "@shared/micro-rules";
+import {
+  normalizeImperfectionProfile,
+  mergeImperfectionDefaults,
+} from "@shared/imperfection";
 import { mayReachOut } from "@shared/graduation-mode";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { extractJsonArray, extractJsonObject } from "./_core/json";
 import { runConversation } from "./chat/service";
-import { writeFarewellLetter } from "./chat/farewell";
+import { writeFarewellLetterWithStatus } from "./chat/farewell";
 import { writeLetter } from "./chat/letters";
 import { encryptSecret } from "./_core/crypto";
 import { RATE_LIMITS } from "./_core/rate-limit";
@@ -943,6 +960,7 @@ export const appRouter = router({
       }),
 
     graduate: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.llmHeavy))
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
@@ -963,13 +981,20 @@ export const appRouter = router({
         // provider meant that anyone who configured a key in the settings —
         // and only there — got an error at the one moment the product exists
         // for.
-        const farewellLetter = await writeFarewellLetter({
+        const { letter: farewellLetter, degraded, draft } = await writeFarewellLetterWithStatus({
           persona,
           userId: ctx.user.id,
           locale: ctx.locale,
         });
-        await setGraduationStatus(input.id, ctx.user.id, "graduated", farewellLetter);
-        return { farewellLetter };
+        await setGraduationStatus(
+          input.id,
+          ctx.user.id,
+          "graduated",
+          farewellLetter,
+          degraded,
+          draft,
+        );
+        return { farewellLetter, degraded, draft };
       }),
 
     declineGraduation: protectedProcedure
@@ -2722,6 +2747,468 @@ export const appRouter = router({
         const removed = await deleteLetter(input.id, ctx.user.id);
         if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
+      }),
+  }),
+
+  /**
+   * The ruler.
+   *
+   * Everything else in this product is measured by whether it works.
+   * This is the part that is measured by whether it is *still* the
+   * person: one of their real lines is held back, and the rebuilt
+   * persona has to say it again.
+   */
+  eval: router({
+    /** Cuts a fresh set of held-out cases out of the imported records. */
+    buildCases: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+        const messages = rows.map((row) => ({
+          id: row.id,
+          role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
+          content: row.content,
+          timestamp: row.timestamp ?? null,
+        }));
+        // The emotion is read in the language the records are in.
+        const cases = buildEvalCases(messages, { locale: input.locale });
+        const saved = await saveEvalCases(
+          input.personaId,
+          ctx.user.id,
+          cases.map((item) => ({
+            context: item.context,
+            expected: item.expected,
+            expectedState: item.expectedState,
+            source: "collected",
+            occurredAt: item.expected.timestamp ?? null,
+          })),
+        );
+        return { saved };
+      }),
+
+    /** The cases that are currently held out. */
+    listCases: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return { cases: await getEvalCases(input.personaId, ctx.user.id) };
+      }),
+
+    /**
+     * Runs the cases and scores the answers.
+     *
+     * "withoutRules" is the control: the same persona, measured with its
+     * rules switched off. A rule that does not move the numbers does not
+     * belong in the prompt.
+     */
+    run: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.llmHeavy))
+      .input(z.object({
+        personaId: z.number(),
+        variant: z.enum(["default", "withoutRules"]).default("default"),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+        const messages = rows.map((row) => ({
+          id: row.id,
+          role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
+          content: row.content,
+          timestamp: row.timestamp ?? null,
+        }));
+
+        // The stored cases are the ones that get measured. Cutting a
+        // fresh set every time would measure a different question each
+        // time, and the comparison with the last run would be between
+        // two different things.
+        const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
+        const cases = stored.length
+          ? stored
+          : buildEvalCases(messages, { locale: input.locale });
+        if (!cases.length) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: copy(input.locale, "labels.eval.noCases"),
+          });
+        }
+        if (!stored.length) {
+          // There were none stored, so these are new; they are kept, so
+          // that the next run measures the same lines.
+          await saveEvalCases(
+            input.personaId,
+            ctx.user.id,
+            cases.map((item) => ({
+              context: item.context,
+              expected: item.expected,
+              expectedState: item.expectedState,
+              source: "collected",
+              occurredAt: item.expected.timestamp ?? null,
+            })),
+          );
+        }
+
+        const metrics = await runEval({
+          persona,
+          userId: ctx.user.id,
+          cases,
+          trainingTexts: trainingTexts(messages, cases),
+          variant: input.variant,
+          locale: input.locale,
+        });
+        // The run is always kept. The comparison with the last run is
+        // only meaningful if there is a last run — and the variant is
+        // stored with it, because a run with the rules switched off is
+        // a different persona and must not be compared against one with
+        // them on.
+        await saveEvalRun(input.personaId, ctx.user.id, {
+          ...metrics,
+          variant: input.variant,
+        }, persona.personaData);
+        return { metrics };
+      }),
+
+    /** The last run, and whether this one is worse than it. */
+    latest: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const run = await getLatestEvalRun(input.personaId, ctx.user.id);
+        return { run };
+      }),
+  }),
+
+  /**
+   * The rules the persona discriminates by.
+   *
+   * They are written into the persona's own data rather than kept in a
+   * table of their own, because they are part of who the persona is —
+   * the same place the catchphrases and the speaking style live.
+   */
+  microRule: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return { rules: normalizeMicroRules((persona.personaData as any)?.microRules) };
+      }),
+
+    /**
+     * Mines the rules out of the imported records.
+     *
+     * The records are the only place the real words are: the app's own
+     * conversation was written by the persona, so mining it would find
+     * the persona's habits and call them the person's.
+     *
+     * What comes back are *candidates*. They carry the messages they
+     * were read off, and they do not take effect until the user has
+     * looked at them — a rule the model invented and the user never
+     * checked is worse than no rule.
+     */
+    mine: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.llm))
+      .input(z.object({
+        personaId: z.number(),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+        const mined = await mineMicroRules({
+          userId: ctx.user.id,
+          locale: input.locale,
+          messages: rows.map((row) => ({
+            content: row.content,
+            timestamp: row.timestamp,
+            // In the collected records the other person is the assistant.
+            role: row.role,
+          })),
+        });
+
+        const existing = normalizeMicroRules((persona.personaData as any)?.microRules);
+        const known = new Set(existing.map((rule) => rule.trigger.join("|")));
+        const fresh = mined.filter((rule) => !known.has(rule.trigger.join("|")));
+        const rules = normalizeMicroRules([...existing, ...fresh]);
+        await updatePersona(input.personaId, ctx.user.id, {
+          personaData: {
+            ...((persona.personaData as any) || {}),
+            microRules: rules,
+          },
+        });
+        return { rules: fresh };
+      }),
+
+    /**
+     * Replaces the rules.
+     *
+     * A rule the user has deleted must not come back from the model, so
+     * the whole list is replaced rather than merged.
+     */
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        rules: z.array(z.object({
+          id: z.string().max(64).optional(),
+          trigger: z.array(z.string().max(40)).min(1).max(12),
+          meaning: z.string().min(1).max(500),
+          rendering: z.string().min(1).max(500),
+          confidence: z.number().min(0).max(1).default(0.5),
+          source: z.enum(["auto", "manual"]).default("manual"),
+          verified: z.boolean().default(true),
+          evidence: z.array(z.object({
+            at: z.string().max(40).optional(),
+            snippet: z.string().max(1000),
+          })).max(20).default([]),
+        })).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const rules = normalizeMicroRules(input.rules);
+        const merged = {
+          ...((persona.personaData as any) || {}),
+          microRules: rules,
+        };
+        await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
+        return { rules };
+      }),
+  }),
+
+  /**
+   * How the persona is imperfect in each state.
+   *
+   * It is separate from the realism level on purpose: the level says how
+   * imperfect they are, and this says what that looks like when they are
+   * happy and what it looks like when they are not.
+   */
+  imperfection: router({
+    get: protectedProcedure
+      .input(z.object({ personaId: z.number(), locale: z.enum(["zh", "en"]).default("zh") }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const stored = normalizeImperfectionProfile(
+          (persona.personaData as any)?.imperfectionProfile,
+          input.locale,
+        );
+        return {
+          stored,
+          merged: mergeImperfectionDefaults(stored, input.locale),
+        };
+      }),
+
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        profile: z.array(z.object({
+          state: z.enum(["warm", "playful", "nostalgic", "melancholy", "happy", "distant"]),
+          deviations: z.array(z.string().max(200)).max(12),
+        })).max(12),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        // The fallback for a state the user left empty is written in the
+        // app's language — which is the user's language, not the app
+        // default's.
+        const profile = normalizeImperfectionProfile(input.profile, ctx.locale);
+        const merged = {
+          ...((persona.personaData as any) || {}),
+          imperfectionProfile: profile,
+        };
+        await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
+        return { profile };
+      }),
+  }),
+
+  /**
+   * The way out.
+   *
+   * The graduation ritual ends with a farewell written in the persona's
+   * voice. But what was actually unfinished was the *user's* sentences —
+   * the things they said here that they never managed to say to the
+   * person they were talking about.
+   *
+   * So the goodbye has an exit as well as a door. The app collects those
+   * words and hands them back; it never sends anything, and it never
+   * writes anything on the user's behalf.
+   */
+  outbound: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return { letters: await getOutboundLetters(input.personaId, ctx.user.id) };
+      }),
+
+    /**
+     * Looks through the conversation for the words that were only ever
+     * said here.
+     *
+     * The candidates are the user's own messages, copied exactly. The
+     * model's only job is to say which ones those are.
+     */
+    collect: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.llm))
+      .input(z.object({
+        personaId: z.number(),
+        locale: z.enum(["zh", "en"]).default("zh"),
+        max: z.number().min(1).max(20).default(5),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+
+        // The whole conversation, not the last page of it: the words
+        // that were only ever said here are often from months ago.
+        const messages = await getMessagesByPersonaId(input.personaId, ctx.user.id, 500);
+        const candidates = await collectOutboundCandidates({
+          userId: ctx.user.id,
+          personaId: input.personaId,
+          messages: messages.map((row) => ({
+            id: row.id,
+            role: row.role === "assistant" ? "assistant" : "user",
+            content: row.content,
+            createdAt: row.createdAt,
+          })),
+          max: input.max,
+          locale: input.locale,
+          // The hour of the day is read in the persona's own zone: the
+          // words someone says at two in the morning are a different
+          // thing depending on whose two in the morning it is.
+          timezone: (persona as any).timezone ?? null,
+        });
+
+        // Asking twice must not produce two copies of the same sentence.
+        // The lines are collected from the conversation, and the
+        // conversation does not change — so a line that is already on the
+        // list is a line that has already been offered.
+        const existing = await getOutboundLetters(input.personaId, ctx.user.id);
+        const known = new Set(
+          existing
+            .map((letter) => letter.sourceMessageId)
+            .filter((id): id is number => typeof id === "number"),
+        );
+
+        let saved = 0;
+        for (const candidate of candidates.candidates) {
+          if (known.has(candidate.messageId)) continue;
+          await createOutboundLetter({
+            userId: ctx.user.id,
+            personaId: input.personaId,
+            text: candidate.text,
+            sourceMessageId: candidate.messageId,
+            status: "ready",
+          });
+          known.add(candidate.messageId);
+          saved += 1;
+        }
+        return { saved, note: candidates.note };
+      }),
+
+    /** "I said it." The app records it; it never sends it. */
+    markSent: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const changed = await setOutboundLetterStatus(input.id, ctx.user.id, "sent");
+        // A letter that is not there is not "done" — the interface would
+        // otherwise show a success for something that never happened.
+        if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /**
+     * "This one is for me."
+     *
+     * When the other person is not there any more, a letter written to
+     * them has nowhere to go. Without somewhere for it to go, it would sit
+     * in the list forever — which is the one outcome this feature exists
+     * to prevent.
+     */
+    keepForSelf: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const changed = await setOutboundLetterStatus(input.id, ctx.user.id, "self");
+        if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /** "Never mind." Recorded rather than deleted: it is one of the two endings worth keeping. */
+    drop: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const changed = await setOutboundLetterStatus(input.id, ctx.user.id, "dropped");
+        if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /**
+     * Records that the letter was pointed out for having waited.
+     *
+     * The reminder is said once; this is the record of that.
+     */
+    markStaleNotified: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await markOutboundLetterStaleNotified(input.id, ctx.user.id);
+        // Recording the reminder is best-effort: failing to write it
+        // would mean the reminder is said again, which is not worth an
+        // error the user cannot act on.
+        return { success: true };
+      }),
+
+    updateText: protectedProcedure
+      .input(z.object({ id: z.number(), text: z.string().min(1).max(5000) }))
+      .mutation(async ({ ctx, input }) => {
+        const changed = await updateOutboundLetterText(input.id, ctx.user.id, input.text);
+        if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+  }),
+
+  /**
+   * How this persona behaves over time.
+   *
+   * The delays used to be product rules. These are the persona's own
+   * numbers, measured from the record, so the waiting is theirs rather
+   * than the app's.
+   */
+  behavior: router({
+    get: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const stored = await getPersonaBehaviorProfile(input.personaId, ctx.user.id);
+        return { profile: normalizeBehaviorProfile(stored) };
+      }),
+
+    /** Measures it again, from whatever records exist now. */
+    measure: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const profile = await measureAndSaveBehaviorProfile({
+          personaId: input.personaId,
+          userId: ctx.user.id,
+          personaTimezone: (persona as any).timezone ?? null,
+        });
+        return { profile };
       }),
   }),
 

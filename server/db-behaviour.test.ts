@@ -564,11 +564,20 @@ describe("the research profiles", () => {
 });
 
 describe("the collected material", () => {
-  it("lists the messages in the order they were collected", async () => {
+  it("lists the messages in the order they were said", async () => {
     registry.select.collected_messages = [{ id: 1 }];
     await db.getCollectedMessagesForPersona(1, 3);
 
-    expect(orderOf()[0].sql).toContain('"collected_messages"."createdAt" asc');
+    // By when they were *said*, not by when they were imported. Two
+    // imports of two different conversations used to be laid end to end,
+    // and the ruler cut cases across the seam — a case whose context was
+    // half of one conversation and half of another. The import time is
+    // the fallback for a record that carries no time of its own.
+    const sql = orderOf()[0].sql;
+    expect(sql).toContain('COALESCE');
+    expect(sql).toContain('"collected_messages"."timestamp"');
+    expect(sql).toContain('"collected_messages"."createdAt"');
+    expect(sql).toContain("asc");
   });
 
   it("lists the sources newest first", async () => {

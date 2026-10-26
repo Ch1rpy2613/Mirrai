@@ -26,6 +26,8 @@ import { loadPrompt } from "./prompts";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
 import { normalizePersonaData, type PersonaData } from "../_core/persona-schema";
+import { normalizeMicroRules, type MicroRule } from "@shared/micro-rules";
+import { normalizeImperfectionProfile } from "@shared/imperfection";
 import { ENV } from "../_core/env";
 import * as db from "../db";
 import {
@@ -42,6 +44,12 @@ import {
   type DistillationMode,
   type DistillationPreset,
 } from "@shared/distillation-modes";
+import {
+  findContrastPairs,
+  MICRO_RULE_PAIR_BUDGET,
+  mineMicroRules,
+  parseTranscriptMessages,
+} from "./micro-rules";
 import { copy, type Locale } from "@shared/copy";
 import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 
@@ -87,6 +95,15 @@ export type PipelineInput = {
    * It defaults to Chinese, which is what the app has always used.
    */
   locale?: Locale;
+  /**
+   * Whether the discriminative rules should be mined from the records.
+   *
+   * The mining is an extra model call, so a caller that does not want it
+   * says so. It is optional by nature: when the material is thin, when
+   * the model fails, or when it is switched off here, the run finishes
+   * with no rules at all — a persona without rules is still a persona.
+   */
+  mineRules?: boolean;
 };
 
 /**
@@ -127,6 +144,46 @@ function researchStage(stage: CelebrityResearchStage): SkillJobStage {
  * which is an optional dependency — so the slug is computed here and passed
  * explicitly. The persona id keeps two people with the same name apart.
  */
+/**
+ * What the user decided, kept across a re-run.
+ *
+ * A re-distillation rebuilds the persona from the records, and it would
+ * happily throw away everything the user worked out by hand: the rules
+ * they confirmed, and the per-state imperfection they wrote. Those are
+ * not the model's to overwrite — the whole point of them is that they are
+ * the user's decisions about a person the model cannot see.
+ *
+ * So the confirmed rules and the whole imperfection profile are carried
+ * over. The mined *candidates* are not: they are read off the records
+ * again, and a fresh reading is a better reading.
+ */
+export function mergeUserDecisions(
+  fresh: PersonaData,
+  previous: Partial<PersonaData>,
+  minedRules: MicroRule[],
+  locale: "zh" | "en" = "zh",
+): PersonaData {
+  const confirmed = normalizeMicroRules(previous.microRules).filter(
+    (rule) => rule.verified,
+  );
+  const imperfectionProfile = normalizeImperfectionProfile(
+    previous.imperfectionProfile,
+    locale,
+  );
+  // A mined rule whose trigger the user has already confirmed is dropped:
+  // the user's version is the one they checked, and two rules about the
+  // same word are two contradictory instructions in one prompt.
+  const covered = new Set(confirmed.map((rule) => rule.trigger.join("|")));
+  const uncovered = minedRules.filter(
+    (rule) => !covered.has(rule.trigger.join("|")),
+  );
+  return {
+    ...fresh,
+    microRules: [...confirmed, ...uncovered],
+    imperfectionProfile,
+  };
+}
+
 export function skillSlug(name: string, personaId: number): string {
   const ascii = name
     .toLowerCase()
@@ -560,6 +617,58 @@ async function runMerger(input: {
 }
 
 /**
+ * The mining stage: finds the smallest contrasts in the records and asks
+ * the model what they mean.
+ *
+ * It runs after the persona has been assembled, because a rule is only
+ * worth mining when there is a person to attach it to. It changes nothing
+ * else about the persona: the rules are added to the contract and every
+ * other field is left exactly as the structurer wrote it.
+ *
+ * Only the persona's own words are read. The rules are about how *she*
+ * discriminates, so a contrast between her messages and the user's says
+ * nothing about her — unless the records do not say whose the words are,
+ * in which case the whole transcript is offered and the model is left to
+ * quote what it can source.
+ */
+async function runMicroRuleStage(input: {
+  chatContent: string;
+  name: string;
+  userId: number;
+  provider?: string;
+  mode: DistillationMode;
+  temperature?: number;
+  locale?: Locale;
+  onProgress?: (message: string) => void;
+}): Promise<MicroRule[]> {
+  const locale = input.locale ?? "zh";
+  try {
+    const messages = parseTranscriptMessages(input.chatContent, { personaName: input.name });
+    const known = messages.some((message) => message.role === "persona");
+    const pairs = findContrastPairs(messages, {
+      role: known ? "persona" : undefined,
+      // The presets promise how much of the material a run reads, and the
+      // mining reads the same records: the deep preset mines more pairs
+      // than the quick one.
+      limit: MICRO_RULE_PAIR_BUDGET[input.mode] ?? 12,
+    });
+    if (!pairs.length) return [];
+
+    return await mineMicroRules({
+      pairs,
+      userId: input.userId,
+      providerName: input.provider,
+      locale,
+      temperature: input.temperature,
+      onProgress: input.onProgress,
+    });
+  } catch (e) {
+    console.warn("[SkillEngine] Micro rule mining failed (non-critical):", e);
+    return [];
+  }
+}
+
+/**
  * How a failed run is retried.
  *
  * The pauses exist to get past a rate limit rather than to hammer it, so
@@ -942,12 +1051,65 @@ async function runSkillPipelineOnce(
       locale,
     );
     const baseData = normalizePersonaData(parsed, { name, locale });
-    const personaData: PersonaData = imageNote
+    const enrichedData: PersonaData = imageNote
       ? {
           ...baseData,
           memories: `${baseData.memories}\n\n${copy(locale, "skillPrompts.pipeline.photoMemories")}${imageNote}`.trim(),
         }
       : baseData;
+
+    // ── Stage 4b: mine the discriminative rules ─────────────────────────────
+    // The rules are read off the records and written into the contract; the
+    // persona itself is left exactly as the structurer wrote it.
+    await setJobStage(
+      {
+        pipelineStage: "structuring",
+        stageProgress: stageProgress.structuring,
+        stageMessage: copy(locale, "labels.microRules.mining"),
+      },
+      jobId,
+    );
+    await setPersonaProgress(
+      stageProgress.structuring,
+      copy(locale, "labels.microRules.mining"),
+    );
+
+    const microRules =
+      input.mineRules === false
+        ? []
+        : await runMicroRuleStage({
+            chatContent,
+            name,
+            userId,
+            provider: input.provider,
+            mode: preset.id,
+            temperature: preset.analysisTemperature,
+            locale,
+            onProgress: (message) => {
+              void setPersonaProgress(stageProgress.structuring, message);
+            },
+          });
+
+    await setPersonaProgress(
+      stageProgress.structuring,
+      microRules.length
+        ? copy(locale, "labels.microRules.mined", { count: microRules.length })
+        : copy(locale, "labels.microRules.minedNone"),
+    );
+
+    const previous = await (async () => {
+      try {
+        const persona = await db.getPersonaById(personaId, userId);
+        return (persona?.personaData as Partial<PersonaData>) || {};
+      } catch {
+        // A persona that cannot be read is a persona whose own decisions
+        // are unknown. The distillation still runs; it just cannot carry
+        // anything over.
+        return {};
+      }
+    })();
+
+    const personaData = mergeUserDecisions(enrichedData, previous, microRules, locale);
 
     // ── Stage 5: persist ───────────────────────────────────────────────────
     await db.updatePersona(personaId, userId, {

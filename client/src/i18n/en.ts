@@ -559,6 +559,7 @@ export const en = {
       back: "Back",
     },
     profile: {
+
       name: "Display name",
       email: "Email",
       changePassword: "Change password",
@@ -1137,6 +1138,127 @@ export const en = {
     goUpload: "Upload material",
   },
 
+  /**
+   * The discriminative rules.
+   *
+   * A persona is prose, and prose is read as meaning. The sharpest thing
+   * anyone knows about another person is usually a distinction, and it
+   * gets its own place here — with the words that fire it, what it means,
+   * and the messages it was read off.
+   */
+  microRules: {
+    title: "Discriminative rules",
+    hint: "Prose is read as meaning; rules are not. The sharpest distinction you know goes here.",
+    empty: "No rules yet. Mine some from the records, or write one yourself.",
+    add: "Add a rule",
+    save: "Save",
+    cancel: "Cancel",
+    saved: "Rules saved",
+    delete: "Delete",
+    edit: "Edit",
+    incomplete: "The trigger, the meaning and the rendering all have to be filled in",
+    mine: "Mine from the records",
+    mining: "Looking for the smallest contrasts…",
+    mined: "{{count}} candidates found. They take effect once you confirm them.",
+    minedNone: "The records did not contain enough contrasts.",
+    trigger: "Trigger",
+    triggerHint: "Separated by commas",
+    meaning: "Meaning",
+    rendering: "What you do then",
+    evidence: "Evidence",
+    evidenceEmpty: "No evidence.",
+    verified: "Confirmed — in effect",
+    unverified: "Candidate — not confirmed",
+    confirm: "Confirm",
+    sourceAuto: "Mined from the records",
+    sourceManual: "Written by you",
+  },
+
+  /**
+   * Imperfection, per state.
+   *
+   * One number cannot describe how a person is imperfect: the same person
+   * is loose when they are happy and clipped when they are not.
+   */
+  imperfection: {
+    title: "Imperfection, per state",
+    hint: "Nobody is constant. The same person is loose when happy and clipped when not. Write them apart and it becomes real.",
+    notAppliedYet: "These are the defaults, and they are not applied yet — press save and they become part of the persona.",
+    deviations: "How they are imperfect here",
+    deviationsHint: "Separated by semicolons",
+    restoreDefaults: "Restore the defaults",
+    save: "Save",
+    saved: "Saved",
+  },
+
+  /**
+   * The way out.
+   *
+   * Graduation ends with a letter in the persona's voice. What was
+   * actually unfinished was the user's own sentences — the things they
+   * said here and never said to the person. These are those words, and
+   * the app never sends them.
+   */
+  outbound: {
+    title: "Words to take back",
+    hint: "These are things you said here and never said to them. Nothing is sent for you — they are laid out, and you decide.",
+    empty: "None yet. We can look through the conversation for the things only said here.",
+    collect: "Look for them",
+    collecting: "Looking…",
+    collected: "Found {{count}}.",
+    collectedNone: "Nothing was said only here.",
+    status: "Status",
+    statusDraft: "Still writing",
+    statusReady: "Ready to take",
+    statusSent: "Already said",
+    statusDropped: "Never mind",
+    markSent: "I said it",
+    drop: "Never mind",
+    source: "From a line in the conversation",
+    edit: "Edit it",
+    staleHint: "This has been waiting {{days}} days. It will not go away on its own.",
+    forSelf: "For yourself",
+  },
+
+  /**
+   * The ruler, and the timing.
+   *
+   * Everything else is measured by whether it works; these two are
+   * measured by whether the persona is still the person.
+   */
+  fidelity: {
+    title: "Does it still sound like them",
+    hint: "One of their real lines is held back, and the rebuilt persona has to produce it. The numbers measure likeness, not usefulness.",
+    run: "Run it",
+    running: "Running…",
+    done: "Done",
+    noRun: "Never run. Import the chat records and it can be.",
+    withRules: "With the rules",
+    withoutRules: "Without the rules",
+    overlap: "3-gram overlap",
+    overlapHint: "How much of the same wording. Higher is closer.",
+    likelihood: "In their own words",
+    likelihoodHint:
+      "Fitted on what they said (minus the held-out line), a model that only knows their habits asks which line sounds like them.",
+    likelihoodSame: "Cannot tell them apart",
+    likelihoodMore: "More like them than the line they actually wrote",
+    likelihoodLess: "Further from them than the line they actually wrote",
+    length: "Length of the line",
+    lengthHint: "How many characters apart the two lengths are. Smaller is closer.",
+    emotion: "Same emotion",
+    emotionHint: "How often the two lines read as the same emotion. Higher is closer.",
+    behavior: {
+      title: "Their timing",
+      hint: "Measured from the real records: how long they take, how many they send at once, when they are most active. The wait before speaking first comes from this distribution, not from a fixed number.",
+      notMeasured: "Not measured yet. Import more of the conversation and it can be.",
+      measure: "Measure",
+      measuring: "Measuring…",
+      samples: "Samples",
+      median: "Typical reply gap",
+      proactive: "How often they speak first",
+    },
+  },
+
   templates: {
     title: "Persona templates",
     builtin: "Built in",
@@ -1194,6 +1316,11 @@ export const en = {
    * itself. The user owns the decision; the app only offers it.
    */
   graduationPage: {
+    simplified: "This is the simplified version: the two-pass writing could not finish, so the letter is plainer than usual.",
+    keptHeading: "What stayed",
+    removedHeading: "What was cut",
+    draftNote: "The letter is written in two passes: five sentences they never said, then only subtraction.",
+
     kicker: "Goodbye",
     title: "Say it properly",
     subtitle: "This is not an ending. It is a sentence that has been finished.",
@@ -1245,6 +1372,8 @@ export const en = {
     touchingMoments: "Moments that moved them",
     summary: "In one line",
     catchphrases: "Their phrases",
+    rules: "Discriminative rules",
+    rulesNote: "The rules you confirmed yourself: how they tell things apart is yours to decide.",
     anchors: "Anchor memories",
     anchorsNote: "These are carried into every single conversation — the things that must not be forgotten.",
     milestones: "Important moments",

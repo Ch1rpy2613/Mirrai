@@ -131,9 +131,40 @@ export const personas = pgTable("personas", {
    * something the user decided, not something the model guessed.
    */
   correctionLog: jsonb("correctionLog"),
+  /**
+   * How this persona actually behaves over time: reply gaps, burst sizes,
+   * how often it speaks first.
+   *
+   * The delays used to be product rules — a fixed hour, a fixed count.
+   * But a person does not reply on a schedule; they reply the way they
+   * have always replied, and that difference is the difference between a
+   * schedule and a person. These numbers are sampled from the persona's
+   * own history, so the uncertainty is theirs and not the app's.
+   */
+  behaviorProfile: jsonb("behaviorProfile"),
   graduationStatus: graduationStatusEnum(),
   graduatedAt: timestamp("graduatedAt"),
   farewellLetter: text("farewellLetter"),
+  /**
+   * Whether the letter is the simplified one.
+   *
+   * The letter is written in two passes — first the sentences they never
+   * said, then the subtraction that leaves only what a last word needs.
+   * When the two passes cannot finish in time the older single-pass
+   * letter is used instead, which is the same letter as before but
+   * plainer. The interface says so rather than passing one thing off as
+   * another.
+   */
+  farewellDegraded: boolean("farewellDegraded").default(false).notNull(),
+  /**
+   * What the second pass kept, and what it cut.
+   *
+   * The letter is written in two passes: five sentences they never said,
+   * then a subtraction that leaves only what a last word needs. Which
+   * lines survived, and which were cut, is the part of that the person
+   * reading it might want to see — so it is kept rather than discarded.
+   */
+  farewellDraft: jsonb("farewellDraft"),
   /**
    * When the graduation was first offered.
    *
@@ -912,3 +943,109 @@ export const graduationAssessments = pgTable("graduation_assessments", {
 
 export type GraduationAssessment = typeof graduationAssessments.$inferSelect;
 export type InsertGraduationAssessment = typeof graduationAssessments.$inferInsert;
+
+// ─── Fidelity evaluation ────────────────────────────────────────────────────
+
+/**
+ * One held-out exchange, used to answer the only question that matters
+ * when the persona is rebuilt: does it still sound like them?
+ *
+ * Every existing test checks a *mechanism* — that the schema is shaped
+ * right, that the prompt is assembled, that the state machine switches.
+ * None of them check whether the persona still sounds like the person.
+ * These cases are that ruler: a stretch of real conversation with the
+ * person's real reply removed, so the rebuilt persona has to produce it.
+ */
+export const evalCases = pgTable("eval_cases", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  /** The messages that led up to the held-out reply. */
+  contextJson: jsonb("contextJson").notNull(),
+  /** What the person actually said. The ground truth. */
+  expectedJson: jsonb("expectedJson").notNull(),
+  /** The emotion the real reply carried, for the per-state buckets. */
+  expectedState: varchar("expectedState", { length: 32 }),
+  /** Where the case came from, so a case can be traced back to the record. */
+  source: varchar("source", { length: 32 }).default("collected").notNull(),
+  /** The timestamp of the held-out reply in the original conversation. */
+  occurredAt: timestamp("occurredAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaIdx: index("eval_cases_persona_idx").on(table.personaId),
+}));
+
+export type EvalCase = typeof evalCases.$inferSelect;
+export type InsertEvalCase = typeof evalCases.$inferInsert;
+
+/**
+ * What the rebuilt persona said, and what it was scored against.
+ *
+ * The metrics need somewhere to live, because a ruler that has to be
+ * recalculated by hand is a ruler nobody uses.
+ */
+export const evalRuns = pgTable("eval_runs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  /** The metrics this run produced. */
+  metricsJson: jsonb("metricsJson").notNull(),
+  /** What the persona looked like when the run happened. */
+  personaSnapshot: jsonb("personaSnapshot"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaIdx: index("eval_runs_persona_idx").on(table.personaId),
+}));
+
+export type EvalRun = typeof evalRuns.$inferSelect;
+export type InsertEvalRun = typeof evalRuns.$inferInsert;
+
+// ─── The way out ────────────────────────────────────────────────────────────
+
+/**
+ * The letters the user takes back to the real person.
+ *
+ * The graduation ritual ends with a farewell written in the persona's
+ * voice. But the thing that was actually unfinished was never the
+ * persona's sentence — it was the user's. They said things here that they
+ * never said to the person they were talking about, and the app's whole
+ * promise is that saying them here was the useful part.
+ *
+ * So graduation has an exit as well as a door: the words that were only
+ * ever said to the persona, collected and handed back. Nothing is sent.
+ * The app never speaks for the person who is not in the room.
+ */
+export const outboundLetters = pgTable("outbound_letters", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  /** The user's own words. Never the persona's. */
+  text: text("text").notNull(),
+  /** Where in the conversation this came from, so it can be traced. */
+  sourceMessageId: integer("sourceMessageId"),
+  /** draft — the user is still writing; ready — offered to be sent. */
+  status: varchar("status", { length: 16 }).default("draft").notNull(),
+  /** When the user decided to keep it. */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  /** When the user sent it — to the real person, themselves. */
+  sentAt: timestamp("sentAt"),
+  /** When the user decided it would never be sent. */
+  droppedAt: timestamp("droppedAt"),
+  /**
+   * When the letter was pointed out for having waited too long.
+   *
+   * A letter that has been sitting for a month is not going to be sent
+   * by accident, and saying so once is useful. Saying it every time the
+   * page is opened is the app nagging — which is the one thing this
+   * product promises not to do. So the reminder is recorded, and it is
+   * said once.
+   */
+  staleNotifiedAt: timestamp("staleNotifiedAt"),
+}, (table) => ({
+  personaIdx: index("outbound_letters_persona_idx").on(table.personaId),
+  statusIdx: index("outbound_letters_status_idx").on(table.status),
+}));
+
+export type OutboundLetter = typeof outboundLetters.$inferSelect;
+export type InsertOutboundLetter = typeof outboundLetters.$inferInsert;

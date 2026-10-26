@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isProactiveDue, buildProactiveInstruction } from "./chat/proactive";
+import {
+  clearProactiveDeadlines,
+  isProactiveDue,
+  buildProactiveInstruction,
+  resolveProactiveDeadline,
+} from "./chat/proactive";
+import { fitBehaviorProfile } from "@shared/behavior-profile";
 import { buildReachabilityNote, isReachability, buildRelationshipSection } from "@shared/user-side";
 import { daysSinceContact } from "@shared/timezone";
 import { buildSystemPrompt } from "./_core/persona-utils";
@@ -23,6 +29,28 @@ describe("isProactiveDue", () => {
       presence: "active",
       now,
     })).toBe(false);
+  });
+
+  it("never speaks when the frequency is negative", () => {
+    // A negative frequency is not a purchase either — it is a number
+    // that cannot be waited out.
+    expect(isProactiveDue({
+      frequencyHours: -24,
+      lastChatAt: null,
+      presence: "active",
+      now,
+    })).toBe(false);
+  });
+
+  it("speaks first when nobody has ever written", () => {
+    // There is no silence to wait out, so the first word is due now:
+    // the persona is the one who has to break the ice.
+    expect(isProactiveDue({
+      frequencyHours: 24,
+      lastChatAt: null,
+      presence: "active",
+      now,
+    })).toBe(true);
   });
 
   it("speaks when enough time has passed", () => {
@@ -59,6 +87,98 @@ describe("isProactiveDue", () => {
       presence: "asleep",
       now,
     })).toBe(false);
+  });
+});
+
+describe("a persona whose timing has been measured", () => {
+  const now = new Date("2026-06-01T12:00:00Z");
+  const lastChatAt = new Date(now.getTime() - 25 * 3_600_000);
+
+  const measured = fitBehaviorProfile([
+    { gapSeconds: 60 },
+    { gapSeconds: 90 },
+    { gapSeconds: 120 },
+    { gapSeconds: 180 },
+    { gapSeconds: 240 },
+    { gapSeconds: 300 },
+    { gapSeconds: 360 },
+    { gapSeconds: 420 },
+  ]);
+  if (!measured) throw new Error("the fixture profile could not be fitted");
+
+  it("speaks at its own moment, and not at the fixed one", () => {
+    clearProactiveDeadlines();
+
+    const deadline = resolveProactiveDeadline({
+      personaId: 1,
+      frequencyHours: 24,
+      lastChatAt,
+      behaviorProfile: measured,
+    })!;
+
+    // The window the user bought is still the floor; the persona's own
+    // history decides what happens on top of it.
+    expect(deadline.sampled).toBe(true);
+    expect(deadline.at.getTime()).toBeGreaterThanOrEqual(deadline.eligibleAt.getTime());
+    expect(
+      isProactiveDue({
+        frequencyHours: 24,
+        lastChatAt,
+        presence: "active",
+        now: new Date(deadline.at.getTime() - 1000),
+        personaId: 1,
+        behaviorProfile: measured,
+      }),
+    ).toBe(false);
+    expect(
+      isProactiveDue({
+        frequencyHours: 24,
+        lastChatAt,
+        presence: "active",
+        now: deadline.at,
+        personaId: 1,
+        behaviorProfile: measured,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not speak more often than the user bought", () => {
+    clearProactiveDeadlines();
+
+    expect(
+      isProactiveDue({
+        frequencyHours: 24,
+        lastChatAt,
+        presence: "active",
+        now: new Date(lastChatAt.getTime() + 23 * 3_600_000),
+        personaId: 2,
+        behaviorProfile: measured,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps a persona nobody measured exactly as it was", () => {
+    clearProactiveDeadlines();
+
+    const deadline = resolveProactiveDeadline({
+      personaId: 3,
+      frequencyHours: 24,
+      lastChatAt,
+      behaviorProfile: null,
+    })!;
+
+    expect(deadline.sampled).toBe(false);
+    expect(deadline.at.getTime()).toBe(lastChatAt.getTime() + 24 * 3_600_000);
+    expect(
+      isProactiveDue({
+        frequencyHours: 24,
+        lastChatAt,
+        presence: "active",
+        now: new Date(lastChatAt.getTime() + 24 * 3_600_000),
+        personaId: 3,
+        behaviorProfile: null,
+      }),
+    ).toBe(true);
   });
 });
 

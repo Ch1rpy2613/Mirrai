@@ -551,6 +551,7 @@ export const zh = {
       back: "返回",
     },
     profile: {
+
       name: "昵称",
       email: "邮箱",
       changePassword: "修改密码",
@@ -1125,6 +1126,126 @@ export const zh = {
     goUpload: "去上传素材",
   },
 
+  /**
+   * The discriminative rules.
+   *
+   * A persona is prose, and prose is read as meaning. The sharpest thing
+   * anyone knows about another person is usually a distinction, and it
+   * gets its own place here — with the words that fire it, what it means,
+   * and the messages it was read off.
+   */
+  microRules: {
+    title: "判别规则",
+    hint: "散文会被读成大意，规则不会。你知道的那种最锋利的区别，写在这里。",
+    empty: "还没有规则。从聊天记录里挖一批，或者自己写一条。",
+    add: "加一条规则",
+    save: "保存",
+    cancel: "取消",
+    saved: "规则已保存",
+    delete: "删掉",
+    edit: "改",
+    incomplete: "触发词、含义、做法都要填",
+    mine: "从记录里挖",
+    mining: "正在找最小对比对…",
+    mined: "挖到 {{count}} 条候选，确认后才会生效。",
+    minedNone: "记录里没有找到足够的对比对。",
+    trigger: "触发词",
+    triggerHint: "用顿号或逗号分开",
+    meaning: "含义",
+    rendering: "这时候你会怎么做",
+    evidence: "依据",
+    evidenceEmpty: "没有依据。",
+    verified: "已确认，会生效",
+    unverified: "候选，还没确认",
+    confirm: "确认",
+    sourceAuto: "从记录里挖到的",
+    sourceManual: "你写的",
+  },
+
+  /**
+   * Imperfection, per state.
+   *
+   * One number cannot describe how a person is imperfect: the same person
+   * is loose when they are happy and clipped when they are not.
+   */
+  imperfection: {
+    title: "每种心情下的不完美",
+    hint: "没有人是恒定的。同一个人心情好时松散，心情差时短促。分别写，才是真的。",
+    notAppliedYet: "这些是默认写法，还没有生效——按「保存」之后才会进到分身身上。",
+    deviations: "这时候 TA 的不完美长什么样",
+    deviationsHint: "用分号分开",
+    restoreDefaults: "恢复默认",
+    save: "保存",
+    saved: "已保存",
+  },
+
+  /**
+   * The way out.
+   *
+   * Graduation ends with a letter in the persona's voice. What was
+   * actually unfinished was the user's own sentences — the things they
+   * said here and never said to the person. These are those words, and
+   * the app never sends them.
+   */
+  outbound: {
+    title: "带回去的话",
+    hint: "这些是你只在这里说过、还没对本人说过的话。系统不代发，只把它们摆在这里，由你决定说不说。",
+    empty: "还没有。从你们的对话里找找那些只在这里说过的话。",
+    collect: "找一找",
+    collecting: "正在找…",
+    collected: "找到 {{count}} 句。",
+    collectedNone: "没有找到只在这里说过的话。",
+    status: "状态",
+    statusDraft: "还在写",
+    statusReady: "可以带走了",
+    statusSent: "已经说过了",
+    statusDropped: "不说了",
+    markSent: "我说过了",
+    drop: "不说了",
+    source: "来自对话里的一句话",
+    edit: "改一改",
+    staleHint: "这句话已经放了 {{days}} 天了。它不会自己消失。",
+    forSelf: "留给自己的",
+  },
+
+  /**
+   * The ruler, and the timing.
+   *
+   * Everything else is measured by whether it works; these two are
+   * measured by whether the persona is still the person.
+   */
+  fidelity: {
+    title: "像不像",
+    hint: "从 TA 真实说过的话里扣下一句不给看，看重建出来的分身能不能写得出。分数是量「像不像」，不是量「好不好用」。",
+    run: "跑一次",
+    running: "正在跑…",
+    done: "跑完了",
+    noRun: "还没有跑过。导入聊天记录之后就可以跑。",
+    withRules: "带规则",
+    withoutRules: "不带规则",
+    overlap: "三字重合率",
+    overlapHint: "用的词重合得越多，越像。越高越像。",
+    likelihood: "用她自己的字眼",
+    likelihoodHint: "拿她说过的话（不含被扣下的那句）训一个只认识她用字习惯的模型，再问它：哪句更像她写的。",
+    likelihoodSame: "分不出来",
+    likelihoodMore: "比她本人那句还像她",
+    likelihoodLess: "比她本人那句差一截",
+    length: "句子长短",
+    lengthHint: "两边的长短差多少个字。越小越像。",
+    emotion: "情绪一致",
+    emotionHint: "两句读起来是同一种情绪的次数。越高越像。",
+    behavior: {
+      title: "TA 的时间习惯",
+      hint: "从真实记录里量出来的：多久回、一次发几条、什么时候最活跃。主动开口的等待时间按这个分布来，而不是按一个固定的数。",
+      notMeasured: "还没有量过。多导入一些聊天记录就能量。",
+      measure: "量一次",
+      measuring: "正在量…",
+      samples: "样本",
+      median: "平均回信间隔",
+      proactive: "主动开口的比例",
+    },
+  },
+
   templates: {
     title: "分身模板",
     builtin: "内置",
@@ -1182,6 +1303,11 @@ export const zh = {
    * itself. The user owns the decision; the app only offers it.
    */
   graduationPage: {
+    simplified: "这封是简化版：生成时没能走完两遍流程，内容比平时单薄一些。",
+    keptHeading: "留下来的",
+    removedHeading: "删掉的",
+    draftNote: "信是两遍写成的：先写五句她从没说过的话，再只做减法。",
+
     kicker: "告别",
     title: "好好说再见",
     subtitle: "这不是结束，是一句说完了的话。",
@@ -1233,6 +1359,8 @@ export const zh = {
     touchingMoments: "动心的时刻",
     summary: "一句话概括",
     catchphrases: "口头禅",
+    rules: "判别规则",
+    rulesNote: "这些是你自己确认过的规则：它们怎么区分，你说了算。",
     anchors: "锚点记忆",
     anchorsNote: "这几条每次对话都会带上，是最不能忘的。",
     milestones: "重要时刻",

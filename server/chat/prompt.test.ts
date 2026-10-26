@@ -99,6 +99,61 @@ describe("the prompt the persona is given", () => {
     expect(built).toContain("第一次见面");
   });
 
+  it("carries the persona's rules and imperfection", async () => {
+    // The evaluation harness measures the persona with and without its
+    // rules, and it does that by switching them off *here*. So the
+    // switch has to reach the prompt builder — a switch that stopped
+    // at the boundary would silently measure the same persona twice.
+    const withRules = await buildPromptForPersona({
+      persona: {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          microRules: [
+            {
+              id: "r1",
+              trigger: ["随便你"],
+              meaning: "她真的生气了",
+              rendering: "更短、更冷",
+              confidence: 1,
+              source: "manual",
+              verified: true,
+              evidence: [],
+            },
+          ],
+          imperfectionProfile: [{ state: "distant", deviations: ["极短句"] }],
+        },
+      },
+      userId: 1,
+    });
+    expect(withRules).toContain("随便你");
+
+    const withoutRules = await buildPromptForPersona({
+      persona: {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          microRules: [
+            {
+              id: "r1",
+              trigger: ["随便你"],
+              meaning: "她真的生气了",
+              rendering: "更短、更冷",
+              confidence: 1,
+              source: "manual",
+              verified: true,
+              evidence: [],
+            },
+          ],
+        },
+      },
+      userId: 1,
+      microRules: null,
+      imperfectionProfile: null,
+    });
+    expect(withoutRules).not.toContain("随便你");
+  });
+
   it("carries the scene it is in", async () => {
     const built = await buildPromptForPersona({
       persona,

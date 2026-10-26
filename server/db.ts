@@ -9,6 +9,7 @@ import {
   channelBindings, channelStates, personaTemplates, personaQuestionnaireAnswers,
   reminderDeliveries, researchProfiles, collectedMessages, collectionSources,
   collectionJobs,
+  evalCases, evalRuns, outboundLetters,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
@@ -16,6 +17,7 @@ import {
   InsertChannelBinding, InsertPersonaTemplate, InsertPersonaQuestionnaireAnswer,
   InsertResearchProfile, InsertCollectedMessage, InsertCollectionSource,
   InsertCollectionJob,
+  InsertEvalCase, InsertEvalRun, InsertOutboundLetter,
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
@@ -559,11 +561,14 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(collectionSources).where(eq(collectionSources.userId, id));
     await tx.delete(diaryEntries).where(eq(diaryEntries.userId, id));
     await tx.delete(emotionSnapshots).where(eq(emotionSnapshots.userId, id));
+    await tx.delete(evalCases).where(eq(evalCases.userId, id));
+    await tx.delete(evalRuns).where(eq(evalRuns.userId, id));
     await tx.delete(graduationAssessments).where(eq(graduationAssessments.userId, id));
     await tx.delete(llmConfigs).where(eq(llmConfigs.userId, id));
     await tx.delete(memories).where(eq(memories.userId, id));
     await tx.delete(memoryExtractions).where(eq(memoryExtractions.userId, id));
     await tx.delete(messages).where(eq(messages.userId, id));
+    await tx.delete(outboundLetters).where(eq(outboundLetters.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
@@ -721,10 +726,13 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(collectionJobs).where(and(eq(collectionJobs.personaId, id), eq(collectionJobs.userId, userId)));
     await tx.delete(diaryEntries).where(and(eq(diaryEntries.personaId, id), eq(diaryEntries.userId, userId)));
     await tx.delete(emotionSnapshots).where(and(eq(emotionSnapshots.personaId, id), eq(emotionSnapshots.userId, userId)));
+    await tx.delete(evalCases).where(and(eq(evalCases.personaId, id), eq(evalCases.userId, userId)));
+    await tx.delete(evalRuns).where(and(eq(evalRuns.personaId, id), eq(evalRuns.userId, userId)));
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
     await tx.delete(memoryExtractions).where(and(eq(memoryExtractions.personaId, id), eq(memoryExtractions.userId, userId)));
     await tx.delete(messages).where(and(eq(messages.personaId, id), eq(messages.userId, userId)));
+    await tx.delete(outboundLetters).where(and(eq(outboundLetters.personaId, id), eq(outboundLetters.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
     await tx.delete(reminderDeliveries).where(and(eq(reminderDeliveries.personaId, id), eq(reminderDeliveries.userId, userId)));
@@ -1838,6 +1846,21 @@ export async function setGraduationStatus(
   personaId: number, userId: number,
   status: "suggested" | "graduated" | "declined" | null,
   farewellLetter?: string,
+  /**
+   * Whether the letter is the simplified one.
+   *
+   * It is recorded next to the letter because the two belong together:
+   * a reader has to be able to tell which of the two they are looking
+   * at, and that has to survive a reload.
+   */
+  farewellDegraded?: boolean,
+  /**
+   * Which lines the second pass kept, and which it cut.
+   *
+   * It is stored next to the letter because the two belong together:
+   * the letter is the result, and this is how it got there.
+   */
+  farewellDraft?: unknown,
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
@@ -1856,6 +1879,8 @@ export async function setGraduationStatus(
     data.graduatedAt = now;
     data.presence = "asleep";
     if (farewellLetter) data.farewellLetter = farewellLetter;
+    if (farewellDegraded !== undefined) data.farewellDegraded = farewellDegraded;
+    if (farewellDraft !== undefined) data.farewellDraft = farewellDraft;
   }
   if (status === null) {
     // Waking a persona does not destroy its farewell letter. The letter is
@@ -2250,10 +2275,14 @@ export async function getCollectedMessagesForPersona(
 ) {
   const db = await getDb();
   if (!db) return [];
+  // Ordered by when the message was *said*, not by when it was
+  // imported. Two imports of two different conversations used to be
+  // laid end to end, and the ruler cut cases across the seam — a case
+  // whose context was half of one conversation and half of another.
   return db.select().from(collectedMessages).where(and(
     eq(collectedMessages.personaId, personaId),
     eq(collectedMessages.userId, userId),
-  )).orderBy(asc(collectedMessages.createdAt));
+  )).orderBy(asc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`));
 }
 
 // ─── Collection source helpers ────────────────────────────────────────────
@@ -2515,4 +2544,227 @@ export async function getSessionStartAt(
     oldest = rows[i].createdAt;
   }
   return oldest;
+}
+
+// ─── Fidelity evaluation ────────────────────────────────────────────────────
+
+/**
+ * Replaces the held-out cases for a persona.
+ *
+ * They are replaced rather than appended: the cases are cut from the
+ * records, so re-cutting after a new import would otherwise leave the
+ * old ones behind, scored against a persona that has since changed.
+ */
+export async function saveEvalCases(
+  personaId: number,
+  userId: number,
+  cases: Array<{
+    context: unknown;
+    expected: unknown;
+    expectedState?: string | null;
+    source?: string;
+    occurredAt?: Date | null;
+  }>,
+) {
+  const db = await getDb();
+  if (!db) return 0;
+  if (!cases.length) {
+    await db.delete(evalCases).where(and(
+      eq(evalCases.personaId, personaId),
+      eq(evalCases.userId, userId),
+    ));
+    return 0;
+  }
+  // The delete and the insert are one thing, not two: a failure between
+  // them would leave the persona with no cases at all, and the ruler
+  // would have nothing to measure.
+  return withTransaction(async (tx) => {
+    await tx.delete(evalCases).where(and(
+      eq(evalCases.personaId, personaId),
+      eq(evalCases.userId, userId),
+    ));
+    await tx.insert(evalCases).values(cases.map((c) => ({
+      userId,
+      personaId,
+      contextJson: c.context,
+      expectedJson: c.expected,
+      expectedState: c.expectedState ?? null,
+      source: c.source ?? "collected",
+      occurredAt: c.occurredAt ?? null,
+    })));
+    return cases.length;
+  });
+}
+
+/** The held-out cases for a persona, oldest first. */
+export async function getEvalCases(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(evalCases).where(and(
+    eq(evalCases.personaId, personaId),
+    eq(evalCases.userId, userId),
+  )).orderBy(asc(evalCases.id));
+}
+
+/**
+ * Records a run of the evaluation.
+ *
+ * The snapshot matters: a run is only meaningful next to the persona
+ * that produced it, and the persona changes.
+ */
+export async function saveEvalRun(
+  personaId: number,
+  userId: number,
+  metrics: unknown,
+  personaSnapshot?: unknown,
+) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [result] = await db.insert(evalRuns).values({
+    userId,
+    personaId,
+    metricsJson: metrics,
+    personaSnapshot: personaSnapshot ?? null,
+  }).returning({ id: evalRuns.id });
+  return result.id;
+}
+
+/** The most recent run of the evaluation for a persona. */
+export async function getLatestEvalRun(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(evalRuns).where(and(
+    eq(evalRuns.personaId, personaId),
+    eq(evalRuns.userId, userId),
+  )).orderBy(desc(evalRuns.id)).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Stores how this persona behaves over time.
+ *
+ * The profile is what makes the waiting theirs rather than the app's,
+ * so it is kept on the persona next to everything else that describes
+ * them.
+ */
+export async function setPersonaBehaviorProfile(
+  personaId: number,
+  userId: number,
+  profile: unknown,
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(personas).set({ behaviorProfile: profile ?? null }).where(and(
+    eq(personas.id, personaId),
+    eq(personas.userId, userId),
+  ));
+}
+
+/** How this persona behaves over time, as measured. */
+export async function getPersonaBehaviorProfile(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ behaviorProfile: personas.behaviorProfile }).from(personas)
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
+  return rows[0]?.behaviorProfile ?? null;
+}
+
+// ─── The way out ────────────────────────────────────────────────────────────
+
+/**
+ * Saves a letter the user is taking back to the real person.
+ *
+ * The text is the user's own words, copied exactly. Nothing here is
+ * ever written by the app on their behalf.
+ */
+export async function createOutboundLetter(data: {
+  userId: number;
+  personaId: number;
+  text: string;
+  sourceMessageId?: number | null;
+  status?: string;
+}) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [result] = await db.insert(outboundLetters).values({
+    userId: data.userId,
+    personaId: data.personaId,
+    text: data.text,
+    sourceMessageId: data.sourceMessageId ?? null,
+    status: data.status ?? "draft",
+  }).returning({ id: outboundLetters.id });
+  return result.id;
+}
+
+/** The letters this user is taking back, newest first. */
+export async function getOutboundLetters(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(outboundLetters).where(and(
+    eq(outboundLetters.personaId, personaId),
+    eq(outboundLetters.userId, userId),
+  )).orderBy(desc(outboundLetters.id));
+}
+
+/**
+ * Moves a letter along: sent, or never mind.
+ *
+ * Both are recorded rather than deleted, because "I said it" and "I
+ * decided not to" are the two endings worth remembering, and neither of
+ * them is a failure.
+ */
+export async function setOutboundLetterStatus(
+  id: number,
+  userId: number,
+  status: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const now = new Date();
+  // The row count comes back so the caller can tell "done" from "there
+  // was nothing there". A procedure that answers "yes" to a letter that
+  // does not exist is a small lie, and the interface would show it.
+  const rows = await db.update(outboundLetters).set({
+    status,
+    updatedAt: now,
+    ...(status === "sent" ? { sentAt: now } : {}),
+    ...(status === "dropped" ? { droppedAt: now } : {}),
+  }).where(and(eq(outboundLetters.id, id), eq(outboundLetters.userId, userId)))
+    .returning({ id: outboundLetters.id });
+  return rows.length > 0;
+}
+
+/**
+ * Records that the letter was pointed out for having waited too long.
+ *
+ * The reminder is said once. The record is what makes "once" true
+ * across sessions — without it the page would say it again every time
+ * it was opened, and a reminder that repeats is a nag.
+ */
+export async function markOutboundLetterStaleNotified(
+  id: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(outboundLetters)
+    .set({ staleNotifiedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(outboundLetters.id, id), eq(outboundLetters.userId, userId)))
+    .returning({ id: outboundLetters.id });
+  return rows.length > 0;
+}
+
+/** Changes the text of a letter the user is taking back. */
+export async function updateOutboundLetterText(
+  id: number,
+  userId: number,
+  text: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(outboundLetters).set({ text, updatedAt: new Date() }).where(and(
+    eq(outboundLetters.id, id),
+    eq(outboundLetters.userId, userId),
+  )).returning({ id: outboundLetters.id });
+  return rows.length > 0;
 }

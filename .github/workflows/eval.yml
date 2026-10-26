@@ -1,0 +1,144 @@
+name: Fidelity gate
+
+# The tests in this project check that the machinery works. This job
+# checks that the *person* still sounds like themselves — and that a
+# change did not quietly make the persona less like the person it was
+# built from.
+#
+# It needs two things the ordinary test job does not have: a database
+# with real chat records, and an LLM provider. Both are secrets, so the
+# job only runs when they are configured.
+#
+# Which persona it measures comes from the repository variables
+# `EVAL_PERSONA` and `EVAL_USER`. Once those are set, every change that
+# could move the numbers runs the gate automatically — a change that
+# makes the persona less like the person fails the build rather than
+# being noticed months later.
+#
+# When the variables are missing the job says so out loud. A green mark
+# that checked nothing is worse than no mark at all.
+on:
+  pull_request:
+    paths:
+      - "server/_core/persona-*.ts"
+      - "server/chat/prompt.ts"
+      - "server/chat/service.ts"
+      - "server/chat/farewell*.ts"
+      - "server/chat/outbound.ts"
+      - "server/chat/proactive*.ts"
+      - "server/skill-engine/**"
+      - "server/eval/**"
+      - "shared/micro-rules.ts"
+      - "shared/imperfection.ts"
+      - "shared/behavior-profile.ts"
+      - "shared/outbound.ts"
+      - "drizzle/schema.ts"
+      - "scripts/eval-run.ts"
+  push:
+    branches: [main]
+    paths:
+      - "server/_core/persona-*.ts"
+      - "server/chat/prompt.ts"
+      - "server/chat/service.ts"
+      - "server/chat/farewell*.ts"
+      - "server/chat/outbound.ts"
+      - "server/chat/proactive*.ts"
+      - "server/skill-engine/**"
+      - "server/eval/**"
+      - "shared/micro-rules.ts"
+      - "shared/imperfection.ts"
+      - "shared/behavior-profile.ts"
+      - "shared/outbound.ts"
+      - "drizzle/schema.ts"
+      - "scripts/eval-run.ts"
+  workflow_dispatch:
+    inputs:
+      persona:
+        description: "The persona to measure (overrides the repository variable)"
+        required: false
+        type: string
+      user:
+        description: "The user who owns it (overrides the repository variable)"
+        required: false
+        type: string
+
+jobs:
+  fidelity:
+    name: Does it still sound like them
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mirrai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mirrai
+      # The dispatch inputs win; the repository variables are the
+      # standing configuration for the automatic runs.
+      EVAL_PERSONA: ${{ inputs.persona || vars.EVAL_PERSONA }}
+      EVAL_USER: ${{ inputs.user || vars.EVAL_USER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply the schema
+        # `drizzle-kit push` rather than `pnpm db:migrate`: the base
+        # schema lives in the full-schema dumps in 0000/0001, which the
+        # migration script skips, so on an empty database `db:migrate`
+        # fails on the first real migration. The ordinary CI job applies
+        # the schema the same way, and then checks that the migrations
+        # are idempotent on top of it.
+        run: pnpm exec drizzle-kit push --force
+
+      - name: Restore the records
+        # The ruler measures a persona against the person's own records,
+        # so the gate needs those records. They are not in the
+        # repository — they are the user's own chat history — so they
+        # come from a secret: a base64 `pg_dump --data-only` of the
+        # tables the evaluation reads.
+        #
+        # Without them the measurement has nothing to measure, and the
+        # gate says so and fails, rather than passing on nothing.
+        if: ${{ secrets.EVAL_RECORDS_SQL != '' }}
+        env:
+          EVAL_RECORDS: ${{ secrets.EVAL_RECORDS_SQL }}
+        run: |
+          echo "$EVAL_RECORDS" | base64 --decode > /tmp/records.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /tmp/records.sql
+
+      - name: Measure the persona
+        if: ${{ env.EVAL_PERSONA != '' && env.EVAL_USER != '' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm eval -- --persona "$EVAL_PERSONA" --user "$EVAL_USER" --gate
+
+      - name: Report that it was skipped
+        if: ${{ env.EVAL_PERSONA == '' || env.EVAL_USER == '' }}
+        run: |
+          echo "::warning title=Fidelity gate skipped::No persona was configured (set the repository variables EVAL_PERSONA and EVAL_USER, or use the manual trigger). Nothing was checked."
+
+      - name: Fail when it was skipped
+        if: ${{ env.EVAL_PERSONA == '' || env.EVAL_USER == '' }}
+        run: |
+          echo "The fidelity gate cannot be trusted as a green mark when it checked nothing."
+          echo "Set the repository variables EVAL_PERSONA and EVAL_USER, and the secret EVAL_RECORDS_SQL."
+          exit 1

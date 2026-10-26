@@ -80,6 +80,12 @@ vi.mock("@/components/RelationshipTimeline", () => ({
 vi.mock("@/components/LetterBox", () => ({
   default: () => <div data-testid="letter-box" />,
 }));
+vi.mock("@/components/MicroRulesEditor", () => ({
+  default: () => <div data-testid="micro-rules-editor" />,
+}));
+vi.mock("@/components/ImperfectionEditor", () => ({
+  default: () => <div data-testid="imperfection-editor" />,
+}));
 
 import PersonaEdit from "./PersonaEdit";
 

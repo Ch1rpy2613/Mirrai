@@ -188,9 +188,52 @@ function isUserScoped(fn: DbFunction): boolean {
   return /eq\(\s*users\.id\s*,/.test(fn.body) && !/personaId|jobId|sceneId|memoryId/.test(fn.params);
 }
 
+/**
+ * True when the helper actually binds the row to the caller.
+ *
+ * Having a `userId` in the signature is not the same as using it. A
+ * helper that takes the caller's id and then queries by the row id
+ * alone will hand back somebody else's private data, and the signature
+ * will look perfectly innocent — so the check has to be on the query,
+ * not on the parameters.
+ */
+function bindsOwnership(fn: DbFunction): boolean {
+  // The ordinary case: the query is filtered by the owner.
+  if (/eq\(\s*\w+\.userId\s*,/.test(fn.body)) return true;
+  // A helper that only creates rows owns them by writing the owner in.
+  if (
+    /\.insert\(/.test(fn.body) &&
+    !/\.update\(|\.delete\(|\.select\(/.test(fn.body)
+  ) {
+    if (/userId\s*[:,]/.test(fn.body)) return true;
+    // The whole parameter object is written out, and that object
+    // carries the owner.
+    const names = (fn.params.match(/(\w+)\s*:/g) ?? []).map((n) =>
+      n.replace(/\s*:/, ""),
+    );
+    return names.some((name) => new RegExp(`\\.\\.\\.${name}\\b`).test(fn.body));
+  }
+  return false;
+}
+
 describe("db helpers enforce ownership", () => {
   it("finds the exported functions", () => {
     expect(functions.length).toBeGreaterThan(50);
+  });
+
+  it("filters by the user id, rather than only taking it", () => {
+    // The signature is not the guarantee. The query is.
+    const unfiltered = functions
+      .filter((fn) => ID_PARAM.test(fn.params))
+      .filter((fn) => fn.params.includes("userId"))
+      .filter((fn) => !isUserScoped(fn))
+      .filter((fn) => !bindsOwnership(fn))
+      .map((fn) => `${fn.name}(${fn.params})`);
+
+    expect(
+      unfiltered,
+      "these helpers take a user id but never bind the row to it",
+    ).toEqual([]);
   });
 
   it("requires a userId on every helper that takes a row identifier", () => {

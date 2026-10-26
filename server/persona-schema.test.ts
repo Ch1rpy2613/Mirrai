@@ -20,6 +20,8 @@ describe("normalizePersonaData", () => {
       ...raw,
       realismLevel: 70,
       relationshipPhase: "initial",
+      microRules: [],
+      imperfectionProfile: [],
     });
   });
 
@@ -79,8 +81,10 @@ describe("normalizePersonaData", () => {
       "attachmentStyle",
       "catchphrases",
       "conflictStyle",
+      "imperfectionProfile",
       "loveLanguage",
       "memories",
+      "microRules",
       "nickname",
       "personality",
       "realismLevel",
@@ -114,6 +118,58 @@ describe("normalizePersonaData", () => {
     // The old fields are untouched.
     expect(result.personality).toBe(old.personality);
     expect(result.catchphrases).toEqual(old.catchphrases);
+    // And the persona does not quietly gain a personality it never had:
+    // no rules and no per-state imperfection, so the prompt is unchanged.
+    expect(result.microRules).toEqual([]);
+    expect(result.imperfectionProfile).toEqual([]);
+  });
+
+  it("keeps the discriminative rules", () => {
+    const rules = [
+      {
+        id: "r1",
+        trigger: ["随便你"],
+        meaning: "她真的生气了",
+        rendering: "更短、更冷",
+        confidence: 0.8,
+        source: "manual",
+        verified: true,
+        evidence: [{ snippet: "随便你" }],
+      },
+    ];
+    const result = normalizePersonaData(
+      { microRules: rules },
+      { name: "小A" },
+    );
+    expect(result.microRules).toHaveLength(1);
+    expect(result.microRules![0].trigger).toEqual(["随便你"]);
+    expect(result.microRules![0].verified).toBe(true);
+  });
+
+  it("drops a rule that cannot be obeyed", () => {
+    const result = normalizePersonaData(
+      { microRules: [{ trigger: [], meaning: "x", rendering: "y" }] },
+      { name: "小A" },
+    );
+    expect(result.microRules).toEqual([]);
+  });
+
+  it("keeps the per-state imperfection", () => {
+    const result = normalizePersonaData(
+      { imperfectionProfile: [{ state: "distant", deviations: ["极短句"] }] },
+      { name: "小A" },
+    );
+    expect(result.imperfectionProfile).toHaveLength(1);
+    expect(result.imperfectionProfile![0].state).toBe("distant");
+    expect(result.imperfectionProfile![0].deviations).toEqual(["极短句"]);
+  });
+
+  it("fills an empty state with the default for that state", () => {
+    const result = normalizePersonaData(
+      { imperfectionProfile: [{ state: "happy", deviations: [] }] },
+      { name: "小A" },
+    );
+    expect(result.imperfectionProfile![0].deviations.length).toBeGreaterThan(0);
   });
 
   it("keeps an explicit realism level and relationship phase", () => {

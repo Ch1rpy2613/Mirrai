@@ -262,9 +262,17 @@ describe("the graduation mutation", () => {
     const result = await caller.persona.graduate({ id: 1 });
 
     expect(result.farewellLetter).toBe("亲爱的，这是一封告别信。");
+    // The flag says whether the letter is the full two-pass one or the
+    // single-pass fallback. In this test the model cannot run the two
+    // passes, so the fallback is what is written — and the flag says so,
+    // so the interface can tell the reader which one they are looking at.
+    // The last argument is the draft — which lines the second pass kept
+    // and which it cut. The single-pass fallback has no draft, so it is
+    // empty.
     expect(setGraduationStatus).toHaveBeenCalledWith(
-      1, 1, "graduated", "亲爱的，这是一封告别信。",
+      1, 1, "graduated", "亲爱的，这是一封告别信。", true, undefined,
     );
+    expect(result.degraded).toBe(true);
   });
 
   it("writes the letter in the manual mode — the user asked for it", async () => {

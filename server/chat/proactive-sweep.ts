@@ -8,6 +8,7 @@
  */
 import * as db from "../db";
 import { composeProactiveMessage, isProactiveDue } from "./proactive";
+import { loadBehaviorProfile } from "../_core/behavior-profile";
 import { resolvePresence } from "@shared/graduation-mode";
 import { getChannelAdapter } from "../channels";
 import { isQuietHour } from "../scheduler/reminders";
@@ -72,6 +73,10 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         lastChatAt: row.lastChatAt,
         presence,
         now,
+        // The persona's own timing, when it has been measured. Without
+        // it the old fixed window applies and nothing changes.
+        personaId: persona.id,
+        behaviorProfile: loadBehaviorProfile(persona),
       })) {
         continue;
       }

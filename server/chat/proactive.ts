@@ -26,6 +26,8 @@ import { llmService } from "../llm";
 import { buildUserContextBlock, isUserMood } from "@shared/user-side";
 import { zonedHour, zonedOffsetHours } from "@shared/timezone";
 import { mayReachOut, type Presence } from "@shared/graduation-mode";
+import { sampleProactiveDelayMs, type BehaviorProfile } from "@shared/behavior-profile";
+import { seededRandom } from "../_core/behavior-profile";
 import { copy } from "@shared/copy";
 
 /** The longest a proactive message may be. A first word is not a letter. */
@@ -198,23 +200,155 @@ export async function composeProactiveMessage(params: {
 }
 
 /**
+ * When the persona will speak first in this silence.
+ *
+ * Two moments, and the difference between them is the whole change. The
+ * first is the end of the window the user bought — the app may not
+ * speak first more often than that, and that rule has not moved. The
+ * second is when it actually will, and for a persona whose timing has
+ * been measured that moment is drawn from its own distribution instead
+ * of being the same clock tick for everybody.
+ */
+export interface ProactiveDeadline {
+  /** The end of the window the user bought. */
+  eligibleAt: Date;
+  /** When the persona will actually speak first. */
+  at: Date;
+  /** Whether the extra wait came from the persona's own distribution. */
+  sampled: boolean;
+}
+
+/**
+ * The deadlines that have been drawn, one per silence.
+ *
+ * The key is the silence itself — the persona and the moment the
+ * silence began — so a new silence is a new plan and the same silence
+ * is always the same plan. The draw is seeded from that key as well,
+ * which means a restart does not change what the persona had decided:
+ * the deadline is a property of the silence, not of the process that
+ * happened to be running when the silence started.
+ */
+const sampledDeadlines = new Map<string, number>();
+
+/** How many deadlines are kept before the old ones are let go. */
+const MAX_KEPT_DEADLINES = 500;
+
+/**
+ * Forgets the deadlines of silences that are long over.
+ *
+ * The map is a cache, not a ledger: a silence that ended is a silence
+ * that will not be asked about again.
+ */
+function pruneDeadlines(): void {
+  if (sampledDeadlines.size <= MAX_KEPT_DEADLINES) return;
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  for (const [key, at] of sampledDeadlines) {
+    if (at < cutoff) sampledDeadlines.delete(key);
+  }
+}
+
+/**
+ * Forgets every drawn deadline.
+ *
+ * Only the tests need this; the deadlines are keyed by the silence, so
+ * in use they cannot be stale.
+ */
+export function clearProactiveDeadlines(): void {
+  sampledDeadlines.clear();
+}
+
+/**
+ * When the persona will speak first, and how that was decided.
+ *
+ * For a persona whose timing has been measured, the wait is drawn from
+ * its own distribution and added to the window the user bought: the
+ * purchase says how often, the persona's own history says when. The
+ * draw happens once per silence — the same silence always yields the
+ * same deadline, so the plan survives a restart.
+ *
+ * For a persona with no measurement, the deadline is the end of the
+ * bought window, exactly as it always was.
+ */
+export function resolveProactiveDeadline(params: {
+  personaId: number;
+  frequencyHours: number;
+  lastChatAt: Date | null;
+  behaviorProfile?: BehaviorProfile | null;
+}): ProactiveDeadline | null {
+  if (!params.lastChatAt || !params.frequencyHours || params.frequencyHours <= 0) {
+    return null;
+  }
+
+  const silenceStart = new Date(params.lastChatAt).getTime();
+  if (Number.isNaN(silenceStart)) return null;
+
+  const windowMs = params.frequencyHours * 3_600_000;
+  const eligibleAt = silenceStart + windowMs;
+  const profile = params.behaviorProfile ?? null;
+
+  if (!profile) {
+    return { eligibleAt: new Date(eligibleAt), at: new Date(eligibleAt), sampled: false };
+  }
+
+  const key = `${params.personaId}:${silenceStart}`;
+  const drawn = sampledDeadlines.get(key);
+  if (drawn !== undefined) {
+    return { eligibleAt: new Date(eligibleAt), at: new Date(drawn), sampled: true };
+  }
+
+  // The silence the draw is made against is the silence at the moment
+  // the persona became allowed to speak — which is the bought window
+  // itself, and is the same number every time the silence is asked
+  // about. That is what makes the deadline reproducible.
+  const waitMs = sampleProactiveDelayMs(
+    profile,
+    windowMs,
+    seededRandom(`${key}:${profile.replyGapMedianSec}:${profile.replyGapLogSigma}`),
+  );
+  const at = eligibleAt + waitMs;
+
+  sampledDeadlines.set(key, at);
+  pruneDeadlines();
+
+  return { eligibleAt: new Date(eligibleAt), at: new Date(at), sampled: true };
+}
+
+/**
  * Whether a persona is due to speak first.
  *
  * Three conditions, and all three have to hold: the user asked for it
  * (the frequency is not zero), enough time has passed, and the persona
  * is actually around. A persona the user has put to sleep, or asked to
  * be left alone, does not come back on its own.
+ *
+ * For a persona whose timing has been measured, "enough time has
+ * passed" is measured against the deadline that was drawn for this
+ * silence rather than against the bought window alone — otherwise the
+ * wait would be recomputed as a constant on every tick and the persona
+ * would never reach it.
  */
 export function isProactiveDue(params: {
   frequencyHours: number;
   lastChatAt: Date | null;
   presence: string;
   now?: Date;
+  /** The persona's own timing, when it has been measured. */
+  behaviorProfile?: BehaviorProfile | null;
+  /** Which persona it is — part of the seed of the draw. */
+  personaId?: number;
 }): boolean {
   const now = params.now ?? new Date();
   if (!params.frequencyHours || params.frequencyHours <= 0) return false;
   if (!mayReachOut(params.presence as Presence)) return false;
   if (!params.lastChatAt) return true;
-  const elapsed = now.getTime() - new Date(params.lastChatAt).getTime();
-  return elapsed >= params.frequencyHours * 3_600_000;
+
+  const deadline = resolveProactiveDeadline({
+    personaId: params.personaId ?? 0,
+    frequencyHours: params.frequencyHours,
+    lastChatAt: params.lastChatAt,
+    behaviorProfile: params.behaviorProfile ?? null,
+  });
+  if (!deadline) return false;
+
+  return now.getTime() >= deadline.at.getTime();
 }

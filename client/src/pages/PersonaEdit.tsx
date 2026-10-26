@@ -18,6 +18,8 @@ import { isPresence, type Presence } from "@shared/graduation-mode";
 import { isReachability, type Reachability } from "@shared/user-side";
 import RelationshipTimeline from "@/components/RelationshipTimeline";
 import LetterBox from "@/components/LetterBox";
+import MicroRulesEditor from "@/components/MicroRulesEditor";
+import ImperfectionEditor from "@/components/ImperfectionEditor";
 import { useLocale } from "@/contexts/LocaleContext";
 import type { GraduationMode } from "@shared/graduation-mode";
 
@@ -121,7 +123,14 @@ export default function PersonaEdit() {
     onError: (e: any) => toast.error(e.message),
   });
   const graduateMutation = trpc.persona.graduate.useMutation({
-    onSuccess: (data) => { toast.success(t("graduation.sent")); setFarewellLetter(data.farewellLetter); },
+    onSuccess: (data) => {
+      toast.success(t("graduation.sent"));
+      setFarewellLetter(data.farewellLetter);
+      // A letter that came out of the single-pass fallback is plainer
+      // than the one the two passes write. Saying so is better than
+      // passing one thing off as another.
+      if (data.degraded) toast.info(t("graduationPage.simplified"));
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -595,6 +604,22 @@ export default function PersonaEdit() {
               className="rounded-md px-5">
               <Save className="w-3.5 h-3.5" />{updateDataMutation.isPending ? t("common.saving") : t("personaEdit.saveData")}
             </Button>
+          </section>
+        )}
+
+        {/* The rules and the per-state imperfection.
+
+            These two are the parts of a persona that a paragraph cannot
+            carry. A rule says what this person discriminates by; the
+            imperfection says what their not-being-perfect looks like in
+            each mood. Both are optional, and both are off until the user
+            turns them on — a persona that was distilled without them
+            keeps behaving exactly as it did. */}
+        {persona.analysisStatus === "ready" && (
+          <section className="surface p-5 sm:p-6 space-y-6 animate-fade-in-up">
+            <MicroRulesEditor personaId={personaId} />
+            <hr className="rule" />
+            <ImperfectionEditor personaId={personaId} />
           </section>
         )}
 

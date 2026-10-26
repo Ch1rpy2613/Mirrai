@@ -18,7 +18,16 @@
  * Each file runs in its own transaction and is recorded in
  * `schema_migrations`, so re-running the script is a no-op.
  *
- * Usage: node scripts/migrate.mjs [--dry-run]
+ * A migration can carry the way back: a `-- mirrai: down` section after
+ * its up statements. `node scripts/migrate.mjs --rollback [n]` runs the
+ * down sections of the last n applied migrations, newest first, and
+ * forgets them in the journal.
+ *
+ * A migration without a down section cannot be rolled back, and the
+ * script says so rather than half undoing a chain — a rollback that
+ * stops halfway is worse than one that refuses to start.
+ *
+ * Usage: node scripts/migrate.mjs [--dry-run] [--rollback [n]]
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -32,6 +41,7 @@ const ROOT = resolve(HERE, "..");
 const MIGRATIONS_DIR = join(ROOT, "drizzle");
 
 const MARKER = "mirrai: idempotent-migration";
+const DOWN_MARKER = "-- mirrai: down";
 
 function log(...args) {
   console.log("[migrate]", ...args);
@@ -55,12 +65,23 @@ function loadMigrationFiles() {
     })
     .map((name) => {
       const sql = readFileSync(join(MIGRATIONS_DIR, name), "utf-8");
-      return { name, sql, version: name.replace(/\.sql$/, "") };
+      const down = sql.includes(DOWN_MARKER)
+        ? sql.slice(sql.indexOf(DOWN_MARKER) + DOWN_MARKER.length)
+        : null;
+      // The up half is everything before the down section. Running the
+      // whole file would undo the migration the moment it was applied.
+      const up = down === null ? sql : sql.slice(0, sql.indexOf(DOWN_MARKER));
+      return { name, sql: up, down, version: name.replace(/\.sql$/, "") };
     });
 }
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
+  const rollbackIndex = process.argv.indexOf("--rollback");
+  const rollbackCount =
+    rollbackIndex === -1
+      ? 0
+      : Number(process.argv[rollbackIndex + 1] ?? 1);
 
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -96,6 +117,49 @@ async function main() {
 
     const { rows } = await client.query('SELECT "version" FROM "schema_migrations"');
     const applied = new Set(rows.map((r) => r.version));
+
+    if (rollbackIndex !== -1) {
+      if (!Number.isInteger(rollbackCount) || rollbackCount < 1) {
+        throw new Error("--rollback takes how many migrations to undo (a whole number).");
+      }
+      // The order the files are listed in is the order they were applied
+      // in, so the last ones are the newest.
+      const undoable = applicable.filter((f) => applied.has(f.version));
+      const targets = undoable.slice(-rollbackCount);
+      if (targets.length < rollbackCount) {
+        throw new Error(
+          `only ${targets.length} migration(s) have been applied; cannot undo ${rollbackCount}.`,
+        );
+      }
+      const missing = targets.filter((f) => !f.down);
+      if (missing.length) {
+        throw new Error(
+          `these migrations carry no way back: ${missing.map((f) => f.name).join(", ")}. ` +
+            "A rollback that stops halfway is worse than one that refuses to start.",
+        );
+      }
+      for (const file of targets.reverse()) {
+        if (dryRun) {
+          log(`would roll back ${file.name}`);
+          continue;
+        }
+        log(`rolling back ${file.name}`);
+        try {
+          await client.query("BEGIN");
+          await client.query(file.down);
+          await client.query('DELETE FROM "schema_migrations" WHERE "version" = $1', [
+            file.version,
+          ]);
+          await client.query("COMMIT");
+        } catch (e) {
+          await client.query("ROLLBACK").catch(() => {});
+          throw new Error(`Rollback of ${file.name} failed: ${e.message}`);
+        }
+      }
+      if (dryRun) log("dry run complete — nothing was written");
+      else log(`rolled back ${targets.length} migration(s)`);
+      return;
+    }
 
     for (const file of applicable) {
       if (applied.has(file.version)) {

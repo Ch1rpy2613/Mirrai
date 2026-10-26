@@ -7,6 +7,8 @@ import { ArrowLeft, Pencil, Heart, Quote, Calendar, Sparkles } from "lucide-reac
 import PageLoader from "@/components/PageLoader";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
+import FidelityPanel from "@/components/FidelityPanel";
+import { normalizeMicroRules } from "@shared/micro-rules";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 
@@ -49,6 +51,14 @@ export default function PersonaProfile() {
   const memoryItems = memories?.items ?? [];
   const anchors = memoryItems.filter((m: any) => m.category === "anchor");
   const milestones = memoryItems.filter((m: any) => m.category !== "anchor");
+  /**
+   * The rules the user has confirmed.
+   *
+   * The unconfirmed ones are candidates — they have not been checked, so
+   * they are not part of the portrait yet, and showing them here would
+   * present a guess as a decision.
+   */
+  const confirmedRules = normalizeMicroRules(data.microRules).filter((rule) => rule.verified);
 
   const portrait: Array<{ label: string; value: string; icon?: any }> = [];
   if (data.personality) portrait.push({ label: t("profile.personality"), value: data.personality });
@@ -153,6 +163,36 @@ export default function PersonaProfile() {
           </motion.section>
         )}
 
+        {/* The rules, read-only.
+
+            The profile is what the app thinks this person is. The rules
+            are the part of that portrait the user decided, so they are
+            shown here as the user's own decisions — not as another field
+            the system guessed. */}
+        {confirmedRules.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+            className="surface p-5 sm:p-6"
+          >
+            <h2 className="section-title">{t("profile.rules")}</h2>
+            <p className="text-xs text-muted-foreground mt-1 mb-4 leading-relaxed">
+              {t("profile.rulesNote")}
+            </p>
+            <ul className="space-y-2.5">
+              {confirmedRules.map((rule) => (
+                <li key={rule.id} className="text-sm">
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {rule.trigger.join(" / ")}
+                  </span>
+                  <p className="text-muted-foreground mt-0.5 leading-relaxed">
+                    {rule.meaning} — {rule.rendering}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </motion.section>
+        )}
+
         {anchors.length > 0 && (
           <motion.section
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
@@ -192,6 +232,19 @@ export default function PersonaProfile() {
             </ul>
           </motion.section>
         )}
+
+        {/* The ruler and the timing.
+
+            The page above is what the app thinks this person is. This is
+            what the measurement says: whether the rebuild still sounds
+            like them, and whether the waiting between their messages is
+            theirs or the app's. */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          className="surface p-5 sm:p-6"
+        >
+          <FidelityPanel personaId={personaId} />
+        </motion.section>
 
         <motion.p
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}

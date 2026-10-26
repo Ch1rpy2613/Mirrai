@@ -1,0 +1,186 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { translate } from "@/i18n";
+
+/**
+ * The rules.
+ *
+ * The rule that matters here is the one the user can refuse: a rule the
+ * model mined and the person never looked at must not go into the
+ * prompt, and a rule the person deleted must not come back. The test is
+ * what says so.
+ */
+const save = vi.fn();
+const mine = vi.fn();
+
+let rules: any[] = [];
+
+vi.mock("@/lib/trpc", () => ({
+  trpc: {
+    microRule: {
+      list: { useQuery: () => ({ data: { rules }, refetch: vi.fn() }) },
+      save: { useMutation: () => ({ mutate: save, isPending: false }) },
+      mine: { useMutation: () => ({ mutate: mine, isPending: false }) },
+    },
+  },
+}));
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock("@/contexts/LocaleContext", () => ({
+  useLocale: () => ({
+    t: (key: any, params?: any) => translate("zh", key, params),
+    locale: "zh",
+    localeName: "中文",
+    setLocale: () => {},
+  }),
+}));
+
+import MicroRulesEditor from "./MicroRulesEditor";
+
+describe("the rules", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rules = [];
+  });
+
+  it("says so when there are no rules yet", () => {
+    render(<MicroRulesEditor personaId={1} />);
+    expect(screen.getByText(translate("zh", "microRules.empty"))).toBeInTheDocument();
+  });
+
+  it("shows a rule and the message it was read off", () => {
+    rules = [
+      {
+        id: "r1",
+        trigger: ["随便你"],
+        meaning: "她真的生气了",
+        rendering: "更短、更冷，不解释",
+        confidence: 0.8,
+        source: "auto",
+        verified: false,
+        evidence: [{ at: "2024-03-02", snippet: "随便你" }],
+      },
+    ];
+    render(<MicroRulesEditor personaId={1} />);
+
+    expect(screen.getByText("她真的生气了")).toBeInTheDocument();
+    expect(screen.getByText(/更短、更冷/)).toBeInTheDocument();
+    expect(screen.getByText(translate("zh", "microRules.unverified"))).toBeInTheDocument();
+  });
+
+  it("lets the user confirm a mined rule", async () => {
+    rules = [
+      {
+        id: "r1",
+        trigger: ["随便你"],
+        meaning: "她真的生气了",
+        rendering: "更短",
+        confidence: 0.8,
+        source: "auto",
+        verified: false,
+        evidence: [],
+      },
+    ];
+    render(<MicroRulesEditor personaId={1} />);
+
+    await userEvent.click(
+      screen.getByText(translate("zh", "microRules.confirm")),
+    );
+
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    const sent = save.mock.calls[0][0];
+    expect(sent.rules[0].verified).toBe(true);
+  });
+
+  it("lets the user change a rule they already confirmed", async () => {
+    // A rule the user confirmed is a rule the user wrote — and a rule
+    // they wrote is one they can change. Without this, a mined rule they
+    // half agree with can only be confirmed whole or thrown away.
+    rules = [
+      {
+        id: "r1",
+        trigger: ["随便你"],
+        meaning: "她真的生气了",
+        rendering: "更短",
+        confidence: 0.8,
+        source: "manual",
+        verified: true,
+        evidence: [],
+      },
+    ];
+    render(<MicroRulesEditor personaId={1} />);
+
+    await userEvent.click(screen.getByLabelText(translate("zh", "microRules.edit")));
+    const meaning = await screen.findByDisplayValue("她真的生气了");
+    await userEvent.clear(meaning);
+    await userEvent.type(meaning, "她只是在赌气");
+    await userEvent.click(screen.getByText(translate("zh", "microRules.save")));
+
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    const sent = save.mock.calls[0][0];
+    // The rule is replaced, not duplicated, and it keeps its id.
+    expect(sent.rules).toHaveLength(1);
+    expect(sent.rules[0].id).toBe("r1");
+    expect(sent.rules[0].meaning).toBe("她只是在赌气");
+  });
+
+  it("lets the user delete a rule", async () => {
+    rules = [
+      {
+        id: "r1",
+        trigger: ["随便你"],
+        meaning: "她真的生气了",
+        rendering: "更短",
+        confidence: 0.8,
+        source: "manual",
+        verified: true,
+        evidence: [],
+      },
+      {
+        id: "r2",
+        trigger: ["嗯嗯"],
+        meaning: "心情好",
+        rendering: "连发三条",
+        confidence: 0.8,
+        source: "manual",
+        verified: true,
+        evidence: [],
+      },
+    ];
+    render(<MicroRulesEditor personaId={1} />);
+
+    const deleteButtons = screen.getAllByRole("button", {
+      name: translate("zh", "microRules.delete"),
+    });
+    expect(deleteButtons).toHaveLength(2);
+
+    await userEvent.click(deleteButtons[0]);
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    const sent = save.mock.calls[0][0];
+    expect(sent.rules).toHaveLength(1);
+    expect(sent.rules[0].id).toBe("r2");
+  });
+
+  it("refuses to save a rule that is missing half of itself", async () => {
+    render(<MicroRulesEditor personaId={1} />);
+
+    await userEvent.click(screen.getByText(translate("zh", "microRules.add")));
+    await userEvent.click(screen.getByText(translate("zh", "microRules.save")));
+
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("mines new candidates from the records", async () => {
+    render(<MicroRulesEditor personaId={1} />);
+
+    await userEvent.click(screen.getByText(translate("zh", "microRules.mine")));
+
+    await waitFor(() => expect(mine).toHaveBeenCalled());
+    expect(mine.mock.calls[0][0]).toMatchObject({ personaId: 1 });
+  });
+});

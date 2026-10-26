@@ -10,14 +10,24 @@
  *
  * Both are fixed here: the letter is written with the user's provider and
  * with the same context the conversation would have had.
+ *
+ * On top of that the letter is now written in two passes — the sentences
+ * first, on their own, and then the subtraction. See
+ * `./farewell-candidates.ts` for why, and for the budget that keeps the
+ * two passes from holding the goodbye hostage.
  */
 import type { Persona } from "../../drizzle/schema";
 import { buildSystemPrompt } from "../_core/persona-utils";
-import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
 import { resolveProviderForUser } from "../llm/user-provider";
 import { llmService } from "../llm";
-import * as db from "../db";
 import { copy } from "@shared/copy";
+import {
+  assembleFarewellContext,
+  writeFarewellLetterInTwoPasses,
+  type FarewellFallbackReason,
+} from "./farewell-candidates";
+
+export { FAREWELL_TWO_PASS_TIMEOUT_MS } from "./farewell-candidates";
 
 export interface FarewellPrompt {
   systemPrompt: string;
@@ -43,41 +53,26 @@ export async function buildFarewellPrompt(params: {
   const { persona, userId } = params;
   const locale = params.locale ?? "zh";
 
-  // The milestones are what a goodbye is made of, so they are named in the
-  // query — otherwise a farewell is written from whatever happened to be
-  // lexically close to the persona's name.
-  const milestones = await db
-    .getMemoriesByPersonaId(persona.id, userId)
-    .catch(() => []);
-  const milestoneText = milestones
-    .filter((m) => m.category === "milestone" || m.category === "anniversary")
-    .map((m) => `${m.title} ${m.description ?? ""}`)
-    .join(" ");
-  const query = `${persona.name} ${milestoneText}`.trim();
-
-  const memories = await retrieveMemories({
-    personaId: persona.id,
+  const context = await assembleFarewellContext({
+    persona,
     userId,
-    userMessage: query,
     locale,
-  }).catch(() => []);
-
-  const summary = await db.getLatestChatSummary(persona.id, userId).catch(() => null);
-  const summaryText = summary?.summary ?? "";
+    now: params.now,
+  });
 
   const systemPrompt = buildSystemPrompt(persona, {
-    anchorSection: formatAnchorsForPrompt(memories, locale),
-    memorySection: formatMemoriesForPrompt(memories, locale),
-    summarySection: summaryText
-      ? `${copy(locale, "prompt.summarySectionHeading")}\n${summaryText}`
-      : "",
+    anchorSection: context.anchorSection,
+    memorySection: context.memorySection,
+    summarySection: context.summarySection,
     locale,
     now: params.now ?? new Date(),
   });
 
-  const userPrompt = copy(locale, "prompts.farewellLetter", { name: persona.name });
+  const userPrompt = copy(locale, "prompts.farewellLetter", {
+    name: persona.name,
+  });
 
-  return { systemPrompt, userPrompt, memoryCount: memories.length };
+  return { systemPrompt, userPrompt, memoryCount: context.memoryCount };
 }
 
 /**
@@ -86,12 +81,21 @@ export async function buildFarewellPrompt(params: {
  * It is written in the persona's voice rather than as a system notice, so
  * the user is not handed an error page at the moment they said goodbye.
  */
-export function fallbackFarewellLetter(persona: Persona, locale: "zh" | "en" = "zh"): string {
+export function fallbackFarewellLetter(
+  persona: Persona,
+  locale: "zh" | "en" = "zh",
+): string {
   return copy(locale, "prompts.farewellFallback", { name: persona.name });
 }
 
 /**
  * Writes the farewell letter.
+ *
+ * The two passes are tried first: the sentences the persona has never
+ * said, and then the subtraction. When they cannot deliver — no
+ * candidates, a model that failed, a provider too slow — the ordinary
+ * single-pass letter is written instead, which is what the product has
+ * always written and is never worse than it was.
  *
  * The provider is chosen in this order: the user's own provider first, then
  * the server's default. The old code went straight to the server's, so a
@@ -102,6 +106,80 @@ export function fallbackFarewellLetter(persona: Persona, locale: "zh" | "en" = "
  * because a provider is misconfigured.
  */
 export async function writeFarewellLetter(params: {
+  persona: Persona;
+  userId: number;
+  locale?: "zh" | "en";
+}): Promise<string> {
+  const { letter } = await writeFarewellLetterWithStatus(params);
+  return letter;
+}
+
+/**
+ * The letter, and whether it is the full one.
+ *
+ * `degraded` means the two passes could not deliver, so what the user
+ * reads is the older single-pass letter. That is not a failure — it is
+ * the same letter as before, written in one go — but the interface has
+ * to be able to say so rather than quietly showing a plainer thing at
+ * the one moment the product exists for.
+ */
+export async function writeFarewellLetterWithStatus(params: {
+  persona: Persona;
+  userId: number;
+  locale?: "zh" | "en";
+}): Promise<{
+  letter: string;
+  degraded: boolean;
+  reason?: string;
+  /** Which lines survived the second pass, and which it cut. */
+  draft?: { kept: string[]; removed: string[] };
+}> {
+  const { persona, userId } = params;
+  const locale = params.locale ?? "zh";
+
+  // The two-pass letter.
+  try {
+    const two = await writeFarewellLetterInTwoPasses({
+      persona,
+      userId,
+      locale,
+    });
+    if (!two.degraded && two.letter.trim()) {
+      return {
+        letter: two.letter.trim(),
+        degraded: false,
+        // The subtraction is the interesting half of the writing, so it
+        // is kept rather than dropped on the floor.
+        draft: two.draft ? { kept: two.draft.kept, removed: two.draft.removed } : undefined,
+      };
+    }
+    logFarewellFallback(two.reason ?? "two-pass-unavailable", persona.id);
+    const single = await writeSinglePassLetter({ persona, userId, locale });
+    return {
+      letter: single,
+      degraded: true,
+      reason: two.reason ?? "two-pass-unavailable",
+    };
+  } catch (e) {
+    logFarewellFallback("two-pass-unavailable", persona.id);
+    console.warn(
+      "[Graduation] The two-pass farewell could not be run:",
+      (e as Error).message,
+    );
+  }
+
+  const single = await writeSinglePassLetter({ persona, userId, locale });
+  return { letter: single, degraded: true, reason: "two-pass-unavailable" };
+}
+
+/**
+ * The older, single-pass letter.
+ *
+ * It is the fallback, and it stays: the two passes are better, but the
+ * ritual must never fail because a model was slow or a provider was
+ * misconfigured.
+ */
+async function writeSinglePassLetter(params: {
   persona: Persona;
   userId: number;
   locale?: "zh" | "en";
@@ -118,7 +196,9 @@ export async function writeFarewellLetter(params: {
   } catch (e) {
     console.warn("[Graduation] Could not assemble the farewell context:", e);
     systemPrompt = buildSystemPrompt(persona);
-    userPrompt = copy(locale, "prompts.farewellLetterShort", { name: persona.name });
+    userPrompt = copy(locale, "prompts.farewellLetterShort", {
+      name: persona.name,
+    });
   }
 
   const messages = [
@@ -137,7 +217,10 @@ export async function writeFarewellLetter(params: {
       if (response?.trim()) return response.trim();
     }
   } catch (e) {
-    console.warn("[Graduation] The user's provider could not write the letter:", e);
+    console.warn(
+      "[Graduation] The user's provider could not write the letter:",
+      e,
+    );
   }
 
   // The server's default provider.
@@ -149,4 +232,23 @@ export async function writeFarewellLetter(params: {
   }
 
   return fallbackFarewellLetter(persona, locale);
+}
+
+/**
+ * Writes down that the letter fell back, and why.
+ *
+ * The fallback is not a failure — it is what keeps the ritual alive when a
+ * provider is slow or misconfigured — but its *frequency* is a
+ * measurement. If the two-pass path falls back most of the time, the
+ * letters are not getting any better, and nothing else in the log would
+ * show it. The reason is in the line so the reasons can be counted
+ * separately.
+ */
+function logFarewellFallback(
+  reason: FarewellFallbackReason,
+  personaId: number,
+): void {
+  console.warn(
+    `[Graduation] Farewell fallback for persona ${personaId}: ${reason}.`,
+  );
 }

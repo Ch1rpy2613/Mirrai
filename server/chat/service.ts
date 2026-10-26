@@ -271,6 +271,12 @@ export async function composeMessages(params: {
     emotionalDesc: scene?.emotionalState && isEmotionalState(scene.emotionalState)
       ? getEmotionalStateDesc(scene.emotionalState, params.locale ?? "zh")
       : undefined,
+    // The state the prompt describes. A scene can set the mood, and the
+    // imperfection has to follow the mood the prompt states rather than
+    // the one the persona happens to be stored in.
+    emotionalState: scene?.emotionalState && isEmotionalState(scene.emotionalState)
+      ? scene.emotionalState
+      : null,
     summarySection: summarySection
       ? `${copy(locale, "prompt.summarySectionHeading")}\n${summarySection}`
       : "",
