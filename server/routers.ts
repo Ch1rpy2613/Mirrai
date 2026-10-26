@@ -90,6 +90,7 @@ import { extractJsonArray, extractJsonObject } from "./_core/json";
 import {
   runConversation,
   withPersonaTurn,
+  PersonaAsleepError,
   clampContextLimit,
   clampTemperature,
   clampMaxTokens,
@@ -1503,26 +1504,41 @@ export const appRouter = router({
         let crisis = false;
         let failure: string | null = null;
 
-        for await (const event of runConversation({
-          persona,
-          userId: ctx.user.id,
-          message: input.message,
-          providerName: (persona as any).llmProvider || undefined,
-          mode: "once",
-          locale: input.locale,
-          replyToId: input.replyToId,
-          // Pressing "stop" has to stop the model too, not just the
-          // waiting.
-          signal: requestAbortSignal(ctx.req, ctx.res),
-        })) {
-          if (event.type === "delta") reply += event.text;
-          else if (event.type === "emotion") emotionalState = event.state;
-          else if (event.type === "error") failure = event.message;
-          else if (event.type === "done") {
-            graduationSuggested = event.graduationSuggested;
-            careNote = event.careNote;
-            crisis = event.crisis;
+        /**
+         * A persona that has said goodbye.
+         *
+         * The notice is written for the person reading it, so it is
+         * carried through. It used to be replaced by "something went
+         * wrong on the server" — while WeChat and Feishu said the real
+         * thing. One condition, three different answers.
+         */
+        try {
+          for await (const event of runConversation({
+            persona,
+            userId: ctx.user.id,
+            message: input.message,
+            providerName: (persona as any).llmProvider || undefined,
+            mode: "once",
+            locale: input.locale,
+            replyToId: input.replyToId,
+            // Pressing "stop" has to stop the model too, not just the
+            // waiting.
+            signal: requestAbortSignal(ctx.req, ctx.res),
+          })) {
+            if (event.type === "delta") reply += event.text;
+            else if (event.type === "emotion") emotionalState = event.state;
+            else if (event.type === "error") failure = event.message;
+            else if (event.type === "done") {
+              graduationSuggested = event.graduationSuggested;
+              careNote = event.careNote;
+              crisis = event.crisis;
+            }
           }
+        } catch (e) {
+          if (e instanceof PersonaAsleepError) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
+          }
+          throw e;
         }
         /**
          * A failure is a failure.
