@@ -19,7 +19,7 @@
 import { decryptSecret, encryptSecret } from "../_core/crypto";
 import * as db from "../db";
 import { handleChannelChat } from "./bridge";
-import { getActivePersonaId, handleCommand } from "./commands";
+import { clearAllActivePersonas, getActivePersonaId, handleCommand } from "./commands";
 import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
 import { copy, detectLocale, type Locale } from "@shared/copy";
 
@@ -408,7 +408,16 @@ export class FeishuAdapter implements ChannelAdapter {
         // far longer than that, so it is started in the background and the
         // callback returns immediately.
         const chatId = data?.event?.chat_id;
-        const previous = chatId ? conversationChains.get(chatId) : undefined;
+        /**
+         * The chain is keyed by the user as well as the chat.
+         *
+         * The chat id alone was the key — so two users whose chats
+         * shared an id waited on each other's conversation. The ids
+         * come from the other side of the platform, and the map is
+         * shared by every user of this process.
+         */
+        const chainKey = chatId ? `${userId}:${chatId}` : null;
+        const previous = chainKey ? conversationChains.get(chainKey) : undefined;
         const run = (async () => {
           // The previous message in this chat is answered first.
           if (previous) await previous.catch(() => undefined);
@@ -425,12 +434,12 @@ export class FeishuAdapter implements ChannelAdapter {
           }
         })().catch((e) => console.error("[Feishu] Failed to handle event:", e));
 
-        if (chatId) {
-          conversationChains.set(chatId, run);
+        if (chainKey) {
+          conversationChains.set(chainKey, run);
           // The chain is let go of once it has settled, so the map does
           // not grow for the life of the process.
           void run.finally(() => {
-            if (conversationChains.get(chatId) === run) conversationChains.delete(chatId);
+            if (conversationChains.get(chainKey) === run) conversationChains.delete(chainKey);
           });
         }
       },
@@ -480,6 +489,15 @@ export class FeishuAdapter implements ChannelAdapter {
       }
       connections.delete(userId);
     }
+    /**
+     * The session overrides are cleared.
+     *
+     * The WeChat channel does this when it stops; the Feishu one did
+     * not — so the persona a conversation was switched to stayed in
+     * force after the channel was disconnected, and came back with it
+     * when the channel was connected again.
+     */
+    clearAllActivePersonas(userId);
     await db.upsertChannelState(userId, CHANNEL_ID, { status: "stopped" });
   }
 
