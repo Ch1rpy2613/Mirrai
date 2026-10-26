@@ -61,6 +61,7 @@ export class XunfeiProvider implements LLMProvider {
    * frames as an async iterable instead of accumulating them into one string.
    */
   async *stream(messages: LLMMessage[], options?: LLMOptions): AsyncGenerator<{ text: string }> {
+    const SPARK_TIMEOUT_MS = 120_000;
     const wsUrl = this.generateWsUrl();
     const domain = this.getModelDomain();
 
@@ -131,9 +132,36 @@ export class XunfeiProvider implements LLMProvider {
     });
 
     // Honour cancellation: close the socket so the upstream stops billing.
-    options?.signal?.addEventListener("abort", cleanup);
+    const onAbort = () => cleanup();
+    options?.signal?.addEventListener("abort", onAbort);
+
+    /**
+     * The deadline.
+     *
+     * The read loop waits for a frame, and only the socket's own
+     * handlers could wake it. If the endpoint accepted the connection
+     * and then stayed silent — or the frame that marks the end never
+     * arrived — the request never returned and the socket was never
+     * closed: the upstream kept billing and the socket leaked.
+     *
+     * The socket is closed when the budget runs out, which wakes the
+     * loop with an error rather than with nothing.
+     */
+    const deadline = setTimeout(() => {
+      queue.push({
+        error: new Error("[Xunfei] The Spark endpoint did not answer in time."),
+      });
+      wake();
+      cleanup();
+    }, SPARK_TIMEOUT_MS);
+    deadline.unref?.();
 
     try {
+      // A signal that is already aborted never fires its event, so the
+      // socket would have been opened and left open.
+      if (options?.signal?.aborted) {
+        throw new Error("[Xunfei] The request was cancelled before it started.");
+      }
       while (true) {
         if (queue.length === 0) {
           await new Promise<void>(resolve => {
@@ -147,6 +175,8 @@ export class XunfeiProvider implements LLMProvider {
         yield item;
       }
     } finally {
+      clearTimeout(deadline);
+      options?.signal?.removeEventListener("abort", onAbort);
       cleanup();
     }
   }
