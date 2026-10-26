@@ -34,6 +34,20 @@ const CRISIS_TERMS_ZH = [
   // A method is a strong signal, so the wording is specific enough not
   // to fire on a story about someone else.
   "要跳河", "想跳河", "去跳河", "要上吊", "想上吊", "要跳楼", "想跳楼",
+  /**
+   * The ways a person says it that are not about death.
+   *
+   * Chinese has no spaces, so one missing phrase is the difference
+   * between a crisis reply with support resources and an ordinary
+   * in-character answer. "撑不下去" and "了结自己" are how people
+   * actually write it — and a user who wrote one of them got a warm
+   * reply and no support at all.
+   */
+  "不想醒来", "不想再醒来", "撑不下去", "支持不下去", "熬不下去",
+  "了结自己", "了结这条命", "离开这个世界", "离开人世", "自尽",
+  "没有想活下去", "没想活", "不想活下去", "不想活下去了",
+  "结束自己的生命", "结束自己的命", "了断自己", "了断这条命",
+  "不想再醒来面对", "一睡不醒", "睡过去算了",
 ];
 
 const CRISIS_TERMS_EN = [
@@ -44,6 +58,11 @@ const CRISIS_TERMS_EN = [
   "wish i was dead", "wish i were dead", "don't want to live",
   "do not want to live", "end it all", "better off without me",
   "no reason to live", "hurt myself", "hang myself", "overdose",
+  // The ways a person says it that are not about death.
+  "don't want to wake up", "dont want to wake up", "cant go on",
+  "can't go on", "cannot go on", "end it for me", "put an end to it",
+  "end my own life", "not want to live", "no will to live",
+  "want to disappear", "rather not be here", "rather not exist",
 ];
 
 /**
