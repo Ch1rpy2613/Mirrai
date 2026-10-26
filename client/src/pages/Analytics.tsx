@@ -76,7 +76,7 @@ export default function Analytics() {
            * look — so it is a group of radio buttons, and the arrow
            * keys move between them.
            */}
-          <div className="flex gap-1 border-b border-border" role="radiogroup" aria-label={t("analytics.title")}
+          <div className="flex gap-1 border-b border-border" role="radiogroup" aria-label={t("analytics.rangeLabel")}
             onKeyDown={(event) => {
               const ranges = [7, 30, 90];
               if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;

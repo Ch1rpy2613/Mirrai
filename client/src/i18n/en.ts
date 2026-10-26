@@ -1072,6 +1072,7 @@ export const en = {
   },
 
   analytics: {
+    rangeLabel: "The range",
     hourly: "Time of day",
     totalMessages: "Total messages",
     activeDays: "Active days",

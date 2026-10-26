@@ -1066,6 +1066,7 @@ export const zh = {
   },
 
   analytics: {
+    rangeLabel: "统计范围",
     hourly: "时段分布",
     totalMessages: "总消息数",
     activeDays: "活跃天数",
