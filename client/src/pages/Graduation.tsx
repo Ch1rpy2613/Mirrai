@@ -23,6 +23,21 @@ import { Button } from "@/components/ui/button";
  * but the page is still here, because being allowed to come back and
  * look is the difference between an ending and a dismissal.
  */
+/**
+ * A "YYYY-MM-DD" day key, in the reader's own date format.
+ *
+ * The key is a calendar day and not an instant, so it is read as one:
+ * `new Date("2026-03-01")` is midnight in Greenwich, which is the
+ * previous day in every timezone west of Greenwich.
+ */
+function formatDayKey(dayKey: string, locale: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey ?? ""));
+  if (!match) return String(dayKey ?? "");
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (Number.isNaN(date.getTime())) return String(dayKey);
+  return date.toLocaleDateString(locale);
+}
+
 export default function Graduation() {
   const params = useParams<{ id: string }>();
   /**
@@ -273,7 +288,12 @@ export default function Graduation() {
             <div className="space-y-3">
               {diaries.slice(0, 5).map((diary: any) => (
                 <div key={diary.id} className="rounded-xl border border-border/70 p-4">
-                  <p className="text-xs text-muted-subtle mb-1.5">{diary.date}</p>
+                  {/* The date was printed raw — "2026-03-01" — while
+                      every other date on the page is in the reader's
+                      own language and format. */}
+                  <p className="text-xs text-muted-subtle mb-1.5">
+                    {formatDayKey(diary.date, locale)}
+                  </p>
                   <p className="text-sm text-foreground/85 leading-relaxed">{diary.summary}</p>
                   {diary.reflection && (
                     <p className="text-xs text-muted-foreground mt-2 italic leading-relaxed">{diary.reflection}</p>
