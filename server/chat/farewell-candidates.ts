@@ -167,9 +167,21 @@ export async function assembleFarewellContext(params: {
     .catch(() => null);
   const summaryText = summary?.summary ?? "";
 
+  /**
+   * The anchors and the ordinary memories, told apart.
+   *
+   * They used to be the same list twice: every memory was rendered into
+   * both sections, so the farewell prompt carried each one twice, and
+   * the ordinary ones sat inside the anchor section — which carries the
+   * rule that these are facts that must hold. A loosely-matched memory
+   * was presented to the model as an immutable truth.
+   */
+  const anchors = memories.filter((m) => m.category === "anchor");
+  const ordinary = memories.filter((m) => m.category !== "anchor");
+
   return {
-    anchorSection: formatAnchorsForPrompt(memories, locale),
-    memorySection: formatMemoriesForPrompt(memories, locale),
+    anchorSection: formatAnchorsForPrompt(anchors, locale),
+    memorySection: formatMemoriesForPrompt(ordinary, locale),
     summarySection: summaryText
       ? `${copy(locale, "prompt.summarySectionHeading")}\n${summaryText}`
       : "",

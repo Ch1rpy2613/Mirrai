@@ -53,7 +53,12 @@ export class DifyProvider implements LLMProvider {
     if (!lastUserMsg) return system;
 
     // The question itself, and the few turns before it.
+    // The turns *before* the question: the question itself is appended
+    // below, and it used to be in this list as well — so the workflow
+    // received it twice, which over-weighted it and inflated the input
+    // on every turn.
     const history = turns
+      .slice(0, -1)
       .slice(-12)
       .map((m) => {
         const who = m.role === "user" ? "User" : "Assistant";

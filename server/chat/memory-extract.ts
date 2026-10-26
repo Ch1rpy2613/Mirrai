@@ -94,8 +94,18 @@ export async function extractMemories(params: {
   const history = await db.getMessagesByPersonaId(persona.id, userId, LOOKBACK);
   if (history.length === 0) return { added: [], skipped: 0 };
 
-  // Only the messages that have not been looked at yet.
-  const lastExtracted = await db.getLastMemoryExtractionAt(persona.id, userId);
+  /**
+   * Only the messages that have not been looked at yet.
+   *
+   * The cut-off has to come from the extraction log — the record of
+   * what was looked at. It used to come from the newest *memory* row,
+   * which is a different thing entirely: a memory the user added by
+   * hand moved the cut-off forward, so the messages between the last
+   * extraction and that memory were never extracted; and an extraction
+   * that produced no new memory left the cut-off where it was, so the
+   * same messages were sent to the model again on every later run.
+   */
+  const lastExtracted = await db.getLastExtractionAt(persona.id, userId);
   const fresh = lastExtracted
     ? history.filter((m) => new Date(m.createdAt).getTime() > lastExtracted.getTime())
     : history;
@@ -114,10 +124,16 @@ export async function extractMemories(params: {
       providerName: (persona as any).llmProvider ?? undefined,
     });
     if (provider) {
-      response = await provider.invoke([
-        { role: "system", content: copy(locale, "prompts.memoryExtraction") },
-        { role: "user", content: chatText },
-      ]);
+      // Through the service, so the retry policy is the same as it is
+      // everywhere else: a transient failure of the user's own provider
+      // failed the extraction outright, while the same failure would
+      // have been retried for every other call.
+      response = await llmService.invokeWithProvider(provider, {
+        messages: [
+          { role: "system", content: copy(locale, "prompts.memoryExtraction") },
+          { role: "user", content: chatText },
+        ],
+      });
     }
   } catch (e) {
     console.warn("[Memories] The user's provider failed:", (e as Error).message);
