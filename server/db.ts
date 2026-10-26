@@ -768,6 +768,33 @@ export async function createPersonaFile(data: InsertPersonaFile) {
   return result.id;
 }
 
+/**
+ * The newest uploaded files, with only what the retrieval needs.
+ *
+ * The full-text column of an uploaded chat log is megabytes long, and
+ * the hot path pulled all of it — for every file of the persona, on
+ * every chat turn — of which two summaries of four hundred characters
+ * were used.
+ */
+export async function getFileSummariesByPersonaId(
+  personaId: number,
+  userId: number,
+  limit = 20,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: personaFiles.id,
+    originalName: personaFiles.originalName,
+    extractedMemory: personaFiles.extractedMemory,
+    createdAt: personaFiles.createdAt,
+  })
+    .from(personaFiles)
+    .where(and(eq(personaFiles.personaId, personaId), eq(personaFiles.userId, userId)))
+    .orderBy(desc(personaFiles.createdAt))
+    .limit(limit);
+}
+
 export async function getFilesByPersonaId(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];

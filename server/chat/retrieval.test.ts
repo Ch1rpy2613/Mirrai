@@ -2,11 +2,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const getMemoriesByPersonaId = vi.fn();
 const getFilesByPersonaId = vi.fn();
+const getFileSummariesByPersonaId = vi.fn();
 const touchMemoryRecalled = vi.fn();
 
 vi.mock("../db", () => ({
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
+  getFileSummariesByPersonaId: (...a: unknown[]) => getFileSummariesByPersonaId(...a),
   touchMemoryRecalled: (...a: unknown[]) => touchMemoryRecalled(...a),
 }));
 
@@ -206,6 +208,8 @@ describe("file summaries", () => {
   beforeEach(() => {
     getMemoriesByPersonaId.mockReset();
     getFilesByPersonaId.mockReset();
+    getFileSummariesByPersonaId.mockReset();
+    getFileSummariesByPersonaId.mockResolvedValue([]);
     touchMemoryRecalled.mockReset();
     getMemoriesByPersonaId.mockResolvedValue([]);
     getFilesByPersonaId.mockResolvedValue([]);
@@ -244,6 +248,7 @@ describe("file summaries", () => {
 
   it("offers the file summary when the message matches it", async () => {
     getFilesByPersonaId.mockResolvedValue([uploadedFile()]);
+    getFileSummariesByPersonaId.mockResolvedValue([uploadedFile()]);
 
     const memories = await retrieveMemories({
       personaId: 1,
@@ -282,6 +287,7 @@ describe("file summaries", () => {
       },
     ]);
     getFilesByPersonaId.mockResolvedValue([uploadedFile()]);
+    getFileSummariesByPersonaId.mockResolvedValue([uploadedFile()]);
 
     const memories = await retrieveMemories({
       personaId: 1,
@@ -294,6 +300,7 @@ describe("file summaries", () => {
 
   it("does not mark a file summary as a recalled memory", async () => {
     getFilesByPersonaId.mockResolvedValue([uploadedFile()]);
+    getFileSummariesByPersonaId.mockResolvedValue([uploadedFile()]);
 
     await retrieveMemories({
       personaId: 1,

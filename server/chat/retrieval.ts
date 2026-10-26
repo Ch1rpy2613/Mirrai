@@ -49,6 +49,15 @@ const DEFAULT_MIN_KEYWORD_SCORE = 0.05;
  */
 const FILE_SUMMARY_TOP_K = 2;
 
+/**
+ * How many anchors go into the prompt.
+ *
+ * They are the facts that must hold, so they are the last thing to be
+ * cut — but not all of them: with fifty anchors the whole block was in
+ * the system prompt on every turn, and nothing trimmed it.
+ */
+const MAX_ANCHORS = 10;
+
 /** How much of a file summary is worth putting in front of the model. */
 const FILE_SUMMARY_MAX_LENGTH = 400;
 
@@ -171,9 +180,19 @@ export function selectMemories(
     score: scoreMemory(memory, messageTokens, now),
   }));
 
+  /**
+   * The anchors, and only the best of them.
+   *
+   * Every anchor used to be returned and rendered, however many there
+   * were: fifty of them put the whole block into the system prompt on
+   * every single turn, with nothing to trim it. They are the facts that
+   * must hold, so they are the last thing to be cut — but not all
+   * fifty.
+   */
   const anchors = scored
     .filter((m) => m.category === "anchor")
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_ANCHORS);
 
   const ordinary = scored
     .filter((m) => m.category !== "anchor")
@@ -319,7 +338,15 @@ export async function retrieveMemories(params: {
   // the curated memories are still worth injecting.
   let files: Array<{ id: number; originalName: string; extractedMemory: string | null; createdAt: Date }> = [];
   try {
-    files = await db.getFilesByPersonaId(params.personaId, params.userId);
+    /**
+     * Only the columns that are used, and only the newest files.
+     *
+     * The whole row used to be loaded, including the extracted text of
+     * every uploaded chat log — megabytes of it, on every single chat
+     * turn, of which two summaries of four hundred characters were
+     * actually used.
+     */
+    files = await db.getFileSummariesByPersonaId(params.personaId, params.userId);
   } catch {
     files = [];
   }
