@@ -2935,7 +2935,17 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => getDiaryEntries(ctx.user.id, input.personaId, input.limit)),
 
     getByDate: protectedProcedure
-      .input(z.object({ personaId: z.number(), date: z.string() }))
+      .input(z.object({
+        personaId: z.number(),
+        /**
+         * The day, as "YYYY-MM-DD".
+         *
+         * It is checked against the days that exist, and not only
+         * against the shape of a date: "2026-02-30" has the right
+         * shape and is not a day.
+         */
+        date: z.string().refine(isRealDayKey, { message: "Not a day." }),
+      }))
       .query(async ({ ctx, input }) => getDiaryByDate(input.personaId, ctx.user.id, input.date)),
 
     getDates: protectedProcedure
@@ -2957,7 +2967,13 @@ export const appRouter = router({
          */
         const timezone = await getUserTimezone(ctx.user.id);
         const date = input.date || previousDateKey(zonedDateKey(new Date(), timezone));
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        /**
+         * The date is a real day.
+         *
+         * It was only checked against a pattern, so "2026-02-30" was
+         * accepted — a day that does not exist.
+         */
+        if (!isRealDayKey(date)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.invalidDateFormat") });
         }
         const today = zonedDateKey(new Date(), timezone);
