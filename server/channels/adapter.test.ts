@@ -493,7 +493,14 @@ describe("shared commands", () => {
     expect(wechatSent).toEqual([LETTER]);
     expect(feishuSent).toEqual([LETTER]);
     expect(sendWeixinText).toHaveBeenCalledWith(1, WECHAT_KEY, LETTER);
-    expect(setGraduationStatus).toHaveBeenCalledWith(1, 1, "graduated", LETTER);
+    expect(setGraduationStatus).toHaveBeenCalledWith(
+      1,
+      1,
+      "graduated",
+      LETTER,
+      expect.any(Boolean),
+      undefined,
+    );
   });
 
   it("keeps the WeChat wording of an undelivered farewell letter", async () => {
@@ -578,6 +585,13 @@ describe("shared commands", () => {
 
     expect(result.handled).toBe(true);
     expect(result.reply).toContain(LETTER);
-    expect(setGraduationStatus).toHaveBeenCalledWith(2, 1, "graduated", LETTER);
+    expect(setGraduationStatus).toHaveBeenCalledWith(
+      2,
+      1,
+      "graduated",
+      LETTER,
+      expect.any(Boolean),
+      undefined,
+    );
   });
 });

@@ -207,7 +207,16 @@ describe("graduation command", () => {
     expect(result.handled).toBe(true);
     expect(result.reply).toContain("告别信");
     expect(sent).toEqual(["亲爱的，这是一封告别信。"]);
-    expect(setGraduationStatus).toHaveBeenCalledWith(1, 1, "graduated", "亲爱的，这是一封告别信。");
+    // The letter is recorded with whether it is the simplified one — so
+    // a reader can tell which of the two they are looking at.
+    expect(setGraduationStatus).toHaveBeenCalledWith(
+      1,
+      1,
+      "graduated",
+      "亲爱的，这是一封告别信。",
+      expect.any(Boolean),
+      undefined,
+    );
   });
 
   it("degrades to a web hint when delivery fails", async () => {

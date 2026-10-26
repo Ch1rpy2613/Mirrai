@@ -12,7 +12,7 @@
 import { checkGraduationEligibility } from "../_core/persona-utils";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
 import { getMessageCountInRange, getPersonasByUserId, getRecentEmotionTrend, setGraduationStatus, getUserTimezone } from "../db";
-import { writeFarewellLetter } from "../chat/farewell";
+import { writeFarewellLetterWithStatus } from "../chat/farewell";
 import type { Persona } from "../../drizzle/schema";
 import type { ChannelId } from "./types";
 import { mayReachOut } from "@shared/graduation-mode";
@@ -364,13 +364,28 @@ async function handleGraduationCommand(
   // material the conversation would have had. Using the server's provider
   // meant a channel user with their own key got an error at the one moment
   // the product exists for. Whatever happens, the user gets a letter.
-  const farewellLetter = await writeFarewellLetter({
+  /**
+   * The letter, and whether it is the full one.
+   *
+   * The channel used to record only the letter — so a farewell that came
+   * out of the simplified fallback was indistinguishable from a full
+   * one on the Graduation page, and the reader could not tell which of
+   * the two they were looking at.
+   */
+  const { letter: farewellLetter, degraded, draft } = await writeFarewellLetterWithStatus({
     persona,
     userId: params.userId,
     locale,
   });
 
-  await setGraduationStatus(personaId, params.userId, "graduated", farewellLetter);
+  await setGraduationStatus(
+    personaId,
+    params.userId,
+    "graduated",
+    farewellLetter,
+    degraded,
+    draft,
+  );
 
   let delivered = false;
   if (params.sendLetter) {
