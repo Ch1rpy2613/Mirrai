@@ -22,9 +22,9 @@
  * English is a translation, not a paraphrase — the meaning of an
  * instruction to a model has to survive the crossing.
  */
-import { COPY, type CopyTable } from "./index";
+import { COPY, type CopyEntry, type CopyTable } from "./index";
 
-export const SKILL_PROMPTS: CopyTable = {
+export const SKILL_PROMPTS = {
   // ── The six research tracks ────────────────────────────────────────────
   // The titles and the focus lines are shown to the model and written into
   // the research notes; the track number and the file name are protocol
@@ -938,7 +938,7 @@ export const SKILL_PROMPTS: CopyTable = {
     zh: "人物画像：\n{{portrait}}",
     en: "Persona portrait:\n{{portrait}}",
   },
-};
+} satisfies CopyTable;
 
 /**
  * Adds this table to the shared dictionary.
@@ -951,7 +951,11 @@ export const SKILL_PROMPTS: CopyTable = {
  * `index.ts` afterwards is then a no-op, and the call can be dropped.
  */
 export function registerSkillPrompts(): void {
+  // The table is frozen — its keys are the literal union that catches a
+  // typo at compile time — so the skill prompts are added through a
+  // mutable view of it.
+  const writable = COPY as unknown as Record<string, CopyEntry>;
   for (const [key, entry] of Object.entries(SKILL_PROMPTS)) {
-    if (!COPY[key]) COPY[key] = entry;
+    if (!writable[key]) writable[key] = entry;
   }
 }

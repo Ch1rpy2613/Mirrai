@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
 import { COPY, copy, detectLocale, interpolate, isCopyKey } from "./index";
+import { registerSkillPrompts } from "./skill-prompts";
+
+// The skill prompts are added to the table when the pipeline is loaded.
+registerSkillPrompts();
+
+/** Every source file under a directory, as full paths. */
+function sourceFiles(dir: string): string[] {
+  const root = path.resolve(__dirname, "..", "..", dir);
+  const out: string[] = [];
+  const walk = (current: string) => {
+    for (const name of readdirSync(current)) {
+      const full = path.join(current, name);
+      if (statSync(full).isDirectory()) {
+        if (name === "node_modules" || name === "dist" || name === ".git") continue;
+        walk(full);
+      } else if (/\.(ts|tsx|mjs)$/.test(name) && !/\.test\.(ts|tsx)$/.test(name)) {
+        out.push(full);
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
 
 /**
  * The server's own words.
@@ -57,8 +82,9 @@ describe("the server's copy", () => {
       return found.sort();
     };
     const mismatched: string[] = [];
-    for (const key of Object.keys(COPY)) {
-      if (placeholders(COPY[key].zh).join(",") !== placeholders(COPY[key].en).join(",")) {
+    const table = COPY as unknown as Record<string, { zh: string; en: string }>;
+    for (const key of Object.keys(table)) {
+      if (placeholders(table[key].zh).join(",") !== placeholders(table[key].en).join(",")) {
         mismatched.push(key);
       }
     }
@@ -143,6 +169,35 @@ describe("looking a sentence up", () => {
 
   it("leaves a placeholder alone when there is nothing to put in it", () => {
     expect(interpolate("Hello {{name}}", {})).toBe("Hello {{name}}");
+  });
+});
+
+describe("the keys the app asks for", () => {
+  it("are all in the table", () => {
+    // A key that is not in the table falls back to the key itself, so a
+    // typo shows up as `errors.someKey` in the interface or inside a
+    // model's prompt — and nothing crashes, so nothing else would
+    // notice.
+    //
+    // The type of the key is now a literal union, so a typo in a
+    // *literal* call is a compile error. This catches the rest: the
+    // calls whose key is built at runtime.
+    const roots = ["server", "client", "shared", "scripts"];
+    const missing: string[] = [];
+    for (const root of roots) {
+      for (const file of sourceFiles(root)) {
+        const text = readFileSync(file, "utf-8");
+        const pattern = /\bcopy\(\s*(?:[a-zA-Z_$][\w$]*|locale)\s*,\s*"([\w.]+)"/g;
+        let match = pattern.exec(text);
+        while (match !== null) {
+          if (!isCopyKey(match[1])) {
+            missing.push(`${file.replace(/.*\//, "")}: ${match[1]}`);
+          }
+          match = pattern.exec(text);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });
 

@@ -8,7 +8,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const CONTENT: CopyTable = {
+export const CONTENT = {
   /** The guided questionnaire — the way in when there are no chat logs. */
   "questionnaire.intro": {
     zh: "还没有聊天记录也没关系。回答几个问题，先把 TA 搭出来。",
@@ -268,4 +268,4 @@ export const CONTENT: CopyTable = {
     zh: "微信导出解析无需凭据，请在 options.file 中提供导出的 JSON / TXT 文件路径",
     en: "Reading a WeChat export needs no credentials. Give the path to the exported JSON / TXT file in options.file",
   },
-};
+} satisfies CopyTable;

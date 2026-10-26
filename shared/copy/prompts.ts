@@ -16,7 +16,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const PROMPTS: CopyTable = {
+export const PROMPTS = {
   /**
    * The summary of a conversation that no longer fits in the window.
    *
@@ -265,4 +265,4 @@ Return JSON only, with no other text:
     zh: "二手",
     en: "secondary",
   },
-};
+} satisfies CopyTable;

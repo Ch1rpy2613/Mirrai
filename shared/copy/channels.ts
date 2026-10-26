@@ -11,7 +11,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const CHANNELS: CopyTable = {
+export const CHANNELS = {
   "channels.commandHelp": {
     zh: [
       "可用指令：",
@@ -186,7 +186,7 @@ export const CHANNELS: CopyTable = {
     zh: "已达到毕业条件",
     en: "the conditions for a graduation are met",
   },
-};
+} satisfies CopyTable;
 
 /**
  * The slash commands the channels understand.

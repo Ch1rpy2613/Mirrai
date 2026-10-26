@@ -12,7 +12,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const LABELS: CopyTable = {
+export const LABELS = {
   /** The voices the text-to-speech picker offers. */
   "labels.voice.xiaoxiao": {
     zh: "晓晓 · 女声",
@@ -288,4 +288,4 @@ export const LABELS: CopyTable = {
     zh: "Mirrai 已创建本地管理员账号",
     en: "A local administrator account was created",
   },
-};
+} satisfies CopyTable;

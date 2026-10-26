@@ -10,7 +10,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const FIDELITY: CopyTable = {
+export const FIDELITY = {
   // ── The prompt ───────────────────────────────────────────────────────────
 
   "prompt.microRulesHeading": {
@@ -519,4 +519,4 @@ export const FIDELITY: CopyTable = {
     zh: "对话：\n{{transcript}}",
     en: "The conversation:\n{{transcript}}",
   },
-};
+} satisfies CopyTable;

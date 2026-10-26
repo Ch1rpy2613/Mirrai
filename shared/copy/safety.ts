@@ -11,7 +11,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const SAFETY: CopyTable = {
+export const SAFETY = {
   "safety.crisisStop": {
     zh: "……我先停一下。",
     en: "……Let me stop for a moment.",
@@ -36,4 +36,4 @@ export const SAFETY: CopyTable = {
     zh: "……你刚刚那句话我听见了。不用急着说更多，我在这儿。",
     en: "……I heard what you just said. You don't have to say more right now. I'm here.",
   },
-};
+} satisfies CopyTable;

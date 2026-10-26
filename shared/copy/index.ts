@@ -37,7 +37,17 @@ import { FIDELITY } from "./fidelity";
 export type CopyEntry = { zh: string; en: string };
 export type CopyTable = Record<string, CopyEntry>;
 
-export const COPY: CopyTable = {
+/**
+ * The whole table.
+ *
+ * It is not annotated as `CopyTable`. The annotation widened `CopyKey`
+ * to `string`, so `copy()` accepted any key at all and a typo compiled
+ * cleanly — and then rendered as the raw key in the interface or inside
+ * a model's prompt. The individual tables are annotated, so the union is
+ * still checked entry by entry; it is only the *merged* table that has
+ * to keep its literal keys.
+ */
+export const COPY = {
   ...ERRORS,
   ...CHANNELS,
   ...REMINDERS,
@@ -50,14 +60,14 @@ export const COPY: CopyTable = {
   ...SCENES_COPY,
   ...USER_SIDE,
   ...FIDELITY,
-};
+} as const satisfies CopyTable;
 
 export type CopyKey = keyof typeof COPY;
 
 export type Locale = "zh" | "en";
 
 /** Anything that can go wrong to look up. */
-export function isCopyKey(key: string): key is CopyKey {
+export function isCopyKey(key: string): key is Extract<CopyKey, string> {
   return Object.prototype.hasOwnProperty.call(COPY, key);
 }
 
@@ -73,7 +83,7 @@ export function copy(
   key: CopyKey | string,
   params?: Record<string, string | number>,
 ): string {
-  const entry = COPY[key as CopyKey];
+  const entry = (COPY as unknown as Record<string, CopyEntry | undefined>)[key];
   if (!entry) return key;
   const lang: Locale = locale === "en" ? "en" : "zh";
   return interpolate(entry[lang] ?? entry.zh, params);

@@ -8,7 +8,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const REMINDERS: CopyTable = {
+export const REMINDERS = {
   "reminders.anniversary": {
     zh: "今天是「{{title}}」的日子。",
     en: "Today is the day of “{{title}}”.",
@@ -25,4 +25,4 @@ export const REMINDERS: CopyTable = {
     zh: "那张照片",
     en: "that photo",
   },
-};
+} satisfies CopyTable;

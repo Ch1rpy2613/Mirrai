@@ -8,7 +8,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const ERRORS: CopyTable = {
+export const ERRORS = {
   "errors.personaNotReady": {
     zh: "分身还未准备好，请先完成 AI 解析",
     en: "This persona is not ready yet — finish the analysis first",
@@ -257,4 +257,4 @@ export const ERRORS: CopyTable = {
     zh: "安装器没有返回安装路径：{{host}}",
     en: "The installer did not report an install path: {{host}}",
   },
-};
+} satisfies CopyTable;

@@ -8,7 +8,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const SKILL_ENGINE: CopyTable = {
+export const SKILL_ENGINE = {
   "skill.waitingMaterial": {
     zh: "等待素材...",
     en: "Waiting for material…",
@@ -115,4 +115,4 @@ export const SKILL_ENGINE: CopyTable = {
     zh: "资料 {{index}}：{{title}}",
     en: "Source {{index}}: {{title}}",
   },
-};
+} satisfies CopyTable;

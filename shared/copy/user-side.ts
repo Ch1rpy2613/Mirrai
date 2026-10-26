@@ -13,7 +13,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const USER_SIDE: CopyTable = {
+export const USER_SIDE = {
   // ── About the person ─────────────────────────────────────────────────────
   "userSide.heading": {
     zh: "【关于对话者】",
@@ -101,4 +101,4 @@ export const USER_SIDE: CopyTable = {
   "labels.time.morning": { zh: "上午", en: "morning" },
   "labels.time.afternoon": { zh: "下午", en: "afternoon" },
   "labels.time.evening": { zh: "晚上", en: "evening" },
-};
+} satisfies CopyTable;

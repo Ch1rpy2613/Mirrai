@@ -13,7 +13,7 @@
  */
 import type { CopyTable } from "./index";
 
-export const PROMPT: CopyTable = {
+export const PROMPT = {
   "prompt.identityVolunteers": {
     zh: [
       "【AI 身份】",
@@ -434,4 +434,4 @@ export const PROMPT: CopyTable = {
     zh: "{{description}}。回应时符合这个阶段。",
     en: "{{description}}. Answer as though you are at this stage.",
   },
-};
+} satisfies CopyTable;
