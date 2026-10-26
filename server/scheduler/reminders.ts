@@ -469,12 +469,26 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
          */
         const bindings = await db.getChannelBindingsByUserId(persona.userId);
 
+        /**
+         * The bindings, in a fixed order.
+         *
+         * The order the rows came back in is the database's, not the
+         * app's — so a user with the same persona bound on two channels
+         * had the reminder go to one of them and then, on the next
+         * tick, to the other. The choice is now the same every time.
+         */
+        const orderedBindings = [...bindings].sort((a, b) => {
+          if (a.personaId !== b.personaId) return a.personaId - b.personaId;
+          if (a.channel !== b.channel) return a.channel < b.channel ? -1 : 1;
+          return a.targetId < b.targetId ? -1 : a.targetId > b.targetId ? 1 : 0;
+        });
+
         for (const reminder of reminders) {
           // A reminder about 小A should not be pushed into the conversation
           // that is set up for 小B. Prefer the binding for this persona; fall
           // back to the web card rather than to the wrong conversation.
           const binding =
-            bindings.find((b) => b.isActive && b.personaId === reminder.personaId) ??
+            orderedBindings.find((b) => b.isActive && b.personaId === reminder.personaId) ??
             null;
 
           const sent = await deliverReminder({
