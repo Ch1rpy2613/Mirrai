@@ -103,6 +103,32 @@ export function extractMessageText(message: {
  */
 const conversationChains = new Map<string, Promise<unknown>>();
 
+/**
+ * The events that have been handled.
+ *
+ * A bounded set of the message ids that have already been answered, so
+ * a retried delivery is not answered twice.
+ */
+const processedEventIds = new Set<string>();
+const PROCESSED_EVENT_ID_MAX = 5000;
+
+/**
+ * Whether an event has already been handled — and marks it as handled.
+ *
+ * The set is bounded: the oldest entry is dropped when it grows past
+ * the limit, so it cannot grow for the life of the process.
+ */
+function hasProcessedEvent(userId: number, messageId: string): boolean {
+  const key = `${userId}:${messageId}`;
+  if (processedEventIds.has(key)) return true;
+  if (processedEventIds.size >= PROCESSED_EVENT_ID_MAX) {
+    const oldest = processedEventIds.values().next().value;
+    if (oldest) processedEventIds.delete(oldest);
+  }
+  processedEventIds.add(key);
+  return false;
+}
+
 /** How many conversations may run at once across all chats of a user. */
 const MAX_CONCURRENT_CONVERSATIONS = 4;
 
