@@ -484,6 +484,18 @@ const MATERIAL_OPEN = "<persona_data>";
 const MATERIAL_CLOSE = "</persona_data>";
 
 /**
+ * The tags that fence the material, in any spelling.
+ *
+ * The fence only works if the closing tag cannot appear inside the
+ * block — but the block is the user's own words, and a chat log is
+ * full of text the user did not write. So the strip has to catch every
+ * spelling of the tag, not just the exact one: `</persona_data >`,
+ * `</PERSONA_DATA>` and `< /persona_data>` all ended the block early
+ * and everything after them was read as the app's own instructions.
+ */
+const MATERIAL_TAG = /<\s*\/?\s*persona_data\s*>/gi;
+
+/**
  * Wraps a block of material that came from the user or from the chat log.
  *
  * The heading goes outside the tag, so the tag is the only thing that
@@ -497,7 +509,8 @@ function asMaterial(headingOrBody: string, body?: string): string {
   const hasHeading = body !== undefined;
   const text = hasHeading ? body : headingOrBody;
   const heading = hasHeading ? headingOrBody : "";
-  const cleaned = String(text ?? "").split(MATERIAL_CLOSE).join("");
+  // Every spelling of the tag is removed, not only the exact one.
+  const cleaned = String(text ?? "").replace(MATERIAL_TAG, "");
   const head = heading ? `${heading}\n` : "";
   return `${head}${MATERIAL_OPEN}\n${cleaned}\n${MATERIAL_CLOSE}`;
 }
