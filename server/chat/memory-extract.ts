@@ -12,7 +12,7 @@
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { llmService } from "../llm";
-import { resolveProviderForUser } from "../llm/user-provider";
+import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 
 /**
@@ -160,17 +160,33 @@ export async function extractMemories(params: {
     .join("\n");
 
   let response = "";
+  /**
+   * Whose provider this is.
+   *
+   * The distinction is the whole point. The environment-configured
+   * provider is the *operator's* account and the operator's bill, so it
+   * may only be used when the user has no provider of their own. When
+   * the provider is the user's, the operator's must not be tried
+   * afterwards: that is how a user's private conversation ended up on
+   * somebody else's account whenever their provider had a bad minute.
+   *
+   * The extraction used to fall back unconditionally — so a user's
+   * own transcript was sent to the operator's account, and billed to
+   * the operator, exactly when their provider had a bad minute.
+   */
+  let mayUseServerProvider = true;
   try {
-    const provider = await resolveProviderForUser({
+    const resolved = await resolveProviderForUserWithOwnership({
       userId,
       providerName: (persona as any).llmProvider ?? undefined,
     });
-    if (provider) {
+    mayUseServerProvider = !resolved.owned;
+    if (resolved.provider) {
       // Through the service, so the retry policy is the same as it is
       // everywhere else: a transient failure of the user's own provider
       // failed the extraction outright, while the same failure would
       // have been retried for every other call.
-      response = await llmService.invokeWithProvider(provider, {
+      response = await llmService.invokeWithProvider(resolved.provider, {
         messages: [
           { role: "system", content: copy(locale, "prompts.memoryExtraction") },
           { role: "user", content: chatText },
@@ -180,7 +196,7 @@ export async function extractMemories(params: {
   } catch (e) {
     console.warn("[Memories] The user's provider failed:", (e as Error).message);
   }
-  if (!response.trim()) {
+  if (!response.trim() && mayUseServerProvider) {
     try {
       response = await llmService.invoke({
         messages: [
@@ -193,6 +209,7 @@ export async function extractMemories(params: {
       return { added: [], skipped: 0 };
     }
   }
+  if (!response.trim()) return { added: [], skipped: 0 };
 
   const existing = await db.getMemoriesByPersonaId(persona.id, userId);
   const added: ExtractResult["added"] = [];
