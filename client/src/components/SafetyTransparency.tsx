@@ -96,7 +96,7 @@ export default function SafetyTransparency() {
                   <span className="text-xs text-foreground">
                     {t(`safetyPanel.eventTypes.${event.type}` as any)}
                   </span>
-                  <span className="text-[0.625rem] text-muted-foreground/70 ml-2">
+                  <span className="text-[0.625rem] text-muted-subtle ml-2">
                     {/* The interface's language, not the browser's.
                         `LetterBox` does it this way, so the same app
                         showed two different date formats depending on
@@ -105,7 +105,7 @@ export default function SafetyTransparency() {
                   </span>
                 </span>
                 {event.handled ? (
-                  <span className="inline-flex items-center gap-1 text-[0.625rem] text-muted-foreground/70">
+                  <span className="inline-flex items-center gap-1 text-[0.625rem] text-muted-subtle">
                     <Check className="w-3 h-3" /> {t("safetyPanel.handled")}
                   </span>
                 ) : (

@@ -148,7 +148,7 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                       : t("outbound.statusDraft")}
               </Badge>
               {letter.sourceMessageId ? (
-                <span className="text-[11px] text-muted-foreground/70">
+                <span className="text-[11px] text-muted-subtle">
                   {t("outbound.source")}
                 </span>
               ) : null}
@@ -193,7 +193,7 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
             </div>
 
             {isStale(letter) && (!letter.staleNotifiedAt || mentioned.current.has(letter.id)) ? (
-              <p className="text-[11px] text-muted-foreground/80">
+              <p className="text-[11px] text-muted-subtle">
                 {t("outbound.staleHint", { days: daysWaiting(letter) })}
               </p>
             ) : null}

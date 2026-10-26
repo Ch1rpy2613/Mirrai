@@ -98,7 +98,7 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
           // default that is only shown is not an active imperfection.
           // Saying so is the difference between "this persona is
           // imperfect" and "here is something you could start from".
-          <p className="text-[11px] text-muted-foreground/80">
+          <p className="text-[11px] text-muted-subtle">
             {t("imperfection.notAppliedYet")}
           </p>
         ) : null}

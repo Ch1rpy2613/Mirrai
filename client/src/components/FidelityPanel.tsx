@@ -161,7 +161,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
         <p className="text-xs text-muted-foreground leading-relaxed">{t("fidelity.hint")}</p>
         {/* The second measure is the least obvious of the four, so it
             says what it does — in a sentence, not in a name. */}
-        <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+        <p className="text-[11px] text-muted-subtle leading-relaxed">
           {t("fidelity.likelihoodHint")}
         </p>
 
@@ -172,7 +172,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
                 {t("fidelity.overlap")}
               </dt>
               <dd className="text-sm mt-1">{metrics.overlap.toFixed(3)}</dd>
-              <dd className="text-[11px] text-muted-foreground/80 mt-1">
+              <dd className="text-[11px] text-muted-subtle mt-1">
                 {t("fidelity.overlapHint")}
               </dd>
             </div>
@@ -185,7 +185,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
                   means nothing to a reader on its own — and its sign
                   runs the other way from the other three numbers. So it
                   is said in words. */}
-              <dd className="text-[11px] text-muted-foreground/80 mt-1">
+              <dd className="text-[11px] text-muted-subtle mt-1">
                 {likelihoodVerdict(metrics.likelihoodGap)}
               </dd>
             </div>
@@ -194,7 +194,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
                 {t("fidelity.length")}
               </dt>
               <dd className="text-sm mt-1">{metrics.lengthDistance.toFixed(1)}</dd>
-              <dd className="text-[11px] text-muted-foreground/80 mt-1">
+              <dd className="text-[11px] text-muted-subtle mt-1">
                 {t("fidelity.lengthHint")}
               </dd>
             </div>
@@ -205,7 +205,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
               <dd className="text-sm mt-1">
                 {Math.round((metrics.emotionAccuracy ?? 0) * 100)}%
               </dd>
-              <dd className="text-[11px] text-muted-foreground/80 mt-1">
+              <dd className="text-[11px] text-muted-subtle mt-1">
                 {t("fidelity.emotionHint")}
               </dd>
             </div>

@@ -70,7 +70,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                       {event.detail}
                     </p>
                   )}
-                  <p className="text-[0.625rem] text-muted-foreground/70 mt-1">
+                  <p className="text-[0.625rem] text-muted-subtle mt-1">
                     {new Date(event.happenedAt).toLocaleDateString(locale)}
                   </p>
                 </div>

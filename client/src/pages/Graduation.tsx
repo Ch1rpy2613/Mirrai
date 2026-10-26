@@ -126,25 +126,25 @@ export default function Graduation() {
             initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
             className="surface p-6 sm:p-8"
           >
-            <p className="text-xs uppercase tracking-wide text-muted-foreground/70 mb-4">
+            <p className="text-xs uppercase tracking-wide text-muted-subtle mb-4">
               {t("graduationPage.letter")}
             </p>
             <p className="text-[0.9375rem] leading-[1.9] whitespace-pre-wrap text-foreground/90">
               {letter}
             </p>
             {persona.farewellDegraded ? (
-              <p className="text-xs text-muted-foreground/80 mt-3">
+              <p className="text-xs text-muted-subtle mt-3">
                 {t("graduationPage.simplified")}
               </p>
             ) : null}
             {draft ? (
               <details className="mt-5 border-t border-border/70 pt-4">
-                <summary className="text-xs text-muted-foreground/80 cursor-pointer">
+                <summary className="text-xs text-muted-subtle cursor-pointer">
                   {t("graduationPage.draftNote")}
                 </summary>
                 {draft.kept?.length ? (
                   <div className="mt-3">
-                    <p className="text-[11px] text-muted-foreground/70 mb-1">
+                    <p className="text-[11px] text-muted-subtle mb-1">
                       {t("graduationPage.keptHeading")}
                     </p>
                     {draft.kept.map((line: string, index: number) => (
@@ -156,7 +156,7 @@ export default function Graduation() {
                 ) : null}
                 {draft.removed?.length ? (
                   <div className="mt-3">
-                    <p className="text-[11px] text-muted-foreground/70 mb-1">
+                    <p className="text-[11px] text-muted-subtle mb-1">
                       {t("graduationPage.removedHeading")}
                     </p>
                     {draft.removed.map((line: string, index: number) => (
@@ -172,7 +172,7 @@ export default function Graduation() {
               </details>
             ) : null}
             {persona.graduatedAt && (
-              <p className="text-xs text-muted-foreground/70 mt-5 text-right">
+              <p className="text-xs text-muted-subtle mt-5 text-right">
                 {t("graduationPage.signed", {
                   date: new Date(persona.graduatedAt).toLocaleDateString(locale),
                 })}
@@ -200,7 +200,7 @@ export default function Graduation() {
               {events.map((event: any) => (
                 <li key={event.id} className="relative pb-5 last:pb-0">
                   <span className="absolute -left-[1.3125rem] top-1.5 w-2 h-2 rounded-full bg-primary/50" aria-hidden />
-                  <p className="text-xs text-muted-foreground/70">
+                  <p className="text-xs text-muted-subtle">
                     {new Date(event.happenedAt).toLocaleDateString(locale)}
                   </p>
                   <p className="text-sm text-foreground mt-0.5">{event.title}</p>
@@ -232,7 +232,7 @@ export default function Graduation() {
                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{memory.description}</p>
                       )}
                       {memory.date && (
-                        <p className="text-[0.625rem] text-muted-foreground/70 mt-1.5 flex items-center gap-1">
+                        <p className="text-[0.625rem] text-muted-subtle mt-1.5 flex items-center gap-1">
                           <Calendar className="w-2.5 h-2.5" /> {memory.date}
                         </p>
                       )}
@@ -256,7 +256,7 @@ export default function Graduation() {
                   <span>
                     {memory.title}
                     {memory.description && (
-                      <span className="text-muted-foreground/70"> — {memory.description}</span>
+                      <span className="text-muted-subtle"> — {memory.description}</span>
                     )}
                   </span>
                 </li>
@@ -273,7 +273,7 @@ export default function Graduation() {
             <div className="space-y-3">
               {diaries.slice(0, 5).map((diary: any) => (
                 <div key={diary.id} className="rounded-xl border border-border/70 p-4">
-                  <p className="text-xs text-muted-foreground/70 mb-1.5">{diary.date}</p>
+                  <p className="text-xs text-muted-subtle mb-1.5">{diary.date}</p>
                   <p className="text-sm text-foreground/85 leading-relaxed">{diary.summary}</p>
                   {diary.reflection && (
                     <p className="text-xs text-muted-foreground mt-2 italic leading-relaxed">{diary.reflection}</p>

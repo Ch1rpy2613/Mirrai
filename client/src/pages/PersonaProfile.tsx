@@ -253,7 +253,7 @@ export default function PersonaProfile() {
             <ul className="mt-3 space-y-2">
               {milestones.map((memory: any) => (
                 <li key={memory.id} className="text-sm text-muted-foreground">
-                  {memory.date && <span className="text-xs text-muted-foreground/70 mr-2">{memory.date}</span>}
+                  {memory.date && <span className="text-xs text-muted-subtle mr-2">{memory.date}</span>}
                   {memory.title}
                 </li>
               ))}

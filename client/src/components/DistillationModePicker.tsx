@@ -54,7 +54,7 @@ export default function DistillationModePicker({ value, onChange, disabled }: Pr
             <p className="text-xs text-muted-foreground leading-relaxed">
               {t(preset.clientDescriptionKey as any)}
             </p>
-            <p className="text-[11px] text-muted-foreground/80 mt-1">
+            <p className="text-[11px] text-muted-subtle mt-1">
               {t("distillation.sample", { count: preset.chatSampleLimit })}
               {" · "}
               {t("distillation.photos", { count: preset.maxImages })}

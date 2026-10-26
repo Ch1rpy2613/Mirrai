@@ -962,7 +962,7 @@ export default function Chat() {
                     for them — the app had no way to say so. */}
                 {theirClock && (
                   <span
-                    className="text-[0.625rem] text-muted-foreground/80 flex-shrink-0 hidden sm:inline"
+                    className="text-[0.625rem] text-muted-subtle flex-shrink-0 hidden sm:inline"
                     title={t("chat.theirClockHint", { time: theirClock })}
                   >
                     {t("chat.theirClock", { time: theirClock })}
@@ -971,7 +971,7 @@ export default function Chat() {
                 {/* How long it has been. */}
                 {daysSinceTalk !== null && daysSinceTalk > 0 && (
                   <span
-                    className="text-[0.625rem] text-muted-foreground/80 flex-shrink-0 hidden sm:inline"
+                    className="text-[0.625rem] text-muted-subtle flex-shrink-0 hidden sm:inline"
                     title={t("chat.lastContactHint", { days: daysSinceTalk })}
                   >
                     {t("chat.lastContact", { days: daysSinceTalk })}
@@ -1425,7 +1425,7 @@ export default function Chat() {
                   is the whole difference between a message that lands and
                   one that does not. */}
               {theyAreAsleep && (
-                <p className="text-[0.625rem] text-muted-foreground/80 flex items-center gap-1 mb-1.5">
+                <p className="text-[0.625rem] text-muted-subtle flex items-center gap-1 mb-1.5">
                   <Moon className="w-3 h-3" /> {t("chat.theyAreAsleep")}
                 </p>
               )}

@@ -1674,10 +1674,10 @@ function CollectorPreview({ personaId }: { personaId: number }) {
                 {message.role === "user" ? t("settings.sources.previewMe") : t("settings.sources.previewThem")}
               </span>
               {message.source && (
-                <span className="text-[0.6875rem] text-muted-foreground/70">{message.source}</span>
+                <span className="text-[0.6875rem] text-muted-subtle">{message.source}</span>
               )}
               {message.timestamp && (
-                <span className="text-[0.6875rem] text-muted-foreground/70 ml-auto">
+                <span className="text-[0.6875rem] text-muted-subtle ml-auto">
                   {new Date(message.timestamp).toLocaleString(locale)}
                 </span>
               )}

@@ -109,7 +109,7 @@ export default function CommandPalette() {
         <div className="max-h-[60vh] overflow-y-auto p-2">
           {matchingPersonas.length > 0 && (
             <div className="mb-2">
-              <p className="text-[0.625rem] uppercase tracking-wide text-muted-foreground/70 px-2 py-1.5">
+              <p className="text-[0.625rem] uppercase tracking-wide text-muted-subtle px-2 py-1.5">
                 {t("commandPalette.personas")}
               </p>
               {matchingPersonas.map((persona) => (
@@ -132,7 +132,7 @@ export default function CommandPalette() {
 
           {matchingMessages.length > 0 && (
             <div>
-              <p className="text-[0.625rem] uppercase tracking-wide text-muted-foreground/70 px-2 py-1.5">
+              <p className="text-[0.625rem] uppercase tracking-wide text-muted-subtle px-2 py-1.5">
                 {t("commandPalette.messages")}
               </p>
               {matchingMessages.map((message) => (
@@ -187,7 +187,7 @@ export default function CommandPalette() {
           )}
         </div>
 
-        <div className="px-4 py-2 border-t border-border text-[0.625rem] text-muted-foreground/70">
+        <div className="px-4 py-2 border-t border-border text-[0.625rem] text-muted-subtle">
           {t("commandPalette.hint")}
         </div>
       </DialogContent>

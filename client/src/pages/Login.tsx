@@ -136,7 +136,7 @@ export default function Login() {
             </button>
           </p>
 
-          <p className="text-center text-xs text-muted-foreground/80 mt-12">
+          <p className="text-center text-xs text-muted-subtle mt-12">
             {t("auth.footer")}
           </p>
         </div>

@@ -162,14 +162,14 @@ function TTSButton({ text }: { text: string }) {
   return (
     <span className="relative inline-flex items-center" ref={menuRef}>
     <button onClick={handlePlay} disabled={loading} title={t("chat.tts")} aria-label={t("chat.tts")}
-      className="text-muted-foreground/70 hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
+      className="text-muted-subtle hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className={`w-3 h-3 ${playing ? "text-foreground" : ""}`} />}
     </button>
     <button
       onClick={() => setShowVoices((value) => !value)}
       title={t("chat.ttsVoice")}
       aria-label={t("chat.ttsVoice")}
-      className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-1 -m-1"
+      className="text-muted-subtle hover:text-muted-foreground transition-colors p-1 -m-1"
     >
       <ChevronDown className="w-2.5 h-2.5" />
     </button>
@@ -335,13 +335,13 @@ export function MessageBubble({
             no way to know it had been recalled rather than invented. */}
         {!isUser && msg.recalled && msg.recalled.length > 0 && (
           <details className="group w-full">
-            <summary className="cursor-pointer list-none text-[11px] text-muted-foreground/70 hover:text-muted-foreground transition-colors flex items-center gap-1">
+            <summary className="cursor-pointer list-none text-[11px] text-muted-subtle hover:text-muted-foreground transition-colors flex items-center gap-1">
               <ChevronDown className="w-3 h-3 transition-transform group-open:rotate-180" />
               {t("chat.recalled", { count: msg.recalled.length })}
             </summary>
             <ul className="mt-1 space-y-0.5 pl-4">
               {msg.recalled.map((memory) => (
-                <li key={memory.id} className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                <li key={memory.id} className="text-[11px] text-muted-subtle leading-relaxed">
                   · {memory.title}
                 </li>
               ))}
@@ -387,7 +387,7 @@ export function MessageBubble({
           )}
         </div>
         {msg.createdAt && !msg.isStreaming && (
-          <span className="text-[11px] text-muted-foreground/70 px-1 flex items-center gap-1.5">
+          <span className="text-[11px] text-muted-subtle px-1 flex items-center gap-1.5">
             {new Date(msg.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
             {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-mood-happy/10 text-mood-happy">{t("chat.channelWechat")}</span>}
             {!isUser && msg.messageType !== "voice" && <TTSButton text={msg.content} />}
@@ -416,7 +416,7 @@ export function MessageBubble({
                     }}
                     title={t("chat.copy")}
                     aria-label={t("chat.copy")}
-                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <Copy className="w-3 h-3" />
                   </button>
@@ -427,7 +427,7 @@ export function MessageBubble({
                     onClick={() => onQuote(msg)}
                     title={t("chat.quote")}
                     aria-label={t("chat.quote")}
-                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <CornerUpLeft className="w-3 h-3" />
                   </button>
@@ -438,7 +438,7 @@ export function MessageBubble({
                     onClick={() => { setDraft(msg.content); setEditing(true); }}
                     title={t("chat.edit")}
                     aria-label={t("chat.edit")}
-                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <Pencil className="w-3 h-3" />
                   </button>
@@ -449,7 +449,7 @@ export function MessageBubble({
                     onClick={() => onRegenerate(msg)}
                     title={t("chat.regenerate")}
                     aria-label={t("chat.regenerate")}
-                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <RefreshCw className="w-3 h-3" />
                   </button>
@@ -460,7 +460,7 @@ export function MessageBubble({
                     onClick={() => onDelete(msg)}
                     title={t("chat.delete")}
                     aria-label={t("chat.delete")}
-                    className="text-muted-foreground/70 hover:text-destructive transition-colors p-0.5"
+                    className="text-muted-subtle hover:text-destructive transition-colors p-0.5"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>

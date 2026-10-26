@@ -25,7 +25,7 @@ export default function DigitalPersonaBadge({ compact = false }: DigitalPersonaB
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1 text-[0.625rem] px-1.5 py-0.5 rounded border border-border/70 text-muted-foreground/80 shrink-0">
+      <span className="inline-flex items-center gap-1 text-[0.625rem] px-1.5 py-0.5 rounded border border-border/70 text-muted-subtle shrink-0">
         {t("chat.digitalPersona")}
       </span>
     );

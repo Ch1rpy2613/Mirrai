@@ -38,6 +38,13 @@
   --color-secondary-foreground: oklch(0.30 0.020 240);
   --color-muted: oklch(0.945 0.008 85);
   --color-muted-foreground: oklch(0.50 0.020 240);
+  /* The quieter text.
+     It is a colour of its own rather than the muted foreground at a
+     lower opacity: an opacity variant on a light background can never
+     reach the 4.5:1 the guidelines ask for — at 70% the muted
+     foreground was at 3.06:1 and at 80% it was 3.75:1 — and fifty
+     places used those two. */
+  --color-muted-subtle: oklch(0.52 0.020 240);
   /* The accent is the background of a focused option, and the text on
      it has to reach the 4.5:1 contrast minimum. At 0.60 it was 4.08:1
      — just under the line, and so close to it that any later tweak of
@@ -51,7 +58,11 @@
   --color-ring: oklch(0.60 0.140 42);
 
   /* ── 强调色别名（砖橘）· 取代旧的 cinnabar ── */
-  --color-cinnabar: oklch(0.60 0.140 42);
+  /* The brick orange, used for real text: the landing page's headings,
+     the "read more" control, the sign-up link. At 0.60 it was 4.06:1
+     against the background — under the 4.5:1 the guidelines ask for —
+     so a low-vision user could not read those. */
+  --color-cinnabar: oklch(0.55 0.140 42);
 
   /* ── Chart · 纸墨系 ── */
   --color-chart-1: oklch(0.60 0.140 42);
@@ -105,6 +116,8 @@ html.dark {
   --color-secondary-foreground: oklch(0.90 0.008 90);
   --color-muted: oklch(0.24 0.012 265);
   --color-muted-foreground: oklch(0.62 0.012 265);
+  /* The quieter text in the dark theme. */
+  --color-muted-subtle: oklch(0.70 0.012 265);
   --color-accent: oklch(0.76 0.130 75);
   --color-accent-foreground: oklch(0.18 0.020 265);
   --color-destructive: oklch(0.65 0.190 25);

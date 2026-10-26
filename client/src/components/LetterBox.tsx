@@ -74,7 +74,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                 {letter.body}
               </p>
-              <div className="flex items-center gap-3 mt-3 text-[0.625rem] text-muted-foreground/80">
+              <div className="flex items-center gap-3 mt-3 text-[0.625rem] text-muted-subtle">
                 <span>{new Date(letter.createdAt).toLocaleDateString(locale)}</span>
                 {letter.mood && (
                   <span>{t(`moodCheckIn.moods.${letter.mood}` as any)}</span>
@@ -92,7 +92,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               </div>
               {letter.replyText && (
                 <div className="mt-3 pt-3 border-t border-border/60">
-                  <p className="text-[0.625rem] text-muted-foreground/70 mb-1.5">
+                  <p className="text-[0.625rem] text-muted-subtle mb-1.5">
                     {t("letters.reply")}
                   </p>
                   <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
@@ -237,7 +237,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               {t("common.cancel")}
             </Button>
           </div>
-          <p className="text-[0.625rem] text-muted-foreground/80 leading-relaxed">
+          <p className="text-[0.625rem] text-muted-subtle leading-relaxed">
             {t(kind === "todo" ? "letters.todoNote" : "letters.deliverNote")}
           </p>
         </div>

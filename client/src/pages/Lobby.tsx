@@ -1067,14 +1067,14 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
       {pd.summary && isReady && (
         <div className="mt-2.5 flex items-start gap-1.5">
           <Eye className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-muted-foreground/80 line-clamp-1 italic">{pd.summary}</p>
+          <p className="text-xs text-muted-subtle line-clamp-1 italic">{pd.summary}</p>
         </div>
       )}
 
       {traits && isReady && !pd.summary && (
         <div className="mt-2.5 flex items-start gap-1.5">
           <Brain className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-muted-foreground/80 line-clamp-1">{traits}</p>
+          <p className="text-xs text-muted-subtle line-clamp-1">{traits}</p>
         </div>
       )}
 
@@ -1368,7 +1368,7 @@ function EmptyState({
       <motion.p variants={fadeUp} className="text-sm text-muted-foreground mb-4 leading-relaxed">
         {t("lobby.emptyState.body")}
       </motion.p>
-      <motion.p variants={fadeUp} className="font-display text-sm text-muted-foreground/70 italic leading-relaxed">
+      <motion.p variants={fadeUp} className="font-display text-sm text-muted-subtle italic leading-relaxed">
         “{quote}”
       </motion.p>
 
@@ -1547,7 +1547,7 @@ function TemplateLibrarySection({
             className="text-left surface p-4 rounded-md border border-border hover:border-foreground/30 transition-colors disabled:opacity-60"
           >
             <div className="flex items-center gap-2 mb-1">
-              <Library className="w-3.5 h-3.5 text-muted-foreground/70" />
+              <Library className="w-3.5 h-3.5 text-muted-subtle" />
               <span className="text-sm font-medium text-foreground">{template.name}</span>
             </div>
             {template.description && (
