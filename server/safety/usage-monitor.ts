@@ -107,13 +107,38 @@ export async function evaluateUsage(params: {
     dailyCounts.push(byDate.get(zonedDateKey(date, timezone)) ?? 0);
   }
 
-  const recentWeek = dailyCounts.slice(7).reduce((a, b) => a + b, 0);
-  const previousWeek = dailyCounts.slice(0, 7).reduce((a, b) => a + b, 0);
+  /**
+   * The days that are over.
+   *
+   * Today is not one of them: it is a day in progress. So the
+   * comparison of the last few days included it — and a day that is
+   * half over is almost always smaller than the day before it, so the
+   * "rising" test could not fire. The signal was under-reported by
+   * exactly the case it was written for.
+   *
+   * The weeks are compared the same way, so that both sides are
+   * counted over whole days.
+   */
+  const completeDays = dailyCounts.slice(0, -1);
+  const todayCount = dailyCounts[dailyCounts.length - 1] ?? 0;
+  const recentWeek = completeDays.slice(7).reduce((a, b) => a + b, 0);
+  const previousWeek = completeDays.slice(0, 7).reduce((a, b) => a + b, 0);
 
-  const lastDays = dailyCounts.slice(-DEPENDENCY_RISING_DAYS);
+  const lastDays = completeDays.slice(-DEPENDENCY_RISING_DAYS);
   const risingConsecutively = lastDays.every(
     (value, index) => index === 0 || value >= lastDays[index - 1],
   ) && lastDays[lastDays.length - 1] > 0;
+
+  /**
+   * The user has spoken today.
+   *
+   * The rise is read from the days that are over — but a burst that
+   * ended yesterday is not a rise either, and the only sign of that
+   * is a day with nothing in it. So today has to have something in
+   * it: a user who has not said anything yet today has not come to
+   * the app *more* and more.
+   */
+  const spokeToday = todayCount > 0;
 
   // A user who went from nothing to a lot of messages is the onset case worth
   // catching: there is no previous week to compare against, so the ratio
@@ -121,7 +146,8 @@ export async function evaluateUsage(params: {
   const grewFromNothing = previousWeek === 0 && recentWeek > 0;
   const grewFromBefore = previousWeek > 0 && recentWeek > previousWeek * DEPENDENCY_RATIO;
 
-  const dependencyRising = (grewFromNothing || grewFromBefore) && risingConsecutively;
+  const dependencyRising =
+    (grewFromNothing || grewFromBefore) && risingConsecutively && spokeToday;
 
   return {
     sessionDurationMs,
