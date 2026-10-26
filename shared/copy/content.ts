@@ -188,6 +188,21 @@ export const CONTENT = {
     zh: "未找到 Slack Bot Token，请运行：python3 tools/slack_auto_collector.py --setup （或通过 options 传入 bot_token）",
     en: "No Slack bot token was found. Run: python3 tools/slack_auto_collector.py --setup (or pass bot_token in options)",
   },
+  /**
+   * The queue is full.
+   *
+   * The error used to reach the browser as the generic "something went
+   * wrong on the server", so the user had no idea that the queue was
+   * the problem.
+   */
+  "collectors.queueFull": {
+    zh: "已经有 {{count}} 个采集在排队了。这个实例一次只能排这么多——等一个跑完再试。",
+    en: "{{count}} collection runs are already waiting. This instance only holds this many — try again when one of them has finished.",
+  },
+  "collectors.queueFullForYou": {
+    zh: "你已经有 {{count}} 个采集在排队了。等一个跑完再试。",
+    en: "You already have {{count}} collection runs waiting. Try again when one of them has finished.",
+  },
   "collectors.emailNeedsNoCredentials": {
     zh: "邮件解析无需凭据，请在 options.file 中提供 .eml / .mbox / .txt 文件路径",
     en: "Reading email needs no credentials. Give the path to a .eml / .mbox / .txt file in options.file",

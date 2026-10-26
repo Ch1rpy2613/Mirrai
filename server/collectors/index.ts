@@ -38,6 +38,7 @@ export {
 
 export {
   enqueueCollectorJob,
+  CollectorQueueFullError,
   getCollectorJob,
   listCollectorJobs,
   waitForCollectorJob,

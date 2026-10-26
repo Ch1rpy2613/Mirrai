@@ -180,6 +180,16 @@ function emit(job: CollectorJob): void {
  */
 const MAX_QUEUE_LENGTH = 20;
 
+/**
+ * How many jobs one user may have waiting.
+ *
+ * The queue is shared by everybody, and it is strictly serial — so one
+ * user who queued twenty runs made every other user's collection wait
+ * behind them for tens of minutes. The rate limit (five a minute) does
+ * not help: twenty runs is four minutes of pressing the button.
+ */
+const MAX_QUEUE_LENGTH_PER_USER = 3;
+
 const queue: string[] = [];
 const inputs = new Map<string, CollectInput>();
 const controllers = new Map<string, AbortController>();
@@ -407,6 +417,27 @@ async function runJob(job: CollectorJob): Promise<void> {
  * final job state; `waitForCollectorJob()` does the same for a job that was
  * queued earlier.
  */
+/**
+ * The queue could not take the job.
+ *
+ * A typed error, so the procedure can say what happened instead of the
+ * generic "something went wrong on the server".
+ */
+export class CollectorQueueFullError extends Error {
+  constructor(
+    message: string,
+    /** How many are waiting, for the message. */
+    readonly waiting: number,
+    /** How many may wait. */
+    readonly limit: number,
+    /** Whether it is the whole queue or this user's share of it. */
+    readonly perUser: boolean,
+  ) {
+    super(message);
+    this.name = "CollectorQueueFullError";
+  }
+}
+
 export async function enqueueCollectorJob(
   spec: CollectorJobSpec,
 ): Promise<CollectorJobHandle> {
@@ -418,8 +449,30 @@ export async function enqueueCollectorJob(
    * of them and take the whole server's memory and CPU with them.
    */
   if (queue.length >= MAX_QUEUE_LENGTH) {
-    throw new Error(
+    throw new CollectorQueueFullError(
       `Too many collection runs are already waiting (${MAX_QUEUE_LENGTH}). Try again when they have finished.`,
+      MAX_QUEUE_LENGTH,
+      MAX_QUEUE_LENGTH,
+      false,
+    );
+  }
+  /**
+   * The user's own share of the queue.
+   *
+   * The queue is shared and it is serial, so one user could fill it
+   * and everybody else waited behind them.
+   */
+  const userId = String(spec.userId);
+  const waitingForThisUser = queue.filter((id) => {
+    const waiting = store.get(id);
+    return waiting ? String(waiting.userId) === userId : false;
+  }).length;
+  if (waitingForThisUser >= MAX_QUEUE_LENGTH_PER_USER) {
+    throw new CollectorQueueFullError(
+      `You already have ${MAX_QUEUE_LENGTH_PER_USER} collection runs waiting. Try again when one of them has finished.`,
+      waitingForThisUser,
+      MAX_QUEUE_LENGTH_PER_USER,
+      true,
     );
   }
 

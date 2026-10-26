@@ -121,6 +121,7 @@ import { resolveStoredPath } from "./storage";
 import { applyPersonaCorrection, buildCorrectionLog } from "./skill-engine/correction";
 import {
   COLLECTOR_SOURCES,
+  CollectorQueueFullError,
   enqueueCollectorJob,
   getCollector,
   getCollectorJob,
@@ -2629,16 +2630,38 @@ export const appRouter = router({
           options = { file: path };
         }
 
-        const handle = await enqueueCollectorJob({
-          userId: String(ctx.user.id),
-          personaId: String(input.personaId),
-          source: input.source,
-          input: {
-            target: input.target,
-            limit: input.limit,
-            ...(options ? { options } : {}),
-          },
-        });
+        let handle;
+        try {
+          handle = await enqueueCollectorJob({
+            userId: String(ctx.user.id),
+            personaId: String(input.personaId),
+            source: input.source,
+            input: {
+              target: input.target,
+              limit: input.limit,
+              ...(options ? { options } : {}),
+            },
+          });
+        } catch (error) {
+          /**
+           * The queue was full.
+           *
+           * The error used to reach the browser as the generic
+           * "something went wrong on the server", so the user had no
+           * idea that the queue was the problem.
+           */
+          if (error instanceof CollectorQueueFullError) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: copy(
+                ctx.locale,
+                error.perUser ? "collectors.queueFullForYou" : "collectors.queueFull",
+                { count: error.waiting },
+              ),
+            });
+          }
+          throw error;
+        }
         return { jobId: handle.id };
       }),
 
