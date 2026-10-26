@@ -97,7 +97,18 @@ export default function PersonaProfile() {
   const phase = resolveRelationshipPhase((eventsData?.events ?? []) as any);
   const memoryItems = memories?.items ?? [];
   const anchors = memoryItems.filter((m: any) => m.category === "anchor");
-  const milestones = memoryItems.filter((m: any) => m.category !== "anchor");
+  /**
+   * The important moments.
+   *
+   * Everything that was not an anchor used to be called a milestone —
+   * so the ordinary memories, the ones the app writes about what
+   * happened yesterday, were presented as the important moments of a
+   * relationship. The graduation page splits the same three categories
+   * properly.
+   */
+  const milestones = memoryItems.filter(
+    (m: any) => m.category === "milestone" || m.category === "anniversary",
+  );
   /**
    * The rules the user has confirmed.
    *
