@@ -359,6 +359,18 @@ export async function deliverReminder(params: {
 export async function runReminderSweep(now: Date = new Date()): Promise<number> {
   let delivered = 0;
 
+  /**
+   * The user's own settings, read once per tick.
+   *
+   * The sweep runs every minute and walks every persona. The locale
+   * and the time zone are the *user's*, not the persona's — so a user
+   * with five personas was read five times, every minute, for ever.
+   */
+  const perUser = new Map<number, {
+    locale: "zh" | "en";
+    timezone: string | null;
+  }>();
+
   try {
     const personas = await db.getAllPersonasForReminders();
     for (const persona of personas) {
@@ -388,7 +400,15 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
        * date.
        */
       const files = await db.getPhotoReminderCandidates(persona.id, persona.userId);
-      const locale = await db.getUserLocale(persona.userId);
+      let settings = perUser.get(persona.userId);
+      if (!settings) {
+        settings = {
+          locale: await db.getUserLocale(persona.userId).catch(() => "zh" as const),
+          timezone: await db.getUserTimezone(persona.userId).catch(() => null),
+        };
+        perUser.set(persona.userId, settings);
+      }
+      const locale = settings.locale;
       /**
        * The *reader's* clock.
        *
@@ -397,7 +417,7 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
        * when they want to be woken up. The persona's zone is the
        * persona's.
        */
-      const timezone = await db.getUserTimezone(persona.userId);
+      const timezone = settings.timezone;
       const reminders = collectReminders({
         locale,
         // The user's own calendar.

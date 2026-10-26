@@ -25,11 +25,13 @@ async function deliverProactive(params: {
   personaId: number;
   text: string;
   emotionalState: string | null;
+  /** The user's language, if the sweep has already read it. */
+  locale?: "zh" | "en";
 }): Promise<"web" | "wechat" | "feishu"> {
   const bindings = await db
     .getChannelBindingsByUserId(params.userId)
     .catch(() => []);
-  const locale = await db.getUserLocale(params.userId).catch(() => "zh" as const);
+  const locale = params.locale ?? (await db.getUserLocale(params.userId).catch(() => "zh" as const));
 
   for (const binding of bindings) {
     if (!binding.isActive) continue;
@@ -56,6 +58,19 @@ async function deliverProactive(params: {
 
 export async function runProactiveSweep(now: Date = new Date()): Promise<number> {
   let sent = 0;
+
+  /**
+   * The user's own settings, read once per tick.
+   *
+   * The sweep runs every minute and walks every persona. The locale,
+   * the time zone and the channel bindings are the *user's*, not the
+   * persona's — so a user with five personas was read five times, every
+   * minute, for ever.
+   */
+  const perUser = new Map<number, {
+    locale: "zh" | "en";
+    timezone: string | null;
+  }>();
 
   const candidates = await db.getProactivePersonas();
   for (const row of candidates) {
@@ -106,8 +121,15 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
        * did it again. That is about five hundred wasted model calls per
        * due persona per night.
        */
-      const timezone = await db.getUserTimezone(row.userId);
-      if (isQuietHour(now, ENV.reminderQuietHours, timezone)) {
+      let settings = perUser.get(row.userId);
+      if (!settings) {
+        settings = {
+          locale: await db.getUserLocale(row.userId).catch(() => "zh" as const),
+          timezone: await db.getUserTimezone(row.userId).catch(() => null),
+        };
+        perUser.set(row.userId, settings);
+      }
+      if (isQuietHour(now, ENV.reminderQuietHours, settings.timezone)) {
         continue;
       }
 
@@ -147,6 +169,7 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         personaId: persona.id,
         text,
         emotionalState: persona.emotionalState,
+        locale: settings.locale,
       });
       // The channel it went out on is worth recording.
       if (delivered !== "web" && messageId) {
