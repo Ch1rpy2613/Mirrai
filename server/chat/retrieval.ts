@@ -189,6 +189,17 @@ export function selectMemories(
   }));
 
   /**
+   * The pinned memories are kept whatever their score.
+   *
+   * A pin was worth a tenth of the score — so an anchor that matched
+   * the message well could push out the very fact the user had pinned,
+   * and the persona stopped using it. The user pinned it; it is theirs.
+   */
+  const pinned = scored.filter((m) => m.isPinned);
+  const pinnedIds = new Set(pinned.map((m) => m.id));
+  const rest = scored.filter((m) => !pinnedIds.has(m.id));
+
+  /**
    * The anchors, and only the best of them.
    *
    * Every anchor used to be returned and rendered, however many there
@@ -197,19 +208,27 @@ export function selectMemories(
    * must hold, so they are the last thing to be cut — but not all
    * fifty.
    */
-  const anchors = scored
+  const pinnedAnchors = pinned.filter((m) => m.category === "anchor");
+  const otherAnchors = rest
     .filter((m) => m.category === "anchor")
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_ANCHORS);
+    .sort((a, b) => b.score - a.score);
+  const anchors = [
+    ...pinnedAnchors,
+    ...otherAnchors.slice(0, Math.max(0, MAX_ANCHORS - pinnedAnchors.length)),
+  ];
 
-  const ordinary = scored
+  const pinnedOrdinary = pinned.filter((m) => m.category !== "anchor");
+  const otherOrdinary = rest
     .filter((m) => m.category !== "anchor")
-    .filter((m) => m.isPinned || keywordCoverage(
+    .filter((m) => keywordCoverage(
       [m.title, m.description, m.date].filter(Boolean).join(" "),
       messageTokens,
     ) >= minKeywordScore)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+    .sort((a, b) => b.score - a.score);
+  const ordinary = [
+    ...pinnedOrdinary,
+    ...otherOrdinary.slice(0, Math.max(0, topK - pinnedOrdinary.length)),
+  ];
 
   return { selected: [...anchors, ...ordinary], anchors };
 }

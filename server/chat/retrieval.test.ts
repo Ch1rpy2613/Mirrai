@@ -183,6 +183,30 @@ describe("selectMemories", () => {
     expect(selected.map((m) => m.id)).toContain(2);
   });
 
+  it("keeps a pinned memory when the ones that match the message are better", () => {
+    // A pin was worth a tenth of the score, so a memory that matched
+    // the message well could push out the very fact the user had
+    // pinned — and the persona stopped using it.
+    const many = Array.from({ length: 12 }, (_, index) =>
+      candidate({
+        id: 100 + index,
+        category: "anchor",
+        title: "图书馆",
+        description: "在里面看书",
+      }),
+    );
+    const { selected } = selectMemories(
+      [
+        ...many,
+        candidate({ id: 1, category: "anchor", isPinned: true, title: "她的生日", description: "3 月 14 日" }),
+      ],
+      "你还记得图书馆吗",
+      { now },
+    );
+
+    expect(selected.map((m) => m.id)).toContain(1);
+  });
+
   it("always includes a pinned memory even without a keyword match", () => {
     const { selected } = selectMemories(
       [candidate({ id: 3, isPinned: true, title: "去吃火锅", description: "排队很久" })],
