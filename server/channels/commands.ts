@@ -13,7 +13,6 @@ import { checkGraduationEligibility } from "../_core/persona-utils";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
 import { getMessageCountInRange, getPersonasByUserId, getRecentEmotionTrend, setGraduationStatus } from "../db";
 import { writeFarewellLetter } from "../chat/farewell";
-import { llmService } from "../llm";
 import type { Persona } from "../../drizzle/schema";
 import type { ChannelId } from "./types";
 import { mayReachOut } from "@shared/graduation-mode";

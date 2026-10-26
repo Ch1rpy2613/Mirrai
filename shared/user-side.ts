@@ -31,7 +31,6 @@ export const USER_MOODS: readonly UserMood[] = [
   "numb",
 ];
 
-export const DEFAULT_USER_MOOD: UserMood = "okay";
 
 export function isUserMood(value: unknown): value is UserMood {
   return (

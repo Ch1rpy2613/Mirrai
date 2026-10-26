@@ -1560,19 +1560,6 @@ export async function getMemoriesByPersonaId(
 /** How many memories the list returns at once. */
 export const MEMORY_LIST_LIMIT = 200;
 
-/**
- * When the memories were last extracted for a persona.
- *
- * It is what keeps the automatic extraction to once a day instead of
- * once a turn.
- */
-export async function getLastMemoryExtractionAt(personaId: number, userId: number): Promise<Date | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const rows = await db.select({ at: max(memories.createdAt) }).from(memories)
-    .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)));
-  return rows[0]?.at ?? null;
-}
 
 /**
  * Records that an extraction has just run.
@@ -2667,25 +2654,6 @@ export async function createCollectedMessage(data: InsertCollectedMessage) {
   return result.id;
 }
 
-/**
- * The messages already collected for a persona from a source.
- *
- * Used to make an import idempotent: re-running a collection must not
- * duplicate the messages.
- */
-export async function getCollectedMessages(
-  personaId: number,
-  userId: number,
-  source: string,
-) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(collectedMessages).where(and(
-    eq(collectedMessages.personaId, personaId),
-    eq(collectedMessages.userId, userId),
-    eq(collectedMessages.source, source),
-  ));
-}
 
 /** The three fields a collected message's identity is made of. */
 export interface CollectedMessageKey {

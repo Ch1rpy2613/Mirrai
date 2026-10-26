@@ -87,8 +87,3 @@ export function registerServiceWorker(): void {
   });
 }
 
-/** True when the browser reports that the app is running offline. */
-export function isOffline(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return !navigator.onLine;
-}

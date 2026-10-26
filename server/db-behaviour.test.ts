@@ -447,17 +447,6 @@ describe("the memories", () => {
     expect(await db.countMemories(1, 3)).toBe(0);
   });
 
-  it("remembers when the last extraction was", async () => {
-    const at = new Date("2026-01-02T00:00:00Z");
-    registry.select.memories = [{ at }];
-    expect(await db.getLastMemoryExtractionAt(1, 3)).toEqual(at);
-  });
-
-  it("has no last extraction for a persona that never had one", async () => {
-    registry.select.memories = [];
-    expect(await db.getLastMemoryExtractionAt(1, 3)).toBeNull();
-  });
-
   it("writes down that an extraction happened", async () => {
     await db.markMemoryExtracted(1, 3);
     expect(last().operation).toBe("insert");

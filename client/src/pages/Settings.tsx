@@ -1003,29 +1003,6 @@ function DataManagementTab() {
   const { logout } = useAuth();
   const { t } = useLocale();
   const { data: accountStats } = trpc.user.getAccountStats.useQuery();
-  const exportData = trpc.user.exportData.useMutation({
-    onSuccess: (data) => {
-      if (!data) return;
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `mirrai-export-${new Date().toISOString().slice(0, 10)}.json`;
-      // The URL is released a moment later, not straight away.
-      //
-      // The download starts asynchronously, so revoking it in the same
-      // tick can leave the browser with no file at all — in Firefox and
-      // Safari it produced nothing, while the toast still said
-      // "exported". The user believed their data was backed up, and it
-      // was not.
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(t("settings.data.exportSuccess"));
-    },
-    onError: (e: any) => toast.error(t("settings.data.exportFailed", { message: e.message })),
-  });
 
   /* The full export: every persona, every memory, every diary, the
      farewell letter, the relationship events and the user's own moods —

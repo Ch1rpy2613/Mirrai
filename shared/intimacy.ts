@@ -26,8 +26,6 @@ export const INTIMACY_LEVELS: IntimacyLevel[] = [
   { key: "soulmate", name: "灵魂伴侣", nameEn: "Soulmate", icon: "👑", threshold: 1000 },
 ];
 
-/** The key of the highest level. */
-export const TOP_INTIMACY_KEY = "soulmate";
 
 /**
  * Normalises any accepted representation of a level to its key.
@@ -44,23 +42,7 @@ export function normalizeIntimacyLevel(value: string | null | undefined): string
   return match?.key ?? INTIMACY_LEVELS[0].key;
 }
 
-/** The Chinese label for a stored level (legacy value or key). */
-export function intimacyLevelName(value: string | null | undefined): string {
-  if (!value) return INTIMACY_LEVELS[0].name;
-  const match = INTIMACY_LEVELS.find(
-    (l) => l.key === value.trim() || l.name === value.trim() || l.nameEn === value.trim(),
-  );
-  return match?.name ?? INTIMACY_LEVELS[0].name;
-}
 
-/** The icon for a stored level. */
-export function intimacyLevelIcon(value: string | null | undefined): string {
-  if (!value) return INTIMACY_LEVELS[0].icon;
-  const match = INTIMACY_LEVELS.find(
-    (l) => l.key === value.trim() || l.name === value.trim() || l.nameEn === value.trim(),
-  );
-  return match?.icon ?? INTIMACY_LEVELS[0].icon;
-}
 
 /**
  * The label for a stored level, in the language asked for.
