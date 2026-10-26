@@ -269,6 +269,16 @@ export const en = {
       extract: "AI extract",
       extracting: "Extracting…",
       extracted: "Extracted {{count}} memories",
+      /**
+       * Nothing new.
+       *
+       * "0 extracted" said nothing about *why* — and the two reasons
+       * are very different: the conversation held nothing new, or the
+       * model's answer could not be read at all.
+       */
+      extractedNone: "No new memories were found.",
+      extractedKnown: "No new memories ({{count}} were already remembered).",
+      extractedUnreadable: "The model's answer could not be read this time, so nothing was extracted. You can check the model settings.",
       delete: "Delete memory",
       deleteConfirm: "Delete this memory?",
       pin: "Pin it (every prompt)",

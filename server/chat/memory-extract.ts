@@ -84,6 +84,15 @@ export function isDuplicateMemory(
 export interface ExtractResult {
   added: Array<{ id: number; title: string; subject: string }>;
   skipped: number;
+  /**
+   * Whether the answer could be read.
+   *
+   * It is what tells "there was nothing to remember" apart from "the
+   * model did not answer in the shape that was asked for" — and the
+   * interface used to say "0 extracted" for both, so a broken
+   * extraction looked like an empty conversation.
+   */
+  readable: boolean;
 }
 
 /**
@@ -152,7 +161,7 @@ export async function extractMemories(params: {
     lastExtracted ?? new Date(0),
     LOOKBACK,
   );
-  if (history.length === 0) return { added: [], skipped: 0 };
+  if (history.length === 0) return { added: [], skipped: 0, readable: true };
 
   /**
    * The batch: the oldest messages first, and only as many as the model
@@ -190,7 +199,7 @@ export async function extractMemories(params: {
    * fact ("my birthday is the 3rd"), and the run happens at most once
    * a day, so the model call is worth it.
    */
-  if (fresh.length < 1) return { added: [], skipped: 0 };
+  if (fresh.length < 1) return { added: [], skipped: 0, readable: true };
 
   // The transcript is read by the model, so the name it gives the user is
   // in the language the persona is speaking.
@@ -245,10 +254,10 @@ export async function extractMemories(params: {
       });
     } catch (e) {
       console.warn("[Memories] No provider could extract:", (e as Error).message);
-      return { added: [], skipped: 0 };
+      return { added: [], skipped: 0, readable: false };
     }
   }
-  if (!response.trim()) return { added: [], skipped: 0 };
+  if (!response.trim()) return { added: [], skipped: 0, readable: false };
 
   const existing = await db.getMemoriesByPersonaId(persona.id, userId);
   const added: ExtractResult["added"] = [];
@@ -361,7 +370,7 @@ export async function extractMemories(params: {
       await db.markMemoryAttempted(persona.id, userId);
     }
   }
-  return { added, skipped };
+  return { added, skipped, readable: understood };
 }
 
 /**

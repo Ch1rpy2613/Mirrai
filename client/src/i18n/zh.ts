@@ -268,6 +268,16 @@ export const zh = {
       extract: "AI 提取",
       extracting: "提取中...",
       extracted: "提取了 {{count}} 条记忆",
+      /**
+       * Nothing new.
+       *
+       * "0 extracted" said nothing about *why* — and the two reasons
+       * are very different: the conversation held nothing new, or the
+       * model's answer could not be read at all.
+       */
+      extractedNone: "没有发现新的记忆。",
+      extractedKnown: "没有新的记忆（{{count}} 条已经记过了）。",
+      extractedUnreadable: "这次没能读取模型的回答，所以没有提取任何记忆。你可以在设置里检查一下模型配置。",
       delete: "删除记忆",
       deleteConfirm: "删掉这条记忆？",
       pin: "钉住（每次都会带上）",

@@ -1959,7 +1959,26 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
     onError: (e: any) => toast.error(e.message),
   });
   const extractMutation = trpc.memory.autoExtract.useMutation({
-    onSuccess: (data) => { refetch(); toast.success(t("chat.memory.extracted", { count: data.extracted.length })); },
+    onSuccess: (data) => {
+      refetch();
+      /**
+       * What happened, said plainly.
+       *
+       * "Extracted 0 memories" said nothing about *why* — and the
+       * reasons are very different: the conversation held nothing new,
+       * the model answered with something that could not be read, or
+       * everything in it was already remembered.
+       */
+      if (data.extracted.length > 0) {
+        toast.success(t("chat.memory.extracted", { count: data.extracted.length }));
+      } else if (data.readable === false) {
+        toast.error(t("chat.memory.extractedUnreadable"));
+      } else if (data.skipped > 0) {
+        toast.info(t("chat.memory.extractedKnown", { count: data.skipped }));
+      } else {
+        toast.info(t("chat.memory.extractedNone"));
+      }
+    },
     onError: (e: any) => toast.error(e.message),
   });
 

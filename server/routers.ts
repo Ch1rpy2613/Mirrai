@@ -3170,7 +3170,14 @@ export const appRouter = router({
         // The extraction is the same one that runs on its own, so the
         // button cannot store what is already held.
         const result = await extractMemories({ persona, userId: ctx.user.id, locale: ctx.locale });
-        return { extracted: result.added, skipped: result.skipped };
+        return {
+          extracted: result.added,
+          skipped: result.skipped,
+          // Whether the answer could be read — so the interface can say
+          // "the model did not answer in the right shape" instead of
+          // "0 extracted".
+          readable: result.readable,
+        };
       }),
   }),
 
