@@ -28,6 +28,17 @@ COPY --from=build /app/drizzle ./drizzle
 # library is empty and "try it out with a sandbox character" is
 # impossible.
 COPY --from=build /app/server/templates/builtin ./server/templates/builtin
+# The skill engine: the prompts the distillation reads at run time, and
+# the Python collectors it drives.
+#
+# They were never shipped, so in the installed app every distillation
+# stage failed with "Prompt not found" and the collectors were spawned
+# in a directory that did not exist.
+COPY --from=build /app/skill-engine ./skill-engine
+# The migration runner. The desktop start scripts run it out of the
+# bundle, and it was not there — so the hand-written data migrations
+# never ran on an installed app.
+COPY --from=build /app/scripts/migrate.mjs ./scripts/migrate.mjs
 COPY drizzle.config.ts package.json ./
 COPY scripts/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh

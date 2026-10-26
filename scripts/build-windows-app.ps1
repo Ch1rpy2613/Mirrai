@@ -208,6 +208,26 @@ Copy-Item -Path (Join-Path $ProjectDir "drizzle") -Destination $AppDest -Recurse
 Copy-Item -Path (Join-Path $ProjectDir "package.json") -Destination $AppDest -Force
 Copy-Item -Path (Join-Path $ProjectDir "drizzle.config.ts") -Destination $AppDest -Force
 
+# The templates that ship with the app. Without them the template
+# library is empty and "try it out with a sandbox character" is
+# impossible.
+New-Item -ItemType Directory -Force -Path (Join-Path $AppDest "server\templates") | Out-Null
+Copy-Item -Path (Join-Path $ProjectDir "server\templates\builtin") -Destination (Join-Path $AppDest "server\templates") -Recurse -Force
+
+# The skill engine: the prompts the distillation reads at run time, and
+# the Python collectors it drives.
+#
+# They were never shipped, so in the installed app every distillation
+# stage failed with "Prompt not found" and the collectors were spawned
+# in a directory that did not exist.
+Copy-Item -Path (Join-Path $ProjectDir "skill-engine") -Destination (Join-Path $AppDest "skill-engine") -Recurse -Force
+
+# The migration runner. The start script runs it out of the bundle, and
+# it was not there — so the hand-written data migrations never ran on
+# an installed app.
+New-Item -ItemType Directory -Force -Path (Join-Path $AppDest "scripts") | Out-Null
+Copy-Item -Path (Join-Path $ProjectDir "scripts\migrate.mjs") -Destination (Join-Path $AppDest "scripts\migrate.mjs") -Force
+
 # The esbuild bundle uses --packages=external, so runtime imports like vite and
 # drizzle-kit must stay resolvable. node_modules was installed with the hoisted
 # linker, so it is a plain directory tree and copies without following links.

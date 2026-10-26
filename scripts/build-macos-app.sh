@@ -242,6 +242,18 @@ cp -R "$PROJECT_DIR/drizzle" "$APP_DEST/"
 # impossible.
 mkdir -p "$APP_DEST/server/templates"
 cp -R "$PROJECT_DIR/server/templates/builtin" "$APP_DEST/server/templates/"
+# The skill engine: the prompts the distillation reads at run time, and
+# the Python collectors it drives.
+#
+# They were never shipped, so in the installed app every distillation
+# stage failed with "Prompt not found" and the collectors were spawned
+# in a directory that did not exist.
+cp -R "$PROJECT_DIR/skill-engine" "$APP_DEST/skill-engine"
+# The migration runner. The start script runs it out of the bundle, and
+# it was not there — so the hand-written data migrations never ran on
+# an installed app.
+mkdir -p "$APP_DEST/scripts"
+cp "$PROJECT_DIR/scripts/migrate.mjs" "$APP_DEST/scripts/migrate.mjs"
 cp "$PROJECT_DIR/package.json" "$APP_DEST/"
 cp "$PROJECT_DIR/drizzle.config.ts" "$APP_DEST/"
 
