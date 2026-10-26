@@ -2,6 +2,7 @@ import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { formatDayKey } from "@/lib/dates";
+import { zonedDateKey } from "@shared/timezone";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
 import { ArrowLeft, Download, Quote, Calendar, Sprout } from "lucide-react";
@@ -44,7 +45,9 @@ export default function Graduation() {
   const personaId = Number.parseInt(params.id ?? "", 10);
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, user } = useAuth({ redirectOnUnauthenticated: true });
+  /** The user's own calendar — the one the server files the days in. */
+  const timezone = (user as any)?.timezone ?? null;
   const { t, locale } = useLocale();
 
   const { data: persona, isLoading, isError, error, refetch } = trpc.persona.get.useQuery(
@@ -236,7 +239,15 @@ export default function Graduation() {
                 <li key={event.id} className="relative pb-5 last:pb-0">
                   <span className="absolute -left-[1.3125rem] top-1.5 w-2 h-2 rounded-full bg-primary/50" aria-hidden />
                   <p className="text-xs text-muted-subtle">
-                    {new Date(event.happenedAt).toLocaleDateString(locale)}
+                    {/**
+                     * The user's own day.
+                     *
+                     * The event is filed at noon in the user's stored
+                     * zone, and the browser's zone was used to read it
+                     * back — so a user whose stored zone and browser
+                     * zone disagreed saw the event on the wrong day.
+                     */}
+                    {formatDayKey(zonedDateKey(new Date(event.happenedAt), timezone), locale)}
                   </p>
                   <p className="text-sm text-foreground mt-0.5">{event.title}</p>
                   {event.detail && (
