@@ -30,7 +30,8 @@ vi.mock("../llm", () => ({
 }));
 
 vi.mock("../db", () => ({
-  updateSkillJob: (...a: unknown[]) => updateSkillJob(...a),
+    getSkillJobById: vi.fn().mockResolvedValue(undefined),
+updateSkillJob: (...a: unknown[]) => updateSkillJob(...a),
   updatePersona: (...a: unknown[]) => updatePersona(...a),
   createSkillJob: (...a: unknown[]) => createSkillJob(...a),
   getFilesByPersonaId: vi.fn().mockResolvedValue([]),

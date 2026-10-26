@@ -1020,9 +1020,20 @@ async function runSkillPipelineOnce(
     });
 
     if (intakeNotes && jobId) {
+      /**
+       * The notes are added to what the row already had.
+       *
+       * The write replaced the whole blob — so the preset the run used
+       * was dropped the moment the intake notes were stored. The run's
+       * own metadata was the first thing to go.
+       */
+      const existing = await db
+        .getSkillJobById(jobId, userId)
+        .catch(() => undefined);
       await db
         .updateSkillJob(jobId, userId, {
           inputMeta: {
+            ...((existing?.inputMeta as Record<string, unknown> | null) ?? {}),
             ...(input.intakeMeta ?? {}),
             ...(effectiveProfile ? { researchProfile: effectiveProfile } : {}),
             intake: intakeNotes.slice(0, 8000),
