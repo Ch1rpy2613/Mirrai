@@ -50,6 +50,16 @@ export interface CollectorJobHandle {
 }
 
 /**
+ * How many finished jobs the store keeps.
+ *
+ * The store never let anything go: every collection run anybody had
+ * ever started stayed in the process for as long as it lived. On a
+ * long-running server that is a slow leak, and the list the interface
+ * asks for grew for ever.
+ */
+const MAX_KEPT_JOBS = 200;
+
+/**
  * Storage seam for collector jobs.
  *
  * The default implementation keeps everything in memory, which is enough for
@@ -64,12 +74,32 @@ export interface CollectorJobStore {
 /** Creates the default in-memory job store. */
 export function createMemoryJobStore(): CollectorJobStore {
   const jobs = new Map<string, CollectorJob>();
+
+  /**
+   * Lets the oldest finished job go when there are too many.
+   *
+   * A job that is still queued or running is never let go of.
+   */
+  const evict = (): void => {
+    if (jobs.size <= MAX_KEPT_JOBS) return;
+    const finished = Array.from(jobs.values())
+      .filter((job) => job.status === "completed" || job.status === "failed" || job.status === "interrupted")
+      .sort((a, b) => (a.startedAt ?? "").localeCompare(b.startedAt ?? ""));
+    // The map is keyed in insertion order, so the first finished job in
+    // the list is the oldest one.
+    for (const job of finished) {
+      if (jobs.size <= MAX_KEPT_JOBS) break;
+      jobs.delete(job.id);
+    }
+  };
+
   return {
     get(id: string): CollectorJob | undefined {
       return jobs.get(id);
     },
     save(job: CollectorJob): void {
       jobs.set(job.id, job);
+      evict();
     },
     list(userId?: string): CollectorJob[] {
       const all = Array.from(jobs.values());
