@@ -805,6 +805,10 @@ export const appRouter = router({
         const prompt = await buildPromptForPersona({
           persona,
           userId: ctx.user.id,
+          // This is a read. Marking the memories as recalled would halve
+          // the weight of the user's own pinned memories and anchors for
+          // a day — every time they opened the prompt.
+          markRecalled: false,
         });
         return { prompt };
       }),

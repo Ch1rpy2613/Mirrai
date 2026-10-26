@@ -313,6 +313,15 @@ export async function retrieveMemories(params: {
   topK?: number;
   locale?: "zh" | "en";
   now?: number;
+  /**
+   * Whether the selected memories are marked as recalled.
+   *
+   * A memory that has just been recalled has its weight halved for a
+   * day. So looking at the prompt — a read, not a conversation — used
+   * to halve the weight of the user's own pinned memories and anchors:
+   * the persona stopped using the facts the user had explicitly pinned.
+   */
+  markRecalled?: boolean;
 }): Promise<ScoredMemory[]> {
   const rows = await db.getMemoriesByPersonaId(params.personaId, params.userId);
   const candidates: MemoryCandidate[] = rows.map((row) => ({
@@ -358,7 +367,7 @@ export async function retrieveMemories(params: {
 
   const merged = [...selected, ...fileSelected];
 
-  if (selected.length > 0) {
+  if (selected.length > 0 && params.markRecalled !== false) {
     const now = new Date(params.now ?? Date.now());
     await Promise.all(
       selected.map((m) => db.touchMemoryRecalled(m.id, params.userId, now).catch(() => undefined)),

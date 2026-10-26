@@ -38,6 +38,15 @@ export interface PromptContext {
   summarySection?: string;
   /** Memories the caller already retrieved. */
   memories?: Parameters<typeof formatAnchorsForPrompt>[0];
+  /**
+   * Whether the retrieved memories are marked as recalled.
+   *
+   * A read — looking at the prompt — is not a conversation. Marking the
+   * memories as recalled halves their weight for a day, so a preview
+   * used to take the user's own pinned memories and anchors down to
+   * half their weight every time they opened it.
+   */
+  markRecalled?: boolean;
   /** The message the user is replying to. */
   quotedSection?: string | null;
   /**
@@ -70,6 +79,16 @@ export async function buildPromptForPersona(
     personaId: persona.id,
     userId,
     userMessage: context.userMessage ?? "",
+    /**
+     * Whether the memories are marked as recalled.
+     *
+     * Looking at the prompt is a read, not a conversation. It used to
+     * mark the memories as recalled — and a memory that has just been
+     * recalled has its weight halved for a day — so the user's own
+     * pinned memories and anchors lost half their weight every time
+     * they opened the prompt.
+     */
+    markRecalled: context.markRecalled,
   }).catch(() => []);
   const anchors = memories.filter((m) => m.category === "anchor");
   const ordinary = memories.filter((m) => m.category !== "anchor");
