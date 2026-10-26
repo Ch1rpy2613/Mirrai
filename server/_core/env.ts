@@ -107,6 +107,27 @@ function resolveSkillEngineDir(): string {
   const fromPackage = path.resolve(packageRoot, configured);
   if (existsSync(fromPackage)) return fromPackage;
 
+  /**
+   * Beside the bundle.
+   *
+   * The Docker image and the desktop bundle both put the skill engine
+   * beside the bundle's own folder: `<app>/skill-engine`. The path
+   * above is two levels up from the bundle — which is *above* the
+   * app — so it was found only because the server happened to be
+   * started from that folder.
+   *
+   * A systemd unit, or a `docker run -w`, would have found no skill
+   * engine at all: the collectors would have been spawned in a
+   * directory that did not exist, and the distillation would have
+   * failed with "Prompt not found".
+   */
+  const besideTheBundle = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    configured,
+  );
+  if (existsSync(besideTheBundle)) return besideTheBundle;
+
   return fromCwd;
 }
 
