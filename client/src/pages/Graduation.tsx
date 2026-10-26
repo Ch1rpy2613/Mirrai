@@ -229,8 +229,16 @@ export default function Graduation() {
             initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           >
             <h2 className="section-title mb-4">{t("graduationPage.timeline")}</h2>
-            <ol className="relative pl-6">
+            {/**
+             * The line down the side of the list.
+             *
+             * It used to be a `<div>` inside the `<ol>`, and only an
+             * `<li>` may be a child of an `<ol>` — so the list's own
+             * count of its items was wrong.
+             */}
+            <div className="relative">
               <div className="absolute left-1.5 top-1 bottom-1 w-px bg-border" aria-hidden />
+              <ol className="relative pl-6">
               {events.map((event: any) => (
                 <li key={event.id} className="relative pb-5 last:pb-0">
                   <span className="absolute -left-[1.3125rem] top-1.5 w-2 h-2 rounded-full bg-primary/50" aria-hidden />
@@ -243,7 +251,8 @@ export default function Graduation() {
                   )}
                 </li>
               ))}
-            </ol>
+              </ol>
+            </div>
           </motion.section>
         )}
 
