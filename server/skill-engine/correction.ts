@@ -13,6 +13,7 @@ import { extractJsonObject } from "../_core/json";
 import { normalizePersonaData, type PersonaData } from "../_core/persona-schema";
 import type { CharacterFamily } from "./pipeline";
 import { copy } from "@shared/copy";
+import type { LLMProvider } from "../llm/types";
 
 export interface CorrectionRequest {
   /** The persona being corrected. */
@@ -24,6 +25,23 @@ export interface CorrectionRequest {
   /** What the user wants changed, in their own words. */
   correction: string;
   provider?: string;
+  /**
+   * The user's own model service.
+   *
+   * The correction carries the persona's whole field set and the user's
+   * own words. It was always sent to the operator's account — the
+   * environment-configured provider — even when the user had a key of
+   * their own.
+   */
+  userProvider?: LLMProvider;
+  /**
+   * Whether the provider is the user's own.
+   *
+   * When it is, the operator's provider must not be tried afterwards:
+   * that is how a user's private material ended up on somebody else's
+   * account whenever their provider had a bad minute.
+   */
+  providerOwned?: boolean;
   /** The language the correction is written in. */
   locale?: "zh" | "en";
 }
@@ -53,20 +71,30 @@ export async function applyPersonaCorrection(
   try {
     const prompt = loadPrompt(request.characterFamily, "correction_handler", null);
 
-    const response = await llmService.invoke({
-      messages: [
-        { role: "system", content: prompt },
-        {
-          role: "user",
-          content: copy(locale, "prompts.personaCorrection", {
-            name: request.name,
-            persona: JSON.stringify(request.personaData, null, 2),
-            correction: request.correction,
-          }),
-        },
-      ],
-      options: { provider: request.provider, temperature: 0.3, maxTokens: 2000 },
-    });
+    const messages = [
+      { role: "system" as const, content: prompt },
+      {
+        role: "user" as const,
+        content: copy(locale, "prompts.personaCorrection", {
+          name: request.name,
+          persona: JSON.stringify(request.personaData, null, 2),
+          correction: request.correction,
+        }),
+      },
+    ];
+    const options = { provider: request.provider, temperature: 0.3, maxTokens: 2000 };
+    let response = "";
+    if (request.userProvider) {
+      response = await llmService.invokeWithProvider(request.userProvider, {
+        messages,
+        options,
+      });
+    }
+    if (!response.trim() && !request.providerOwned) {
+      // The operator's provider may only be used when the user has no
+      // provider of their own.
+      response = await llmService.invoke({ messages, options });
+    }
 
     const parsed = extractJsonObject(response);
     if (!parsed || typeof parsed !== "object") return null;

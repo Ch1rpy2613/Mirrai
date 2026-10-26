@@ -869,12 +869,28 @@ export const appRouter = router({
             .catch(() => undefined);
         }
 
+        /**
+         * The user's own model service.
+         *
+         * The correction carries the persona's whole field set and the
+         * user's own words. It was always sent to the operator's
+         * account — the environment-configured provider — even when the
+         * user had a key of their own.
+         */
+        const { provider: correctionProvider, owned: correctionOwned } =
+          await resolveProviderForUserWithOwnership({
+            userId: ctx.user.id,
+            providerName: (persona as any).llmProvider || undefined,
+          });
+
         const result = await applyPersonaCorrection({
           name: persona.name,
           characterFamily: "relationship",
           personaData: persona.personaData as any,
           correction: input.correction,
           provider: (persona as any).llmProvider || undefined,
+          userProvider: correctionProvider,
+          providerOwned: correctionOwned,
           locale: ctx.locale,
         });
 
