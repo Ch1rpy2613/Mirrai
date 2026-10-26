@@ -144,7 +144,19 @@ export function formatZonedClock(
  * Shanghai, not to whatever day the server thinks it is.
  */
 export function zonedDateKey(date: Date, timeZone?: string | null): string {
-  if (!timeZone) return date.toISOString().slice(0, 10);
+  /**
+   * No zone: the server's own day.
+   *
+   * It used to be the *UTC* day — and the database's day column is the
+   * server's own wall clock. So the two calendars disagreed for the
+   * first hours of every local day on any server that is not on UTC,
+   * and the places that compare them directly — the consecutive-days
+   * streak — broke at local midnight.
+   *
+   * `localDateKey` is the same key, and it is deliberately not
+   * `toISOString().slice(0, 10)`.
+   */
+  if (!timeZone) return localDateKey(date);
   try {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone,
@@ -157,10 +169,10 @@ export function zonedDateKey(date: Date, timeZone?: string | null): string {
     const year = read("year");
     const month = read("month");
     const day = read("day");
-    if (!year || !month || !day) return date.toISOString().slice(0, 10);
+    if (!year || !month || !day) return localDateKey(date);
     return `${year}-${month}-${day}`;
   } catch {
-    return date.toISOString().slice(0, 10);
+    return localDateKey(date);
   }
 }
 

@@ -298,7 +298,20 @@ function formatWhen(value: Date | string, locale: "zh" | "en", now: Date = new D
       { weeks },
     );
   }
-  return date.toISOString().slice(0, 10);
+  /**
+   * The day, in the server's own calendar.
+   *
+   * The value is a wall clock with no time zone in it — the server's
+   * own — and `toISOString()` converts it to UTC. So a relationship
+   * event recorded on the first of January at half past midnight on a
+   * server east of Greenwich was printed as the thirty-first of
+   * December: the persona was told the wrong day for every event older
+   * than a month.
+   */
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
