@@ -14,6 +14,16 @@ import { computeIntimacy } from "./persona-utils";
 import { copy, type Locale } from "@shared/copy";
 import { intimacyLevelLabel } from "@shared/intimacy";
 
+/**
+ * How many messages one persona's export carries.
+ *
+ * The whole bundle is held in memory and then serialised into one
+ * string, so the ceiling is a memory ceiling rather than a policy one.
+ * Ten thousand messages is a long conversation; a hundred thousand is a
+ * hundred megabytes of JSON per persona.
+ */
+const MAX_EXPORT_MESSAGES = 10_000;
+
 export interface ExportBundle {
   /**
    * The language the export reads in.
@@ -107,7 +117,11 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
   const personas: ExportBundle["personas"] = [];
   for (const persona of personaList) {
     const [messageList, memoryList, diaryList, snapshotList, eventList, letterList] = await Promise.all([
-      db.getMessagesByPersonaId(persona.id, userId, 100000),
+      // The export is loaded into memory, put into one object and then
+      // serialised into one string. A hundred thousand messages per
+      // persona is hundreds of megabytes, and the process that builds it
+      // runs out of memory — taking every other request with it.
+      db.getMessagesByPersonaId(persona.id, userId, MAX_EXPORT_MESSAGES),
       db.getMemoriesByPersonaId(persona.id, userId),
       db.getDiaryEntries(userId, persona.id, 10000),
       db.getEmotionSnapshots(persona.id, userId, 36500),

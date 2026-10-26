@@ -123,7 +123,7 @@ function buildEmotionSVG(
   const polyline = points.map(p => `${p.x},${p.y}`).join(" ");
   const dots = points.map(p =>
     `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${EMOTION_COLORS[p.state] || "#999"}" />
-     <title>${p.date}: ${EMOTION_LABELS[p.state]?.[locale] || p.state}</title>`
+     <title>${escapeHtml(p.date)}: ${escapeHtml(EMOTION_LABELS[p.state]?.[locale] || p.state)}</title>`
   ).join("\n");
 
   const yLabels = Object.entries(EMOTION_Y).map(([state, val]) => {
@@ -176,7 +176,7 @@ export function generateChatExportHTML(
     <h2>${copy.milestones}</h2>
     <div class="memories">${memories.map(m => `<div class="memory-card">
       <span class="mem-cat">${m.category === "milestone" ? copy.milestone : m.category === "anniversary" ? copy.anniversary : copy.memory}</span>
-      ${m.date ? `<span class="mem-date">${m.date}</span>` : ""}
+      ${m.date ? `<span class="mem-date">${escapeHtml(m.date)}</span>` : ""}
       <p class="mem-title">${escapeHtml(m.title)}</p>
       ${m.description ? `<p class="mem-desc">${escapeHtml(m.description)}</p>` : ""}
     </div>`).join("\n")}</div>
@@ -279,7 +279,6 @@ h2{font-size:1.1rem;font-weight:600;margin-bottom:12px;padding-bottom:8px;border
 ${emotionSection}
 ${memoriesHtml}
 ${letterHtml}
-${lettersHtml}
 ${lettersHtml}
 <section class="section">
   <h2>${copy.transcript}</h2>

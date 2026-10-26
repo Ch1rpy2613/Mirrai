@@ -611,7 +611,10 @@ export async function exportUserData(userId: number) {
   const [user] = await db.select({ username: users.username, name: users.name, email: users.email, createdAt: users.createdAt })
     .from(users).where(eq(users.id, userId));
   const personaList = await db.select().from(personas).where(eq(personas.userId, userId));
-  const messageList = await db.select().from(messages).where(eq(messages.userId, userId)).orderBy(messages.createdAt);
+  // Bounded: the bundle is serialised into one string in memory, and an
+  // unbounded query is an out-of-memory crash for the whole server.
+  const messageList = await db.select().from(messages).where(eq(messages.userId, userId))
+    .orderBy(messages.createdAt).limit(50_000);
   return { user, personas: personaList, messages: messageList };
 }
 
