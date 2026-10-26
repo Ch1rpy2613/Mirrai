@@ -253,6 +253,15 @@ async function startPersonaDistillation(params: {
   mode?: DistillationMode | null;
   /** The language the status messages are written in. */
   locale?: "zh" | "en";
+  /**
+   * The provider this persona is pinned to.
+   *
+   * It was never passed — so the pipeline fell back to the user's
+   * *default* row, and a persona set to a local model (for privacy)
+   * was distilled with a different service than the one the user chose
+   * for it. The material went somewhere else.
+   */
+  provider?: string;
 }): Promise<void> {
   const { personaId, userId, name } = params;
   const locale = params.locale ?? "zh";
@@ -323,6 +332,8 @@ async function startPersonaDistillation(params: {
       imageUrls,
       researchProfile: params.researchProfile ?? undefined,
       mode: params.mode ?? undefined,
+      // The persona's own provider — the one the user chose for it.
+      provider: params.provider,
       // The prompts and the progress messages are written in the language
       // the person is using.
       locale,
@@ -1139,6 +1150,9 @@ export const appRouter = router({
         startPersonaDistillation({
           locale: ctx.locale,
           personaId: input.id,
+          // The provider the persona is pinned to — the chat path
+          // honours it, and the distillation did not.
+          provider: (persona as any).llmProvider ?? undefined,
           userId: ctx.user.id,
           name: persona.name,
           characterFamily: input.characterFamily,
