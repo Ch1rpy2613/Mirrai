@@ -109,6 +109,46 @@ export function clampMaxTokens(value: unknown): number {
   return Math.min(128_000, Math.max(16, Math.round(n)));
 }
 
+/**
+ * The provider's own settings, checked.
+ *
+ * Three of them are read as numbers — the provider reads them, and the
+ * history slice reads one of them — so a value that is not a number, or
+ * one that is out of range, has to be corrected.
+ *
+ * The correction happens twice on purpose: once when the settings are
+ * written, and once when they are read. The write-time check does not
+ * help a row that was written before it existed, or one written by
+ * hand, and there was a second write path that skipped the check
+ * altogether — so the check on the way out is the one that matters.
+ *
+ * A setting that was never made stays unset. `undefined` and `null`
+ * both mean "the user never chose this", and the provider's own default
+ * is the right answer for it — `Number(null)` is 0, which would have
+ * meant a temperature of zero and an answer with no variation in it.
+ */
+export function sanitizeExtraConfig(extra: unknown): Record<string, unknown> {
+  const source =
+    extra && typeof extra === "object" && !Array.isArray(extra)
+      ? (extra as Record<string, unknown>)
+      : {};
+  const out: Record<string, unknown> = { ...source };
+  const checks: Array<[string, (value: unknown) => number]> = [
+    ["contextLimit", clampContextLimit],
+    ["temperature", clampTemperature],
+    ["maxTokens", clampMaxTokens],
+  ];
+  for (const [key, clamp] of checks) {
+    const value = source[key];
+    if (value === undefined || value === null) {
+      delete out[key];
+      continue;
+    }
+    out[key] = clamp(value);
+  }
+  return out;
+}
+
 export interface ConversationOptions {
   persona: Persona;
   userId: number;
@@ -562,7 +602,15 @@ async function* runConversationTurn(
   }
 
   const defaultConfig = await db.getDefaultLlmConfig(userId);
-  const extraConfig = (defaultConfig?.extraConfig as any) ?? {};
+  /**
+   * The provider's own settings, checked on the way out.
+   *
+   * They are checked when they are written, but a row written before
+   * that — or one written by hand — is read raw. So a temperature of
+   * "hot" reached the provider as `hot`, which it answered with a 400,
+   * and the interface said "the reply failed".
+   */
+  const extraConfig = sanitizeExtraConfig(defaultConfig?.extraConfig) as Record<string, any>;
   /**
    * How many messages of history the turn carries.
    *

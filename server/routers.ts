@@ -107,6 +107,7 @@ import {
   clampContextLimit,
   clampTemperature,
   clampMaxTokens,
+  sanitizeExtraConfig,
 } from "./chat/service";
 import { writeFarewellLetterWithStatus } from "./chat/farewell";
 import { writeLetter } from "./chat/letters";
@@ -3111,7 +3112,10 @@ export const appRouter = router({
         baseUrl: config.baseUrl,
         model: config.model,
         systemMessage: config.systemMessage,
-        extraConfig: config.extraConfig,
+        // The settings that are read as numbers are checked on the way
+        // out as well: a row written before the check existed would
+        // otherwise put a word into a number field in the interface.
+        extraConfig: sanitizeExtraConfig(config.extraConfig),
         hasKey: !!config.apiKey,
         apiKeyHint: config.apiKeyHint ?? null,
         createdAt: config.createdAt,
@@ -3127,7 +3131,8 @@ export const appRouter = router({
         isDefault: config.isDefault,
         baseUrl: config.baseUrl,
         model: config.model,
-        extraConfig: config.extraConfig,
+        // Checked on the way out — see `llmConfig.list`.
+        extraConfig: sanitizeExtraConfig(config.extraConfig),
         hasKey: !!config.apiKey,
         apiKeyHint: config.apiKeyHint ?? null,
       };
@@ -3169,6 +3174,17 @@ export const appRouter = router({
           // A cleared field is a removal, not "leave it alone".
           ...(rest.baseUrl === null ? { baseUrl: null } : {}),
           ...(rest.model === null ? { model: null } : {}),
+          /**
+           * The settings that are read as numbers are checked here too.
+           *
+           * This was the second write path, and it did not check them —
+           * so a temperature of "hot" was stored and went straight to the
+           * provider, which answered with a 400 and the interface said
+           * "the reply failed".
+           */
+          ...(rest.extraConfig !== undefined
+            ? { extraConfig: sanitizeExtraConfig(rest.extraConfig) }
+            : {}),
         };
 
         if (apiKey) {
