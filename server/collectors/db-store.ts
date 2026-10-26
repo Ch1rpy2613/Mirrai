@@ -142,14 +142,21 @@ export async function importCollectedMessages(params: {
     ),
   );
 
-  let added = 0;
+  /**
+   * The rows that are actually new, gathered first.
+   *
+   * They used to be inserted one at a time, so a chat log of fifty
+   * thousand lines was fifty thousand round trips to the database, and
+   * the collection sat there for an hour.
+   */
+  const rows = [];
   for (const message of params.messages) {
     const timestamp = message.timestamp ? new Date(message.timestamp) : null;
     const key = idempotencyKey(params.source, timestamp, message.content);
     if (seen.has(key)) continue;
     seen.add(key);
 
-    await db.createCollectedMessage({
+    rows.push({
       userId: params.userId,
       personaId: params.personaId,
       source: params.source,
@@ -157,9 +164,10 @@ export async function importCollectedMessages(params: {
       content: message.content,
       timestamp,
     });
-    added++;
   }
-  return added;
+  if (rows.length === 0) return 0;
+  await db.createCollectedMessages(rows);
+  return rows.length;
 }
 
 /**

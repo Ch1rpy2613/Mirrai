@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const createCollectedMessage = vi.fn();
+const createCollectedMessages = vi.fn();
 const getCollectedMessages = vi.fn();
 const getCollectedMessageKeys = vi.fn();
 
@@ -33,6 +34,7 @@ const client = vi.hoisted(() => ({
 
 vi.mock("../db", () => ({
   createCollectedMessage: (...a: unknown[]) => createCollectedMessage(...a),
+  createCollectedMessages: (...a: unknown[]) => createCollectedMessages(...a),
   getCollectedMessages: (...a: unknown[]) => getCollectedMessages(...a),
   getCollectedMessageKeys: (...a: unknown[]) => getCollectedMessageKeys(...a),
   getDb: async () => client,
@@ -49,9 +51,11 @@ import {
 describe("importCollectedMessages", () => {
   beforeEach(() => {
     createCollectedMessage.mockReset();
+    createCollectedMessages.mockReset();
     getCollectedMessages.mockReset();
     getCollectedMessageKeys.mockReset();
     createCollectedMessage.mockResolvedValue(1);
+    createCollectedMessages.mockResolvedValue(0);
     getCollectedMessageKeys.mockResolvedValue([]);
     getCollectedMessageKeys.mockResolvedValue([]);
   });
@@ -68,7 +72,10 @@ describe("importCollectedMessages", () => {
     });
 
     expect(added).toBe(2);
-    expect(createCollectedMessage).toHaveBeenCalledTimes(2);
+    // One statement, not one per message: a chat log of fifty thousand
+    // lines was fifty thousand round trips to the database.
+    expect(createCollectedMessages).toHaveBeenCalledTimes(1);
+    expect(createCollectedMessages.mock.calls[0][0]).toHaveLength(2);
   });
 
   it("does not import the same message twice", async () => {
@@ -97,8 +104,8 @@ describe("importCollectedMessages", () => {
 
     // Only the new one was added.
     expect(added).toBe(1);
-    expect(createCollectedMessage).toHaveBeenCalledTimes(1);
-    expect(createCollectedMessage.mock.calls[0][0].content).toBe("在的");
+    expect(createCollectedMessages).toHaveBeenCalledTimes(1);
+    expect(createCollectedMessages.mock.calls[0][0][0].content).toBe("在的");
   });
 
   it("treats a message with no timestamp as its own entry", async () => {
@@ -123,7 +130,7 @@ describe("importCollectedMessages", () => {
     });
 
     expect(added).toBe(0);
-    expect(createCollectedMessage).not.toHaveBeenCalled();
+    expect(createCollectedMessages).not.toHaveBeenCalled();
   });
 
   it("keys the idempotency on the source, not on the content alone", async () => {
@@ -150,7 +157,7 @@ describe("importCollectedMessages", () => {
     });
 
     expect(added).toBe(1);
-    expect(createCollectedMessage).toHaveBeenCalledTimes(1);
+    expect(createCollectedMessages).toHaveBeenCalledTimes(1);
   });
 
   it("does not import the same source and timestamp twice", async () => {
@@ -175,7 +182,7 @@ describe("importCollectedMessages", () => {
     });
 
     expect(added).toBe(0);
-    expect(createCollectedMessage).not.toHaveBeenCalled();
+    expect(createCollectedMessages).not.toHaveBeenCalled();
   });
 });
 

@@ -2671,6 +2671,28 @@ export async function createCollectedMessage(data: InsertCollectedMessage) {
   return result.id;
 }
 
+/**
+ * Stores a batch of collected messages.
+ *
+ * One insert with many rows, rather than one insert per message. A
+ * chat log of fifty thousand lines was fifty thousand round trips to
+ * the database, and the collection sat there for an hour.
+ */
+export async function createCollectedMessages(
+  rows: InsertCollectedMessage[],
+): Promise<number> {
+  const db = await getDb();
+  if (!db || rows.length === 0) return 0;
+  // Postgres takes at most a thousand parameters in one statement, and
+  // a row has five of them.
+  const chunkSize = 200;
+  for (let start = 0; start < rows.length; start += chunkSize) {
+    const chunk = rows.slice(start, start + chunkSize);
+    await db.insert(collectedMessages).values(chunk);
+  }
+  return rows.length;
+}
+
 
 /** The three fields a collected message's identity is made of. */
 export interface CollectedMessageKey {

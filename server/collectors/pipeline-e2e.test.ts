@@ -13,11 +13,13 @@ import path from "node:path";
  */
 
 const createCollectedMessage = vi.fn();
+const createCollectedMessages = vi.fn();
 const getCollectedMessages = vi.fn();
 const getCollectedMessageKeys = vi.fn();
 
 vi.mock("../db", () => ({
   createCollectedMessage: (...a: unknown[]) => createCollectedMessage(...a),
+  createCollectedMessages: (...a: unknown[]) => createCollectedMessages(...a),
   getCollectedMessages: (...a: unknown[]) => getCollectedMessages(...a),
   getCollectedMessageKeys: (...a: unknown[]) => getCollectedMessageKeys(...a),
   getDb: async () => null,
@@ -63,11 +65,13 @@ function writeMailFixture(dir: string): string {
 describe("collecting a chat history into a persona", () => {
   beforeEach(() => {
     createCollectedMessage.mockReset();
+    createCollectedMessages.mockReset();
     getCollectedMessages.mockReset();
     getCollectedMessageKeys.mockReset();
     getCollectedMessageKeys.mockResolvedValue([]);
     getCollectedMessageKeys.mockResolvedValue([]);
     createCollectedMessage.mockResolvedValue(1);
+    createCollectedMessages.mockResolvedValue(0);
   });
 
   it("runs the collector, parses its output and stores the messages", async () => {
@@ -107,8 +111,9 @@ describe("collecting a chat history into a persona", () => {
       });
 
       expect(added).toBe(result.messages.length);
-      expect(createCollectedMessage).toHaveBeenCalledTimes(result.messages.length);
-      expect(createCollectedMessage.mock.calls[0][0]).toMatchObject({
+      expect(createCollectedMessages).toHaveBeenCalledTimes(1);
+      expect(createCollectedMessages.mock.calls[0][0]).toHaveLength(result.messages.length);
+      expect(createCollectedMessages.mock.calls[0][0][0]).toMatchObject({
         personaId: 1,
         userId: 1,
         source: "email",
@@ -146,7 +151,7 @@ describe("collecting a chat history into a persona", () => {
         source: "email",
         messages: result.messages,
       });
-      createCollectedMessage.mockClear();
+      createCollectedMessages.mockClear();
 
       // The second run finds the rows the first run wrote.
       getCollectedMessageKeys.mockResolvedValue(
@@ -170,7 +175,7 @@ describe("collecting a chat history into a persona", () => {
       });
 
       expect(addedAgain).toBe(0);
-      expect(createCollectedMessage).not.toHaveBeenCalled();
+      expect(createCollectedMessages).not.toHaveBeenCalled();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
