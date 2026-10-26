@@ -2501,7 +2501,16 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.unknownCollector") });
         }
 
-        const collectInput = { target: input.target } as any;
+        /**
+         * Whose collection this is.
+         *
+         * The user id was missing — and it is what the credentials are
+         * held under. So the check that follows looked in a slot with
+         * no owner, found nothing, and reported "not authorised"
+         * straight after the user had authorised it. And the
+         * credentials that were saved were the empty ones.
+         */
+        const collectInput = { target: input.target, userId: ctx.user.id } as any;
 
         if (input.credentials && connector.importCredentials) {
           // The user id matters: the credentials are held against the

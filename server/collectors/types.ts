@@ -13,7 +13,7 @@
  *   runner.ts  — process execution + output normalisation
  *   jobs.ts    — the in-process job queue that drives the connectors
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import os from "os";
 import path from "path";
 import { encryptSecret } from "../_core/crypto";
@@ -139,6 +139,20 @@ export interface SourceConnector {
  * to run the `--setup` flow of the tool once.
  */
 const COLLECTOR_CONFIG_DIR = path.join(os.homedir(), ".colleague-skill");
+
+/**
+ * The file each collector reads its credentials from.
+ *
+ * The Python tools keep them in `~/.colleague-skill/<source>_config.json`
+ * — a file on the machine, belonging to whoever set it up.
+ */
+const CONNECTOR_CONFIG_FILES: Record<CollectorSourceId, string> = {
+  feishu: "feishu_config.json",
+  dingtalk: "dingtalk_config.json",
+  slack: "slack_config.json",
+  email: "email_config.json",
+  wechat_export: "wechat_export_config.json",
+};
 
 /** Reads one of the collectors' credential files, if it exists and is valid JSON. */
 function readCollectorConfig(fileName: string): Record<string, unknown> | undefined {
@@ -290,6 +304,49 @@ function readCollectorTranscript(outputDir: string): string | undefined {
  * transcript file is only read when the collector did not print JSON, and the
  * legacy format parsers are the last resort.
  */
+/**
+ * The credentials of a connector, written to a file of their own.
+ *
+ * The Python collectors read their credentials from
+ * `~/.colleague-skill/<source>_config.json` — a file on the machine,
+ * belonging to whoever set it up. So a collection always
+ * authenticated as the operator: a user who had authorised their own
+ * Slack workspace was still reading the operator's messages, and one
+ * user's collection brought the operator's chat history into another
+ * user's persona.
+ *
+ * The file is written per run, in the run's own temporary directory,
+ * and it is deleted with it. The credentials are encrypted at rest in
+ * the database; this file is the plain form, and it exists only while
+ * the collector runs.
+ */
+export function connectorCredentials(
+  connector: SourceConnector,
+  input: CollectInput,
+): CollectorCredentials {
+  const keys = connector.credentialKeys ?? [];
+  if (keys.length === 0) return {};
+  return collectCredentials(
+    connector.id,
+    input,
+    keys,
+    CONNECTOR_CONFIG_FILES[connector.id],
+    input.userId,
+  );
+}
+
+function writeCredentialFile(
+  connector: SourceConnector,
+  input: CollectInput,
+  dir: string,
+): string | null {
+  const credentials = connectorCredentials(connector, input);
+  if (Object.keys(credentials).length === 0) return null;
+  const file = path.join(dir, `${connector.id}_config.json`);
+  writeFileSync(file, JSON.stringify(credentials, null, 2), { mode: 0o600 });
+  return file;
+}
+
 async function collectViaOutputDir(
   connector: SourceConnector,
   input: CollectInput,
@@ -300,7 +357,16 @@ async function collectViaOutputDir(
       ...input,
       options: { ...(input.options ?? {}), outputDir },
     };
-    const { stdout, stderr } = await runCollector(connector.tool, connector.args(effective), {
+    const args = connector.args(effective);
+    /**
+     * The credentials go into a file of their own.
+     *
+     * The tools read them from the machine's configuration file, so
+     * without this every collection ran as the operator.
+     */
+    const credentialFile = writeCredentialFile(connector, effective, outputDir);
+    if (credentialFile) args.push("--config", credentialFile);
+    const { stdout, stderr } = await runCollector(connector.tool, args, {
       onProgress: input.onProgress,
       signal: input.signal,
     });
@@ -372,8 +438,13 @@ const feishuConnector: SourceConnector = {
       input.userId,
     );
     if (credentials.open_id) argv.push("--open-id", credentials.open_id);
-    if (credentials.user_access_token) argv.push("--user-token", credentials.user_access_token);
-    if (credentials.p2p_chat_id) argv.push("--p2p-chat-id", credentials.p2p_chat_id);
+    /**
+     * The token is not on the command line.
+     *
+     * It used to be — and every other process on the machine could see
+     * it in the process list. It goes in the credential file now, which
+     * the collector reads.
+     */
     return argv;
   },
   async checkAuth(input: CollectInput): Promise<CollectorAuthState> {

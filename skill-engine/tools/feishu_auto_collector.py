@@ -57,6 +57,20 @@ except ImportError:
 
 
 CONFIG_PATH = Path.home() / ".colleague-skill" / "feishu_config.json"
+
+# The config file to use for this run.
+#
+# It is a global because the collector's own functions read it from
+# several places, and the server may point it at a file of its own —
+# one that holds the credentials of the person who asked for the
+# collection, rather than the ones of whoever set the machine up.
+_CONFIG_OVERRIDE: Path | None = None
+
+
+def config_path() -> Path:
+    return _CONFIG_OVERRIDE or CONFIG_PATH
+
+
 BASE_URL = "https://open.feishu.cn/open-apis"
 
 SOURCE_NAME = "feishu"
@@ -143,15 +157,17 @@ def print_json_payload(payload: dict) -> None:
 # ─── 配置 ────────────────────────────────────────────────────────────────────
 
 def load_config() -> dict:
-    if not CONFIG_PATH.exists():
+    path = config_path()
+    if not path.exists():
         print("未找到配置，请先运行：python3 feishu_auto_collector.py --setup", file=sys.stderr)
         sys.exit(1)
-    return json.loads(CONFIG_PATH.read_text())
+    return json.loads(path.read_text())
 
 
 def save_config(config: dict) -> None:
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False))
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2, ensure_ascii=False))
 
 
 def setup_config() -> None:
@@ -200,7 +216,7 @@ def setup_config() -> None:
         config["p2p_chat_id"] = p2p_chat_id
 
     save_config(config)
-    print(f"\n✅ 配置已保存到 {CONFIG_PATH}")
+    print(f"\n✅ 配置已保存到 {config_path()}")
 
 
 # ─── Token ───────────────────────────────────────────────────────────────────
@@ -1000,6 +1016,11 @@ def collect_all(
 def main() -> None:
     parser = argparse.ArgumentParser(description="飞书数据自动采集器")
     parser.add_argument("--setup", action="store_true", help="初始化配置")
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="配置文件路径（默认 ~/.colleague-skill/feishu_config.json）",
+    )
     parser.add_argument("--name", help="同事姓名")
     parser.add_argument("--output-dir", default=None, help="输出目录（默认 ./knowledge/{name}）")
     parser.add_argument("--msg-limit", type=int, default=1000, help="最多采集消息条数（默认 1000）")
@@ -1016,6 +1037,13 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    # The server may point the collector at a file of its own — one that
+    # holds the credentials of the person who asked for the collection
+    # rather than the ones of whoever set the machine up.
+    global _CONFIG_OVERRIDE
+    if args.config:
+        _CONFIG_OVERRIDE = Path(args.config).expanduser()
 
     if args.setup:
         setup_config()

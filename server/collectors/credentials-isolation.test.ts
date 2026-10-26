@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   clearRestoredCredentials,
+  connectorCredentials,
   setRestoredCredentials,
 } from "./types";
 import { getCollector } from "./index";
@@ -30,11 +31,11 @@ describe("the credentials of a collector source", () => {
     setRestoredCredentials("feishu", { user_access_token: "token-of-user-1" }, 1);
 
     const feishu = getCollector("feishu")!;
-    const forUserOne = feishu.args({ target: "someone", userId: 1 });
-    const forUserTwo = feishu.args({ target: "someone", userId: 2 });
+    const forUserOne = connectorCredentials(feishu, { target: "someone", userId: 1 });
+    const forUserTwo = connectorCredentials(feishu, { target: "someone", userId: 2 });
 
-    expect(forUserOne).toContain("token-of-user-1");
-    expect(forUserTwo).not.toContain("token-of-user-1");
+    expect(forUserOne.user_access_token).toBe("token-of-user-1");
+    expect(forUserTwo.user_access_token).toBeUndefined();
   });
 
   it("are not kept at all when there is no user", () => {
@@ -45,13 +46,22 @@ describe("the credentials of a collector source", () => {
 
     const feishu = getCollector("feishu")!;
     for (const userId of [1, 2, 3]) {
-      expect(feishu.args({ target: "someone", userId })).not.toContain("token-of-nobody");
+      const credentials = connectorCredentials(feishu, { target: "someone", userId });
+      expect(credentials.user_access_token).toBeUndefined();
     }
   });
 
   it("do not leak into a run that has no user of its own", () => {
     setRestoredCredentials("feishu", { user_access_token: "token-of-user-1" }, 1);
     const feishu = getCollector("feishu")!;
-    expect(feishu.args({ target: "someone" })).not.toContain("token-of-user-1");
+    const credentials = connectorCredentials(feishu, { target: "someone" });
+    expect(credentials.user_access_token).toBeUndefined();
+  });
+
+  it("do not go on the command line", () => {
+    // Every other process on the machine could see the process list.
+    setRestoredCredentials("feishu", { user_access_token: "token-of-user-1" }, 1);
+    const feishu = getCollector("feishu")!;
+    expect(feishu.args({ target: "someone", userId: 1 })).not.toContain("token-of-user-1");
   });
 });
