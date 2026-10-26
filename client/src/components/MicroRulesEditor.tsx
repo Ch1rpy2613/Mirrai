@@ -120,7 +120,18 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
     save(rules.map((r) => (r.id === rule.id ? { ...r, ...patch } : r)));
   }
 
+  /**
+   * Removes a rule — after asking.
+   *
+   * It used to go at once: one click, and the rule was gone from the
+   * persona's prompt. Everywhere else in the app a destructive click
+   * asks first — the messages and the memories, the letter, the
+   * persona.
+   */
   function remove(rule: MicroRule) {
+    if (!window.confirm(t("microRules.removeConfirm", { trigger: rule.trigger.join("、") }))) {
+      return;
+    }
     save(rules.filter((r) => r.id !== rule.id));
   }
 

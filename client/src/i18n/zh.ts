@@ -1200,6 +1200,7 @@ export const zh = {
     cancel: "取消",
     saved: "规则已保存",
     delete: "删掉",
+    removeConfirm: "要删掉「{{trigger}}」这条规则吗？删掉以后这条规则就不会再生效了。",
     edit: "改",
     incomplete: "触发词、含义、做法都要填",
     mine: "从记录里挖",

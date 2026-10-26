@@ -200,11 +200,38 @@ describe("the rules", () => {
     });
     expect(deleteButtons).toHaveLength(2);
 
+    // A rule is removed after the user is asked — everywhere else in
+    // the app a destructive click asks first.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(deleteButtons[0]);
     await waitFor(() => expect(save).toHaveBeenCalled());
     const sent = save.mock.calls[0][0];
     expect(sent.rules).toHaveLength(1);
     expect(sent.rules[0].id).toBe("r2");
+    expect(confirmSpy).toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("keeps the rule when the user says no", async () => {
+    rules = [
+      {
+        id: "r1",
+        trigger: ["随便你"],
+        meaning: "她真的生气了",
+        rendering: "更短",
+        confidence: 0.8,
+        source: "manual",
+        verified: true,
+        evidence: [],
+      },
+    ];
+    render(<MicroRulesEditor personaId={1} />);
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "microRules.delete") }));
+
+    expect(save).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 
   it("refuses to save a rule that is missing half of itself", async () => {

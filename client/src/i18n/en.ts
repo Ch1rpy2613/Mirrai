@@ -1205,6 +1205,7 @@ export const en = {
     cancel: "Cancel",
     saved: "Rules saved",
     delete: "Delete",
+    removeConfirm: "Remove the rule “{{trigger}}”? It will not take effect any more once it is gone.",
     edit: "Edit",
     incomplete: "The trigger, the meaning and the rendering all have to be filled in",
     mine: "Mine from the records",
