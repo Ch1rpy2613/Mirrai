@@ -16,7 +16,7 @@ import { useLocale } from "@/contexts/LocaleContext";
  */
 export default function CrisisCard({ onClose }: { onClose: () => void }) {
   const { t } = useLocale();
-  const { data } = trpc.safety.resources.useQuery();
+  const { data, isError, isLoading } = trpc.safety.resources.useQuery();
 
   return (
     <div
@@ -47,17 +47,39 @@ export default function CrisisCard({ onClose }: { onClose: () => void }) {
       <p className="text-xs text-muted-foreground mt-4 mb-2">
         {t("safety.resourcesTitle")}
       </p>
-      <ul className="space-y-1.5">
-        {(data?.resources ?? []).map((resource) => (
-          <li key={resource.id} className="text-xs text-muted-foreground leading-relaxed">
-            <span className="text-foreground/80">{resource.region}</span>
-            {" · "}
-            {resource.description}
-            {" · "}
-            <span className="text-foreground/80">{resource.contact}</span>
-          </li>
-        ))}
-      </ul>
+      {/**
+       * The list of numbers.
+       *
+       * A failed request left the list empty — so the card said "here
+       * are the resources" and then showed none, in the one moment the
+       * person most needs the numbers. The card says so plainly when
+       * the numbers could not be read, and gives the one number that
+       * does not depend on the server.
+       */}
+      {isError ? (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("safety.resourcesFailed")}
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("safety.resourcesEmergency")}
+          </p>
+        </div>
+      ) : isLoading ? (
+        <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {(data?.resources ?? []).map((resource) => (
+            <li key={resource.id} className="text-xs text-muted-foreground leading-relaxed">
+              <span className="text-foreground/80">{resource.region}</span>
+              {" · "}
+              {resource.description}
+              {" · "}
+              <span className="text-foreground/80">{resource.contact}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

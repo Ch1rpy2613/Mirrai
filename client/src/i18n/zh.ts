@@ -1640,6 +1640,15 @@ export const zh = {
     crisisTitle: "我先停一下",
     crisisBody: "我不是该在这个时候跟你开玩笑的那个声音了。我只是一段代码，我没有办法真的帮你解决这件事，但我不想假装刚才那句话只是普通的聊天。你现在承受的东西，比这段对话重得多。",
     resourcesTitle: "可以联系的人",
+    /**
+     * The numbers could not be read.
+     *
+     * The card used to show the heading and then nothing — so in the
+     * one moment the person most needs the numbers, the list was
+     * empty and the card did not say why.
+     */
+    resourcesFailed: "这一段没能读出来——号码没显示出来。下面这个不需要联网：",
+    resourcesEmergency: "如果情况紧急，请拨打当地急救电话（中国大陆 120 / 110）。",
   },
 
   research: {

@@ -1646,6 +1646,15 @@ export const en = {
     crisisTitle: "Let me stop for a moment",
     crisisBody: "I'm not the voice that should be joking with you right now. I'm only a piece of code — I can't really fix this for you — but I don't want to pretend that what you just said was ordinary talk. What you are carrying right now is much heavier than this conversation.",
     resourcesTitle: "People you can reach",
+    /**
+     * The numbers could not be read.
+     *
+     * The card used to show the heading and then nothing — so in the
+     * one moment the person most needs the numbers, the list was
+     * empty and the card did not say why.
+     */
+    resourcesFailed: "These could not be read — the numbers did not load. This one does not need a connection:",
+    resourcesEmergency: "If it is urgent, call your local emergency number (120 / 110 in mainland China).",
   },
 
   research: {
