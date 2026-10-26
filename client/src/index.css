@@ -194,7 +194,14 @@ html.dark {
   :focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
-    border-radius: var(--radius-sm);
+    /**
+     * The element keeps its own radius.
+     *
+     * The rule set the radius on every focusable element, so a round
+     * button got a square ring and a pill got a square ring — the ring
+     * and the shape it was around no longer matched. The outline
+     * follows the border radius on its own, so there is nothing to set.
+     */
   }
 }
 
