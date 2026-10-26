@@ -338,7 +338,17 @@ async function pollLoginStatus(userId: number): Promise<void> {
         // visible until the login resolves.
         if (account.status !== "scaned") {
           account.status = "scaned";
-          await db.upsertWechatBotState(userId, { status: "scanned" });
+          /**
+           * The status the column accepts.
+           *
+           * It was written as "scanned" — and the column is a Postgres
+           * enum whose values are `stopped | scanning | scaned |
+           * need_verifycode | logged_in | error`. So the update was
+           * refused, the error was caught by the poll, and the login
+           * ended with a Postgres error on the screen instead of "the
+           * code has been scanned".
+           */
+          await db.upsertWechatBotState(userId, { status: "scaned" });
         }
         continue;
       }
