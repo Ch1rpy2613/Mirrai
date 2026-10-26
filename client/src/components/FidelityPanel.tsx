@@ -16,6 +16,29 @@ import { Gauge, Timer, Play } from "lucide-react";
  * other side. A persona whose reply gaps come from a product constant is
  * a schedule; one whose gaps come from its own history is a person.
  */
+/**
+ * The metrics of a run, with every number filled in.
+ *
+ * A number that is not there reads as zero rather than as a crash.
+ */
+function normaliseMetrics(raw: unknown): {
+  overlap: number;
+  likelihoodGap: number;
+  lengthDistance: number;
+  emotionAccuracy: number;
+} | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const number = (value: unknown): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return {
+    overlap: number(record.overlap),
+    likelihoodGap: number(record.likelihoodGap),
+    lengthDistance: number(record.lengthDistance),
+    emotionAccuracy: number(record.emotionAccuracy),
+  };
+}
+
 export default function FidelityPanel({ personaId }: { personaId: number }) {
   const { t } = useLocale();
 
@@ -63,7 +86,15 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const metrics = (latest?.run?.metricsJson as any) ?? null;
+  /**
+   * The metrics, with every number present.
+   *
+   * The record is a loosely-typed JSON column, and it was read as if it
+   * always had every field. A run stored before a field existed — or
+   * written by an older build — threw a TypeError inside this panel,
+   * which blanked the whole profile page.
+   */
+  const metrics = normaliseMetrics(latest?.run?.metricsJson);
   const profile = behavior?.profile ?? null;
 
   return (
