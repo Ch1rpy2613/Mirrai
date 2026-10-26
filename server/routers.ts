@@ -75,7 +75,7 @@ import type { personas as personasTable } from "../drizzle/schema";
 import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
 import { getCrisisResources } from "./safety/resources";
-import { isRealDayKey, isValidTimeZone, previousDateKey, zonedDateKey } from "@shared/timezone";
+import { dayShiftMinutes, isRealDayKey, isValidTimeZone, previousDateKey, zonedDateKey } from "@shared/timezone";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
@@ -379,6 +379,20 @@ function assertKnownProvider(providerName: string, locale: "zh" | "en" = "zh"): 
     code: "BAD_REQUEST",
     message: copy(locale, "errors.unknownProvider", { provider: providerName }),
   });
+}
+
+/**
+ * Noon on a day, in the user's own time zone.
+ *
+ * A day the user typed is a calendar day, not an instant — so it is
+ * filed at the middle of that day *where they are*, and the interface
+ * (which renders it in the reader's own zone) shows the day they meant.
+ */
+function noonInTheUsersZone(dayKey: string, timezone: string | null | undefined): Date {
+  const noonUtc = new Date(`${dayKey}T12:00:00Z`);
+  if (!timezone) return noonUtc;
+  const shift = dayShiftMinutes(timezone, noonUtc);
+  return new Date(noonUtc.getTime() - shift * 60_000);
 }
 
 export const appRouter = router({
@@ -3519,7 +3533,7 @@ export const appRouter = router({
          */
         const happenedAt = input.happenedAt
           ? (/^\d{4}-\d{2}-\d{2}$/.test(input.happenedAt)
-            ? new Date(`${input.happenedAt}T12:00:00Z`)
+            ? noonInTheUsersZone(input.happenedAt, ctx.user.timezone)
             : new Date(input.happenedAt))
           : undefined;
         const event = await createRelationshipEvent({
