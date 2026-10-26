@@ -68,7 +68,7 @@ function emotionalArcValues(arc: unknown): string[] {
   return [];
 }
 
-function DiaryCard({ entry, onDelete }: { entry: any; onDelete: (id: number) => void }) {
+function DiaryCard({ entry, onDelete, deleting }: { entry: any; onDelete: (id: number) => void; deleting?: boolean }) {
   const { t } = useLocale();
   const [confirming, setConfirming] = useState(false);
   /**
@@ -93,7 +93,8 @@ function DiaryCard({ entry, onDelete }: { entry: any; onDelete: (id: number) => 
           <span className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{t("diary.deleteConfirm")}</span>
             <button onClick={() => onDelete(entry.id)}
-              className="text-xs px-2.5 py-1 rounded-md bg-destructive/10 text-destructive border border-destructive/25 hover:bg-destructive/15 transition-colors">
+              disabled={deleting}
+              className="text-xs px-2.5 py-1 rounded-md bg-destructive/10 text-destructive border border-destructive/25 hover:bg-destructive/15 transition-colors disabled:opacity-50">
               {t("common.delete")}
             </button>
             <button onClick={() => setConfirming(false)}
@@ -345,7 +346,11 @@ export default function Diary() {
                   )}
                 </div>
                 {dayEntry && (
-                  <DiaryCard entry={dayEntry} onDelete={(id) => deleteMutation.mutate({ id })} />
+                  <DiaryCard
+                    entry={dayEntry}
+                    onDelete={(id) => deleteMutation.mutate({ id })}
+                    deleting={deleteMutation.isPending}
+                  />
                 )}
               </motion.section>
             )}
