@@ -23,6 +23,7 @@ import {
   getResearchProfilesByPersonaId,
   updateUserProfile, updateUserPassword, deleteUserAccount, getAccountStats, exportUserData,
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
+  getUserTimezone,
   createMemory, getMemoriesByPersonaId, countMemories, getMemoryTitles, deleteMemory, updateMemory,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
   getCollectedMessagesForPersona,
@@ -61,7 +62,7 @@ import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
 import { inferEmotionalState } from "./_core/emotion";
 import { getCrisisResources } from "./safety/resources";
-import { isValidTimeZone, zonedDateKey } from "@shared/timezone";
+import { isValidTimeZone, previousDateKey, zonedDateKey } from "@shared/timezone";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
@@ -2576,17 +2577,26 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const date = input.date || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        /**
+         * The user's own calendar.
+         *
+         * "Today" was decided in UTC, so for anybody east of Greenwich
+         * the app told them they could not write a diary for the day
+         * they were living — and the messages of that morning were
+         * filed under the previous day.
+         */
+        const timezone = await getUserTimezone(ctx.user.id);
+        const date = input.date || previousDateKey(zonedDateKey(new Date(), timezone));
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.invalidDateFormat") });
         }
-        const today = new Date().toISOString().slice(0, 10);
+        const today = zonedDateKey(new Date(), timezone);
         if (date > today) {
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.futureDiary") });
         }
         const existing = await getDiaryByDate(input.personaId, ctx.user.id, date);
         if (existing) throw new TRPCError({ code: "CONFLICT", message: copy(ctx.locale, "errors.diaryExists") });
-        const msgs = await getMessagesByDate(input.personaId, ctx.user.id, date);
+        const msgs = await getMessagesByDate(input.personaId, ctx.user.id, date, timezone);
         if (msgs.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.noMessagesThatDay") });
         const chatText = msgs.map(m => `${m.role === "user" ? copy(ctx.locale, "prompt.roleUser") : persona.name}: ${m.content || ""}`).join("\n");
         if (!chatText.trim()) {

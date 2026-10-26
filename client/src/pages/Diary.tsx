@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { localDateKey, zonedDateKey } from "@shared/timezone";
 import { ArrowLeft, ChevronLeft, ChevronRight, PenLine, Trash2, Loader2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -153,11 +154,23 @@ function DiaryCard({ entry, onDelete }: { entry: any; onDelete: (id: number) => 
 
 export default function Diary() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { t, locale } = useLocale();
+  /**
+   * The user's own clock.
+   *
+   * The calendar used to count the days in the browser's calendar while
+   * the server counted them in the user's — so for anybody whose
+   * configured zone is not the browser's, the two disagreed about which
+   * day it was, and the diary of the morning was filed under the day
+   * before.
+   */
+  const timezone = (user as any)?.timezone ?? null;
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
+  const todayStr = timezone ? zonedDateKey(now, timezone) : localDateKey(now);
+  const todayParts = parseLocalDate(todayStr);
+  const [year, setYear] = useState(todayParts.getFullYear());
+  const [month, setMonth] = useState(todayParts.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null);
@@ -218,8 +231,6 @@ export default function Diary() {
       toast.error(t("diary.generateFailedShort"));
     } finally { setGenerating(false); }
   };
-
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

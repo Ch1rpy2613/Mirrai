@@ -1627,11 +1627,26 @@ export async function deleteDiaryEntry(id: number, userId: number) {
   await db.delete(diaryEntries).where(and(eq(diaryEntries.id, id), eq(diaryEntries.userId, userId)));
 }
 
-export async function getMessagesByDate(personaId: number, userId: number, date: string) {
+/**
+ * The messages of one day, in the user's own calendar.
+ *
+ * The day a message belongs to is the user's day, not the server's: the
+ * timestamps are stored without a time zone, so `DATE(createdAt)` is
+ * the day it was written on the machine that wrote it. The shift is the
+ * same one the daily counts use.
+ */
+export async function getMessagesByDate(
+  personaId: number,
+  userId: number,
+  date: string,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return [];
+  const shift = dayShiftHours(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
   return db.select().from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId), sql`DATE(${messages.createdAt}) = ${date}`))
+    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId), sql`${day} = ${date}`))
     .orderBy(asc(messages.createdAt));
 }
 
