@@ -11,6 +11,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  */
 
 const invoke = vi.fn();
+const invokeForUser = vi.fn();
 const updateSkillJob = vi.fn();
 const updatePersona = vi.fn();
 const createSkillJob = vi.fn();
@@ -22,6 +23,7 @@ vi.mock("../llm", () => ({
     invoke: (...a: unknown[]) => invoke(...a),
     invokeWithProvider: (...a: unknown[]) => invoke(...a),
   },
+  invokeForUser: (...a: unknown[]) => invokeForUser(...a),
 }));
 
 vi.mock("../db", () => ({
@@ -114,9 +116,10 @@ function describedPhotos(): number {
 }
 
 beforeEach(() => {
-  for (const fn of [invoke, updateSkillJob, updatePersona, createSkillJob, runPythonTool, loadPrompt]) {
+  for (const fn of [invoke, invokeForUser, updateSkillJob, updatePersona, createSkillJob, runPythonTool, loadPrompt]) {
     fn.mockReset();
   }
+  invokeForUser.mockImplementation(async (...a: unknown[]) => invoke(...a));
   createSkillJob.mockResolvedValue(7);
   updateSkillJob.mockResolvedValue(undefined);
   updatePersona.mockResolvedValue(undefined);

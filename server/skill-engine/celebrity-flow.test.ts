@@ -13,6 +13,7 @@ import path from "node:path";
  */
 
 const invoke = vi.fn();
+const invokeForUser = vi.fn();
 const updateSkillJob = vi.fn();
 const createSkillJob = vi.fn();
 const updatePersona = vi.fn();
@@ -48,6 +49,7 @@ vi.mock("../llm", () => ({
     invoke: (...a: unknown[]) => invoke(...a),
     invokeWithProvider: (...a: unknown[]) => invoke(...a),
   },
+  invokeForUser: (...a: unknown[]) => invokeForUser(...a),
 }));
 
 vi.mock("../db", () => ({
@@ -151,6 +153,7 @@ describe("the celebrity research flow", () => {
       getDailyChatCounts,
       createGraduationAssessment,
       getMessagesSince,
+      invokeForUser,
     ]) {
       fn.mockReset();
     }
@@ -162,6 +165,7 @@ describe("the celebrity research flow", () => {
     originalSkillEngineDir = ENV.skillEngineDir;
     ENV.skillEngineDir = skillDir;
 
+    invokeForUser.mockImplementation(async (...a: unknown[]) => invoke(...a));
     createSkillJob.mockResolvedValue(7);
     updateSkillJob.mockResolvedValue(undefined);
     updatePersona.mockResolvedValue(undefined);

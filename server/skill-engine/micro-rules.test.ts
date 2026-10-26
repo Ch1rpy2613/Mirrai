@@ -15,6 +15,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const miningInvoke = vi.fn();
 const pipelineInvoke = vi.fn();
+const invokeForUser = vi.fn();
 const resolveProviderForUser = vi.fn();
 const updateSkillJob = vi.fn();
 const updatePersona = vi.fn();
@@ -28,6 +29,7 @@ vi.mock("../llm", () => ({
     invoke: (...a: unknown[]) => pipelineInvoke(...a),
     invokeWithProvider: (...a: unknown[]) => miningInvoke(...a),
   },
+  invokeForUser: (...a: unknown[]) => invokeForUser(...a),
 }));
 
 vi.mock("../llm/user-provider", () => ({
@@ -84,6 +86,7 @@ const PAIRS = [{ a: "随便", b: "随便你" }];
 beforeEach(() => {
   miningInvoke.mockReset();
   pipelineInvoke.mockReset();
+  invokeForUser.mockReset();
   resolveProviderForUser.mockReset();
   updateSkillJob.mockReset();
   updatePersona.mockReset();
@@ -93,6 +96,7 @@ beforeEach(() => {
   loadPrompt.mockReset();
 
   resolveProviderForUser.mockResolvedValue({ name: "Test" });
+  invokeForUser.mockImplementation(async (...a: unknown[]) => pipelineInvoke(...a));
   createSkillJob.mockResolvedValue(7);
   updateSkillJob.mockResolvedValue(undefined);
   updatePersona.mockResolvedValue(undefined);

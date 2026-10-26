@@ -21,7 +21,8 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { llmService } from "../llm";
+import { invokeForUser } from "../llm";
+import type { LLMMessage, LLMOptions } from "../llm/types";
 import { loadPrompt } from "./prompts";
 import { asMaterial } from "./material";
 import { runPythonTool } from "./runner";
@@ -64,6 +65,31 @@ import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 registerSkillPrompts();
 
 export type CharacterFamily = "colleague" | "relationship" | "celebrity";
+
+/**
+ * One model call for the pipeline.
+ *
+ * It goes to the user's own provider when they have one — the uploaded
+ * chat log is their material, and it must not go to the operator's
+ * account, or the operator's bill, when they chose a key of their own.
+ *
+ * The environment's provider is used only when the user has nothing of
+ * their own, which is what running your own instance means.
+ */
+async function invokePipeline(params: {
+  userId: number;
+  providerName?: string;
+  messages: LLMMessage[];
+  options?: LLMOptions;
+}): Promise<string> {
+  const text = await invokeForUser(params);
+  if (text == null) {
+    throw new Error(
+      "No LLM provider available. Configure one in .env, or add a key of your own in the settings.",
+    );
+  }
+  return text;
+}
 
 export type PipelineInput = {
   personaId: number;
@@ -206,9 +232,11 @@ export function skillBaseDir(characterFamily: CharacterFamily): string {
 async function describeImages(
   name: string,
   imageUrls: string[],
-  provider?: string,
+  provider: string | undefined,
   maxImages: number = 6,
   locale: Locale = "zh",
+  /** Whose pictures these are — and whose key they go to. */
+  userId?: number,
 ): Promise<string> {
   if (imageUrls.length === 0) return "";
 
@@ -223,7 +251,9 @@ async function describeImages(
       content.push({ type: "image_url", url });
     }
 
-    const response = await llmService.invoke({
+    const response = await invokePipeline({
+      userId: userId ?? 0,
+      providerName: provider,
       messages: [{ role: "user", content }],
       options: { provider, maxTokens: 500 },
     });
@@ -475,6 +505,8 @@ async function runIntakeStage(input: {
   name: string;
   chatContent: string;
   imageCount: number;
+  /** Whose material this is — and whose key it goes to. */
+  userId: number;
   provider?: string;
   locale?: Locale;
 }): Promise<string> {
@@ -490,7 +522,9 @@ async function runIntakeStage(input: {
       input.chatContent.slice(0, 4000) || copy(locale, "skillPrompts.pipeline.intakeNoChat"),
     ].join("\n\n");
 
-    const response = await llmService.invoke({
+    const response = await invokePipeline({
+      userId: input.userId,
+      providerName: input.provider,
       messages: [
         { role: "system", content: prompt },
         {
@@ -522,6 +556,8 @@ async function runWorkDimension(input: {
   name: string;
   analysisResult: string;
   research?: CelebrityResearchResult | null;
+  /** Whose material this is — and whose key it goes to. */
+  userId: number;
   provider?: string;
   /** The extraction stages run at a lower temperature than the default. */
   temperature?: number;
@@ -536,7 +572,9 @@ async function runWorkDimension(input: {
       ? `\n\n${copy(locale, "skillPrompts.pipeline.researchNotesHeading")}\n\n${input.research.digest.slice(0, MAX_RESEARCH_SAMPLE)}`
       : "";
 
-    const analysis = await llmService.invoke({
+    const analysis = await invokePipeline({
+      userId: input.userId,
+      providerName: input.provider,
       messages: [
         { role: "system", content: analyzerPrompt },
         {
@@ -553,7 +591,9 @@ async function runWorkDimension(input: {
       options: { provider: input.provider, temperature: input.temperature },
     });
 
-    const document = await llmService.invoke({
+    const document = await invokePipeline({
+      userId: input.userId,
+      providerName: input.provider,
       messages: [
         { role: "system", content: builderPrompt },
         {
@@ -589,6 +629,8 @@ async function runMerger(input: {
   name: string;
   personaDocument: string;
   workDocument: string;
+  /** Whose material this is — and whose key it goes to. */
+  userId: number;
   provider?: string;
   /** The extraction stages run at a lower temperature than the default. */
   temperature?: number;
@@ -597,7 +639,9 @@ async function runMerger(input: {
   const locale = input.locale ?? "zh";
   try {
     const prompt = loadPrompt(input.characterFamily, "merger", input.profile);
-    const merged = await llmService.invoke({
+    const merged = await invokePipeline({
+      userId: input.userId,
+      providerName: input.provider,
       messages: [
         { role: "system", content: prompt },
         {
@@ -912,6 +956,7 @@ async function runSkillPipelineOnce(
       name,
       chatContent,
       imageCount: input.imageUrls?.length ?? 0,
+      userId,
       provider: input.provider,
       locale,
     });
@@ -950,7 +995,9 @@ async function runSkillPipelineOnce(
           }),
         ].join("\n\n")
       : chatBlock;
-    const analysisResult = await llmService.invoke({
+    const analysisResult = await invokePipeline({
+      userId,
+      providerName: input.provider,
       messages: [
         { role: "system", content: analyzerPrompt },
         {
@@ -991,7 +1038,9 @@ async function runSkillPipelineOnce(
         : copy(locale, "skillPrompts.pipeline.builderAnalysis", { result: analysisResult }),
       locale,
     );
-    const builtPersona = await llmService.invoke({
+    const builtPersona = await invokePipeline({
+      userId,
+      providerName: input.provider,
       messages: [
         { role: "system", content: builderPrompt },
         {
@@ -1024,6 +1073,7 @@ async function runSkillPipelineOnce(
         name,
         analysisResult,
         research,
+        userId,
         provider: input.provider,
         temperature: preset.analysisTemperature,
         locale,
@@ -1052,6 +1102,7 @@ async function runSkillPipelineOnce(
           characterFamily,
           profile: effectiveProfile,
           name,
+          userId,
           personaDocument: builtPersona,
           workDocument,
           provider: input.provider,
@@ -1075,7 +1126,9 @@ async function runSkillPipelineOnce(
     await setPersonaProgress(stageProgress.structuring, copy(locale, "skill.integrating"));
 
     const structurerPrompt = loadPrompt(characterFamily, "structurer", effectiveProfile);
-    const structuredRaw = await llmService.invoke({
+    const structuredRaw = await invokePipeline({
+      userId,
+      providerName: input.provider,
       messages: [
         { role: "system", content: structurerPrompt },
         {
@@ -1104,6 +1157,7 @@ async function runSkillPipelineOnce(
       input.provider,
       preset.maxImages,
       locale,
+      userId,
     );
     const baseData = normalizePersonaData(parsed, { name, locale });
     const enrichedData: PersonaData = imageNote
