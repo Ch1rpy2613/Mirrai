@@ -107,6 +107,14 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
     locale,
     microRules: switches.rules === "off" ? null : undefined,
     imperfectionProfile: switches.imperfection === "off" ? null : undefined,
+    /**
+     * The run is not a conversation.
+     *
+     * Looking at the prompt is a read, and a read does not make a
+     * memory recalled — so the user's own pinned memories and anchors
+     * kept losing half their weight every time an evaluation ran.
+     */
+    markRecalled: false,
   });
 
   const model = buildCharNgramModel(options.trainingTexts);
