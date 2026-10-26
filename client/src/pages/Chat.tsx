@@ -835,7 +835,10 @@ export default function Chat() {
     };
     reader.readAsDataURL(file);
     e.target.value = "";
-  }, [isSending, personaId, currentState]);
+    // `t` is in the list because the handler says things to the reader:
+    // without it, a picture sent after a change of language was
+    // described in the language that had been in use before.
+  }, [isSending, personaId, currentState, t]);
 
   const startRecording = useCallback(async () => {
     // The stop button has to work on this path too.

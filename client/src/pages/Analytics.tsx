@@ -69,9 +69,28 @@ export default function Analytics() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="app-nav-spacer" />
-          <div className="flex gap-1 border-b border-border">
+          {/**
+           * The range.
+           *
+           * It is one control — the reader chooses how far back to
+           * look — so it is a group of radio buttons, and the arrow
+           * keys move between them.
+           */}
+          <div className="flex gap-1 border-b border-border" role="radiogroup" aria-label={t("analytics.title")}
+            onKeyDown={(event) => {
+              const ranges = [7, 30, 90];
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              const index = ranges.indexOf(days);
+              const step = event.key === "ArrowRight" ? 1 : -1;
+              const next = ranges[(index + step + ranges.length) % ranges.length];
+              setDays(next);
+            }}>
             {[7, 30, 90].map(d => (
               <button key={d} onClick={() => setDays(d)}
+                role="radio"
+                aria-checked={days === d}
+                tabIndex={days === d ? 0 : -1}
                 className={`text-xs px-3 py-2 -mb-px border-b-2 transition-colors ${days === d ? "border-cinnabar text-foreground font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                 {t("analytics.days", { count: d })}
               </button>
