@@ -1388,7 +1388,12 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const updated = await updateUserMessage(input.messageId, ctx.user.id, input.content);
+        const updated = await updateUserMessage(
+          input.messageId,
+          ctx.user.id,
+          input.content,
+          input.personaId,
+        );
         if (!updated) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotEditable") });
         return { success: true };
       }),
@@ -1402,7 +1407,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const deleted = await deleteMessage(input.messageId, ctx.user.id);
+        const deleted = await deleteMessage(input.messageId, ctx.user.id, input.personaId);
         if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),

@@ -2195,15 +2195,24 @@ export async function updateUserMessage(
   messageId: number,
   userId: number,
   content: string,
+  personaId?: number,
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
+  /**
+   * The message has to be in the conversation the user is looking at.
+   *
+   * The edit was scoped to the user alone, so a message of one persona
+   * could be edited through another — the conversation on the screen
+   * and the conversation that changed were two different ones.
+   */
   const updated = await db.update(messages)
     .set({ content })
     .where(and(
       eq(messages.id, messageId),
       eq(messages.userId, userId),
       eq(messages.role, "user"),
+      ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
     ))
     .returning({ id: messages.id });
   return updated.length > 0;
@@ -2215,11 +2224,20 @@ export async function updateUserMessage(
  * The chat history is the user's, and a single message in the middle of it
  * can be something they would rather not have written down.
  */
-export async function deleteMessage(messageId: number, userId: number): Promise<boolean> {
+export async function deleteMessage(
+  messageId: number,
+  userId: number,
+  personaId?: number,
+): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
+  // The message has to be in the conversation the user is looking at.
   const deleted = await db.delete(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
+    .where(and(
+      eq(messages.id, messageId),
+      eq(messages.userId, userId),
+      ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
+    ))
     .returning({ id: messages.id });
   return deleted.length > 0;
 }
