@@ -296,8 +296,28 @@ async function pollLoginStatus(userId: number): Promise<void> {
   account.loginPolling = true;
 
   try {
+    /**
+     * When the last poll was.
+     *
+     * The minimum interval was applied in one branch only — the one
+     * that says "nothing has happened yet". So the moment the code was
+     * scanned, the loop asked again straight away, and again, and
+     * again: a hot loop against Tencent's backend for as long as the
+     * user took to confirm the scan in WeChat.
+     */
+    let lastPollAt = 0;
+
     while (account.loginSession) {
       const session = account.loginSession;
+
+      // The pause comes before the poll, so every branch of the loop
+      // is paced — the scan, the redirect and the refresh included.
+      if (lastPollAt) {
+        const sinceLast = Date.now() - lastPollAt;
+        if (sinceLast < MIN_POLL_INTERVAL_MS) {
+          await sleep(MIN_POLL_INTERVAL_MS - sinceLast);
+        }
+      }
 
       // Backstop only: `startedAt` is reset on every refresh, so this fires
       // only if the backend stops reporting expiry. In practice the ~90s
@@ -311,13 +331,13 @@ async function pollLoginStatus(userId: number): Promise<void> {
       }
 
       const pollStartedAt = Date.now();
+      lastPollAt = pollStartedAt;
       const result = await pollQrLogin({
         qrcode: session.qrcode,
         baseUrl: session.baseUrl,
         verifyCode: session.verifyCode,
         apiOptions: buildApiOptions({}),
       });
-      const pollDuration = Date.now() - pollStartedAt;
 
       if (result.status === "wait") {
         // Nothing changed yet — poll again.
@@ -326,9 +346,8 @@ async function pollLoginStatus(userId: number): Promise<void> {
         // request failed. Every failure was reported as "wait", so a
         // backend that was down was asked again immediately, for as long
         // as the QR screen was open.
-        if (pollDuration < MIN_POLL_INTERVAL_MS) {
-          await sleep(MIN_POLL_INTERVAL_MS - pollDuration);
-        }
+        //
+        // The pause before the next poll is what keeps the rate down.
         continue;
       }
 
