@@ -8,6 +8,10 @@
  */
 import { normalizePersonaData, type PersonaData } from "../_core/persona-schema";
 import { copy, type Locale } from "@shared/copy";
+import {
+  LOVE_LANGUAGE_BY_ANSWER_KEY,
+  normaliseLoveLanguage,
+} from "@shared/love-language";
 
 export interface QuestionnaireAnswers {
   /** The person's name. */
@@ -64,14 +68,18 @@ const CONFLICT_KEYS: Record<string, string> = {
   apologetic: "questionnaire.conflict.apologetic",
 };
 
-const LOVE_LANGUAGE_KEYS: Record<string, string> = {
-  words: "questionnaire.love.words",
-  time: "questionnaire.love.time",
-  gifts: "questionnaire.love.gifts",
-  acts: "questionnaire.love.acts",
-  touch: "questionnaire.love.touch",
-  service: "questionnaire.love.service",
-};
+/**
+ * The value each answer is stored under.
+ *
+ * It used to be a localised string: "具体的礼物" for a Chinese user and
+ * "Gifts" for an English one. So a persona created from the
+ * questionnaire matched neither the profile editor's list nor the
+ * lobby's icons — the editor's select showed nothing at all, and the
+ * icon was missing.
+ *
+ * The values live in one place now, and they are not localised: they
+ * are what the rows in the database say.
+ */
 
 export interface QuestionnaireResult {
   name: string;
@@ -139,9 +147,9 @@ export function buildPersonaFromAnswers(
   const conflictStyle =
     (conflictKey ? copy(locale, conflictKey) : answers.conflictStyle?.trim()) ||
     copy(locale, "prompt.unknown");
-  const loveKey = LOVE_LANGUAGE_KEYS[answers.loveLanguage ?? ""];
+  const loveValue = LOVE_LANGUAGE_BY_ANSWER_KEY[answers.loveLanguage ?? ""];
   const loveLanguage =
-    (loveKey ? copy(locale, loveKey) : answers.loveLanguage?.trim()) ||
+    (loveValue ? normaliseLoveLanguage(loveValue) : answers.loveLanguage?.trim()) ||
     copy(locale, "prompt.unknown");
 
   const memories = answers.metStory?.trim() ?? "";

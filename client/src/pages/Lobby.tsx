@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
 import { localDateKey } from "@shared/timezone";
@@ -50,8 +51,17 @@ const STATUS_CONFIG: Record<string, { labelKey: "lobby.status.pending" | "lobby.
 
 /* These are the values stored on the persona, not display strings — the
    server keeps them verbatim, so they must not be localised. */
+/**
+ * The icon for each love language.
+ *
+ * It is keyed by the *stored* value, and the list of those values lives
+ * in one place — the lobby had its own, with one value misspelled, so
+ * the gift icon never appeared for anybody.
+ */
 const LOVE_LANG_ICONS: Record<string, any> = {
-  "肯定的言辞": MessageCircle, "精心时刻": Clock, "接受礼物": Gift,
+  // i18n:allow-identifier
+  "肯定的言辞": MessageCircle, "精心时刻": Clock, "接收礼物": Gift,
+  // i18n:allow-identifier
   "服务的行动": Handshake, "身体接触": HeartHandshake,
 };
 
@@ -128,10 +138,35 @@ function relativeTime(date: string | Date, locale: string, t: Translate): string
   return new Date(date).toLocaleDateString(locale);
 }
 
+/**
+ * The start of a day, in the reader's own calendar.
+ *
+ * "2021-05-20" is a calendar date, not an instant: `new Date()` reads
+ * it as midnight in *Greenwich*, so for anybody east of Greenwich the
+ * day was already partly over when it was parsed. The number of days
+ * together was then off by one — and the anniversary fell on the wrong
+ * day, which is the one number on this page that has to be right.
+ */
+function dayStart(value: string | Date): number {
+  if (typeof value === "string") {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+    if (match) {
+      return new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+      ).getTime();
+    }
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return Date.now();
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
 function daysBetween(from: string | Date, to?: string | Date): number {
-  const start = new Date(from).getTime();
-  const end = to ? new Date(to).getTime() : Date.now();
-  return Math.max(1, Math.floor((end - start) / 86400000));
+  const start = dayStart(from);
+  const end = dayStart(to ?? new Date());
+  return Math.max(1, Math.round((end - start) / 86400000));
 }
 
 function getAnalysisStage(progress: number): "lobby.analysisStages.reading" | "lobby.analysisStages.chatting" | "lobby.analysisStages.images" | "lobby.analysisStages.done" | "lobby.analysisStages.preparing" {
@@ -146,7 +181,7 @@ function getMilestone(chatCount: number) {
 }
 
 function getDaysUntilAnniversary(togetherFrom: string): number | null {
-  const start = new Date(togetherFrom);
+  const start = new Date(dayStart(togetherFrom));
   const now = new Date();
   const thisYear = new Date(now.getFullYear(), start.getMonth(), start.getDate());
   if (thisYear < now) thisYear.setFullYear(thisYear.getFullYear() + 1);
@@ -1061,9 +1096,9 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
               {attachmentStyleLabel(pd.attachmentStyle, t)}
             </span>
           )}
-          {pd.loveLanguage && LOVE_LANG_ICONS[pd.loveLanguage] && (
+          {pd.loveLanguage && LOVE_LANG_ICONS[normaliseLoveLanguage(pd.loveLanguage)] && (
             <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-muted/60 text-muted-foreground">
-              {(() => { const LoveIcon = LOVE_LANG_ICONS[pd.loveLanguage]; return <LoveIcon className="w-2.5 h-2.5" />; })()}
+              {(() => { const LoveIcon = LOVE_LANG_ICONS[normaliseLoveLanguage(pd.loveLanguage)]; return <LoveIcon className="w-2.5 h-2.5" />; })()}
               {loveLanguageLabel(pd.loveLanguage, t)}
             </span>
           )}

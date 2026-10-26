@@ -7,6 +7,10 @@
  * interface language or the English UI would show Chinese.
  */
 import type { Translate } from "@/i18n";
+import {
+  LOVE_LANGUAGES as SHARED_LOVE_LANGUAGES,
+  normaliseLoveLanguage,
+} from "@shared/love-language";
 
 export interface PersonaOption {
   /** The value written to the persona. */
@@ -27,14 +31,18 @@ export const ATTACHMENT_STYLES: PersonaOption[] = [
   { value: "混乱型", labelKey: "personaOptions.attachmentStyles.disorganized" },
 ];
 
-// i18n:allow-identifier
-export const LOVE_LANGUAGES: PersonaOption[] = [
-  { value: "精心时刻", labelKey: "personaOptions.loveLanguages.qualityTime" },
-  { value: "肯定的言辞", labelKey: "personaOptions.loveLanguages.words" },
-  { value: "服务的行动", labelKey: "personaOptions.loveLanguages.service" },
-  { value: "身体接触", labelKey: "personaOptions.loveLanguages.touch" },
-  { value: "接收礼物", labelKey: "personaOptions.loveLanguages.gifts" },
-];
+/**
+ * The love languages.
+ *
+ * They live in `shared/love-language.ts`, because the questionnaire, the
+ * profile editor and the lobby all have to agree on what is stored —
+ * and they did not: the lobby had a different list, with one value
+ * misspelled, so the gift icon never appeared for anybody.
+ */
+export const LOVE_LANGUAGES: PersonaOption[] = SHARED_LOVE_LANGUAGES.map((entry) => ({
+  value: entry.value,
+  labelKey: entry.labelKey,
+}));
 
 function labelFor(
   value: string | null | undefined,
@@ -42,7 +50,12 @@ function labelFor(
   t: Translate,
 ): string {
   if (!value) return "";
-  const match = options.find((option) => option.value === value);
+  // A persona created from the questionnaire before the values were
+  // unified holds one of the old spellings; it is brought forward so it
+  // is not left blank.
+  const normalised =
+    options === LOVE_LANGUAGES ? normaliseLoveLanguage(value) : value;
+  const match = options.find((option) => option.value === normalised);
   // A value the app does not know about is shown as it is — better than
   // showing nothing.
   if (!match) return value;
