@@ -1230,6 +1230,7 @@ export const en = {
   outbound: {
     title: "Words to take back",
     editLabel: "These words",
+    dropConfirm: "Drop these words? They will be thrown away, and there is no way to get them back.",
     hint: "These are things you said here and never said to them. Nothing is sent for you — they are laid out, and you decide.",
     empty: "None yet. We can look through the conversation for the things only said here.",
     collect: "Look for them",

@@ -180,10 +180,23 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                       <BookMarked className="h-3.5 w-3.5" />
                       {t("outbound.forSelf")}
                     </Button>
+                    {/**
+                     * Dropping is for ever.
+                     *
+                     * The other panels ask before they remove
+                     * something — the letters, the relationship events.
+                     * This one did not, and there is no way to undo it:
+                     * one click discarded a letter the user wrote, and
+                     * the app's own framing is that these words were
+                     * only ever said to the persona.
+                     */}
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => dropMutation.mutate({ id: letter.id })}
+                      onClick={() => {
+                        if (!window.confirm(t("outbound.dropConfirm"))) return;
+                        dropMutation.mutate({ id: letter.id });
+                      }}
                     >
                       <X className="h-3.5 w-3.5" />
                       {t("outbound.drop")}
