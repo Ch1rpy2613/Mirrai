@@ -984,7 +984,23 @@ function DataManagementTab() {
    * language while the dialog was open left the destructive button
    * permanently disabled — and the user had no way of finding out why.
    */
+  /**
+   * The phrase the user has to type.
+   *
+   * It is captured when the dialog opens, so a change of language in
+   * the meantime does not lock the user out of the button they are
+   * trying to press.
+   *
+   * It used to be captured inside the dialog's `onOpenChange`, which
+   * Radix calls when the dialog *asks* to be closed — never when the
+   * `open` property says it has opened. So the phrase was never
+   * captured at all, the button was never enabled, and the account
+   * could never be deleted.
+   */
   const [expectedPhrase, setExpectedPhrase] = useState("");
+  useEffect(() => {
+    if (showDeleteDialog) setExpectedPhrase(t("settings.data.phrase"));
+  }, [showDeleteDialog, t]);
   const deleteAccount = trpc.user.deleteAccount.useMutation({
     onSuccess: () => {
       toast.success(t("settings.data.accountDeleted"));
@@ -1080,13 +1096,7 @@ function DataManagementTab() {
       {/* Delete Account Dialog */}
       <Dialog
         open={showDeleteDialog}
-        onOpenChange={(open) => {
-          setShowDeleteDialog(open);
-          // The phrase is captured when the dialog opens, so a change of
-          // language in the meantime does not lock the user out of the
-          // button they are trying to press.
-          if (open) setExpectedPhrase(t("settings.data.phrase"));
-        }}
+        onOpenChange={setShowDeleteDialog}
       >
         <DialogContent className="bg-card border-border rounded-lg max-w-sm">
           <DialogHeader>
