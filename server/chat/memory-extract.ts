@@ -94,6 +94,25 @@ export async function extractMemories(params: {
   userId: number;
   locale?: "zh" | "en";
   now?: Date;
+  /**
+   * The messages to read, when they are not in the conversation.
+   *
+   * An uploaded chat log is the material the persona is built from, and
+   * it never becomes a memory: the distillation writes the persona's
+   * personality and its rules, and the facts in the upload stay in the
+   * upload. So the memory panel is empty after the very upload the
+   * person did to fill it.
+   *
+   * The extraction log is not touched when the messages come from here:
+   * it records what has been read *of the conversation*, and the
+   * conversation has not been read.
+   */
+  history?: Array<{
+    id: number;
+    role: string;
+    content: string;
+    createdAt: Date;
+  }>;
 }): Promise<ExtractResult> {
   const { persona, userId } = params;
   const locale = params.locale ?? "zh";
@@ -126,7 +145,8 @@ export async function extractMemories(params: {
    * fifty. A long-lived persona's first extraction was tens of
    * thousands of rows for nothing.
    */
-  const history = await db.getMessagesSince(
+  const fromUpload = params.history ? true : false;
+  const history = params.history ?? await db.getMessagesSince(
     persona.id,
     userId,
     lastExtracted ?? new Date(0),
@@ -175,7 +195,7 @@ export async function extractMemories(params: {
   // The transcript is read by the model, so the name it gives the user is
   // in the language the persona is speaking.
   const chatText = fresh
-    .map((m) => `${m.role === "user" ? copy(locale, "prompt.roleUser") : persona.name}: ${m.content}`)
+    .map((m) => `${speakerName(m.role, persona.name, locale)}: ${m.content}`)
     .join("\n");
 
   let response = "";
@@ -321,7 +341,7 @@ export async function extractMemories(params: {
    * marking it means the same messages are not sent again on every
    * later run. An answer that could not be parsed is not.
    */
-  if (understood) {
+  if (understood && !fromUpload) {
     await db.markMemoryExtracted(
       persona.id,
       userId,
@@ -329,6 +349,19 @@ export async function extractMemories(params: {
     );
   }
   return { added, skipped };
+}
+
+/**
+ * The name a speaker is shown under.
+ *
+ * A conversation has two sides: the user and the persona. An uploaded
+ * transcript has as many as the export had — so a line that is neither
+ * is shown under its own name, rather than being called the persona.
+ */
+function speakerName(role: string, personaName: string, locale: "zh" | "en"): string {
+  if (role === "user") return copy(locale, "prompt.roleUser");
+  if (role === "persona" || !role) return personaName;
+  return role;
 }
 
 /**

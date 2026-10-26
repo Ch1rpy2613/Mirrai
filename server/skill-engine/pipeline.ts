@@ -57,6 +57,15 @@ import {
   parseTranscriptMessages,
 } from "./micro-rules";
 import { copy, type Locale } from "@shared/copy";
+import { extractMemories } from "../chat/memory-extract";
+
+/**
+ * How many lines of the upload are read for the memories.
+ *
+ * The same ceiling the conversation extraction uses — the model is
+ * given a window, not the whole file.
+ */
+const MEMORY_EXTRACTION_MESSAGE_LIMIT = 50;
 import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 
 // The prompt dictionary is assembled in `shared/copy/index.ts`. Registering it
@@ -1219,6 +1228,56 @@ async function runSkillPipelineOnce(
     })();
 
     const personaData = mergeUserDecisions(enrichedData, previous, microRules, locale);
+
+    /**
+     * The facts in the upload become memories.
+     *
+     * The distillation wrote the persona's personality and its rules —
+     * and the individual facts (the birthday, the anniversary, the
+     * place they went) stayed in the upload. So the memory panel was
+     * empty after the very upload the person did to fill it, and the
+     * anchors and the pinning had nothing to work with.
+     *
+     * The extraction reads the transcript itself, so it is the same
+     * reading the persona is built from.
+     */
+    if (chatContent.trim()) {
+      const transcript = parseTranscriptMessages(chatContent, { personaName: name });
+      const uploaded = transcript
+        .filter((m) => m.content.trim())
+        .slice(0, MEMORY_EXTRACTION_MESSAGE_LIMIT)
+        .map((m, index) => ({
+          id: index + 1,
+          role: m.role,
+          content: m.content,
+          createdAt: new Date(0),
+        }));
+      if (uploaded.length >= 1) {
+        /**
+         * The extraction is a bonus, not a step.
+         *
+         * A persona that cannot be read is a persona whose own decisions
+         * are unknown — and the run still finishes. So the extraction
+         * never stops the distillation.
+         */
+        let persona: Awaited<ReturnType<typeof db.getPersonaById>> | undefined;
+        try {
+          persona = await db.getPersonaById(personaId, userId);
+        } catch {
+          persona = undefined;
+        }
+        if (persona) {
+          await extractMemories({
+            persona,
+            userId,
+            locale,
+            history: uploaded,
+          }).catch((e) =>
+            console.warn("[SkillEngine] The memories could not be extracted from the upload:", e.message),
+          );
+        }
+      }
+    }
 
     // ── Stage 5: persist ───────────────────────────────────────────────────
     await db.updatePersona(personaId, userId, {
