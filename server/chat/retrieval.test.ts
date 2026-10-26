@@ -76,6 +76,25 @@ describe("keywordCoverage", () => {
   it("is zero for an empty message", () => {
     expect(keywordCoverage("第一次见面", new Set())).toBe(0);
   });
+
+  it("does not let a long message make an unrelated memory look relevant", () => {
+    // One shared word, in a message that is mostly about something
+    // else.
+    const short = tokenize("图书馆");
+    const long = tokenize("图书馆 今天 天气 很好 我们 晚上 去 看 电影 好 不好");
+    expect(keywordCoverage("图书馆", short)).toBeGreaterThan(
+      keywordCoverage("图书馆", long),
+    );
+  });
+
+  it("does not make a long memory unreachable", () => {
+    // A long description used to need twenty shared words with the
+    // message to clear the floor, while a short title needed one — so
+    // the summaries of an uploaded file were never retrieved.
+    const longMemory = "第一次见面在图书馆门口 她穿着一件白色的外套 那天下了小雨 我们在门口的长椅上坐了很久 聊起了她最喜欢的书";
+    const message = tokenize("第一次见面在图书馆门口 她穿着一件白色的外套");
+    expect(keywordCoverage(longMemory, message)).toBeGreaterThan(0.5);
+  });
 });
 
 describe("scoreMemory", () => {

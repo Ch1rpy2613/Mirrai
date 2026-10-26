@@ -104,8 +104,16 @@ export function tokenize(text: string): Set<string> {
 /**
  * Keyword coverage of a memory against the user's message, from 0 to 1.
  *
- * Coverage is measured against the *message's* tokens so a long message does
- * not make an unrelated memory look relevant.
+ * Coverage is measured against the *message's* tokens, so a long
+ * message does not make an unrelated memory look relevant.
+ *
+ * It used to be measured against the *memory's* tokens — which is the
+ * opposite of what the sentence above says, and it made two things
+ * wrong at once. A long memory was essentially never retrieved: a
+ * four-hundred-character description had to share twenty words with
+ * the message to clear the floor, while a short title needed one. And
+ * a weak match was never damped: one shared word in a ten-word memory
+ * scored a tenth however long the message was.
  */
 export function keywordCoverage(memoryText: string, messageTokens: Set<string>): number {
   if (messageTokens.size === 0) return 0;
@@ -116,7 +124,7 @@ export function keywordCoverage(memoryText: string, messageTokens: Set<string>):
   for (const token of Array.from(memoryTokens)) {
     if (messageTokens.has(token)) hits++;
   }
-  return hits / memoryTokens.size;
+  return hits / messageTokens.size;
 }
 
 /** Recency weight — a memory fades over roughly a month. */
