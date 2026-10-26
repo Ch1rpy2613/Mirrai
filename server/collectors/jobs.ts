@@ -515,6 +515,21 @@ export function cancelCollectorJob(jobId: string): boolean {
 }
 
 /**
+ * Cancels every job that is running or queued.
+ *
+ * It is what the process calls when it is asked to shut down: a
+ * collector that is still running survives the server — the DingTalk
+ * one drives a Chromium — and goes on to its own timeout.
+ */
+export function cancelAllCollectorJobs(): void {
+  for (const job of store.list()) {
+    if (job.status === "queued" || job.status === "running") {
+      cancelCollectorJob(job.id);
+    }
+  }
+}
+
+/**
  * Marks jobs that were running when the process went away as interrupted.
  *
  * With the in-memory store this is a no-op on a cold start (there is nothing

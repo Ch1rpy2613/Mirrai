@@ -396,6 +396,17 @@ export class FeishuAdapter implements ChannelAdapter {
     await db.upsertChannelState(userId, CHANNEL_ID, { status: "stopped" });
   }
 
+  async stopAll(): Promise<void> {
+    for (const userId of Array.from(connections.keys())) {
+      try {
+        await this.stop(userId);
+      } catch {
+        // A connection that will not close must not hold the
+        // shutdown up.
+      }
+    }
+  }
+
   async status(userId: number): Promise<ChannelStatus> {
     const state = await db.getChannelState(userId, CHANNEL_ID);
     const connected = connections.has(userId);

@@ -548,6 +548,24 @@ export async function restoreWeChatBot(userId: number): Promise<boolean> {
 }
 
 /** Stops the long-poll loop. */
+/**
+ * Stops every running bot.
+ *
+ * It is what the process calls when it is asked to shut down: the
+ * poll loop keeps running until it is told to stop, and a bot that
+ * was left running would go on polling a backend that is no longer
+ * being answered.
+ */
+export async function stopAllWeChatBots(): Promise<void> {
+  for (const userId of Array.from(accounts.keys())) {
+    try {
+      await stopWeChatBot(userId);
+    } catch {
+      // A bot that will not stop must not hold the shutdown up.
+    }
+  }
+}
+
 export async function stopWeChatBot(userId: number) {
   const account = getAccount(userId);
   if (account.monitorAbort) {

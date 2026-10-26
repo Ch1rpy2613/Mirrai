@@ -43,6 +43,14 @@ export interface ChannelAdapter {
   start(userId: number, locale?: "zh" | "en"): Promise<void>;
   /** Stops the channel for one user. */
   stop(userId: number): Promise<void>;
+  /**
+   * Stops the channel for everybody.
+   *
+   * It is what the process calls when it is asked to shut down: the
+   * poll loop and the long connection keep running until they are
+   * told to stop.
+   */
+  stopAll?(): Promise<void>;
   /** Reports the current state of the channel for one user. */
   status(userId: number): Promise<ChannelStatus>;
   /**

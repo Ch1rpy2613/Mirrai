@@ -35,6 +35,24 @@ export function listChannels(): ChannelAdapter[] {
  * A channel that cannot be restored (expired credentials, a channel that was
  * never configured) is skipped rather than failing the boot.
  */
+/**
+ * Stops every channel that is running.
+ *
+ * The WeChat poll loop and the Feishu long connection keep running
+ * until they are told to stop — so without this the process was left
+ * with them open when it was asked to shut down.
+ */
+export async function stopAllChannels(): Promise<void> {
+  for (const adapter of listChannels()) {
+    if (typeof adapter.stopAll !== "function") continue;
+    try {
+      await adapter.stopAll();
+    } catch {
+      // A channel that will not stop must not hold the shutdown up.
+    }
+  }
+}
+
 export async function restoreChannels(userIds: number[]): Promise<void> {
   for (const userId of userIds) {
     for (const adapter of listChannels()) {

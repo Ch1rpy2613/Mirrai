@@ -167,6 +167,53 @@ async function startServer() {
   } catch (e) {
     console.warn("[Channels] Failed to restore channels:", e);
   }
+
+  /**
+   * The process is stopped cleanly.
+   *
+   * There was no handler at all — so a collector that was running
+   * survived the server (the DingTalk one drives a Chromium) and went
+   * on to its own thirty-minute timeout, the WeChat poll loop went on
+   * asking a backend that was no longer being answered, and the
+   * scheduler's timer went on firing into a process that was on its
+   * way out.
+   */
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[Server] ${signal} — shutting down.`);
+
+    try {
+      const { stopScheduler } = await import("../scheduler");
+      stopScheduler();
+    } catch (e) {
+      console.warn("[Server] Could not stop the scheduler:", e);
+    }
+
+    try {
+      const { cancelAllCollectorJobs } = await import("../collectors/jobs");
+      cancelAllCollectorJobs();
+    } catch (e) {
+      console.warn("[Server] Could not cancel the collection jobs:", e);
+    }
+
+    try {
+      const { stopAllChannels } = await import("../channels");
+      await stopAllChannels();
+    } catch (e) {
+      console.warn("[Server] Could not stop the channels:", e);
+    }
+
+    // And the requests that are in flight.
+    server.close(() => process.exit(0));
+    // The deadline: a request that will not finish must not hold the
+    // shutdown up for ever.
+    setTimeout(() => process.exit(0), 5_000).unref?.();
+  };
+
+  process.once("SIGINT", () => void shutdown("SIGINT"));
+  process.once("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
 startServer().catch(console.error);

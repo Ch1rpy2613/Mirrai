@@ -41,6 +41,11 @@ export class WechatAdapter implements ChannelAdapter {
     clearAllActivePersonas(userId);
   }
 
+  async stopAll(): Promise<void> {
+    const { stopAllWeChatBots } = await import("../wechat/bot");
+    await stopAllWeChatBots();
+  }
+
   async status(userId: number): Promise<ChannelStatus> {
     const snapshot = getBotStatus(userId);
     return {
