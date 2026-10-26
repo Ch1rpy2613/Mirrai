@@ -622,6 +622,16 @@ export const letters = pgTable(
   (table) => ({
     personaTimeIdx: index("letters_persona_time_idx").on(table.personaId, table.createdAt),
     dueIdx: index("letters_reply_due_idx").on(table.status, table.replyAt),
+    /**
+     * The claim lock.
+     *
+     * The migration created it, and the schema did not declare it —
+     * and `drizzle-kit push` drops the objects the schema does not
+     * declare, on every boot. So the index that stops the sweep from
+     * answering the same letter twice was created and dropped over
+     * and over, and the table was scanned in full every minute.
+     */
+    claimedIdx: index("letters_claimed_idx").on(table.status, table.claimedAt),
   }),
 );
 

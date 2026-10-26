@@ -103,10 +103,76 @@ function schemaColumns(): Map<string, Set<string>> {
     }
     const body = source.slice(start, index - 1);
     const columns = new Set<string>();
-    for (const column of body.matchAll(/^\s{2}"?([A-Za-z_][A-Za-z0-9_]*)"?\s*[:(]/gm)) {
+    /**
+     * The indentation is not fixed.
+     *
+     * It used to be exactly two spaces — and the tables that are
+     * written with four (the letters, the relationship events, the
+     * user's moods) were read as having *no columns at all*. So the
+     * "the same columns" check was vacuous for them: a column the
+     * migrations never added would not have been noticed.
+     */
+    for (const column of body.matchAll(/^\s+"?([A-Za-z_][A-Za-z0-9_]*)"?\s*[:(]/gm)) {
       columns.add(column[1]);
     }
     result.set(match[1], columns);
+  }
+  return result;
+}
+
+/**
+ * The indexes the schema declares, by table name.
+ *
+ * The names matter: `drizzle-kit push` drops the objects the schema
+ * does not declare. So an index the migration creates and the schema
+ * does not know about is created and dropped over and over, on every
+ * boot.
+ */
+function schemaIndexes(): Map<string, Set<string>> {
+  const source = readSchema();
+  const result = new Map<string, Set<string>>();
+  const pattern = /pgTable\(\s*"([^"]+)"/g;
+  for (const match of source.matchAll(pattern)) {
+    /**
+     * The whole call, not just the column list.
+     *
+     * The indexes are declared in the *third* argument — the one that
+     * receives the table — so reading only the columns would have
+     * missed every index in the schema.
+     */
+    const open = source.indexOf("(", match.index);
+    let depth = 1;
+    let index = open + 1;
+    while (index < source.length && depth > 0) {
+      const character = source[index];
+      if (character === "(") depth++;
+      else if (character === ")") depth--;
+      index++;
+    }
+    const body = source.slice(open, index);
+    const indexes = new Set<string>();
+    // Both the plain and the unique indexes: a unique index is an
+    // index too, and `drizzle-kit push` drops it just as readily.
+    for (const declared of body.matchAll(/\b(?:index|uniqueIndex)\(\s*"([^"]+)"/g)) {
+      indexes.add(declared[1]);
+    }
+    result.set(match[1], indexes);
+  }
+  return result;
+}
+
+/** The indexes the migrations create, by table name. */
+function migrationIndexes(): Map<string, Set<string>> {
+  const source = readMigrations();
+  const result = new Map<string, Set<string>>();
+  const ensure = (name: string) => {
+    if (!result.has(name)) result.set(name, new Set());
+    return result.get(name)!;
+  };
+  // CREATE [UNIQUE] INDEX "name" ON "table" (...);
+  const create = /CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF NOT EXISTS\s+)?(?:"public"\.)?"([^"]+)"\s+ON\s+(?:(?:"public"\.)?"([^"]+)"|\w+)/g;
+  for (const match of source.matchAll(create)) {
+    ensure(match[2]).add(match[1]);
   }
   return result;
 }
@@ -172,6 +238,49 @@ describe("the schema and the migrations", () => {
         [...values].sort(),
         `the enum "${name}" has different values in the schema and in the migrations`,
       ).toEqual([...fromMigrations!].sort());
+    }
+  });
+
+  it("declare the same indexes", () => {
+    const schema = schemaIndexes();
+    const migrations = migrationIndexes();
+
+    expect(schema.size).toBeGreaterThan(0);
+
+    for (const [name, indexes] of schema) {
+      // A table with no index of its own is not a disagreement.
+      if (indexes.size === 0) continue;
+      const fromMigrations = migrations.get(name);
+      expect(
+        fromMigrations,
+        `the migrations never create an index on "${name}"`,
+      ).toBeDefined();
+      const missing = [...indexes].filter((i) => !fromMigrations!.has(i));
+      expect(
+        missing,
+        `the table "${name}" has indexes the migrations never create`,
+      ).toEqual([]);
+    }
+  });
+
+  it("do not create an index the schema does not declare", () => {
+    // The other direction.
+    //
+    // `drizzle-kit push` drops the objects the schema does not
+    // declare — so an index the migration creates and the schema does
+    // not know about is created and dropped over and over, on every
+    // boot.
+    const schema = schemaIndexes();
+    const migrations = migrationIndexes();
+
+    for (const [name, indexes] of migrations) {
+      const fromSchema = schema.get(name);
+      if (!fromSchema) continue;
+      const extra = [...indexes].filter((i) => !fromSchema.has(i));
+      expect(
+        extra,
+        `the migrations create indexes on "${name}" that the schema does not declare`,
+      ).toEqual([]);
     }
   });
 
