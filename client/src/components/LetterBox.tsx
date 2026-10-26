@@ -35,7 +35,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
    */
   const [older, setOlder] = useState<any[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const { data: todosData } = trpc.letter.todos.useQuery({ personaId });
+  const { data: todosData, isError: todosFailed } = trpc.letter.todos.useQuery({ personaId });
   const [showWrite, setShowWrite] = useState(false);
   const [body, setBody] = useState("");
   const [mood, setMood] = useState<UserMood | "">("");
@@ -228,6 +228,16 @@ export default function LetterBox({ personaId }: { personaId: number }) {
             {loadingOlder ? t("common.loading") : t("letters.loadOlder")}
           </button>
         </div>
+      )}
+
+      {/**
+       * The notes for later.
+       *
+       * A failed request left the list empty — so the box said there
+       * were none, which is a claim about the user's own writing.
+       */}
+      {todosFailed && (
+        <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
       )}
 
       {todos.length > 0 && (

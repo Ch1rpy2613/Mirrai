@@ -92,7 +92,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
   });
 
   const utils = trpc.useUtils();
-  const { data: latest } = trpc.eval.latest.useQuery({ personaId });
+  const { data: latest, isError: evalFailed } = trpc.eval.latest.useQuery({ personaId });
   /**
    * The last runs.
    *
@@ -232,7 +232,9 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
           {t("fidelity.likelihoodHint")}
         </p>
 
-        {metrics ? (
+        {evalFailed ? (
+          <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
+        ) : metrics ? (
           <>
           {/**
            * What the numbers are.
