@@ -141,7 +141,13 @@ export async function updateUserProfile(
   id: number,
   data: {
     name?: string;
-    email?: string;
+    /**
+     * The address, or `null` to take it away.
+     *
+     * `undefined` means "leave it alone" — so an empty field cannot
+     * clear the address unless the caller says `null` explicitly.
+     */
+    email?: string | null;
     timezone?: string | null;
     addressStyle?: string | null;
     boundaries?: string | null;

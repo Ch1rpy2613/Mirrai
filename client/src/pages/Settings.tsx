@@ -287,7 +287,13 @@ function ProfileTab() {
                 </div>
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" className="rounded-md px-5"
-                    onClick={() => updateProfile.mutate({ name: editName.trim() || undefined, email: editEmail.trim() || undefined })}
+                    onClick={() => updateProfile.mutate({
+                      name: editName.trim() || undefined,
+                      // `undefined` means "leave it alone", so an empty
+                      // field could never clear the address. `null`
+                      // means "take it away".
+                      email: editEmail.trim() || null,
+                    })}
                     disabled={updateProfile.isPending}>
                     {updateProfile.isPending ? t("common.saving") : t("common.save")}
                   </Button>
@@ -907,8 +913,17 @@ function DataManagementTab() {
       const a = document.createElement("a");
       a.href = url;
       a.download = `mirrai-export-${new Date().toISOString().slice(0, 10)}.json`;
+      // The URL is released a moment later, not straight away.
+      //
+      // The download starts asynchronously, so revoking it in the same
+      // tick can leave the browser with no file at all — in Firefox and
+      // Safari it produced nothing, while the toast still said
+      // "exported". The user believed their data was backed up, and it
+      // was not.
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success(t("settings.data.exportSuccess"));
     },
     onError: (e: any) => toast.error(t("settings.data.exportFailed", { message: e.message })),
@@ -924,8 +939,11 @@ function DataManagementTab() {
       const a = document.createElement("a");
       a.href = url;
       a.download = data.fileName;
+      // The URL is released a moment later — see the note above.
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success(t("settings.data.exportSuccess"));
     },
     onError: (e: any) => toast.error(t("settings.data.exportFailed", { message: e.message })),
@@ -1330,8 +1348,14 @@ function DataSourcesTab() {
   // The persona remembers the preset it was built with, so the picker
   // starts from that rather than from the default.
   useEffect(() => {
+    // The persona remembers the preset it was built with, so the picker
+    // starts from that rather than from the default.
+    //
+    // The default is applied too: it used to be applied only when the
+    // newly chosen persona had a preset of its own, so a persona with
+    // none silently ran with the previous persona's.
     const saved = selectedPersona?.distillationMode;
-    if (saved) setMode(saved as DistillationMode);
+    setMode((saved as DistillationMode) ?? DEFAULT_DISTILLATION_MODE);
   }, [selectedPersona?.id, selectedPersona?.distillationMode]);
 
   function handleStart() {
@@ -1375,7 +1399,19 @@ function DataSourcesTab() {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">{t("settings.sources.sourceLabel")}</Label>
-            <Select value={sourceId} onValueChange={v => setSourceId(v as CollectorSourceId)}>
+            <Select value={sourceId} onValueChange={v => {
+              setSourceId(v as CollectorSourceId);
+              // The credentials of the platform that was chosen before
+              // are let go of.
+              //
+              // Feishu uses `app_id`/`app_secret` and DingTalk uses
+              // `app_key`/`app_secret`, so the secret of one platform
+              // stayed in the other's field — and "Authorize" was then
+              // satisfied by it, and the secret was written into the
+              // other platform's credential store. One platform's secret
+              // was handed to another.
+              setCredentials({});
+            }}>
               <SelectTrigger className="h-9 rounded-md text-sm w-full">
                 <SelectValue placeholder={t("settings.sources.selectPlatform")} />
               </SelectTrigger>
@@ -1706,10 +1742,18 @@ function TemplateLibraryTab() {
     const a = document.createElement("a");
     a.href = url;
     a.download = data.fileName;
+    // The URL is released a moment later — see the note in the data tab.
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success(t("settings.templates.exported"));
-  }, [exportRequest?.nonce, exportQuery.data, t]);
+    // The nonce alone decides when the file is downloaded.
+    //
+    // `t` was in the list, and it is a fresh function every time the
+    // locale changes — so switching the language in Settings re-fired
+    // the template download behind the user's back.
+  }, [exportRequest?.nonce, exportQuery.data]);
 
   const templateList = templates.data ?? [];
   const builtinTemplates = templateList.filter(t => t.builtin);

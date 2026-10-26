@@ -448,7 +448,15 @@ export const appRouter = router({
     updateProfile: protectedProcedure
       .input(z.object({
         name: z.string().min(1).max(100).optional(),
-        email: z.string().email().max(320).optional(),
+        /**
+         * The user's own address.
+         *
+         * `null` takes it away. It used to be optional only, and
+         * `undefined` means "leave it alone" — so an empty field could
+         * never clear the address, and there was no other way to remove
+         * it.
+         */
+        email: z.string().email().max(320).nullable().optional(),
         /**
          * The user's own time zone, as an IANA name.
          *
