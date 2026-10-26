@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
 import MoodCheckIn from "@/components/MoodCheckIn";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
+import { localDateKey } from "@shared/timezone";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeIntimacyLevel } from "@shared/intimacy";
 
@@ -508,7 +509,11 @@ function ActivityHeatmap() {
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      // The user's own day, not the UTC one: `toISOString()` is the day
+      // in Greenwich, which is the wrong day for everybody east of it
+      // until lunchtime — and the server counts the days in the user's
+      // calendar, so the two have to agree.
+      const key = localDateKey(d);
       const count = map.get(key) || 0;
       if (count > maxCount) maxCount = count;
       cells.push({
@@ -611,12 +616,12 @@ function ChatStreak() {
     const dateSet = new Set(dailyActivity.map(r => String(r.date)));
     let count = 0;
     const d = new Date();
-    const todayKey = d.toISOString().slice(0, 10);
+    const todayKey = localDateKey(d);
     if (!dateSet.has(todayKey)) {
       d.setDate(d.getDate() - 1);
-      if (!dateSet.has(d.toISOString().slice(0, 10))) return 0;
+      if (!dateSet.has(localDateKey(d))) return 0;
     }
-    while (dateSet.has(d.toISOString().slice(0, 10))) {
+    while (dateSet.has(localDateKey(d))) {
       count++;
       d.setDate(d.getDate() - 1);
     }

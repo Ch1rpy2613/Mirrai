@@ -514,7 +514,7 @@ export const appRouter = router({
 
     recentActivity: protectedProcedure.query(async ({ ctx }) => getRecentActivity(ctx.user.id)),
 
-    dailyActivity: protectedProcedure.query(async ({ ctx }) => getDailyChatCounts(ctx.user.id)),
+    dailyActivity: protectedProcedure.query(async ({ ctx }) => getDailyChatCounts(ctx.user.id, 30, ctx.user.timezone)),
 
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -3346,7 +3346,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const [stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution, moods] = await Promise.all([
           getAnalyticsStats(ctx.user.id, input.days),
-          getMessageVolume(ctx.user.id, input.days),
+          getMessageVolume(ctx.user.id, input.days, ctx.user.timezone),
           getEmotionTimeline(ctx.user.id, input.days),
           getPersonaEngagement(ctx.user.id, input.days),
           getHourlyDistribution(ctx.user.id, input.days),

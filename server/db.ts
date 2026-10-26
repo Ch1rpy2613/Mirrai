@@ -22,6 +22,7 @@ import {
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
+import { localDateKey, dayShiftHours, previousDateKey, zonedDateKey } from "@shared/timezone";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -1125,18 +1126,21 @@ export async function getDefaultLlmConfig(userId: number) {
 
 // ─── Daily Activity helpers ────────────────────────────────────────────────
 
-export async function getDailyChatCounts(userId: number, days = 30) {
+export async function getDailyChatCounts(userId: number, days = 30, timezone?: string | null) {
   const db = await getDb();
   if (!db) return [];
   const since = new Date();
   since.setDate(since.getDate() - days);
+  // The day a message belongs to is the user's day, not the server's.
+  const shift = dayShiftHours(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
   const rows = await db.select({
-    date: sql<string>`DATE(${messages.createdAt})`,
+    date: day,
     count: count(),
   })
     .from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
-    .groupBy(sql`DATE(${messages.createdAt})`);
+    .groupBy(day);
   return rows;
 }
 
@@ -1220,15 +1224,30 @@ export async function getIntimacyData(personaId: number, userId: number) {
     .where(and(eq(emotionSnapshots.personaId, personaId), eq(emotionSnapshots.userId, userId)))
     .groupBy(emotionSnapshots.emotionalState);
   const daysSinceCreation = Math.floor((Date.now() - new Date(persona[0].createdAt).getTime()) / 86400000);
-  const recentDays = await db.select({ d: sql<string>`DATE(${messages.createdAt})` }).from(messages)
+  // The days the conversations happened on, in the user's own calendar.
+  //
+  // Two things were wrong here, and together they made the streak always
+  // zero: the database hands a `DATE` back as a JavaScript Date rather
+  // than as the string the code compared it against, and the day it was
+  // compared with was the *UTC* day while the stored value is the
+  // server's own clock.
+  //
+  // The streak is one of the inputs to the intimacy score, and the
+  // intimacy score is one of the gates on the graduation — so a streak
+  // that was always zero meant the whole ritual was unreachable.
+  const timezone = await getUserTimezone(userId);
+  const shift = dayShiftHours(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
+  const recentDays = await db.select({ d: day }).from(messages)
     .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
-    .groupBy(sql`DATE(${messages.createdAt})`).orderBy(desc(sql`DATE(${messages.createdAt})`)).limit(30);
+    .groupBy(day).orderBy(desc(day)).limit(30);
   let consecutiveDays = 0;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // Walk back from today, in the user's calendar.
+  let cursor = zonedDateKey(new Date(), timezone);
   for (let i = 0; i < recentDays.length; i++) {
-    const expected = new Date(today); expected.setDate(expected.getDate() - i);
-    if (recentDays[i].d === expected.toISOString().slice(0, 10)) consecutiveDays++;
-    else break;
+    if (recentDays[i].d !== cursor) break;
+    consecutiveDays++;
+    cursor = previousDateKey(cursor);
   }
   return {
     chatCount: persona[0].chatCount,
@@ -1441,13 +1460,15 @@ export async function getTodaySnapshot(personaId: number, userId: number) {
 
 // ─── Analytics helpers ────────────────────────────────────────────────────
 
-export async function getMessageVolume(userId: number, days: number) {
+export async function getMessageVolume(userId: number, days: number, timezone?: string | null) {
   const db = await getDb();
   if (!db) return [];
   const since = new Date(); since.setDate(since.getDate() - days);
-  return db.select({ date: sql<string>`DATE(${messages.createdAt})`, count: count() })
+  const shift = dayShiftHours(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
+  return db.select({ date: day, count: count() })
     .from(messages).where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
-    .groupBy(sql`DATE(${messages.createdAt})`).orderBy(sql`DATE(${messages.createdAt})`);
+    .groupBy(day).orderBy(day);
 }
 
 export async function getEmotionTimeline(userId: number, days: number) {
@@ -1497,9 +1518,9 @@ export async function getAnalyticsStats(userId: number, days: number) {
   const since = new Date(); since.setDate(since.getDate() - days);
   const [msgCount] = await db.select({ c: count() }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)));
-  const activeDaysRows = await db.select({ d: sql<string>`DATE(${messages.createdAt})` }).from(messages)
+  const activeDaysRows = await db.select({ d: sql<string>`TO_CHAR(${messages.createdAt}, 'YYYY-MM-DD')` }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
-    .groupBy(sql`DATE(${messages.createdAt})`).orderBy(sql`DATE(${messages.createdAt})`);
+    .groupBy(sql`TO_CHAR(${messages.createdAt}, 'YYYY-MM-DD')`).orderBy(sql`TO_CHAR(${messages.createdAt}, 'YYYY-MM-DD')`);
   const activeDays = activeDaysRows.length;
   let longestStreak = 0, currentStreak = 0;
   for (let i = 0; i < activeDaysRows.length; i++) {
@@ -2513,13 +2534,15 @@ export async function getUserMessageCountSince(userId: number, since: Date) {
  * Only the user's own messages count: a conversation is one turn from
  * them, not two rows in the table.
  */
-export async function getDailyUserChatCounts(userId: number, days = 30) {
+export async function getDailyUserChatCounts(userId: number, days = 30, timezone?: string | null) {
   const db = await getDb();
   if (!db) return [];
   const since = new Date();
   since.setDate(since.getDate() - days);
+  const shift = dayShiftHours(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
   const rows = await db.select({
-    date: sql<string>`DATE(${messages.createdAt})`,
+    date: day,
     count: count(),
   })
     .from(messages)
@@ -2528,7 +2551,7 @@ export async function getDailyUserChatCounts(userId: number, days = 30) {
       eq(messages.role, "user"),
       gte(messages.createdAt, since),
     ))
-    .groupBy(sql`DATE(${messages.createdAt})`);
+    .groupBy(day);
   return rows;
 }
 

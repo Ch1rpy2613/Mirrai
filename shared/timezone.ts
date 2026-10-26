@@ -121,6 +121,61 @@ export function zonedDateKey(date: Date, timeZone?: string | null): string {
   }
 }
 
+/**
+ * How many hours the user's clock is ahead of the server's.
+ *
+ * The database stores timestamps as a wall clock with no time zone in it —
+ * the server's own. A message written at half past nine in the evening in
+ * Shanghai is stored as 21:30, and the day it belongs to is the day it was
+ * 21:30 for the *user*, which is not the same day when the server and the
+ * user are in different places.
+ *
+ * This is the number of hours to add to the stored value to land on the
+ * user's clock. It is zero when the zone is the same as the server's, and
+ * it ignores the hour an hour of daylight saving makes it ambiguous —
+ * which is the right trade for counting days.
+ */
+export function dayShiftHours(timeZone?: string | null, now: Date = new Date()): number {
+  if (!timeZone) return 0;
+  return zonedOffsetHours(now, timeZone) - zonedOffsetHours(now, null);
+}
+
+/**
+ * The day before a "YYYY-MM-DD" key.
+ *
+ * Pure arithmetic on the key, with no time zone in it: the key is a
+ * calendar day, so the day before it is a calendar day too. Doing this
+ * with a `Date` would drag the machine's own offset into it.
+ */
+export function previousDateKey(key: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return key;
+  const date = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  );
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The day, as "YYYY-MM-DD", in the server's own calendar.
+ *
+ * The database stores timestamps *without* a time zone, so a row's day is
+ * the day it was written on the machine that wrote it — which is what
+ * `DATE(createdAt)` returns in the database. This is the same key, made
+ * in JavaScript, so the two can be compared.
+ *
+ * It is deliberately not `toISOString().slice(0, 10)`: that is the *UTC*
+ * day, and on a server that is not on UTC it is the wrong day for half
+ * of every day.
+ */
+export function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /** Whether a time zone name is one this runtime understands. */
 export function isValidTimeZone(timeZone: string | null | undefined): boolean {
   if (!timeZone) return false;
