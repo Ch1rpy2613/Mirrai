@@ -287,6 +287,30 @@ export function isRealDayKey(dayKey: string): boolean {
   return day <= lastDay;
 }
 
+/**
+ * Whether a string is a month key — "2021-05".
+ *
+ * The editor asks for a month: the placeholders say "2021-05", and the
+ * questionnaire takes whatever the user typed.
+ */
+export function isRealMonthKey(monthKey: string): boolean {
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey);
+  if (!match) return false;
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12;
+}
+
+/**
+ * Whether a string is a month key or a day key.
+ *
+ * Both are accepted, because both are what the app asks for: the date
+ * picker hands over a day, and the editor's placeholder asks for a
+ * month.
+ */
+export function isRealStartKey(value: string): boolean {
+  return isRealMonthKey(value) || isRealDayKey(value);
+}
+
 /** Whether a time zone name is one this runtime understands. */
 export function isValidTimeZone(timeZone: string | null | undefined): boolean {
   if (!timeZone) return false;

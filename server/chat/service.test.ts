@@ -36,6 +36,11 @@ const getUserById = vi.fn();
 const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
 
+const storageToDataUrl = vi.fn();
+vi.mock("../storage", () => ({
+  storageToDataUrl: (...a: unknown[]) => storageToDataUrl(...a),
+}));
+
 vi.mock("../db", () => ({
   createMessage: (...a: unknown[]) => createMessage(...a),
   getDefaultLlmConfig: (...a: unknown[]) => getDefaultLlmConfig(...a),
@@ -615,6 +620,44 @@ describe("composeMessages", () => {
     getSceneById.mockResolvedValue(null);
     getLatestChatSummary.mockResolvedValue(undefined);
     touchMemoryRecalled.mockResolvedValue(undefined);
+    // The real helper leaves an absolute URL alone and cannot read a
+    // path that is not there.
+    storageToDataUrl.mockImplementation(async (url: string) =>
+      /^https?:\/\//i.test(url) ? url : null);
+  });
+
+  it("hands the picture to the model as bytes, not as a path", async () => {
+    /**
+     * The picture has to reach the model.
+     *
+     * The stored URL is `/uploads/chat/1/2/x.png` — a path, with no
+     * host — and the API answered "Invalid image URL" and the turn
+     * failed. Against a local model the picture was dropped and the
+     * persona answered as if it had seen nothing.
+     */
+    storageToDataUrl.mockResolvedValue("data:image/png;base64,AAAA");
+    getMessagesByPersonaId.mockResolvedValue([
+      {
+        id: 1,
+        role: "user",
+        content: "[图片]",
+        messageType: "image",
+        mediaUrl: "/uploads/chat/1/2/x.png",
+      },
+    ]);
+
+    const { messages } = await composeMessages({
+      persona: persona(),
+      userId: 1,
+      userMessage: "[图片]",
+      contextLimit: 20,
+    });
+
+    const turn = messages[messages.length - 1];
+    expect(Array.isArray(turn.content)).toBe(true);
+    const parts = turn.content as any[];
+    expect(parts[1].url).toBe("data:image/png;base64,AAAA");
+    expect(parts[1].url).not.toContain("/uploads/");
   });
 
   it("puts the system prompt first", async () => {

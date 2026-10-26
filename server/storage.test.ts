@@ -4,7 +4,7 @@ import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ENV } from "./_core/env";
 import { sanitizeFileName } from "./_core/filename";
-import { storageGet, storagePut } from "./storage";
+import { storageGet, storagePut, storageToDataUrl } from "./storage";
 
 /** Lists every file below `dir`, relative to `dir`. */
 function listFiles(dir: string, prefix = ""): string[] {
@@ -81,6 +81,42 @@ describe("storage", () => {
     it("rejects a key that resolves to the parent of the uploads root", async () => {
       await expect(storagePut("../escaped.txt", "pwned")).rejects.toThrow(/rejected/i);
       expect(fs.existsSync(path.join(path.dirname(tmpDir), "escaped.txt"))).toBe(false);
+    });
+  });
+
+  describe("storageToDataUrl", () => {
+    it("hands the bytes over as a data URL", async () => {
+      /**
+       * The picture has to reach the model.
+       *
+       * The stored URL is a *path* — `/uploads/...` — and a path with
+       * no host is not a URL any model can fetch: the API answered
+       * "Invalid image URL" and the turn failed, and against a local
+       * model the picture was dropped and the persona answered as if it
+       * had seen nothing.
+       */
+      const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+      const { url } = await storagePut("chat/1/2/photo.png", bytes);
+
+      const dataUrl = await storageToDataUrl(url);
+
+      expect(dataUrl).not.toBeNull();
+      expect(dataUrl!.startsWith("data:image/png;base64,")).toBe(true);
+      expect(Buffer.from(dataUrl!.split(",")[1], "base64").equals(bytes)).toBe(true);
+    });
+
+    it("leaves an absolute URL alone", async () => {
+      const url = "https://example.com/photo.png";
+      expect(await storageToDataUrl(url)).toBe(url);
+    });
+
+    it("refuses to read outside the uploads directory", async () => {
+      const dataUrl = await storageToDataUrl("/uploads/../../etc/passwd");
+      expect(dataUrl).toBeNull();
+    });
+
+    it("gives nothing back for a file that is not there", async () => {
+      expect(await storageToDataUrl("/uploads/chat/1/2/missing.png")).toBeNull();
     });
   });
 

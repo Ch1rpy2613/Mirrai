@@ -28,6 +28,7 @@ import { copy, localizeScene } from "@shared/copy";
 import { buildPromptForPersona } from "./prompt";
 import { dayShiftMinutes, localDateKey, zonedDateKey } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
+import { storageToDataUrl } from "../storage";
 
 export type ChatMode = "stream" | "once";
 
@@ -271,19 +272,43 @@ async function maybeCompactHistory(params: {
  * An image keeps its media URL: the model has to see the picture, not the
  * "[图片]" placeholder. Everything else stays a plain string.
  */
-function toLLMMessage(message: {
-  role: string;
-  content: string;
-  messageType?: string | null;
-  mediaUrl?: string | null;
-}): LLMMessage {
+async function toLLMMessage(
+  message: {
+    role: string;
+    content: string;
+    messageType?: string | null;
+    mediaUrl?: string | null;
+  },
+  locale: "zh" | "en",
+): Promise<LLMMessage> {
   const role = message.role as "user" | "assistant";
   if (message.messageType === "image" && message.mediaUrl) {
+    /**
+     * The picture itself, not a path to it.
+     *
+     * The stored URL is `/uploads/chat/1/2/x.png` — a path, with no
+     * host. A model cannot fetch that: the API answered "Invalid image
+     * URL" and the turn failed, and against a local model the picture
+     * was dropped and the persona answered as if it had seen nothing.
+     *
+     * So the bytes are read back and inlined. If they cannot be read,
+     * the model is told the picture is there but could not be opened —
+     * a missing picture is better than a turn that fails outright.
+     */
+    const inlined = await storageToDataUrl(message.mediaUrl).catch(() => null);
+    if (inlined) {
+      return {
+        role,
+        content: [
+          { type: "text", text: message.content },
+          { type: "image_url", url: inlined },
+        ],
+      };
+    }
     return {
       role,
       content: [
-        { type: "text", text: message.content },
-        { type: "image_url", url: message.mediaUrl },
+        { type: "text", text: `${message.content}\n${copy(locale, "prompt.imageUnreadable")}` },
       ],
     };
   }
@@ -390,7 +415,9 @@ export async function composeMessages(params: {
     quotedSection,
   });
 
-  const recent = history.slice(-(contextLimit - 1)).map((m) => toLLMMessage(m));
+  const recent = await Promise.all(
+    history.slice(-(contextLimit - 1)).map((m) => toLLMMessage(m, locale)),
+  );
 
   return {
     messages: [{ role: "system", content: systemPrompt }, ...recent],

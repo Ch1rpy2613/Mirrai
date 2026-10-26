@@ -331,6 +331,17 @@ export const PROMPT = {
     zh: "[图片]",
     en: "[image]",
   },
+  /**
+   * The note that stands in for a picture that could not be read.
+   *
+   * The bytes are inlined for the model, and when they cannot be read
+   * the model is told there is a picture it cannot see — rather than
+   * the turn failing, or the picture being quietly left out.
+   */
+  "prompt.imageUnreadable": {
+    zh: "[图片无法读取]",
+    en: "[the picture could not be read]",
+  },
   /** The text that stands in for a voice message that could not be read. */
 
   // ── How the persona is doing, and what time it is ───────────────────────

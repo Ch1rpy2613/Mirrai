@@ -6,6 +6,20 @@ function toClaudeContent(content: string | LLMContentPart[]): any {
   if (typeof content === "string") return content;
   return content.map(p => {
     if (p.type === "text") return { type: "text", text: p.text };
+    /**
+     * The picture.
+     *
+     * Claude takes a base64 source, not a URL — so a `data:` URL has
+     * to be taken apart and handed over as the bytes. A plain URL is
+     * still accepted, for the providers that fetch it themselves.
+     */
+    const inlined = /^data:([^;,]+);base64,(.*)$/s.exec(p.url);
+    if (inlined) {
+      return {
+        type: "image",
+        source: { type: "base64", media_type: inlined[1], data: inlined[2] },
+      };
+    }
     return { type: "image", source: { type: "url", url: p.url } };
   });
 }
