@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS "collection_jobs" (
 );
 
 -- The stable job identifier, so a client can keep polling across a restart.
-ALTER TABLE "collection_jobs" ADD COLUMN IF NOT EXISTS "jobKey" varchar(64);
+ALTER TABLE "collection_jobs" ADD COLUMN IF NOT EXISTS "jobKey" varchar(64) NOT NULL DEFAULT '';
 CREATE UNIQUE INDEX IF NOT EXISTS "collection_jobs_job_key_idx"
   ON "collection_jobs" ("jobKey");
 

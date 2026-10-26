@@ -434,7 +434,16 @@ export const memoryExtractions = pgTable("memory_extractions", {
   personaId: integer("personaId").notNull(),
   userId: integer("userId").notNull(),
   extractedAt: timestamp("extractedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The index the migration creates.
+   *
+   * It was not declared here, so `drizzle-kit push` wanted to drop it
+   * on every start — harmless, but a schema and its SQL that disagree
+   * are a schema and its SQL that disagree.
+   */
+  personaIdx: index("memory_extractions_persona_idx").on(table.personaId, table.userId),
+}));
 
 export type Memory = typeof memories.$inferSelect;
 export type InsertMemory = typeof memories.$inferInsert;
