@@ -1356,7 +1356,11 @@ export async function countMemories(personaId: number, userId: number) {
   return result?.c || 0;
 }
 
-export async function getMemoriesByPersonaId(personaId: number, userId: number) {
+export async function getMemoriesByPersonaId(
+  personaId: number,
+  userId: number,
+  limit: number = MEMORY_LIST_LIMIT,
+) {
   const db = await getDb();
   if (!db) return [];
   // Pinned first, then by weight, then newest. The retrieval scorer does
@@ -1366,7 +1370,7 @@ export async function getMemoriesByPersonaId(personaId: number, userId: number) 
   return db.select().from(memories)
     .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)))
     .orderBy(desc(memories.isPinned), desc(memories.importance), desc(memories.createdAt))
-    .limit(MEMORY_LIST_LIMIT);
+    .limit(limit);
 }
 
 /** How many memories the list returns at once. */

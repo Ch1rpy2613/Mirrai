@@ -135,8 +135,8 @@ function buildEmotionSVG(
     <polyline points="${polyline}" fill="none" stroke="#7CB69D" stroke-width="2" opacity="0.5"/>
     ${dots}
     ${yLabels}
-    <text x="${PAD}" y="${H - 5}" font-size="10" fill="#aaa">${snapshots[0]?.date || ""}</text>
-    <text x="${W - PAD}" y="${H - 5}" text-anchor="end" font-size="10" fill="#aaa">${snapshots[snapshots.length - 1]?.date || ""}</text>
+    <text x="${PAD}" y="${H - 5}" font-size="10" fill="#aaa">${escapeHtml(snapshots[0]?.date || "")}</text>
+    <text x="${W - PAD}" y="${H - 5}" text-anchor="end" font-size="10" fill="#aaa">${escapeHtml(snapshots[snapshots.length - 1]?.date || "")}</text>
   </svg>`;
 }
 
@@ -185,7 +185,7 @@ export function generateChatExportHTML(
   const diaryHtml = diaryEntries.length > 0 ? `<section class="section">
     <h2>${copy.diaries}</h2>
     ${diaryEntries.slice(0, 10).map(d => `<div class="diary-entry">
-      <span class="diary-date">${d.date}</span>
+      <span class="diary-date">${escapeHtml(d.date)}</span>
       ${d.summary ? `<p>${escapeHtml(d.summary)}</p>` : ""}
       ${d.reflection ? `<p class="reflection">${escapeHtml(d.reflection)}</p>` : ""}
     </div>`).join("\n")}

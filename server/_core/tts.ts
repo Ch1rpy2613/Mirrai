@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
-import { existsSync, mkdirSync, readdirSync } from "fs";
-import { rename, writeFile } from "fs/promises";
+import { existsSync, mkdirSync } from "fs";
+import { readdir, stat } from "fs/promises";
+import { rename, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { ENV } from "./env";
 import { copy } from "@shared/copy";
@@ -128,6 +129,51 @@ function getCacheKey(text: string, voice: string): string {
 }
 
 /**
+ * How many clips are kept per user.
+ *
+ * Every distinct (text, voice) pair writes a new file, and nothing ever
+ * deleted one: so the uploads directory grew without bound for the life
+ * of the install, and on a small container disk it eventually fills and
+ * takes the app down.
+ *
+ * The oldest are let go when the directory is full. The clips are a
+ * cache — the text can always be synthesised again — so losing the
+ * oldest is not losing anything.
+ */
+const MAX_CLIPS_PER_USER = 500;
+
+/**
+ * Lets the oldest clips go when the user's directory is full.
+ */
+async function trimClipCache(dir: string): Promise<void> {
+  let names: string[];
+  try {
+    names = (await readdir(dir)).filter((name) => name.endsWith(".mp3"));
+  } catch {
+    return;
+  }
+  if (names.length < MAX_CLIPS_PER_USER) return;
+
+  const withTimes = await Promise.all(
+    names.map(async (name) => {
+      try {
+        const info = await stat(path.join(dir, name));
+        return { name, at: info.mtimeMs };
+      } catch {
+        return { name, at: 0 };
+      }
+    }),
+  );
+  withTimes.sort((a, b) => a.at - b.at);
+
+  // The newest half is kept; the rest goes.
+  const doomed = withTimes.slice(0, Math.floor(withTimes.length / 2));
+  await Promise.all(
+    doomed.map((entry) => unlink(path.join(dir, entry.name)).catch(() => undefined)),
+  );
+}
+
+/**
  * Synthesises text to speech and returns the URL of the stored audio.
  *
  * Audio is scoped per user (`tts/<userId>/<hash>.mp3`) so that one user's
@@ -153,6 +199,8 @@ export async function generateTTS(
   const { tts } = await import("edge-tts");
   const audioBuffer = await tts(trimmed, { voice });
   await writeFile(filePath, audioBuffer);
+  // The cache is bounded, so the directory cannot grow for ever.
+  await trimClipCache(dir);
 
   return urlPath;
 }
@@ -171,7 +219,7 @@ export async function migrateLegacyTTSFiles(): Promise<number> {
 
   let entries: string[];
   try {
-    entries = readdirSync(TTS_ROOT);
+    entries = await readdir(TTS_ROOT);
   } catch {
     return 0;
   }

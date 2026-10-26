@@ -24,6 +24,13 @@ import { intimacyLevelLabel } from "@shared/intimacy";
  */
 const MAX_EXPORT_MESSAGES = 10_000;
 
+/**
+ * How many memories one persona's export carries.
+ *
+ * The same reasoning as the messages: the bundle is held in memory.
+ */
+const MAX_EXPORT_MEMORIES = 10_000;
+
 export interface ExportBundle {
   /**
    * The language the export reads in.
@@ -122,7 +129,10 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
       // persona is hundreds of megabytes, and the process that builds it
       // runs out of memory — taking every other request with it.
       db.getMessagesByPersonaId(persona.id, userId, MAX_EXPORT_MESSAGES),
-      db.getMemoriesByPersonaId(persona.id, userId),
+      // All of them. The list used to carry the interface's own limit of
+      // two hundred, so the export — which says "all of my data" —
+      // silently left out everything past the two hundredth memory.
+      db.getMemoriesByPersonaId(persona.id, userId, MAX_EXPORT_MEMORIES),
       db.getDiaryEntries(userId, persona.id, 10000),
       db.getEmotionSnapshots(persona.id, userId, 36500),
       db.getRelationshipEvents(persona.id, userId, 1000),

@@ -26,6 +26,7 @@ import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } 
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { buildPromptForPersona } from "./prompt";
+import { localDateKey } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 
 export type ChatMode = "stream" | "once";
@@ -575,7 +576,14 @@ export async function* runConversation(
     emotionalState: newEmotionalState as any,
   });
 
-  const todayStr = now.toISOString().slice(0, 10);
+  /**
+   * The day, in the server's own calendar.
+   *
+   * It was the UTC day, while the daily-activity chart computes the
+   * *user's* day — so the emotion timeline and the message-volume chart
+   * disagreed about which day a message belonged to.
+   */
+  const todayStr = localDateKey(now);
   const existing = await db.getTodaySnapshot(persona.id, userId);
   if (!existing) {
     // The count is the number of messages that actually happened today.
