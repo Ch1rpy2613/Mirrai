@@ -1891,9 +1891,24 @@ function TemplateLibraryTab() {
     { enabled: exportRequest !== null },
   );
 
+  /**
+   * The file that has already been downloaded.
+   *
+   * The effect watched the query's data as well as the nonce, and the
+   * panel is remounted on every tab change — and React Query still has
+   * the cached result for the key. So switching to another tab and back
+   * downloaded the last exported template again, without the user
+   * asking for it.
+   */
+  const downloadedRef = useRef<string | null>(null);
+
   useEffect(() => {
     const data = exportQuery.data;
     if (!data) return;
+    // The nonce alone decides when the file is downloaded.
+    const marker = `${exportRequest?.nonce ?? 0}:${data.fileName}`;
+    if (downloadedRef.current === marker) return;
+    downloadedRef.current = marker;
     const blob = new Blob([data.content], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
