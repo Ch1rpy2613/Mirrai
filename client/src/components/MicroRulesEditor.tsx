@@ -44,7 +44,7 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
   // "Meaning：the meaning".
   const colon = locale === "en" ? ": " : "：";
   const triggerSeparator = locale === "en" ? ", " : "、";
-  const { data, refetch } = trpc.microRule.list.useQuery({ personaId });
+  const { data, refetch, isError, isLoading } = trpc.microRule.list.useQuery({ personaId });
   const saveMutation = trpc.microRule.save.useMutation({
     onSuccess: () => {
       toast.success(t("microRules.saved"));
@@ -265,7 +265,25 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
         <p className="text-xs text-muted-foreground">{t("microRules.hint")}</p>
       </header>
 
-      {rules.length === 0 && !draft ? (
+      {/**
+       * A failed request says so.
+       *
+       * The list came back empty — so the panel said "no rules yet",
+       * which is a claim about the user's own persona, and it was
+       * simply false.
+       */}
+      {isError ? (
+        <div className="space-y-2">
+          <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
+          <Button variant="ghost" size="sm" onClick={() => refetch()}>{t("common.retry")}</Button>
+        </div>
+      ) : null}
+
+      {isLoading && !isError ? (
+        <p className="text-xs text-muted-subtle" role="status">{t("common.loading")}</p>
+      ) : null}
+
+      {rules.length === 0 && !draft && !isError && !isLoading ? (
         <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
           {t("microRules.empty")}
         </p>
