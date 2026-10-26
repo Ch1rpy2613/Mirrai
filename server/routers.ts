@@ -3468,6 +3468,24 @@ export const appRouter = router({
           happenedAt: input.happenedAt ? new Date(input.happenedAt) : undefined,
         });
 
+        /**
+         * The text is scanned.
+         *
+         * The relationship timeline is where the user writes what
+         * happened — "she said she wanted to die that night" — and it
+         * was the other place the user could write freely that the
+         * crisis detector never read.
+         */
+        const crisis = detectCrisis(`${input.title}\n${input.detail ?? ""}`);
+        if (crisis.crisis) {
+          await createSafetyEvent({
+            userId: ctx.user.id,
+            personaId: input.personaId,
+            type: "crisis",
+            severity: "critical",
+          }).catch((e) => console.warn("[Safety] Failed to record the crisis event:", e));
+        }
+
         // A breakup or a reunion changes the relationship itself, so the
         // persona's record is updated to match. The end date is what the
         // app uses to stop the anniversaries and to speak about the past
@@ -3491,7 +3509,7 @@ export const appRouter = router({
           await updatePersona(input.personaId, ctx.user.id, { togetherTo: null });
         }
 
-        return { success: true, event };
+        return { success: true, event, crisis: crisis.crisis };
       }),
 
     remove: protectedProcedure

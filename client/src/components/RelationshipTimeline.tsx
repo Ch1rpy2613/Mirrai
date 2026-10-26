@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import CrisisCard from "@/components/CrisisCard";
 
 /**
  * What actually happened in the relationship.
@@ -27,8 +28,23 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
   const { data, isLoading, isError } = trpc.relationship.list.useQuery({ personaId });
   const invalidate = () => utils.relationship.list.invalidate({ personaId });
 
+  /**
+   * The support resources.
+   *
+   * The timeline is where the user writes what happened — "she said she
+   * wanted to die that night" — so the text is scanned, and the
+   * resources are shown when it says something like that.
+   */
+  const [showCrisis, setShowCrisis] = useState(false);
   const addEvent = trpc.relationship.add.useMutation({
-    onSuccess: () => { toast.success(t("relationship.saved")); invalidate(); setTitle(""); setDetail(""); setKind("news"); },
+    onSuccess: (result) => {
+      toast.success(t("relationship.saved"));
+      invalidate();
+      setTitle("");
+      setDetail("");
+      setKind("news");
+      if (result?.crisis) setShowCrisis(true);
+    },
     onError: (e) => toast.error(e.message),
   });
   const removeEvent = trpc.relationship.remove.useMutation({
@@ -45,6 +61,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
 
   return (
     <div className="space-y-4">
+      {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
       {events.length === 0 ? (
         <p className="text-xs text-muted-foreground leading-relaxed">
           {/* While the list is still on its way, the panel used to say
