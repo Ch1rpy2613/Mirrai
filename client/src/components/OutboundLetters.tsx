@@ -28,7 +28,7 @@ import { daysWaiting, isStale } from "@shared/outbound";
  */
 export default function OutboundLetters({ personaId }: { personaId: number }) {
   const { t } = useLocale();
-  const { data, refetch } = trpc.outbound.list.useQuery({ personaId });
+  const { data, refetch, isLoading } = trpc.outbound.list.useQuery({ personaId });
   const collectMutation = trpc.outbound.collect.useMutation({
     onSuccess: (result) => {
       if (result.saved) {
@@ -89,8 +89,21 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
   }
 
   function saveEdit(id: number) {
-    updateMutation.mutate({ id, text });
-    setEditing(null);
+    const trimmed = text.trim();
+    if (!trimmed) {
+      // A letter with nothing in it is not a letter.
+      toast.error(t("outbound.editRequired"));
+      return;
+    }
+    // The editor stays open until the server has taken the text.
+    //
+    // It used to close at once, so a failed save threw the user's
+    // rewritten words away with no way of getting them back — the only
+    // trace was the error toast.
+    updateMutation.mutate(
+      { id, text: trimmed },
+      { onSuccess: () => setEditing(null) },
+    );
   }
 
   return (
@@ -114,7 +127,7 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
 
       {letters.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border/70 px-4 py-8 text-center text-xs text-muted-foreground">
-          {t("outbound.empty")}
+          {isLoading ? t("common.loading") : t("outbound.empty")}
         </p>
       ) : null}
 

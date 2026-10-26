@@ -19,15 +19,31 @@ const run = vi.fn();
 let profile: any = null;
 let lastRun: any = null;
 
+const invalidate = vi.fn();
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    // The panel refreshes the numbers after a run.
+    useUtils: () => ({
+      eval: { latest: { invalidate: (...a: unknown[]) => invalidate(...a) } },
+    }),
     behavior: {
       get: { useQuery: () => ({ data: { profile }, refetch: vi.fn() }) },
       measure: { useMutation: () => ({ mutate: measure, isPending: false }) },
     },
     eval: {
       latest: { useQuery: () => ({ data: { run: lastRun } }) },
-      run: { useMutation: () => ({ mutate: run, isPending: false }) },
+      // The mutation calls its own `onSuccess`, the way the real one
+      // does — that is where the numbers are refreshed.
+      run: {
+        useMutation: (opts: any) => ({
+          mutate: (input: any, callbacks?: any) => {
+            run(input, callbacks);
+            opts?.onSuccess?.({ run: lastRun }, callbacks);
+          },
+          isPending: false,
+        }),
+      },
     },
   },
 }));
@@ -161,6 +177,16 @@ describe("the ruler and the timing", () => {
     await userEvent.click(screen.getByText(translate("zh", "fidelity.run")));
     await waitFor(() => expect(run).toHaveBeenCalled());
     expect(run.mock.calls[0][0]).toMatchObject({ personaId: 1, variant: "default" });
+  });
+
+  it("shows the numbers of the run it has just made", async () => {
+    // The run was never invalidated, so the toast said "done" while the
+    // four tiles still showed the run before it — the user had no way
+    // to see the result of the run they had just paid for.
+    render(<FidelityPanel personaId={1} />);
+    await userEvent.click(screen.getByText(translate("zh", "fidelity.run")));
+    await waitFor(() => expect(run).toHaveBeenCalled());
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ personaId: 1 }));
   });
 
   it("runs the control — the same persona without its rules", async () => {

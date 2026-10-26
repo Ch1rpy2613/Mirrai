@@ -1213,6 +1213,7 @@ export const zh = {
     drop: "不说了",
     source: "来自对话里的一句话",
     edit: "改一改",
+    editRequired: "这句话不能是空的。",
     staleHint: "这句话已经放了 {{days}} 天了。它不会自己消失。",
     forSelf: "留给自己的",
   },

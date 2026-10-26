@@ -18,7 +18,7 @@ export default function SafetyTransparency() {
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
-  const { data: eventsData } = trpc.safety.events.useQuery({ limit: 20 });
+  const { data: eventsData, isLoading } = trpc.safety.events.useQuery({ limit: 20 });
   const { data: assessmentsData } = trpc.safety.assessments.useQuery();
 
   const resolve = trpc.safety.resolveEvent.useMutation({
@@ -35,7 +35,10 @@ export default function SafetyTransparency() {
   if (events.length === 0 && assessments.length === 0) {
     return (
       <p className="text-xs text-muted-foreground leading-relaxed">
-        {t("safetyPanel.empty")}
+        {/* Not "nothing to report" while the record is still being
+            fetched — that is a claim about the user's own history, and
+            it was made a moment before the truth appeared. */}
+        {isLoading ? t("common.loading") : t("safetyPanel.empty")}
       </p>
     );
   }

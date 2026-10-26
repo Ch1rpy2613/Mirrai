@@ -24,7 +24,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
-  const { data } = trpc.relationship.list.useQuery({ personaId });
+  const { data, isLoading } = trpc.relationship.list.useQuery({ personaId });
   const invalidate = () => utils.relationship.list.invalidate({ personaId });
 
   const addEvent = trpc.relationship.add.useMutation({
@@ -47,7 +47,11 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
     <div className="space-y-4">
       {events.length === 0 ? (
         <p className="text-xs text-muted-foreground leading-relaxed">
-          {t("relationship.empty")}
+          {/* While the list is still on its way, the panel used to say
+              that nothing had been recorded — a false statement about
+              the user's own data, made a moment before the real thing
+              appeared. */}
+          {isLoading ? t("common.loading") : t("relationship.empty")}
         </p>
       ) : (
         <ol className="space-y-3">

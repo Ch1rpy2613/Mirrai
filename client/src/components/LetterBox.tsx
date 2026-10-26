@@ -25,7 +25,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
-  const { data } = trpc.letter.list.useQuery({ personaId });
+  const { data, isLoading } = trpc.letter.list.useQuery({ personaId });
   const { data: todosData } = trpc.letter.todos.useQuery({ personaId });
   const [showWrite, setShowWrite] = useState(false);
   const [body, setBody] = useState("");
@@ -58,7 +58,9 @@ export default function LetterBox({ personaId }: { personaId: number }) {
     <div className="space-y-4">
       {letters.length === 0 && !showWrite && (
         <p className="text-xs text-muted-foreground leading-relaxed">
-          {t("letters.empty")}
+          {/* "No letters yet" while the letters are still on their way
+              is a false statement about the user's own data. */}
+          {isLoading ? t("common.loading") : t("letters.empty")}
         </p>
       )}
 

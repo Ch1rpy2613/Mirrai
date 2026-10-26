@@ -25,6 +25,11 @@ let lastRun: any = null;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    // The panels refresh their own queries after a run.
+    useUtils: () => ({
+      eval: { latest: { invalidate: vi.fn() } },
+      behavior: { get: { invalidate: vi.fn() } },
+    }),
     microRule: {
       list: { useQuery: () => ({ data: { rules: [] }, refetch: vi.fn() }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

@@ -1219,6 +1219,7 @@ export const en = {
     drop: "Never mind",
     source: "From a line in the conversation",
     edit: "Edit it",
+    editRequired: "This cannot be empty.",
     staleHint: "This has been waiting {{days}} days. It will not go away on its own.",
     forSelf: "For yourself",
   },

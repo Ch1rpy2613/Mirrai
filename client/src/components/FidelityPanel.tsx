@@ -2,7 +2,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Gauge, Timer, Play } from "lucide-react";
 
@@ -48,9 +47,19 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const utils = trpc.useUtils();
   const { data: latest } = trpc.eval.latest.useQuery({ personaId });
   const runMutation = trpc.eval.run.useMutation({
-    onSuccess: () => toast.success(t("fidelity.done")),
+    onSuccess: () => {
+      toast.success(t("fidelity.done"));
+      // The numbers on screen are the previous run's.
+      //
+      // The run was never invalidated, so the toast said "done" while
+      // the four tiles still showed the run before it — the user had no
+      // way to see the result of the run they had just paid for. The
+      // measurement next door does refresh its own.
+      utils.eval.latest.invalidate({ personaId });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -120,15 +129,24 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
             {t("fidelity.title")}
           </h3>
           <div className="flex items-center gap-2">
-            <Badge
-              variant={variant === "default" ? "default" : "secondary"}
-              className="cursor-pointer select-none"
+            {/* The switch is a button.
+                A `Badge` is a `<span>`, so the control that decides
+                what the evaluation measured could not be reached with
+                the keyboard and was not announced as a switch. */}
+            <button
+              type="button"
+              aria-pressed={variant === "default"}
               onClick={() => setVariant(variant === "default" ? "withoutRules" : "default")}
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                variant === "default"
+                  ? "border-transparent bg-primary text-primary-foreground"
+                  : "border-border bg-transparent text-muted-foreground hover:text-foreground"
+              }`}
             >
               {variant === "default"
                 ? t("fidelity.withRules")
                 : t("fidelity.withoutRules")}
-            </Badge>
+            </button>
             <Button
               size="sm"
               variant="outline"
