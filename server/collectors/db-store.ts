@@ -99,6 +99,28 @@ export async function listPersistedCollectorJobs(userId: number) {
 }
 
 /**
+ * One persisted collection job, for the owner.
+ *
+ * The job list is read from the database, so a job that survived a
+ * restart is in the list — and clicking it returned "not found",
+ * because the detail was read from the process's memory.
+ */
+export async function getPersistedCollectorJob(jobKey: string, userId: number) {
+  const job = await db.getCollectionJob(jobKey, userId);
+  if (!job) return undefined;
+  return {
+    id: job.jobKey,
+    source: job.source as CollectorJob["source"],
+    status: job.status as CollectorJobStatus,
+    progress: job.progress,
+    messageCount: job.messageCount,
+    error: job.error ?? undefined,
+    startedAt: job.startedAt ?? undefined,
+    finishedAt: job.finishedAt ?? undefined,
+  };
+}
+
+/**
  * The idempotency key of a collected message.
  *
  * The plan requires the import to be idempotent per source and timestamp:

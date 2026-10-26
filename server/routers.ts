@@ -125,7 +125,7 @@ import {
   getCollectorJob,
   listCollectorJobs,
 } from "./collectors";
-import { listPersistedCollectorJobs, collectedSpeaker } from "./collectors/db-store";
+import { listPersistedCollectorJobs, getPersistedCollectorJob, collectedSpeaker } from "./collectors/db-store";
 
 /**
  * Resolves a persona's picture to PNG bytes for the character-card export.
@@ -2720,20 +2720,32 @@ export const appRouter = router({
     getJob: protectedProcedure
       .input(z.object({ jobId: z.string() }))
       .query(async ({ ctx, input }) => {
-        const job = getCollectorJob(input.jobId);
-        if (!job || job.userId !== String(ctx.user.id)) {
+        /**
+         * The live job, or the persisted one.
+         *
+         * The job list is read from the database — so a job that
+         * survived a restart is in the list, and clicking it returned
+         * "not found" because the detail came from the process's
+         * memory. The panel then spun on "loading" for ever.
+         */
+        const live = getCollectorJob(input.jobId);
+        if (live && live.userId === String(ctx.user.id)) {
+          return {
+            id: live.id,
+            source: live.source,
+            status: live.status,
+            progress: live.progress,
+            messageCount: live.messageCount,
+            error: live.error,
+            startedAt: live.startedAt,
+            finishedAt: live.finishedAt,
+          };
+        }
+        const persisted = await getPersistedCollectorJob(input.jobId, ctx.user.id);
+        if (!persisted) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
-        return {
-          id: job.id,
-          source: job.source,
-          status: job.status,
-          progress: job.progress,
-          messageCount: job.messageCount,
-          error: job.error,
-          startedAt: job.startedAt,
-          finishedAt: job.finishedAt,
-        };
+        return persisted;
       }),
   }),
 

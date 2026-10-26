@@ -3448,6 +3448,26 @@ export async function getCollectionJobs(userId: number, limit = 20) {
     .limit(limit);
 }
 
+/**
+ * One persisted collection job.
+ *
+ * The job list is read from the database, so a job that survived a
+ * restart is in the list — and clicking it returned "not found",
+ * because the detail was read from the process's memory. The panel
+ * then spun on "loading" for ever.
+ */
+export async function getCollectionJob(jobKey: string, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select().from(collectionJobs)
+    .where(and(
+      eq(collectionJobs.jobKey, jobKey),
+      eq(collectionJobs.userId, userId),
+    ))
+    .limit(1);
+  return row;
+}
+
 // ─── Reminder helpers ──────────────────────────────────────────────────────
 
 /** Personas that may receive proactive reminders. */
