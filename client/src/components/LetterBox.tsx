@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { USER_MOODS, type UserMood } from "@shared/user-side";
+import { USER_MOODS, isUserMood, type UserMood } from "@shared/user-side";
 
 /**
  * The letters.
@@ -146,7 +146,19 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               <div className="flex items-center gap-3 mt-3 text-[0.625rem] text-muted-subtle">
                 <span>{new Date(letter.createdAt).toLocaleDateString(locale)}</span>
                 {letter.mood && (
-                  <span>{t(`moodCheckIn.moods.${letter.mood}` as any)}</span>
+                  /**
+                   * The mood is named, not coded.
+                   *
+                   * The dictionary falls back to the key itself, so an
+                   * unknown mood was shown as "moodCheckIn.moods.xyz" —
+                   * and the server accepts any sixteen-character mood
+                   * string.
+                   */
+                  <span>
+                    {isUserMood(letter.mood)
+                      ? t(`moodCheckIn.moods.${letter.mood}` as any)
+                      : letter.mood}
+                  </span>
                 )}
                 {letter.status === "private" && (
                   <span className="inline-flex items-center gap-1">
@@ -177,7 +189,17 @@ export default function LetterBox({ personaId }: { personaId: number }) {
                   if (!window.confirm(t("letters.removeConfirm"))) return;
                   remove.mutate({ id: letter.id });
                 }}
-                aria-label={t("letters.remove")}
+                /**
+                 * The button says which letter.
+                 *
+                 * Every one of them was "remove" — so a screen-reader
+                 * user heard "remove, remove, remove" and could not
+                 * tell which letter they were about to throw away.
+                 */
+                aria-label={t("letters.removeNamed", {
+                  date: new Date(letter.createdAt).toLocaleDateString(locale),
+                  preview: (letter.body ?? "").slice(0, 20),
+                })}
                 // The button is disabled while the removal is in flight:
                 // two clicks meant two removals, and the second one
                 // failed on a row that was already gone.

@@ -1400,6 +1400,7 @@ export const zh = {
     noteSaved: "记下来了。等你们重新联系上的时候再说。",
     moreCount: "还有 {{count}} 封更早的信没有显示。",
     loadOlder: "看更早的信",
+    removeNamed: "删除 {{date}} 的这封信（{{preview}}…）",
     delivered: "信写好了，已经交给 TA。",
     /**
      * The letter to a persona that has said goodbye.
@@ -1412,7 +1413,6 @@ export const zh = {
     statusPrivate: "只写下来了",
     statusWaiting: "等回信",
     reply: "TA 的回信",
-    remove: "删掉这封信",
     removeConfirm: "删掉这封信？写下的内容不会留下。",
     kindLetter: "写给 TA 的信",
     kindLabel: "这封信是什么",
