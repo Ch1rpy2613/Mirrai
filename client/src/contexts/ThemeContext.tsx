@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 type Theme = "light" | "dark";
 
@@ -98,17 +98,37 @@ export function ThemeProvider({
     }
   }, [theme, switchable]);
 
-  const toggleTheme = switchable
-    ? () => {
-        setTheme(prev => (prev === "light" ? "dark" : "light"));
-      }
-    : undefined;
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, switchable }}>
-      {children}
-    </ThemeContext.Provider>
+  /**
+   * The toggle.
+   *
+   * It used to be a new function on every render — so a consumer that
+   * had it in a dependency list saw it change every time, and did its
+   * work again for nothing.
+   */
+  const toggleTheme = useMemo(
+    () =>
+      switchable
+        ? () => {
+            setTheme((prev) => (prev === "light" ? "dark" : "light"));
+          }
+        : undefined,
+    [switchable],
   );
+
+  /**
+   * The value.
+   *
+   * It used to be a new object on every render — so every consumer of
+   * `useTheme()` re-rendered whenever the provider did, whatever had
+   * changed. The toast bar is one of them, and it is at the top of the
+   * app.
+   */
+  const value = useMemo(
+    () => ({ theme, toggleTheme, switchable }),
+    [theme, toggleTheme, switchable],
+  );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
