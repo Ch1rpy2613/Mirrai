@@ -50,7 +50,7 @@ function LandingNav() {
           <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="text-sm">
             {t("landing.nav.login")}
           </Button>
-          <Button size="sm" onClick={() => navigate("/login")} className="hidden sm:inline-flex text-sm rounded-md px-4">
+          <Button size="sm" onClick={() => navigate("/login?mode=register")} className="hidden sm:inline-flex text-sm rounded-md px-4">
             {t("landing.nav.register")}
           </Button>
         </div>

@@ -9,10 +9,23 @@ import { ArrowLeft } from "lucide-react";
 import { useLocale } from "@/contexts/LocaleContext";
 
 export default function Login() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
-  const [isRegister, setIsRegister] = useState(false);
+  /**
+   * Which form is shown.
+   *
+   * The landing page's "Sign up" button said one thing and did another:
+   * it opened the sign-in form. So a reader who chose to register had
+   * to find the small "create an account" link at the bottom of the
+   * sign-in form to get what they asked for.
+   *
+   * The page reads it from the address now, so the button can say
+   * "register" and mean it.
+   */
+  const [isRegister, setIsRegister] = useState(
+    () => new URLSearchParams(location.split("?")[1] ?? "").get("mode") === "register",
+  );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
