@@ -13,6 +13,11 @@ import { DEFAULT_CRISIS_RESOURCES, getCrisisResources } from "./resources";
  * test fails once that date is old enough that somebody has to look at it
  * again. The window is generous on purpose: the point is to force a check
  * before a release, not to nag every day.
+ *
+ * The date in the list that ships with the app is a placeholder — the
+ * numbers have not been checked against the operators. What this test
+ * enforces is that the check has somewhere to be recorded and that it is
+ * not left to rot; the check itself is owed by a person.
  */
 
 /** How long a resource may go unverified before the build asks for a look. */
@@ -43,7 +48,7 @@ describe("the crisis resources", () => {
     }
   });
 
-  it("has been checked by a human recently enough", () => {
+  it("has not been left unverified for too long", () => {
     // A number that nobody has looked at in a year might have changed.
     // Update `lastVerified` in server/safety/resources.ts after checking.
     const stale = DEFAULT_CRISIS_RESOURCES

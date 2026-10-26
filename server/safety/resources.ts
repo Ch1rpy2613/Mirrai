@@ -1,11 +1,13 @@
 /**
  * Crisis-support resources.
  *
- * IMPORTANT: the numbers below are the ones named in the approved plan. They
- * have not been re-verified against the operators themselves — the
- * `lastVerified` field records that they still need a human check before a
- * release goes out. Edit this file (or point `SAFETY_RESOURCES_FILE` at your
- * own copy) to correct them.
+ * IMPORTANT: the numbers below are the ones named in the approved plan, and
+ * they are the widely published ones. **Nobody has checked them against the
+ * operators themselves.** The `lastVerified` field records when the entry
+ * was written, not when a person verified it — and the date in it is a
+ * placeholder, not a promise. A human check is still owed before a release
+ * goes out: edit this file (or point `SAFETY_RESOURCES_FILE` at your own
+ * copy) to correct the numbers, and put the real date in the field.
  *
  * Nothing in this file is fetched from the network: the list ships with the
  * app so it is available even when the machine is offline.
@@ -26,7 +28,13 @@ export interface CrisisResource {
   descriptionEn?: string;
   /** The contact itself — a phone number or a URL. */
   contact: string;
-  /** ISO date the entry was last checked by a human. */
+  /**
+   * ISO date the entry was last checked by a human.
+   *
+   * It is a placeholder in the list that ships with the app: the numbers
+   * have not been checked against the operators. The field is kept so that
+   * the check has somewhere to be recorded when it happens.
+   */
   lastVerified: string;
 }
 
