@@ -59,10 +59,14 @@ export async function persistCollectorJob(job: CollectorJob): Promise<void> {
  */
 export async function markInterruptedCollectorJobs(): Promise<number> {
   try {
-    const jobs = await db.getCollectionJobs();
+    // The jobs that are still running, and only those.
+    //
+    // The twenty newest jobs of everybody used to be looked at, so a
+    // job that had been running when the process died stayed "running"
+    // for ever — and the interface showed a spinner that never ended.
+    const jobs = await db.getRunningCollectionJobs();
     let marked = 0;
     for (const job of jobs) {
-      if (job.status !== "running") continue;
       await db.updateCollectionJob(job.id, job.userId, {
         status: "interrupted",
         error: "The server restarted while this collection was running.",
@@ -122,7 +126,11 @@ export async function importCollectedMessages(params: {
   source: string;
   messages: CollectedMessage[];
 }): Promise<number> {
-  const existing = await db.getCollectedMessages(
+  // Only the keys of the messages that are already there.
+  //
+  // The whole row of every message ever collected was loaded — fifty
+  // thousand rows of a full chat log — of which three fields were used.
+  const existing = await db.getCollectedMessageKeys(
     params.personaId,
     params.userId,
     params.source,

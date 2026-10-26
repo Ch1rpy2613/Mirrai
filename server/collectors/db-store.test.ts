@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const createCollectedMessage = vi.fn();
 const getCollectedMessages = vi.fn();
+const getCollectedMessageKeys = vi.fn();
 
 /** The rows the fake drizzle client hands back for a select. */
 const dbState = vi.hoisted(() => ({
@@ -33,6 +34,7 @@ const client = vi.hoisted(() => ({
 vi.mock("../db", () => ({
   createCollectedMessage: (...a: unknown[]) => createCollectedMessage(...a),
   getCollectedMessages: (...a: unknown[]) => getCollectedMessages(...a),
+  getCollectedMessageKeys: (...a: unknown[]) => getCollectedMessageKeys(...a),
   getDb: async () => client,
 }));
 
@@ -48,8 +50,10 @@ describe("importCollectedMessages", () => {
   beforeEach(() => {
     createCollectedMessage.mockReset();
     getCollectedMessages.mockReset();
+    getCollectedMessageKeys.mockReset();
     createCollectedMessage.mockResolvedValue(1);
-    getCollectedMessages.mockResolvedValue([]);
+    getCollectedMessageKeys.mockResolvedValue([]);
+    getCollectedMessageKeys.mockResolvedValue([]);
   });
 
   it("imports every message when the persona has none yet", async () => {
@@ -68,7 +72,7 @@ describe("importCollectedMessages", () => {
   });
 
   it("does not import the same message twice", async () => {
-    getCollectedMessages.mockResolvedValue([
+    getCollectedMessageKeys.mockResolvedValue([
       {
         id: 1,
         userId: 2,
@@ -98,7 +102,7 @@ describe("importCollectedMessages", () => {
   });
 
   it("treats a message with no timestamp as its own entry", async () => {
-    getCollectedMessages.mockResolvedValue([
+    getCollectedMessageKeys.mockResolvedValue([
       {
         id: 1,
         userId: 2,
@@ -125,7 +129,7 @@ describe("importCollectedMessages", () => {
   it("keys the idempotency on the source, not on the content alone", async () => {
     // The very same sentence, at the very same moment, coming from another
     // platform is another message.
-    getCollectedMessages.mockResolvedValue([
+    getCollectedMessageKeys.mockResolvedValue([
       {
         id: 1,
         userId: 2,
@@ -150,7 +154,7 @@ describe("importCollectedMessages", () => {
   });
 
   it("does not import the same source and timestamp twice", async () => {
-    getCollectedMessages.mockResolvedValue([
+    getCollectedMessageKeys.mockResolvedValue([
       {
         id: 1,
         userId: 2,

@@ -2351,6 +2351,40 @@ export async function getCollectedMessages(
   ));
 }
 
+/** The three fields a collected message's identity is made of. */
+export interface CollectedMessageKey {
+  source: string | null;
+  timestamp: Date | null;
+  content: string;
+}
+
+/**
+ * The keys of the messages that were already collected.
+ *
+ * Only the three columns the key is made of are read: the whole row of
+ * every message ever collected was loaded into the heap — fifty
+ * thousand rows of a full chat log — of which three fields were used.
+ */
+export async function getCollectedMessageKeys(
+  personaId: number,
+  userId: number,
+  source: string,
+): Promise<CollectedMessageKey[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    source: collectedMessages.source,
+    timestamp: collectedMessages.timestamp,
+    content: collectedMessages.content,
+  })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+      eq(collectedMessages.source, source),
+    ));
+}
+
 /**
  * Every collected message of a persona, across all sources.
  *
@@ -2420,6 +2454,33 @@ export async function getCollectionJobByKey(jobKey: string, userId: number) {
     .where(and(eq(collectionJobs.jobKey, jobKey), eq(collectionJobs.userId, userId)))
     .limit(1);
   return rows[0];
+}
+
+/** A collection job that is still marked as running. */
+export interface RunningCollectionJob {
+  id: number;
+  userId: number;
+}
+
+/**
+ * The collection jobs that are still marked as running.
+ *
+ * The reconciliation after a restart used to look at the twenty newest
+ * jobs of everybody: so a job that had been running when the process
+ * died stayed "running" for ever, and the interface showed a spinner
+ * that never ended — which is exactly what the reconciliation exists to
+ * prevent.
+ */
+export async function getRunningCollectionJobs(): Promise<RunningCollectionJob[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    id: collectionJobs.id,
+    userId: collectionJobs.userId,
+  })
+    .from(collectionJobs)
+    .where(eq(collectionJobs.status, "running"));
+  return rows.map((row) => ({ id: row.id, userId: row.userId }));
 }
 
 export async function getCollectionJobs(userId?: number, limit = 20) {

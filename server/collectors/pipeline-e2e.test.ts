@@ -14,10 +14,12 @@ import path from "node:path";
 
 const createCollectedMessage = vi.fn();
 const getCollectedMessages = vi.fn();
+const getCollectedMessageKeys = vi.fn();
 
 vi.mock("../db", () => ({
   createCollectedMessage: (...a: unknown[]) => createCollectedMessage(...a),
   getCollectedMessages: (...a: unknown[]) => getCollectedMessages(...a),
+  getCollectedMessageKeys: (...a: unknown[]) => getCollectedMessageKeys(...a),
   getDb: async () => null,
 }));
 
@@ -62,7 +64,9 @@ describe("collecting a chat history into a persona", () => {
   beforeEach(() => {
     createCollectedMessage.mockReset();
     getCollectedMessages.mockReset();
-    getCollectedMessages.mockResolvedValue([]);
+    getCollectedMessageKeys.mockReset();
+    getCollectedMessageKeys.mockResolvedValue([]);
+    getCollectedMessageKeys.mockResolvedValue([]);
     createCollectedMessage.mockResolvedValue(1);
   });
 
@@ -145,7 +149,7 @@ describe("collecting a chat history into a persona", () => {
       createCollectedMessage.mockClear();
 
       // The second run finds the rows the first run wrote.
-      getCollectedMessages.mockResolvedValue(
+      getCollectedMessageKeys.mockResolvedValue(
         result.messages.map((m, i) => ({
           id: i + 1,
           userId: 1,
