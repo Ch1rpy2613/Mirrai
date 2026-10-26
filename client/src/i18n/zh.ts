@@ -795,6 +795,7 @@ export const zh = {
       targetLabel: "目标联系人（可选）",
       fileLabel: "要导入的文件",
       fileUploadFailed: "文件上传失败",
+    fileNeedsPersona: "请先选择一个分身，再选择要导入的文件",
       targetPlaceholder: "平台上的对方名字",
       limitLabel: "最多采集条数（可选）",
       limitPlaceholder: "例如 500",

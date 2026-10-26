@@ -1644,7 +1644,21 @@ function DataSourcesTab() {
                 aria-label={t("settings.sources.fileLabel")}
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (!file || !personaId) return;
+                  if (!file) return;
+                  /**
+                   * The file belongs to a persona.
+                   *
+                   * Without one the file was dropped in silence: the
+                   * user saw nothing happen, the "start collection"
+                   * button stayed disabled, and the file field looked
+                   * filled. Choosing the same file again did not even
+                   * fire a change event.
+                   */
+                  if (!personaId) {
+                    e.target.value = "";
+                    toast.error(t("settings.sources.fileNeedsPersona"));
+                    return;
+                  }
                   try {
                     const content = await fileToBase64(file);
                     const uploaded = await uploadSourceFile.mutateAsync({
