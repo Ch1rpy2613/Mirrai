@@ -147,7 +147,10 @@ describe("handleFeishuEvent", () => {
     expect(sent).toContain("已切换到 小A。");
   });
 
-  it("mentions the graduation ritual when the persona is ready to let go", async () => {
+  it("does not add a second note about the graduation ritual", async () => {
+    // The bridge owns the note. It used to be added here as well, so the
+    // user received two instructions to type "/毕业" at the end of one
+    // message.
     getPersonaById.mockResolvedValue({ id: 7, graduationStatus: "suggested" });
     const sent: string[] = [];
 
@@ -163,6 +166,7 @@ describe("handleFeishuEvent", () => {
       },
     });
 
-    expect(sent.join("\n")).toContain("/毕业");
+    expect(sent[0]).toBe("在的。");
+    expect(sent[0]).not.toContain("/毕业");
   });
 });

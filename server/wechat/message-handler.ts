@@ -57,18 +57,13 @@ export async function handleWeixinMessage(
 
   if (!reply) return;
 
-  // When the system has decided it is time to let go, surface the option
-  // alongside the reply so the ritual can be completed from WeChat.
-  const persona = await db.getPersonaById(personaId, userId);
-  if (persona?.graduationStatus === "suggested") {
-    await sendText(
-      userId,
-      parsed,
-      `${reply}\n\n（如果你觉得是时候了，回复「/毕业」我来写最后一封信。）`,
-    );
-    return;
-  }
-
+  // The bridge appends the note itself, when the app has decided that a
+  // farewell is due.
+  //
+  // It used to be appended twice — once by the bridge and once here —
+  // so the user received two instructions to type "/毕业" at the end of
+  // one message. And it was hard-coded Chinese, so an English user on
+  // WeChat was told to type a Chinese command.
   await sendText(userId, parsed, reply);
 }
 

@@ -167,12 +167,12 @@ export async function handleFeishuEvent(params: {
 
   if (!reply) return;
 
-  const persona = await db.getPersonaById(personaId, userId);
-  if (persona?.graduationStatus === "suggested") {
-    await sendText(chatId, `${reply}${copy(locale, "channels.graduationHint")}`);
-    return;
-  }
-
+  // The bridge appends the note itself, when the app has decided that
+  // a farewell is due.
+  //
+  // It used to be appended twice — once by the bridge and once here —
+  // so the user received two instructions to type "/毕业" at the end of
+  // one message.
   await sendText(chatId, reply);
 }
 

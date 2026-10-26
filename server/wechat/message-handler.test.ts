@@ -81,12 +81,16 @@ describe("handleWeixinMessage", () => {
     expect(sendWeixinText).toHaveBeenCalledWith(1, "wx-user-1", "已切换到 小B。", "ctx-1");
   });
 
-  it("appends a graduation hint when graduation was suggested", async () => {
+  it("does not add a second note about the graduation ritual", async () => {
+    // The bridge owns the note. It used to be added here as well, so the
+    // user received two instructions to type "/毕业" at the end of one
+    // message — and it was hard-coded Chinese, so an English user was
+    // told to type a Chinese command.
     getPersonaById.mockResolvedValue({ id: 7, graduationStatus: "suggested" });
     await handleWeixinMessage(1, parsed);
     const sent = sendWeixinText.mock.calls[0];
     expect(sent[2]).toContain("我在呢");
-    expect(sent[2]).toContain("/毕业");
+    expect(sent[2]).not.toContain("/毕业");
   });
 
   it("does not append the hint when graduation was not suggested", async () => {

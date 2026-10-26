@@ -83,12 +83,20 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
     throw e;
   }
 
-  // The app may have decided that a farewell is due. On the web that opens
-  // a card; on a channel there is nowhere to open one, so the suggestion
-  // was simply dropped — which meant the one place the user is least
-  // surrounded by the rest of the interface was the one place the
-  // suggestion never reached.
-  if (graduationSuggested && reply) {
+  /**
+   * The app may have decided that a farewell is due.
+   *
+   * On the web that opens a card; on a channel there is nowhere to open
+   * one, so the suggestion was simply dropped — which meant the one
+   * place the user is least surrounded by the rest of the interface was
+   * the one place the suggestion never reached.
+   *
+   * The note is added here, and only here. The channels used to add a
+   * second one of their own, so the user received two instructions to
+   * type "/毕业" at the end of one message.
+   */
+  const farewellDue = graduationSuggested || persona.graduationStatus === "suggested";
+  if (farewellDue && reply) {
     reply += copy(params.locale ?? "zh", "channels.graduationNote");
   }
 
