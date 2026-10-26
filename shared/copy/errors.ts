@@ -165,6 +165,18 @@ export const ERRORS: CopyTable = {
     zh: "注册失败",
     en: "Registration failed",
   },
+  "errors.loginFailed": {
+    zh: "登录失败",
+    en: "Sign-in failed",
+  },
+  "errors.usernameTooShort": {
+    zh: "用户名需要 2 到 50 个字符",
+    en: "The username must be between 2 and 50 characters",
+  },
+  "errors.passwordTooShort": {
+    zh: "密码至少要 6 个字符",
+    en: "The password must be at least 6 characters",
+  },
   "errors.usernameTaken": {
     zh: "这个用户名已经被用了",
     en: "That username is already taken",

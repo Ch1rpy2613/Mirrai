@@ -10,7 +10,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 
 export default function Login() {
   const [, navigate] = useLocation();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const utils = trpc.useUtils();
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState("");
@@ -27,7 +27,14 @@ export default function Login() {
       const endpoint = isRegister ? "/api/auth/register" : "/api/auth/login";
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // The server's own words have to be in the language of the
+          // person reading them: the sign-in screen is where the
+          // wording matters most, and it used to answer in English
+          // whatever the reader's language was.
+          "x-mirrai-locale": locale,
+        },
         body: JSON.stringify({ username, password }),
         credentials: "include",
       });

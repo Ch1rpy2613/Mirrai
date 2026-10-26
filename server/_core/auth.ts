@@ -8,6 +8,7 @@ import * as db from "../db";
 import { ENV } from "./env";
 import { getSessionCookieOptions } from "./cookies";
 import { hashPassword, needsRehash, verifyPassword } from "./password";
+import { copy, type Locale } from "@shared/copy";
 import { RATE_LIMITS, getClientIp, rateLimiter } from "./rate-limit";
 
 export type SessionPayload = {
@@ -90,28 +91,43 @@ export async function authenticateRequest(req: Request): Promise<User> {
   return user;
 }
 
+/**
+ * The language the person is reading in.
+ *
+ * The client says which language that is, the same way it does for the
+ * tRPC calls. The auth routes used to answer in English whatever the
+ * reader's language was — so the one screen that speaks the user's
+ * language failed to speak it at the moment the wording mattered most.
+ */
+function localeOf(req: Request): Locale {
+  const header = req.headers["x-mirrai-locale"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return value === "en" ? "en" : "zh";
+}
+
 export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/register", async (req: Request, res: Response) => {
+    const locale = localeOf(req);
     if (await rejectIfRateLimited(req, res)) return;
 
     const { username, password } = req.body;
     if (!username || !password || typeof username !== "string" || typeof password !== "string") {
-      res.status(400).json({ error: "username and password are required" });
+      res.status(400).json({ error: copy(locale, "errors.usernamePasswordRequired") });
       return;
     }
     if (username.length < 2 || username.length > 50) {
-      res.status(400).json({ error: "username must be 2-50 characters" });
+      res.status(400).json({ error: copy(locale, "errors.usernameTooShort") });
       return;
     }
     if (password.length < 6) {
-      res.status(400).json({ error: "password must be at least 6 characters" });
+      res.status(400).json({ error: copy(locale, "errors.passwordTooShort") });
       return;
     }
 
     try {
       const existing = await db.getUserByUsername(username);
       if (existing) {
-        res.status(409).json({ error: "username already taken" });
+        res.status(409).json({ error: copy(locale, "errors.usernameTaken") });
         return;
       }
 
@@ -129,29 +145,30 @@ export function registerAuthRoutes(app: Express) {
       res.json({ success: true, userId });
     } catch (error) {
       console.error("[Auth] Register failed:", error);
-      res.status(500).json({ error: "Registration failed" });
+      res.status(500).json({ error: copy(locale, "errors.registrationFailed") });
     }
   });
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
+    const locale = localeOf(req);
     if (await rejectIfRateLimited(req, res)) return;
 
     const { username, password } = req.body;
     if (!username || !password) {
-      res.status(400).json({ error: "username and password are required" });
+      res.status(400).json({ error: copy(locale, "errors.usernamePasswordRequired") });
       return;
     }
 
     try {
       const user = await db.getUserByUsername(username);
       if (!user || !user.passwordHash) {
-        res.status(401).json({ error: "invalid credentials" });
+        res.status(401).json({ error: copy(locale, "errors.invalidCredentials") });
         return;
       }
 
       const valid = await verifyPassword(password, user.passwordHash);
       if (!valid) {
-        res.status(401).json({ error: "invalid credentials" });
+        res.status(401).json({ error: copy(locale, "errors.invalidCredentials") });
         return;
       }
 
@@ -176,7 +193,7 @@ export function registerAuthRoutes(app: Express) {
       res.json({ success: true, userId: user.id });
     } catch (error) {
       console.error("[Auth] Login failed:", error);
-      res.status(500).json({ error: "Login failed" });
+      res.status(500).json({ error: copy(locale, "errors.loginFailed") });
     }
   });
 }
