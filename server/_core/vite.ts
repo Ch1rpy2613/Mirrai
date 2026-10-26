@@ -6,11 +6,36 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
 
+/**
+ * The host names the development server answers to.
+ *
+ * The machine's own names, plus anything the operator has listed in
+ * `DEV_ALLOWED_HOSTS` — which is how the dev server is reached from a
+ * phone on the same network.
+ */
+function devAllowedHosts(): string[] {
+  const hosts = ["localhost", "127.0.0.1", "::1", "0.0.0.0"];
+  const extra = (process.env.DEV_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return [...hosts, ...extra];
+}
+
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
-    allowedHosts: true as const,
+    /**
+     * Which host names the dev server answers to.
+     *
+     * `true` turns Vite's host-header check off, and that check is the
+     * protection against DNS rebinding: without it a name that resolves
+     * to the developer's machine can be pointed at the dev server and
+     * read from a page the developer has open. It is only reached in
+     * development, but a developer's machine is still a machine.
+     */
+    allowedHosts: devAllowedHosts(),
   };
 
   const vite = await createViteServer({

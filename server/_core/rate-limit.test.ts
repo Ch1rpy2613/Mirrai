@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryRateLimiter, RATE_LIMITS, type RateLimitRule } from "./rate-limit";
+import { MemoryRateLimiter, RATE_LIMITS, getClientIp, type RateLimitRule } from "./rate-limit";
 
 const rule: RateLimitRule = { name: "test", limit: 3, windowMs: 60_000, scope: "user" };
 
@@ -83,5 +83,28 @@ describe("the shipped rate limits", () => {
       if ((await limiter.check("user-1", RATE_LIMITS.llm)).allowed) allowed++;
     }
     expect(allowed).toBe(RATE_LIMITS.llm.limit);
+  });
+});
+
+describe("the client's address", () => {
+  it("is the address of the connection, not a header the client chose", () => {
+    // The `X-Forwarded-For` header used to be believed, which made the
+    // login limit — the only defence against credential stuffing — a
+    // matter of sending one more header.
+    const req = {
+      ip: "203.0.113.7",
+      socket: { remoteAddress: "203.0.113.7" },
+      headers: { "x-forwarded-for": "1.2.3.4" },
+    } as any;
+    expect(getClientIp(req)).toBe("203.0.113.7");
+  });
+
+  it("falls back to the socket when there is nothing else", () => {
+    const req = { socket: { remoteAddress: "198.51.100.4" } } as any;
+    expect(getClientIp(req)).toBe("198.51.100.4");
+  });
+
+  it("is never empty", () => {
+    expect(getClientIp({} as any)).toBe("unknown");
   });
 });
