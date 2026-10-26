@@ -330,10 +330,16 @@ export async function deferLetter(id: number, userId: number, replyAt: Date) {
  * no longer running.
  *
  * The answer takes a model call, and a model call is allowed two
- * minutes. A claim older than five minutes belongs to a process that
- * has gone — so the letter is answered again.
+ * minutes — three times over, with the retries between them. So the
+ * window has to be longer than the worst case, not the typical one: at
+ * five minutes the claim went stale *while the first answer was still
+ * being written*, so the next sweep claimed the same letter and
+ * answered it again — the second answer overwrote the first, and the
+ * conversation got both.
+ *
+ * Fifteen minutes is comfortably longer than the worst case.
  */
-export const LETTER_CLAIM_STALE_MS = 5 * 60_000;
+export const LETTER_CLAIM_STALE_MS = 15 * 60_000;
 
 export async function getDueLetters(now: Date, limit = 20) {
   const db = await getDb();
@@ -404,9 +410,22 @@ export async function answerLetterWithMessage(
   },
 ): Promise<boolean> {
   return withTransaction(async (tx) => {
+    /**
+     * Only a letter that is still waiting.
+     *
+     * The write used to take any letter — so a second sweep, which had
+     * claimed the letter because the first claim had gone stale,
+     * overwrote the first answer's text *and* inserted a second
+     * message into the conversation. The user saw two replies to the
+     * same letter in the thread, and only the second one in the box.
+     */
     const [row] = await tx.update(letters)
       .set({ status: "answered", replyText, repliedAt, claimedAt: null })
-      .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+      .where(and(
+        eq(letters.id, id),
+        eq(letters.userId, userId),
+        eq(letters.status, "waiting"),
+      ))
       .returning({ id: letters.id });
     if (!row) return false;
     await tx.insert(messages).values({
@@ -496,15 +515,48 @@ export async function releaseLetterClaim(id: number, userId: number): Promise<vo
 }
 
 /** Marks a letter as answered with nothing — the persona stayed quiet. */
+/**
+ * A letter the persona could not answer.
+ *
+ * It used to set the letter back to "private" — the status of a letter
+ * that was *kept* and never sent. But the letter had been delivered: it
+ * was in the conversation as the user's own message, written
+ * atomically with the row. So one provider hiccup turned a delivered
+ * letter into a kept one, the interface showed the "kept" badge, and
+ * `replyAt: null` meant the sweep never picked it up again — the reply
+ * never came and the app said the letter had never been sent.
+ *
+ * The letter keeps its "waiting" status, and the attempt is put back
+ * an hour later — so it is tried again, and the user is not told a
+ * lie.
+ */
 export async function markLetterUnanswered(id: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [row] = await db.update(letters)
-    .set({ status: "private", replyAt: null })
-    .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+    .set({
+      status: "waiting",
+      replyAt: new Date(Date.now() + LETTER_RETRY_AFTER_MS),
+      claimedAt: null,
+    })
+    .where(and(
+      eq(letters.id, id),
+      eq(letters.userId, userId),
+      // Only a letter that is still waiting — one that has been
+      // answered keeps its answer.
+      eq(letters.status, "waiting"),
+    ))
     .returning();
   return row ?? null;
 }
+
+/**
+ * How long a letter waits before it is tried again.
+ *
+ * Long enough not to hammer a provider that is having a bad minute,
+ * short enough that the reply still arrives while the user cares.
+ */
+export const LETTER_RETRY_AFTER_MS = 60 * 60_000;
 
 export async function deleteLetter(id: number, userId: number) {
   const db = await getDb();
