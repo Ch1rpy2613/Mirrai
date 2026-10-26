@@ -36,6 +36,14 @@ export default function LetterBox({ personaId }: { personaId: number }) {
   const write = trpc.letter.write.useMutation({
     onSuccess: (data) => {
       utils.letter.list.invalidate({ personaId });
+      /**
+       * The list of things to say later.
+       *
+       * It is a separate query — and it was never invalidated, so a
+       * note the user had just written did not appear until the page
+       * was reloaded.
+       */
+      utils.letter.todos.invalidate({ personaId });
       setBody("");
       setMood("");
       setShowWrite(false);
@@ -48,7 +56,10 @@ export default function LetterBox({ personaId }: { personaId: number }) {
     onError: (e) => toast.error(e.message),
   });
   const remove = trpc.letter.remove.useMutation({
-    onSuccess: () => utils.letter.list.invalidate({ personaId }),
+    onSuccess: () => {
+      utils.letter.list.invalidate({ personaId });
+      utils.letter.todos.invalidate({ personaId });
+    },
     onError: (e) => toast.error(e.message),
   });
 
