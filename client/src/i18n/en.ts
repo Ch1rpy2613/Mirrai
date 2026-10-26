@@ -469,6 +469,7 @@ export const en = {
       awakening: "Waking…",
       awaken: "Wake up",
       awakened: "{{name}} has been woken up",
+      graduatedNotice: "{{name}} has graduated. If you still want to talk, wake this persona up first.",
       viewLetter: "Read the farewell letter",
       chat: "Chat",
       edit: "Edit",

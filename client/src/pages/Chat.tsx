@@ -274,6 +274,20 @@ export default function Chat() {
    *
    * There is a query for exactly this state, and nothing called it.
    */
+  /**
+   * Waking a persona that has said goodbye.
+   *
+   * The notice says to do it, so the control is here.
+   */
+  const awakenMutation = trpc.persona.awaken.useMutation({
+    onSuccess: () => {
+      toast.success(t("lobby.card.awakened", { name: persona?.name || "" }));
+      utils.persona.get.invalidate({ id: personaId });
+      utils.persona.checkGraduation.invalidate({ id: personaId });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const { data: graduationCheck } = trpc.persona.checkGraduation.useQuery(
     { id: personaId },
     {
@@ -1546,6 +1560,27 @@ export default function Chat() {
       {/* Input */}
       <div className="flex-shrink-0 chat-composer">
         <div className="container pt-3 max-w-2xl mx-auto">
+          {/**
+           * A persona that has said goodbye.
+           *
+           * The notice that comes back from a sleeping persona says "if
+           * you still want to talk, awaken it first" — and the only
+           * control for that was on the lobby card, folded away behind a
+           * "show graduated" toggle. So the person was told to do
+           * something they could not do from where they were.
+           */}
+          {persona?.graduationStatus === "graduated" && (
+            <div className="mb-3 rounded-lg border border-border bg-muted/40 px-3.5 py-3 flex items-center gap-3 flex-wrap">
+              <p className="text-xs text-muted-foreground leading-relaxed flex-1 min-w-[12rem]">
+                {t("lobby.card.graduatedNotice", { name: persona?.name || "" })}
+              </p>
+              <Button size="sm" className="rounded-md px-4 flex-shrink-0"
+                disabled={awakenMutation.isPending}
+                onClick={() => awakenMutation.mutate({ id: personaId })}>
+                {awakenMutation.isPending ? t("common.saving") : t("lobby.card.awaken")}
+              </Button>
+            </div>
+          )}
           {isRecording ? (
             <div className="flex items-center gap-3 h-11">
               <button onClick={cancelRecording} aria-label={t("chat.cancelRecording")}

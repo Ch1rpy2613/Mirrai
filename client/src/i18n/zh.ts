@@ -467,6 +467,7 @@ export const zh = {
       awakening: "唤醒中...",
       awaken: "唤醒",
       awakened: "{{name}} 已被唤醒",
+      graduatedNotice: "{{name}} 已经毕业了。如果还想继续聊，先把这个分身唤醒。",
       viewLetter: "查看告别信",
       chat: "对话",
       edit: "编辑",
