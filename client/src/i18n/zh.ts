@@ -765,7 +765,7 @@ export const zh = {
       noBrowser: "直接调用平台接口采集，不需要浏览器。",
       needsBrowserChip: "需要浏览器",
       startTitle: "开始采集",
-      startNote: "选一个分身承接采集到的记录",
+      startNote: "选一个分身承接采集到的记录。采集器是 Python 脚本，这台机器上需要装 Python 3。",
       sourceLabel: "来源",
       selectPlatform: "选择要采集的平台",
       browserWarning: "该来源需要 Playwright 与已下载的 Chromium，请先完成准备再启动采集。",

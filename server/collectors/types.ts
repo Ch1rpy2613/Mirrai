@@ -413,6 +413,7 @@ async function collectViaOutputDir(
     const { stdout, stderr } = await runCollector(connector.tool, args, {
       onProgress: input.onProgress,
       signal: input.signal,
+      locale: input.locale,
     });
     const normalised = parseNormalisedPayload(stdout, connector.id, {
       target: input.target,
@@ -718,6 +719,7 @@ const emailConnector: SourceConnector = {
     const { stdout, stdoutTruncated } = await runCollector(emailConnector.tool, emailConnector.args(input), {
       onProgress: input.onProgress,
       signal: input.signal,
+      locale: input.locale,
     });
     return normaliseCollectorOutput(stdout, emailConnector.id, {
       target: input.target,
@@ -777,7 +779,7 @@ const wechatExportConnector: SourceConnector = {
     const { stdout, stdoutTruncated } = await runCollector(
       wechatExportConnector.tool,
       wechatExportConnector.args(input),
-      { onProgress: input.onProgress, signal: input.signal },
+      { onProgress: input.onProgress, signal: input.signal, locale: input.locale },
     );
     return normaliseCollectorOutput(stdout, wechatExportConnector.id, {
       target: input.target,

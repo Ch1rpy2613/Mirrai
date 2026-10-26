@@ -771,7 +771,7 @@ export const en = {
       noBrowser: "Collected straight from the platform API, no browser needed.",
       needsBrowserChip: "Needs a browser",
       startTitle: "Start collecting",
-      startNote: "Choose the persona that receives the collected messages",
+      startNote: "Pick a persona to receive what is collected. The collectors are Python scripts, so this machine needs Python 3.",
       sourceLabel: "Source",
       selectPlatform: "Select a platform to collect from",
       browserWarning: "This source needs Playwright and a downloaded Chromium — finish the setup before you start.",

@@ -364,6 +364,18 @@ export const ERRORS = {
     zh: "凭据没有存下来，所以这次授权不算数。请再试一次。",
     en: "The credentials could not be stored, so this authorisation did not take. Please try again.",
   },
+  /**
+   * The interpreter is not there.
+   *
+   * The collectors are Python scripts. The desktop builds ship the
+   * scripts but no interpreter, so the spawn failed with
+   * "spawn python3 ENOENT" — which says nothing about what to do about
+   * it.
+   */
+  "errors.collectorNeedsPython": {
+    zh: "采集器没能启动：这台机器上找不到 {{path}}。采集来源需要 Python 3——装一个，或者把 PYTHON_PATH 指向你要用的解释器。（工具：{{tool}}）",
+    en: "The collector could not be started: {{path}} was not found on this machine. The collection sources need Python 3 — install it, or point PYTHON_PATH at the interpreter you want to use. (tool: {{tool}})",
+  },
   "errors.collectorNeedsAuthorization": {
     zh: "这个来源还没有授权。填好凭据并点「授权」，再开始采集。",
     en: "This source has not been authorised yet. Fill in the credentials and press Authorise, then start the collection.",

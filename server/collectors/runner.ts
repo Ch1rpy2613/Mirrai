@@ -12,6 +12,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { ENV } from "../_core/env";
 import { subprocessEnvironment } from "../_core/subprocess-env";
 import { zonedOffsetMinutes } from "@shared/timezone";
+import { copy } from "@shared/copy";
 import type { CollectedMessage, CollectorSourceId, CollectResult } from "./types";
 
 /** Default budget for a single collector run (30 minutes). */
@@ -27,6 +28,12 @@ export interface RunCollectorOptions {
   onProgress?: (pct: number) => void;
   /** Cancels the child process when aborted. */
   signal?: AbortSignal;
+  /**
+   * The language the reader reads.
+   *
+   * The errors the runner raises are read by a person.
+   */
+  locale?: "zh" | "en";
 }
 
 /**
@@ -256,6 +263,27 @@ export async function runCollector(
     timeoutTimer.unref();
 
     child.on("error", (error) => {
+      /**
+       * The interpreter is not there.
+       *
+       * The collectors are Python scripts, and the interpreter is
+       * whatever `PYTHON_PATH` names — `python3` by default. On a
+       * desktop install there is no Python in the bundle, so the spawn
+       * failed with "spawn python3 ENOENT" — which says nothing about
+       * what to do about it.
+       */
+      const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+      if (missing) {
+        fail(
+          new Error(
+            copy(opts.locale ?? "zh", "errors.collectorNeedsPython", {
+              tool,
+              path: ENV.pythonPath,
+            }),
+          ),
+        );
+        return;
+      }
       fail(new Error(`Failed to start collector "${tool}": ${error.message}`));
     });
 
