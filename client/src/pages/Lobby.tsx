@@ -281,9 +281,20 @@ function PanelTitle({ icon: Icon, title, right }: { icon: any; title: string; ri
 // ─── HERO BANNER · 问候区 ────────────────────────────────────────────────────
 
 function HeroBanner({ username, stats }: { username?: string; stats?: any }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const greeting = getGreeting();
-  const quote = useMemo(() => Array.from(t("lobby.quotes"))[Math.floor(Math.random() * 12)], [t]);
+  /**
+   * The quote.
+   *
+   * The count was written as twelve — the number of quotes today. So
+   * any copy change that made it thirteen would have shown "undefined"
+   * one time in thirteen.
+   */
+  const quote = useMemo(() => {
+    const quotes = Array.from(t("lobby.quotes"));
+    if (quotes.length === 0) return "";
+    return quotes[Math.floor(Math.random() * quotes.length)];
+  }, [t]);
   const memberDays = stats?.memberSince
     ? Math.max(1, Math.floor((Date.now() - new Date(stats.memberSince).getTime()) / 86400000))
     : 0;
@@ -298,7 +309,7 @@ function HeroBanner({ username, stats }: { username?: string; stats?: any }) {
       </motion.p>
 
       <motion.h1 variants={fadeUp} className="page-title">
-        {username ? `${username}，${t(greeting.textKey)}` : t(greeting.textKey)}
+        {username ? `${username}${locale === "en" ? ", " : "，"}${t(greeting.textKey)}` : t(greeting.textKey)}
       </motion.h1>
       <motion.p variants={fadeUp} className="text-muted-foreground mt-2">{t(greeting.subKey)}</motion.p>
 
@@ -912,7 +923,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
   const isGraduated = persona.graduationStatus === "graduated";
   const pd = (persona.personaData as any) || {};
   const togetherDays = persona.togetherFrom ? daysBetween(persona.togetherFrom, persona.togetherTo || undefined) : null;
-  const traits = [pd.personality, pd.speakingStyle].filter(Boolean).join("，").slice(0, 50);
+  const traits = [pd.personality, pd.speakingStyle].filter(Boolean).join(locale === "en" ? ", " : "，").slice(0, 50);
   const milestone = getMilestone(persona.chatCount || 0);
   const MilestoneIcon = milestone?.icon;
   const anniversary = persona.togetherFrom ? getDaysUntilAnniversary(persona.togetherFrom) : null;
@@ -1391,7 +1402,18 @@ function EmptyState({
   sandboxPending: boolean;
 }) {
   const { t } = useLocale();
-  const quote = useMemo(() => Array.from(t("lobby.quotes"))[Math.floor(Math.random() * 12)], [t]);
+  /**
+   * The quote.
+   *
+   * The count was written as twelve — the number of quotes today. So
+   * any copy change that made it thirteen would have shown "undefined"
+   * one time in thirteen.
+   */
+  const quote = useMemo(() => {
+    const quotes = Array.from(t("lobby.quotes"));
+    if (quotes.length === 0) return "";
+    return quotes[Math.floor(Math.random() * quotes.length)];
+  }, [t]);
   return (
     <motion.div
       className="py-16 max-w-md"
