@@ -1617,6 +1617,22 @@ function FeishuSection() {
       )}
 
       {/**
+       * The commands.
+       *
+       * The channel answers a set of slash commands, and the interface
+       * never said so — so the only way to learn that they exist was
+       * to type one and have it work.
+       */}
+      <div className="mt-5 rounded-lg border border-border/70 bg-muted/30 p-4">
+        <p className="text-xs font-medium text-foreground/80 mb-2">
+          {t("settings.channels.feishu.commandsTitle")}
+        </p>
+        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+          {t("settings.channels.feishu.commands")}
+        </p>
+      </div>
+
+      {/**
        * The persona Feishu talks to.
        *
        * There was no binding UI here at all — while the bot told the

@@ -755,6 +755,17 @@ export const zh = {
         reqEncryptionLead: "App ID 与 App Secret 会",
         reqEncryptionEmphasis: "加密",
         reqEncryptionTail: "后保存在本机，不会上传到任何第三方。",
+        /**
+         * The commands.
+         *
+         * The channel answers a set of slash commands — but the
+         * interface never said so. The WeChat panel says nothing
+         * about them either, but the Feishu panel is where a new user
+         * looks first, and the commands are the only way to switch
+         * persona or graduate from a chat window.
+         */
+        commandsTitle: "在对话里可以输入这些指令",
+        commands: "/使用 <分身名> — 切换当前对话的分身\n/分身列表 — 查看所有可用分身\n/当前分身 — 查看当前正在对话的分身\n/毕业 — 生成告别信并完成毕业\n/帮助 — 列出这些指令",
         connected: "飞书已连接",
         disconnected: "飞书已断开",
         connecting: "连接中...",

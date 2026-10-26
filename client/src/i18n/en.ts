@@ -760,6 +760,17 @@ export const en = {
         reqEncryptionLead: "The App ID and App Secret are ",
         reqEncryptionEmphasis: "encrypted",
         reqEncryptionTail: " and stored on this machine — never uploaded to a third party.",
+        /**
+         * The commands.
+         *
+         * The channel answers a set of slash commands — but the
+         * interface never said so. The WeChat panel says nothing
+         * about them either, but the Feishu panel is where a new user
+         * looks first, and the commands are the only way to switch
+         * persona or graduate from a chat window.
+         */
+        commandsTitle: "These commands can be typed in the conversation",
+        commands: "/use <name> — switch to another persona\n/personas — list your personas\n/current — show who you are talking to\n/graduate — write the farewell letter and graduate\n/help — list these commands",
         connected: "Feishu connected",
         disconnected: "Feishu disconnected",
         connecting: "Connecting…",
