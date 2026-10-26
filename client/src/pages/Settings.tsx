@@ -2128,6 +2128,35 @@ export default function SettingsPage() {
             by a coloured underline, so a screen-reader user could not
             tell which of the seven sections was open. */}
         <div role="tablist" aria-label={t("settings.title")}
+          /**
+           * The arrow keys move between the tabs.
+           *
+           * A tab list is one control, so the arrow keys are what moves
+           * inside it. The inactive tabs were already out of the tab
+           * order — and nothing moved the focus — so six of the seven
+           * sections of the settings could not be reached without a
+           * mouse.
+           */
+          onKeyDown={(event) => {
+            const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+            if (!keys.includes(event.key)) return;
+            event.preventDefault();
+            const index = TABS.findIndex((tab) => tab.key === activeTab);
+            const next =
+              event.key === "Home"
+                ? TABS[0]
+                : event.key === "End"
+                  ? TABS[TABS.length - 1]
+                  : TABS[
+                      (index +
+                        (event.key === "ArrowRight" ? 1 : -1) +
+                        TABS.length) %
+                      TABS.length
+                    ];
+            if (!next) return;
+            setActiveTab(next.key);
+            document.getElementById(`settings-tab-${next.key}`)?.focus();
+          }}
           className="flex gap-1 mb-7 border-b border-border overflow-x-auto scrollbar-hide">
           {TABS.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
