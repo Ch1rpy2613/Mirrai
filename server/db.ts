@@ -819,6 +819,26 @@ export async function getFileSummariesByPersonaId(
 }
 
 /**
+ * The titles of the files whose summaries were recalled.
+ *
+ * A file summary carries a negative id — it lives in another table, and
+ * the negative id is what keeps the two apart. So the memories table
+ * has no row for it, and the title was empty.
+ */
+export async function getFileSummaryTitles(ids: number[], userId: number) {
+  const db = await getDb();
+  if (!db || ids.length === 0) return new Map<number, string>();
+  const unique = Array.from(new Set(ids));
+  const rows = await db.select({
+    id: personaFiles.id,
+    originalName: personaFiles.originalName,
+  })
+    .from(personaFiles)
+    .where(and(inArray(personaFiles.id, unique), eq(personaFiles.userId, userId)));
+  return new Map(rows.map((r) => [r.id, r.originalName]));
+}
+
+/**
  * One file, by its id.
  *
  * Scoped by the owner, so a file id that was guessed reaches nothing.

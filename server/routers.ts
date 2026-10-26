@@ -26,6 +26,7 @@ import {
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
   getUserTimezone,
   createMemory, getMemoriesByPersonaId, countMemories, getMemoryTitles, deleteMemory, updateMemory,
+  getFileSummaryTitles,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
   getCollectedMessagesForPersona,
   getIntimacyData, updateIntimacy,
@@ -1201,11 +1202,22 @@ export const appRouter = router({
         // The memories each turn recalled, with their titles.
         const ids = rows.flatMap((m: any) => parseRecalledIds(m.recalledMemoryIds));
         const titles = await getMemoryTitles(ids, ctx.user.id);
+        /**
+         * The titles of the recalled file summaries.
+         *
+         * A file summary carries a negative id — it lives in another
+         * table, and the negative id is what keeps the two apart. So
+         * the memories table has no row for it, and the title was
+         * empty: the "what did the persona recall" chip was there
+         * during the conversation and gone after a reload.
+         */
+        const fileIds = ids.filter((id) => id < 0).map((id) => Math.abs(id));
+        const fileTitles = await getFileSummaryTitles(fileIds, ctx.user.id);
         return rows.map((m: any) => ({
           ...m,
           recalled: parseRecalledIds(m.recalledMemoryIds).map((id: number) => ({
             id,
-            title: titles.get(id) ?? "",
+            title: titles.get(id) ?? fileTitles.get(Math.abs(id)) ?? "",
           })),
         }));
       }),
