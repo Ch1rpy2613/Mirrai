@@ -17,7 +17,20 @@ RUN corepack enable
 # scheduler does not deliver the same reminder twice. The app finds this
 # binary and starts a Redis itself when it needs one, so nothing has to be
 # configured for it to work.
-RUN apk add --no-cache redis
+#
+# Python, because the skill engine drives the collectors and the skill
+# writer through it. Without an interpreter the tools were shipped but
+# could never run: every distillation failed at the "write the skill
+# package" step, every collector failed to start, and the celebrity
+# research flow was skipped — with nothing but a line in the log to say
+# so.
+RUN apk add --no-cache redis python3 py3-pip
+
+# The one dependency the collectors and the skill writer cannot do
+# without. The optional ones — the browser automation, the document
+# parsers — are not installed here: they are large, and the features
+# that use them say so when they are missing.
+RUN pip3 install --no-cache-dir --break-system-packages "requests>=2.28.0" "pypinyin>=0.48.0"
 
 # Server bundle + client static assets (dist/), dependencies (drizzle-kit kept
 # for schema push on boot), and drizzle schema for migrations
