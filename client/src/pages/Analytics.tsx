@@ -35,7 +35,7 @@ export default function Analytics() {
   const { t } = useLocale();
   const [days, setDays] = useState(30);
 
-  const { data, isLoading } = trpc.analytics.overview.useQuery({ days }, { enabled: isAuthenticated });
+  const { data, isLoading, isError } = trpc.analytics.overview.useQuery({ days }, { enabled: isAuthenticated });
 
   const stats = data?.stats || { totalMessages: 0, activeDays: 0, longestStreak: 0, avgPerDay: 0 };
 
@@ -99,16 +99,28 @@ export default function Analytics() {
           </p>
         ) : null}
 
+        {/*
+          The failure is not the same as no data.
+          A failed query used to render the same four zeroed tiles and
+          four empty charts as a person with no history — so the app
+          made a false claim about the user's own past.
+        */}
+        {isError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {t("common.error")}
+          </p>
+        ) : null}
+
         <motion.div
           className="stat-grid grid-cols-2 md:grid-cols-4"
           initial="hidden"
           animate="visible"
           variants={stagger}
         >
-          <StatCard label={t("analytics.totalMessages")} value={stats.totalMessages} />
-          <StatCard label={t("analytics.activeDays")} value={stats.activeDays} />
-          <StatCard label={t("analytics.longestStreak")} value={t("analytics.streakDays", { count: stats.longestStreak })} />
-          <StatCard label={t("analytics.avgMessages")} value={stats.avgPerDay} />
+          <StatCard label={t("analytics.totalMessages")} value={isLoading || isError ? "—" : stats.totalMessages} />
+          <StatCard label={t("analytics.activeDays")} value={isLoading || isError ? "—" : stats.activeDays} />
+          <StatCard label={t("analytics.longestStreak")} value={isLoading || isError ? "—" : t("analytics.streakDays", { count: stats.longestStreak })} />
+          <StatCard label={t("analytics.avgMessages")} value={isLoading || isError ? "—" : stats.avgPerDay} />
         </motion.div>
 
         <ChartCard title={t("analytics.dailyMessages")}>
