@@ -2899,6 +2899,39 @@ export async function createSafetyEvent(data: InsertSafetyEvent) {
   return result.id;
 }
 
+/**
+ * Whether a safety event of this kind was already recorded today.
+ *
+ * The safety layer's own conditions stay true all day: "more than
+ * five messages" is true for the sixth message *and every message
+ * after it*, and a long session stays long. So without this, every
+ * message of the day recorded another event and carried another copy
+ * of the same caring words — and the transparency panel, which shows
+ * the newest twenty, filled up with twenty identical rows and pushed
+ * the one real record off the end.
+ */
+export async function hasSafetyEventSince(params: {
+  userId: number;
+  personaId: number | null;
+  type: "crisis" | "usage" | "dependency" | "graduation_trajectory";
+  since: Date;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.select({ id: safetyEvents.id })
+    .from(safetyEvents)
+    .where(and(
+      eq(safetyEvents.userId, params.userId),
+      eq(safetyEvents.type, params.type),
+      gte(safetyEvents.createdAt, params.since),
+      ...(params.personaId === null
+        ? [isNull(safetyEvents.personaId)]
+        : [eq(safetyEvents.personaId, params.personaId)]),
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function getSafetyEvents(userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];

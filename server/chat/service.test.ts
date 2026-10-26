@@ -23,6 +23,7 @@ const createGraduationAssessment = vi.fn();
 const getMessagesSince = vi.fn();
 const touchMemoryRecalled = vi.fn();
 const createSafetyEvent = vi.fn();
+const hasSafetyEventSince = vi.fn();
 const getLastMessageAt = vi.fn();
 const getMessageCountSince = vi.fn();
 const getDailyChatCounts = vi.fn();
@@ -59,6 +60,7 @@ vi.mock("../db", () => ({
   getMessagesSince: (...a: unknown[]) => getMessagesSince(...a),
   touchMemoryRecalled: (...a: unknown[]) => touchMemoryRecalled(...a),
   createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
+  hasSafetyEventSince: (...a: unknown[]) => hasSafetyEventSince(...a),
   getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
   getMessageCountSince: (...a: unknown[]) => getMessageCountSince(...a),
   getDailyChatCounts: (...a: unknown[]) => getDailyChatCounts(...a),
@@ -135,7 +137,7 @@ describe("runConversation", () => {
       getMessageCountInRange, setGraduationStatus, getLatestGraduationAssessment,
       createGraduationAssessment, getMessagesSince, touchMemoryRecalled, createSafetyEvent,
       getLastMessageAt, getMessageCountSince, getDailyChatCounts,
-      getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts,
+      getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, inferEmotionalState,
     ]) {
@@ -171,6 +173,8 @@ describe("runConversation", () => {
     getDailyUserChatCounts.mockResolvedValue([]);
     createMessage.mockResolvedValue(99);
     createSafetyEvent.mockResolvedValue(1);
+    // Nothing has been said yet today.
+    hasSafetyEventSince.mockResolvedValue(false);
     touchMemoryRecalled.mockResolvedValue(undefined);
     inferEmotionalState.mockResolvedValue({ state: "warm", source: "heuristic" });
     resolveProviderForUser.mockResolvedValue({

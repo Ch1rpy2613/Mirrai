@@ -734,6 +734,20 @@ async function* runConversationTurn(
    */
   const usageTimezone = await db.getUserTimezone(userId);
 
+  /**
+   * The user's midnight.
+   *
+   * The safety events are filed under the user's own day, so "already
+   * said today" means "since the user's midnight" — not the server's.
+   */
+  const dayStart = new Date(now.getTime());
+  {
+    const shift = dayShiftMinutes(usageTimezone, now);
+    dayStart.setMinutes(dayStart.getMinutes() + shift);
+    dayStart.setHours(0, 0, 0, 0);
+    dayStart.setMinutes(dayStart.getMinutes() - shift);
+  }
+
   // The care note is decided before the reply is stored, so it can be part
   // of what the persona actually says — the plan asks for the persona itself
   // to say the caring words, not for a separate system notice.
@@ -761,15 +775,46 @@ async function* runConversationTurn(
   } catch (e) {
     console.warn("[Safety] Could not evaluate the usage:", e);
   }
-  const careNote = signals ? pickCareNote(signals, locale) : null;
+  const pickedNote = signals ? pickCareNote(signals, locale) : null;
 
-  if (careNote) {
-    await db.createSafetyEvent({
-      userId,
-      personaId: persona.id,
-      type: careNote.kind === "dependency" ? "dependency" : "usage",
-      severity: careNote.showBanner ? "warning" : "info",
-    }).catch((e) => console.warn("[Safety] Failed to record usage event:", e));
+  /**
+   * The note is said once a day.
+   *
+   * The safety layer's own conditions stay true all day: "more than
+   * five messages" is true for the sixth message *and every message
+   * after it*, and a long session stays long. So without this, every
+   * message of the day carried another copy of the same caring words,
+   * and every one of them recorded another event — so the
+   * transparency panel, which shows the newest twenty, filled up with
+   * twenty identical rows and pushed the one real record off the end.
+   *
+   * The banner goes with it: the user does not need to be told fifteen
+   * times an evening.
+   */
+  let careNote = pickedNote;
+  if (pickedNote) {
+    const eventType = pickedNote.kind === "dependency" ? "dependency" : "usage";
+    const alreadyToday = await db
+      .hasSafetyEventSince({
+        userId,
+        personaId: persona.id,
+        type: eventType,
+        since: dayStart,
+      })
+      .catch((e) => {
+        console.warn("[Safety] Could not read the usage events:", e);
+        return false;
+      });
+    if (alreadyToday) {
+      careNote = { ...pickedNote, text: "", showBanner: false };
+    } else {
+      await db.createSafetyEvent({
+        userId,
+        personaId: persona.id,
+        type: eventType,
+        severity: pickedNote.showBanner ? "warning" : "info",
+      }).catch((e) => console.warn("[Safety] Failed to record usage event:", e));
+    }
   }
 
   // The trajectory is assessed here, before the reply is composed, so that
@@ -786,12 +831,29 @@ async function* runConversationTurn(
   });
   const worsening = trajectory === "worsening";
   if (worsening) {
-    await db.createSafetyEvent({
-      userId,
-      personaId: persona.id,
-      type: "graduation_trajectory",
-      severity: "info",
-    }).catch((e) => console.warn("[Safety] Failed to record the trajectory event:", e));
+    /**
+     * Once a day as well.
+     *
+     * The trajectory stays "worsening" for as long as it does — so
+     * every message of the day recorded another row, and the panel
+     * showed twenty of them.
+     */
+    const alreadyToday = await db
+      .hasSafetyEventSince({
+        userId,
+        personaId: persona.id,
+        type: "graduation_trajectory",
+        since: dayStart,
+      })
+      .catch(() => false);
+    if (!alreadyToday) {
+      await db.createSafetyEvent({
+        userId,
+        personaId: persona.id,
+        type: "graduation_trajectory",
+        severity: "info",
+      }).catch((e) => console.warn("[Safety] Failed to record the trajectory event:", e));
+    }
   }
 
   // Even a partial answer is kept — half a sentence is still worth more than
@@ -887,7 +949,7 @@ async function* runConversationTurn(
    *
    * The user's day is used, and the snapshot is written under it.
    */
-  const timezone = await db.getUserTimezone(userId);
+  const timezone = usageTimezone;
   const todayStr = zonedDateKey(now, timezone) || localDateKey(now);
   // The lookup has to be under the same day the snapshot is written
   // under, or the "one a day" guard fires against the wrong row.
@@ -911,11 +973,6 @@ async function* runConversationTurn(
    * day before, and the last hours of the day before were counted as
    * this one.
    */
-  const dayStart = new Date(now.getTime());
-  const shift = dayShiftMinutes(timezone);
-  dayStart.setMinutes(dayStart.getMinutes() + shift);
-  dayStart.setHours(0, 0, 0, 0);
-  dayStart.setMinutes(dayStart.getMinutes() - shift);
   const messageCount = await db.getUserMessageCountForPersonaSince(
     persona.id,
     userId,
