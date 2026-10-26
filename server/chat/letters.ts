@@ -18,6 +18,15 @@ import {
 } from "@shared/letters";
 import { buildUserContextBlock } from "@shared/user-side";
 import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
+import { getEffectivePresence } from "../_core/graduation";
+
+/**
+ * How long a letter to a sleeping persona is left alone.
+ *
+ * An hour: long enough not to crowd the sweep, short enough that a
+ * persona which is awakened gets its answer.
+ */
+const ASLEEP_LETTER_RECHECK_MS = 60 * 60 * 1000;
 
 /**
  * Writes a letter.
@@ -105,6 +114,39 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
       const persona = await db.getPersonaById(letter.personaId, letter.userId);
       if (!persona) {
         await db.markLetterUnanswered(letter.id, letter.userId);
+        continue;
+      }
+
+      /**
+       * A persona that has said goodbye does not answer any more.
+       *
+       * Graduating sets the persona asleep, and the chat path refuses
+       * to talk to a sleeping persona. The letter path did not: it
+       * fetched the persona, composed a reply and wrote it into the
+       * conversation without ever asking whether it was awake.
+       *
+       * So a letter written before the goodbye was answered a day
+       * *after* the goodbye — in the persona's voice, as though it had
+       * never left.
+       */
+      const presence = getEffectivePresence({
+        personaPresence: persona.presence,
+        graduationStatus: persona.graduationStatus,
+      });
+      if (presence === "asleep") {
+        /**
+         * The letter is left where it is: the user wrote it, it was
+         * delivered, and it is still theirs. It is simply not answered.
+         *
+         * It is put back an hour later rather than left due: a persona
+         * can be awakened, and then the letter deserves an answer — but
+         * a sleeping one is not re-checked every minute for ever.
+         */
+        await db.deferLetter(
+          letter.id,
+          letter.userId,
+          new Date(now.getTime() + ASLEEP_LETTER_RECHECK_MS),
+        );
         continue;
       }
 

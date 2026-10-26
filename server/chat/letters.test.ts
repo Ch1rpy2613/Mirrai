@@ -186,6 +186,35 @@ describe("answering the letters that are due", () => {
     getUserLocale.mockResolvedValue("zh");
   });
 
+  it("does not answer a letter when the persona has said goodbye", async () => {
+    // Graduating sets the persona asleep, and the chat path refuses to
+    // talk to a sleeping persona. The letter path did not: a letter
+    // written before the goodbye was answered a day *after* it, in the
+    // persona's voice, as though it had never left.
+    getPersonaById.mockResolvedValue({
+      ...persona,
+      presence: "asleep",
+      graduationStatus: "graduated",
+    });
+    getDueLetters.mockResolvedValue([{
+      id: 7,
+      userId: 1,
+      personaId: 1,
+      body: "有件事我一直没说。",
+      kind: "letter",
+      status: "waiting",
+      replyAt: new Date("2026-06-01T00:00:00Z"),
+      createdAt: new Date("2026-05-31T00:00:00Z"),
+    }]);
+
+    const answered = await answerDueLetters(new Date("2026-06-02T12:00:00Z"));
+
+    expect(answered).toBe(0);
+    expect(answerLetterWithMessage).not.toHaveBeenCalled();
+    // The letter is not lost: it is put back, and left for the user.
+    expect(deferLetter).toHaveBeenCalledTimes(1);
+  });
+
   it("writes the answer into the conversation, marked as an answer", async () => {
     getDueLetters.mockResolvedValue([{
       id: 7,
