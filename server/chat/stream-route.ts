@@ -133,14 +133,34 @@ export function registerChatStreamRoute(app: Express): void {
             recalled: event.recalled,
           });
         } else if (event.type === "error") {
-          writeEvent(res, "error", { message: event.message, partial: event.partial });
+          /**
+           * The message the browser gets is the app's own.
+           *
+           * The pipeline's error carries the provider's own words — the
+           * raw response body, the endpoint, the model name. That text
+           * was written straight to the browser, and a Postgres error
+           * can echo a stored value.
+           */
+          writeEvent(res, "error", {
+            message: copy(parsed.data.locale, "errors.replyFailed"),
+            partial: event.partial,
+          });
         }
       }
     } catch (e) {
       console.error("[ChatStream] Failed:", e);
       try {
         writeEvent(res, "error", {
-          message: e instanceof TRPCError ? e.message : (e as Error).message,
+          /**
+           * The app's own words, unless the error was written for the
+           * person reading it.
+           *
+           * Everything else — a Postgres error, a provider's raw
+           * response — is kept on the server.
+           */
+          message: e instanceof TRPCError
+            ? e.message
+            : copy(parsed.data.locale, "errors.replyFailed"),
           partial: false,
         });
       } catch {

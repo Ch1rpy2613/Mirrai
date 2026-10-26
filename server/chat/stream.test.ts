@@ -296,7 +296,16 @@ describe("POST /api/chat/stream", () => {
     const error = frames.find((f) => f.event === "error");
 
     expect(error).toBeDefined();
-    expect(error!.data.message).toBe("upstream exploded");
+    /**
+     * The browser is not told what the provider said.
+     *
+     * The error carried the provider's own words — the raw response
+     * body, the endpoint, the model name — and they were written
+     * straight to the browser. A Postgres error can echo a stored
+     * value.
+     */
+    expect(error!.data.message).not.toContain("upstream exploded");
+    expect(error!.data.message).toBeTruthy();
     expect(error!.data.partial).toBe(true);
   });
 
