@@ -2040,6 +2040,17 @@ export async function activateScene(personaId: number, sceneId: number | null, u
 
 // ─── Export helpers ─────────────────────────────────────────────────────────
 
+/**
+ * How many messages one persona's export carries.
+ *
+ * The export is held in memory and then serialised into one string, so
+ * the ceiling is a memory ceiling rather than a policy one. The
+ * whole-account export has had one all along; the single-persona one
+ * did not — and a persona with a hundred thousand messages read all of
+ * them, and then built one HTML string out of them.
+ */
+const MAX_PERSONA_EXPORT_MESSAGES = 10_000;
+
 export async function getExportData(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return null;
@@ -2048,7 +2059,8 @@ export async function getExportData(personaId: number, userId: number) {
   if (!persona) return null;
   const allMessages = await db.select().from(messages)
     .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
-    .orderBy(asc(messages.createdAt));
+    .orderBy(asc(messages.createdAt))
+    .limit(MAX_PERSONA_EXPORT_MESSAGES);
   const allMemories = await db.select().from(memories)
     .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)))
     .orderBy(asc(memories.createdAt));
