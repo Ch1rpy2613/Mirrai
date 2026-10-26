@@ -117,10 +117,20 @@ export async function extractMemories(params: {
    * window, were never extracted, and the window was still marked as
    * extracted. Those messages were skipped for ever.
    */
+  /**
+   * The messages are read in batches.
+   *
+   * The read had no ceiling, so on a persona's *first* extraction it
+   * brought every message the persona had ever had — id, role, text
+   * and all — into the heap, and then threw away all but the first
+   * fifty. A long-lived persona's first extraction was tens of
+   * thousands of rows for nothing.
+   */
   const history = await db.getMessagesSince(
     persona.id,
     userId,
     lastExtracted ?? new Date(0),
+    LOOKBACK,
   );
   if (history.length === 0) return { added: [], skipped: 0 };
 
