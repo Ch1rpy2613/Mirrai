@@ -73,9 +73,19 @@ const trpcClient = trpc.createClient({
         // the language of the person reading them. The client says which
         // language that is.
         const headers = new Headers(init?.headers ?? {});
-        const locale = typeof localStorage !== "undefined"
-          ? localStorage.getItem("mirrai-locale")
-          : null;
+        // The storage can refuse — private mode, cookies disabled, a
+        // full quota — and `typeof localStorage !== "undefined"` only
+        // proves the global exists. The read used to throw there, which
+        // broke every API call: the interface looked fine and nothing
+        // worked.
+        let locale: string | null = null;
+        try {
+          locale = typeof localStorage !== "undefined"
+            ? localStorage.getItem("mirrai-locale")
+            : null;
+        } catch {
+          locale = null;
+        }
         headers.set("x-mirrai-locale", locale === "en" ? "en" : "zh");
         return globalThis.fetch(input, {
           ...(init ?? {}),
