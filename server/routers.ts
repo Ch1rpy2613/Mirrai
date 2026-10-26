@@ -1969,14 +1969,23 @@ export const appRouter = router({
         if (input.name !== undefined) data.name = input.name;
         if (input.description !== undefined) data.description = input.description;
         if (input.tags !== undefined) data.tags = input.tags;
-        await updateUserTemplate(input.id, ctx.user.id, data as any);
+        const changed = await updateUserTemplate(input.id, ctx.user.id, data as any);
+        if (!changed) {
+          // The row does not exist, or it belongs to somebody else. The
+          // update is scoped to the owner, so it was silently not
+          // done — and the caller used to report that as a success.
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
         return { success: true };
       }),
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await deleteUserTemplate(input.id, ctx.user.id);
+        const removed = await deleteUserTemplate(input.id, ctx.user.id);
+        if (!removed) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
         return { success: true };
       }),
 

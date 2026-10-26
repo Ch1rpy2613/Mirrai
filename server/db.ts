@@ -2545,22 +2545,39 @@ export async function createUserTemplate(data: InsertPersonaTemplate) {
   return result.id;
 }
 
+/**
+ * Updates a template.
+ *
+ * It says whether a row was actually changed: the update is scoped to
+ * the owner, so a row that does not exist — or belongs to somebody
+ * else — is silently not updated, and the caller used to report that
+ * as a success.
+ */
 export async function updateUserTemplate(
   id: number,
   userId: number,
   data: Partial<InsertPersonaTemplate>,
-) {
+): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
-  await db.update(personaTemplates).set(data)
-    .where(and(eq(personaTemplates.id, id), eq(personaTemplates.userId, userId)));
+  if (!db) return false;
+  const rows = await db.update(personaTemplates).set(data)
+    .where(and(eq(personaTemplates.id, id), eq(personaTemplates.userId, userId)))
+    .returning({ id: personaTemplates.id });
+  return rows.length > 0;
 }
 
-export async function deleteUserTemplate(id: number, userId: number) {
+/**
+ * Deletes a template.
+ *
+ * It says whether a row was actually removed, for the same reason.
+ */
+export async function deleteUserTemplate(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
-  await db.delete(personaTemplates)
-    .where(and(eq(personaTemplates.id, id), eq(personaTemplates.userId, userId)));
+  if (!db) return false;
+  const rows = await db.delete(personaTemplates)
+    .where(and(eq(personaTemplates.id, id), eq(personaTemplates.userId, userId)))
+    .returning({ id: personaTemplates.id });
+  return rows.length > 0;
 }
 
 // ─── Questionnaire helpers ─────────────────────────────────────────────────
