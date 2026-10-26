@@ -488,3 +488,35 @@ describe("the shared emotion trigger tables", () => {
     }
   });
 });
+
+/**
+ * A card that was compressed.
+ *
+ * The reader takes the first matching chunk in file order, and the new
+ * one is written last — so a picture whose card was in a `zTXt` chunk
+ * kept its old card, and the export round-tripped the persona the user
+ * had already replaced.
+ */
+describe("a card in a compressed chunk", () => {
+  it("is replaced, not left beside the new one", () => {
+    const compressed = makeChunk("zTXt", Buffer.concat([
+      Buffer.from("chara", "latin1"),
+      Buffer.from([0]),
+      Buffer.from([0]), // the compression method: deflate
+      deflateSync(Buffer.from("THE OLD CARD", "utf-8")),
+    ]));
+    const picture = Buffer.concat([
+      PNG_SIGNATURE,
+      makeChunk("IHDR", Buffer.alloc(13)),
+      compressed,
+      makeChunk("IEND", Buffer.alloc(0)),
+    ]);
+
+    const written = writePngWithTextChunk(picture, "chara", "THE NEW CARD");
+    const chunks = readPngTextChunks(written);
+    const cards = chunks.filter((chunk) => chunk.key === "chara");
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0].text).toBe("THE NEW CARD");
+  });
+});

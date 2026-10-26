@@ -134,13 +134,6 @@ function decodeTextBytes(bytes: Buffer): string {
   return bytes.toString("latin1");
 }
 
-/** Extracts the keyword of a text chunk, or null when it has none. */
-function textChunkKey(data: Buffer): string | null {
-  const separator = data.indexOf(0);
-  if (separator === -1) return null;
-  return data.toString("latin1", 0, separator);
-}
-
 /**
  * Parses one metadata chunk into a key/text pair.
  *
@@ -304,17 +297,25 @@ function buildChunk(type: string, data: Buffer): Buffer {
  * Writes a `tEXt` chunk into a PNG, leaving the picture untouched.
  *
  * Every original chunk is copied byte-for-byte in its original order; the new
- * chunk is inserted just before `IEND`. A pre-existing `tEXt` chunk with the
- * same keyword is replaced, so exporting a card twice never leaves two
- * conflicting copies of the metadata behind.
+ * chunk is inserted just before `IEND`. A pre-existing chunk with the same
+ * keyword is replaced — in any of the three forms it can take — so
+ * exporting a card twice never leaves two conflicting copies of the
+ * metadata behind.
+ *
+ * The `zTXt` and `iTXt` forms used to be left alone, and the reader takes
+ * the *first* matching chunk in file order while the new one is written
+ * last. So a picture whose card was compressed kept its old card: the
+ * export round-tripped the persona the user had already replaced.
  */
 export function writePngWithTextChunk(buffer: Buffer, key: string, text: string): Buffer {
   const chunks = parseChunks(buffer);
   assertCompletePng(chunks);
 
-  const kept = chunks.filter(
-    (chunk) => !(chunk.type === "tEXt" && textChunkKey(chunk.data) === key),
-  );
+  const kept = chunks.filter((chunk) => {
+    if (chunk.type !== "tEXt" && chunk.type !== "zTXt" && chunk.type !== "iTXt") return true;
+    const parsed = parseTextChunk(chunk.type, chunk.data);
+    return parsed?.key !== key;
+  });
 
   const payload = Buffer.concat([
     Buffer.from(key, "latin1"),
