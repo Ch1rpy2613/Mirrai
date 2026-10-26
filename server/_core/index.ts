@@ -37,6 +37,18 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  /**
+   * Which proxies to believe.
+   *
+   * `X-Forwarded-For` is a header the client can set, so it says
+   * nothing about who is calling unless the caller is a proxy the
+   * operator has named. The list is empty by default, and the address
+   * of the connection is used instead.
+   */
+  if (ENV.trustedProxies.length > 0) {
+    app.set("trust proxy", ENV.trustedProxies);
+  }
+
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 

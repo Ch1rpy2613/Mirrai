@@ -168,14 +168,35 @@ return { allowed, tostring(math.floor(tokens)), tostring(retry) }
  * limit of 30 a minute means 30 a minute.
  */
 export class RedisRateLimiter implements RateLimiter {
-  constructor(private client: RedisClient) {}
+  constructor(
+    private client: RedisClient,
+    /**
+     * What to count on when the shared store is not there.
+     *
+     * Redis is not what makes the app run — the module says so itself —
+     * so an outage has to mean "the limits are counted per process
+     * again", not "every request fails". Without this, a Redis restart
+     * on the user's machine turned every login and every chat into a
+     * 500 with the message "Login failed".
+     */
+    private fallback: RateLimiter = new MemoryRateLimiter(),
+  ) {}
 
   async check(key: string, rule: RateLimitRule): Promise<RateLimitResult> {
     const bucketKey = `mirrai:ratelimit:${rule.name}:${key}`;
-    const raw = (await this.client.eval(TOKEN_BUCKET_SCRIPT, {
-      keys: [bucketKey],
-      arguments: [String(rule.limit), String(rule.windowMs)],
-    })) as Array<string | number>;
+    let raw: Array<string | number>;
+    try {
+      raw = (await this.client.eval(TOKEN_BUCKET_SCRIPT, {
+        keys: [bucketKey],
+        arguments: [String(rule.limit), String(rule.windowMs)],
+      })) as Array<string | number>;
+    } catch (e) {
+      console.warn(
+        "[rate-limit] The shared store is unavailable — counting per process:",
+        (e as Error).message,
+      );
+      return this.fallback.check(key, rule);
+    }
 
     const allowed = Number(raw?.[0] ?? 0) === 1;
     const remaining = Number(raw?.[1] ?? 0);
@@ -185,8 +206,20 @@ export class RedisRateLimiter implements RateLimiter {
 
   async reset(key?: string): Promise<void> {
     if (key === undefined) return;
-    const keys = await this.client.keys(`mirrai:ratelimit:*:${key}`);
-    if (keys.length > 0) await this.client.del(keys);
+    // `KEYS` walks the whole keyspace and blocks the server while it
+    // does, so the keys are found with `SCAN` instead.
+    const pattern = `mirrai:ratelimit:*:${key}`;
+    const found: string[] = [];
+    let cursor = "0";
+    do {
+      const reply = (await this.client.scan(cursor, {
+        MATCH: pattern,
+        COUNT: 100,
+      })) as unknown as { cursor: string; keys: string[] };
+      cursor = reply.cursor;
+      found.push(...reply.keys);
+    } while (cursor !== "0");
+    if (found.length > 0) await this.client.del(found);
   }
 }
 
@@ -250,14 +283,20 @@ export const RATE_LIMITS = {
   tts: { name: "tts", limit: 30, windowMs: 60_000, scope: "user" } as RateLimitRule,
 };
 
-/** Best-effort client IP, honouring a single proxy hop. */
+/**
+ * The client's address, as far as the app can tell.
+ *
+ * The `X-Forwarded-For` header used to be read directly and believed.
+ * Nothing ever said which proxies could be trusted with it, so the
+ * header was simply whatever the caller said it was — and the only
+ * defence against credential stuffing (ten login attempts a minute) was
+ * bypassed by sending a different value with each request.
+ *
+ * The header is now only read when the request came from a proxy the
+ * operator has listed in `TRUSTED_PROXIES`, which is also what Express's
+ * own `trust proxy` is set from — so `req.ip` already accounts for it.
+ */
 export function getClientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  if (value) {
-    const first = value.split(",")[0]?.trim();
-    if (first) return first;
-  }
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
 

@@ -34,6 +34,20 @@ function parseOriginList(raw: string | undefined): string[] {
 }
 
 /**
+ * Parses a list of addresses.
+ *
+ * Used for the proxy list: an entry may be a single address or a range
+ * in the `a.b.c.d/len` form.
+ */
+function parseAddressList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+/**
  * Resolves the skill-engine directory.
  *
  * The configured path is relative to the server's working directory, which is
@@ -127,6 +141,19 @@ export const ENV = {
   skillEngineDir: resolveSkillEngineDir(),
 
   uploadDir: process.env.UPLOAD_DIR ?? "./uploads",
+
+  /**
+   * The proxies whose `X-Forwarded-For` header may be believed.
+   *
+   * Empty by default: a header that anybody can set is not evidence of
+   * anything, and believing it makes the rate limits — the only defence
+   * against credential stuffing — a matter of sending one more header.
+   *
+   * An operator who puts the app behind nginx sets this to the proxy's
+   * address (`127.0.0.1`, or the Docker network's), and the header is
+   * read again.
+   */
+  trustedProxies: parseAddressList(process.env.TRUSTED_PROXIES),
 
   /**
    * Extra origins allowed to make mutating requests. The app's own origin is

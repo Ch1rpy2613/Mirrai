@@ -150,12 +150,30 @@ let managedChild: ChildProcess | null = null;
 export async function connectRedis(): Promise<RedisHandle | null> {
   if (handle) return handle;
   if (starting) return starting;
+  // The last look found nothing, so there is no point looking again this
+  // soon.
+  //
+  // The scheduler asks for the connection on every tick, and every ask
+  // used to start the whole search again: connect, time out, look for a
+  // binary, take the lock file, start a Redis, wait eight seconds for
+  // it, give up and kill it — once a minute, forever, on the machine
+  // that has none.
+  if (lastFailureAt && Date.now() - lastFailureAt < REDISCOVERY_INTERVAL_MS) {
+    return null;
+  }
   starting = doConnect().finally(() => {
     starting = null;
   });
   handle = await starting;
+  if (!handle) lastFailureAt = Date.now();
   return handle;
 }
+
+/** How long to wait before looking for a Redis again. */
+const REDISCOVERY_INTERVAL_MS = 60_000;
+
+/** When the last search came up empty. */
+let lastFailureAt = 0;
 
 /** The handle, if one was already established. */
 export function getRedis(): RedisHandle | null {
@@ -204,7 +222,16 @@ async function tryConnect(url: string): Promise<RedisHandle | null> {
     return null;
   }
   // Without a listener, a connection error takes the process down.
+  //
+  // The listener also starts the client talking again when the
+  // connection is lost. The reconnect strategy is off, so a client whose
+  // Redis went away stayed closed for good: every later call to it
+  // failed, and the shared limits never came back until the app itself
+  // was restarted.
   client.on("error", () => {});
+  client.on("end", () => {
+    scheduleReconnect(client, url);
+  });
   try {
     await client.connect();
   } catch {
@@ -217,6 +244,40 @@ async function tryConnect(url: string): Promise<RedisHandle | null> {
   }
   return { url, client, managed: false };
 }
+
+/** How long to wait before trying the shared store again. */
+const RECONNECT_DELAY_MS = 5_000;
+
+/**
+ * Tries to bring the connection back after it was lost.
+ *
+ * A Redis that is restarted — by an update, by a machine waking up, by
+ * an operator — should not need the whole app restarted with it.
+ */
+function scheduleReconnect(client: RedisClient, url: string): void {
+  if (reconnecting.has(client)) return;
+  reconnecting.add(client);
+  setTimeout(() => {
+    reconnecting.delete(client);
+    void (async () => {
+      try {
+        if (!client.isOpen) await client.connect();
+        // The handle is back, so the shared limits are shared again.
+        if (handle && handle.client === client) {
+          console.log("[redis] The connection is back — the limits are shared again.");
+        } else {
+          handle = { url, client, managed: false };
+        }
+      } catch {
+        // Still not there. The limiter counts per process meanwhile.
+        scheduleReconnect(client, url);
+      }
+    })();
+  }, RECONNECT_DELAY_MS).unref?.();
+}
+
+/** The clients that are waiting to be reconnected. */
+const reconnecting = new WeakSet<RedisClient>();
 
 interface InstanceInfo {
   port: number;
