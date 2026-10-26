@@ -58,7 +58,24 @@ export async function handleWeixinMessage(
 
   if (commandResult.handled) {
     if (commandResult.reply) {
-      await sendText(userId, parsed, commandResult.reply);
+      /**
+       * The delivery is checked.
+       *
+       * The normal reply checks it — and the command's did not. So a
+       * `/毕业` on an expired bot session graduated the persona and
+       * wrote the letter, and the user received *nothing at all*: no
+       * word that it had happened, no word that the send had failed.
+       */
+      const delivered = await sendText(userId, parsed, commandResult.reply);
+      if (!delivered) {
+        const { noteDeliveryFailure } = await import("./bot");
+        noteDeliveryFailure(
+          userId,
+          copy(locale, "channels.messageFailed", {
+            reason: copy(locale, "channels.deliveryFailed"),
+          }),
+        );
+      }
     }
     return;
   }

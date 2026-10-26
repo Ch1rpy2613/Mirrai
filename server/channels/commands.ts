@@ -417,9 +417,21 @@ async function handleGraduationCommand(
 
   // The wording names the channel. The WeChat copy has to stay exactly as it
   // was before the channels were unified.
+  /**
+   * The name of the channel.
+   *
+   * The Feishu handler did not say which channel it was — so the
+   * message said "the letter was saved on the current channel", which
+   * is the wording for a channel with no name. The user was told a
+   * letter was kept *somewhere* rather than where it was.
+   */
   const channelName = copy(
     locale,
-    params.channel === "wechat" ? "channels.channelNameWechat" : "channels.channelNameDefault",
+    params.channel === "wechat"
+      ? "channels.channelNameWechat"
+      : params.channel === "feishu"
+        ? "channels.channelNameFeishu"
+        : "channels.channelNameDefault",
   );
   return {
     handled: true,

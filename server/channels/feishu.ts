@@ -231,6 +231,9 @@ export async function handleFeishuEvent(params: {
     conversationKey: chatId,
     text,
     defaultPersonaId,
+    // The channel names itself — so the message that says where a
+    // letter was saved can say "Feishu" and not "this channel".
+    channel: "feishu",
     sendLetter: async (letter) => {
       await sendText(chatId, letter);
       return true;
