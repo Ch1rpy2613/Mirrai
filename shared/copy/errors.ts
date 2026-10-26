@@ -301,6 +301,21 @@ export const ERRORS = {
     zh: "还没有绑定任何微信会话。",
     en: "No WeChat conversation is bound yet.",
   },
+  /**
+   * The WeChat login has expired.
+   *
+   * The notice was hard-coded Chinese — so an English user was told, in
+   * Chinese, to scan the code again.
+   */
+  "errors.wechatTokenExpired": {
+    zh: "微信登录已过期，请重新扫码连接。",
+    en: "The WeChat login has expired. Please scan the code again to reconnect.",
+  },
+  /** The stored WeChat credentials could not be decrypted. */
+  "errors.wechatCredentialsLost": {
+    zh: "凭据已失效，请重新连接微信",
+    en: "The stored credentials are no longer valid. Please connect WeChat again.",
+  },
 
   /** A template file that cannot be used. */
   "errors.templateNotAnObject": {

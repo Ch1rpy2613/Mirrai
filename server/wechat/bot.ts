@@ -37,6 +37,7 @@ import {
 import { parseInboundMessage } from "./ilink/parse";
 import { sendTextMessage } from "./ilink/send";
 import { handleWeixinMessage } from "./message-handler";
+import { copy } from "@shared/copy";
 
 /** Error code returned by the backend when the bot token is stale/expired. */
 export const STALE_TOKEN_ERRCODE = -14;
@@ -118,8 +119,16 @@ const accounts = new Map<number, AccountState>();
  * The token has to be obtained again — the pause is an hour, and the
  * token does not come back on its own.
  */
-const STALE_TOKEN_MESSAGE =
-  "微信登录已过期，请重新扫码连接。";
+/**
+ * The notice, in the reader's language.
+ *
+ * It used to be a hard-coded Chinese string, so an English user was
+ * told, in Chinese, to scan the code again.
+ */
+async function staleTokenMessage(userId: number): Promise<string> {
+  const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
+  return copy(locale, "errors.wechatTokenExpired");
+}
 
 /**
  * Records that a reply could not be delivered.
@@ -532,17 +541,29 @@ export async function restoreWeChatBot(userId: number): Promise<boolean> {
   const state = await db.getWechatBotState(userId);
   if (!state?.botTokenEnc) return false;
 
+  const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
   const token = await decryptSecret(state.botTokenEnc);
   if (!token) {
     log("凭据无法解密，需要重新扫码");
-    await db.upsertWechatBotState(userId, { status: "error", lastError: "凭据已失效，请重新连接微信" });
+    await db.upsertWechatBotState(userId, {
+      status: "error",
+      lastError: copy(locale, "errors.wechatCredentialsLost"),
+    });
     return false;
   }
 
   const account = getAccount(userId);
-  account.status = "logged_in";
+  /**
+   * The error is not thrown away.
+   *
+   * A restart set the status to "logged_in" and the error to null — so
+   * the interface said "connected" for a credential known to be dead,
+   * and the error that said otherwise was gone.
+   */
+  const recordedError = state.lastError ?? null;
+  account.status = recordedError ? "error" : "logged_in";
   account.loggedInUser = state.loggedInUser;
-  account.lastError = null;
+  account.lastError = recordedError;
   startWeChatBot(userId);
   return true;
 }
@@ -658,10 +679,11 @@ async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
            * anywhere — and the only way out was to notice and re-scan
            * by hand.
            */
+          const expiredNotice = await staleTokenMessage(userId);
           account.status = "error";
-          account.lastError = STALE_TOKEN_MESSAGE;
+          account.lastError = expiredNotice;
           await db
-            .upsertWechatBotState(userId, { status: "error", lastError: STALE_TOKEN_MESSAGE })
+            .upsertWechatBotState(userId, { status: "error", lastError: expiredNotice })
             .catch((e) => logError(`状态写入失败: ${String(e)}`));
           consecutiveFailures = 0;
           continue;
