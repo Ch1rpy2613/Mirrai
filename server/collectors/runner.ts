@@ -102,10 +102,18 @@ const MAX_COLLECTOR_OUTPUT_CHARS = 1024 * 1024;
  *
  * The beginning is what matters: it is where the progress lines and the
  * first error are.
+ *
+ * Whether anything was cut is reported — a collector that printed more
+ * than the cap was cut in the middle, and the job then said the output
+ * "could not be parsed", which says nothing about why.
  */
-function appendCapped(buffer: string, chunk: string): string {
-  if (buffer.length >= MAX_COLLECTOR_OUTPUT_CHARS) return buffer;
-  return (buffer + chunk).slice(0, MAX_COLLECTOR_OUTPUT_CHARS);
+function appendCapped(buffer: string, chunk: string): { text: string; truncated: boolean } {
+  if (buffer.length >= MAX_COLLECTOR_OUTPUT_CHARS) {
+    return { text: buffer, truncated: true };
+  }
+  const next = buffer + chunk;
+  if (next.length <= MAX_COLLECTOR_OUTPUT_CHARS) return { text: next, truncated: false };
+  return { text: next.slice(0, MAX_COLLECTOR_OUTPUT_CHARS), truncated: true };
 }
 
 /**
@@ -122,7 +130,7 @@ export async function runCollector(
   tool: string,
   args: string[],
   opts: RunCollectorOptions = {},
-): Promise<{ stdout: string; stderr: string }> {
+): Promise<{ stdout: string; stderr: string; stdoutTruncated?: boolean }> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_COLLECTOR_TIMEOUT_MS;
 
   if (opts.signal?.aborted) {
@@ -144,11 +152,13 @@ export async function runCollector(
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+  return new Promise<{ stdout: string; stderr: string; stdoutTruncated?: boolean }>((resolve, reject) => {
     let stdout = "";
     let stderr = "";
     let stdoutBuffer = "";
     let stderrBuffer = "";
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
     let settled = false;
     let timeoutTimer: NodeJS.Timeout | undefined;
 
@@ -159,7 +169,9 @@ export async function runCollector(
 
     child.stdout?.setEncoding("utf-8");
     child.stdout?.on("data", (chunk: string) => {
-      stdout = appendCapped(stdout, chunk);
+      const capped = appendCapped(stdout, chunk);
+      stdout = capped.text;
+      stdoutTruncated = stdoutTruncated || capped.truncated;
       stdoutBuffer += chunk;
       const lines = stdoutBuffer.split("\n");
       stdoutBuffer = lines.pop() ?? "";
@@ -170,7 +182,9 @@ export async function runCollector(
 
     child.stderr?.setEncoding("utf-8");
     child.stderr?.on("data", (chunk: string) => {
-      stderr = appendCapped(stderr, chunk);
+      const capped = appendCapped(stderr, chunk);
+      stderr = capped.text;
+      stderrTruncated = stderrTruncated || capped.truncated;
       stderrBuffer += chunk;
       const lines = stderrBuffer.split("\n");
       stderrBuffer = lines.pop() ?? "";
@@ -211,7 +225,7 @@ export async function runCollector(
       settled = true;
       cleanup();
       if (code === 0) {
-        resolve({ stdout, stderr });
+        resolve({ stdout, stderr, stdoutTruncated });
         return;
       }
       const detail = stderr.trim().slice(-500);
@@ -226,6 +240,16 @@ export async function runCollector(
 }
 
 export interface NormaliseCollectorOptions {
+  /**
+   * Whether the collector's output was cut off.
+   *
+   * The output is capped, so a collector that printed more than the cap
+   * was cut in the middle — and the job then said the output "could not
+   * be parsed", which says nothing about why. The e-mail and the
+   * WeChat export read their whole payload from stdout, so a large
+   * export failed after minutes of collecting.
+   */
+  truncated?: boolean;
   /** Target person, used to decide whether a message belongs to the persona. */
   target?: string;
   /** Hard cap applied after parsing. */
@@ -723,6 +747,14 @@ export function normaliseCollectorOutput(
 
   const parsed = parseCollectorMessages(text, source, opts.target);
   if (parsed.length === 0) {
+    if (opts.truncated) {
+      throw new Error(
+        `Collector "${source}" printed more than the output limit allows, ` +
+          `so it was cut off in the middle and could not be read. ` +
+          `Collect a smaller range, or raise the limit. ` +
+          `First 200 characters: ${text.slice(0, 200)}`,
+      );
+    }
     throw new Error(
       `Collector "${source}" output could not be parsed into messages. ` +
         `First 200 characters: ${text.slice(0, 200)}`,

@@ -541,13 +541,14 @@ const emailConnector: SourceConnector = {
     if (!input.target) {
       throw new Error('Collector "email" requires a target (the sender whose mail is kept)');
     }
-    const { stdout } = await runCollector(emailConnector.tool, emailConnector.args(input), {
+    const { stdout, stdoutTruncated } = await runCollector(emailConnector.tool, emailConnector.args(input), {
       onProgress: input.onProgress,
       signal: input.signal,
     });
     return normaliseCollectorOutput(stdout, emailConnector.id, {
       target: input.target,
       limit: input.limit,
+      truncated: stdoutTruncated,
     });
   },
 };
@@ -593,7 +594,7 @@ const wechatExportConnector: SourceConnector = {
     if (!input.target) {
       throw new Error('Collector "wechat_export" requires a target (the person to keep)');
     }
-    const { stdout } = await runCollector(
+    const { stdout, stdoutTruncated } = await runCollector(
       wechatExportConnector.tool,
       wechatExportConnector.args(input),
       { onProgress: input.onProgress, signal: input.signal },
@@ -601,6 +602,7 @@ const wechatExportConnector: SourceConnector = {
     return normaliseCollectorOutput(stdout, wechatExportConnector.id, {
       target: input.target,
       limit: input.limit,
+      truncated: stdoutTruncated,
     });
   },
 };
