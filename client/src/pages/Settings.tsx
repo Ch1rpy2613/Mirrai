@@ -169,7 +169,7 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Base URL</Label>
+              <Label className="text-xs text-muted-foreground">{t("settings.ai.baseUrl")}</Label>
               <Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
                 placeholder="https://api.openai.com/v1" className="h-9 rounded-md text-sm" />
             </div>
@@ -304,7 +304,9 @@ function ProfileTab() {
               <>
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <h3 className="font-sans text-lg font-semibold text-foreground">{profile.name || profile.username}</h3>
-                  {profile.role !== "user" && <StatusChip tone="primary">{profile.role}</StatusChip>}
+                  {profile.role !== "user" && (
+                    <StatusChip tone="primary">{t(`settings.profile.roles.${profile.role}` as any)}</StatusChip>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">@{profile.username}</p>
                 {profile.email && (
@@ -672,7 +674,7 @@ function WeChatTab() {
         {bot?.qrCodeUrl && isPending && (
           <div className="mt-5 flex flex-col items-center gap-3 py-6 px-4 rounded-lg border border-border bg-card">
             <div className="bg-white p-3 rounded-lg border border-border">
-              <img src={bot.qrCodeUrl} alt="WeChat QR" className="w-44 h-44" />
+              <img src={bot.qrCodeUrl} alt={t("settings.wechat.qrAlt")} className="w-44 h-44" />
             </div>
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
               {needsCode ? t("settings.wechat.codeScanned")
@@ -952,6 +954,14 @@ function DataManagementTab() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  /**
+   * The phrase the user has to type, captured when the dialog opens.
+   *
+   * It was compared against the *localised* string, so changing the
+   * language while the dialog was open left the destructive button
+   * permanently disabled — and the user had no way of finding out why.
+   */
+  const [expectedPhrase, setExpectedPhrase] = useState("");
   const deleteAccount = trpc.user.deleteAccount.useMutation({
     onSuccess: () => {
       toast.success(t("settings.data.accountDeleted"));
@@ -1045,7 +1055,16 @@ function DataManagementTab() {
       </section>
 
       {/* Delete Account Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <Dialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          setShowDeleteDialog(open);
+          // The phrase is captured when the dialog opens, so a change of
+          // language in the meantime does not lock the user out of the
+          // button they are trying to press.
+          if (open) setExpectedPhrase(t("settings.data.phrase"));
+        }}
+      >
         <DialogContent className="bg-card border-border rounded-lg max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display text-destructive">{t("settings.data.confirmTitle")}</DialogTitle>
@@ -1078,7 +1097,7 @@ function DataManagementTab() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowDeleteDialog(false)} className="rounded-md">{t("common.cancel")}</Button>
             <Button variant="destructive" className="rounded-md px-5"
-              disabled={!deletePassword || deleteConfirmText !== t("settings.data.phrase") || deleteAccount.isPending}
+              disabled={!deletePassword || deleteConfirmText !== expectedPhrase || deleteAccount.isPending}
               onClick={() => deleteAccount.mutate({ confirmPassword: deletePassword })}>
               {deleteAccount.isPending ? t("common.deleting") : t("settings.data.permanent")}
             </Button>
