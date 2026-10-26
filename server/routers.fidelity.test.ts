@@ -28,6 +28,7 @@ const markOutboundLetterStaleNotified = vi.fn();
 const getPersonaBehaviorProfile = vi.fn();
 const setPersonaBehaviorProfile = vi.fn();
 const getMessagesByPersonaId = vi.fn();
+const getMessagesByPersonaIdPaged = vi.fn();
 const invoke = vi.fn();
 
 vi.mock("./db", () => ({
@@ -46,6 +47,7 @@ vi.mock("./db", () => ({
   getPersonaBehaviorProfile: (...a: unknown[]) => getPersonaBehaviorProfile(...a),
   setPersonaBehaviorProfile: (...a: unknown[]) => setPersonaBehaviorProfile(...a),
   getMessagesByPersonaId: (...a: unknown[]) => getMessagesByPersonaId(...a),
+  getMessagesByPersonaIdPaged: (...a: unknown[]) => getMessagesByPersonaIdPaged(...a),
   getLatestChatSummary: vi.fn().mockResolvedValue(null),
   getUserById: vi.fn().mockResolvedValue({ id: 1, name: "测试" }),
   getRecentUserMood: vi.fn().mockResolvedValue(null),
@@ -181,6 +183,7 @@ beforeEach(() => {
   markOutboundLetterStaleNotified.mockResolvedValue(undefined);
   getPersonaBehaviorProfile.mockResolvedValue(null);
   getMessagesByPersonaId.mockResolvedValue([]);
+  getMessagesByPersonaIdPaged.mockResolvedValue([]);
   invoke.mockResolvedValue("嗯嗯");
 });
 
@@ -429,7 +432,7 @@ describe("the way out", () => {
     getOutboundLetters.mockResolvedValue([
       { id: 5, sourceMessageId: 42, text: "我害怕你离开我", status: "ready" },
     ]);
-    getMessagesByPersonaId.mockResolvedValue([
+    getMessagesByPersonaIdPaged.mockResolvedValue([
       { id: 42, role: "user", content: "我害怕你离开我", createdAt: new Date() },
     ]);
     const caller = appRouter.createCaller(makeCtx());

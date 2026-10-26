@@ -1384,6 +1384,42 @@ export async function getMessagesByPersonaId(personaId: number, userId: number, 
 }
 
 /**
+ * The whole conversation, in pages.
+ *
+ * A page at a time, because the whole conversation of a persona who has
+ * talked for a year is tens of thousands of rows. The ceiling is
+ * there so that one very long conversation cannot exhaust the memory
+ * of the process.
+ */
+export async function getMessagesByPersonaIdPaged(
+  personaId: number,
+  userId: number,
+  options: { pageSize?: number; max?: number } = {},
+): Promise<typeof messages.$inferSelect[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const pageSize = Math.max(1, Math.min(1000, options.pageSize ?? 500));
+  const max = Math.max(pageSize, Math.min(20_000, options.max ?? 5000));
+  const collected: (typeof messages.$inferSelect)[] = [];
+  let before: Date | undefined;
+  while (collected.length < max) {
+    const rows = await db.select().from(messages)
+      .where(and(
+        eq(messages.personaId, personaId),
+        eq(messages.userId, userId),
+        ...(before ? [lt(messages.createdAt, before)] : []),
+      ))
+      .orderBy(desc(messages.createdAt))
+      .limit(Math.min(pageSize, max - collected.length));
+    if (rows.length === 0) break;
+    collected.push(...rows);
+    before = rows[rows.length - 1].createdAt;
+    if (rows.length < pageSize) break;
+  }
+  return collected.reverse();
+}
+
+/**
  * A single message, if it belongs to the user.
  */
 /**

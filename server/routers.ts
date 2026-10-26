@@ -23,7 +23,7 @@ import {
   getPersonasWithStats, getUserStats, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId,
   createMessage,
-  getPersonaFileById, getMessagesByPersonaId, clearMessagesByPersonaId, searchMessages,
+  getPersonaFileById, getMessagesByPersonaId, getMessagesByPersonaIdPaged, clearMessagesByPersonaId, searchMessages,
   updateUserMessage, deleteMessage, deleteMessagesFrom, getPreviousMessage,
   getMessagesFrom, restoreMessages,
   getMessagesBefore, hasOlderMessages, searchAllMessages,
@@ -4176,9 +4176,21 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
-        // The whole conversation, not the last page of it: the words
-        // that were only ever said here are often from months ago.
-        const messages = await getMessagesByPersonaId(input.personaId, ctx.user.id, 500);
+        /**
+         * The whole conversation, not the last page of it.
+         *
+         * The words that were only ever said here are often from months
+         * ago — and the reader took the newest five hundred, which at
+         * twenty messages a day is about a month. So the older half of
+         * the conversation was never read, while the comment claimed
+         * otherwise.
+         *
+         * It is read in pages now, up to five thousand messages.
+         */
+        const messages = await getMessagesByPersonaIdPaged(input.personaId, ctx.user.id, {
+          pageSize: 500,
+          max: 5000,
+        });
         const candidates = await collectOutboundCandidates({
           userId: ctx.user.id,
           personaId: input.personaId,
