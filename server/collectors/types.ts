@@ -76,6 +76,16 @@ export interface CollectInput {
    * user's collection.
    */
   userId?: number | null;
+  /**
+   * The reader's own time zone.
+   *
+   * The collectors bring back the user's own history, and a timestamp
+   * that names a wall clock but no zone is the reader's clock. It used
+   * to be read in the *server's* zone, so on a server in another
+   * country every message landed at the wrong hour, and often on the
+   * wrong day.
+   */
+  timezone?: string;
   /** Progress sink (0..100) injected by the job runner. */
   onProgress?: (pct: number) => void;
   /** Cancellation signal injected by the job runner. */
@@ -297,6 +307,7 @@ async function collectViaOutputDir(
     const normalised = parseNormalisedPayload(stdout, connector.id, {
       target: input.target,
       limit: input.limit,
+      timeZone: input.timezone,
     });
     if (normalised) return normalised;
 
@@ -311,6 +322,7 @@ async function collectViaOutputDir(
     return normaliseCollectorOutput(raw, connector.id, {
       target: input.target,
       limit: input.limit,
+      timeZone: input.timezone,
     });
   } finally {
     rmSync(outputDir, { recursive: true, force: true });
@@ -549,6 +561,7 @@ const emailConnector: SourceConnector = {
       target: input.target,
       limit: input.limit,
       truncated: stdoutTruncated,
+      timeZone: input.timezone,
     });
   },
 };
@@ -603,6 +616,7 @@ const wechatExportConnector: SourceConnector = {
       target: input.target,
       limit: input.limit,
       truncated: stdoutTruncated,
+      timeZone: input.timezone,
     });
   },
 };

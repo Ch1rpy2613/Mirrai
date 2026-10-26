@@ -14,6 +14,7 @@
  * "running" forever.
  */
 import { randomUUID } from "crypto";
+import * as db from "../db";
 import { COLLECTOR_SOURCES } from "./types";
 import type { CollectInput, CollectResult, CollectorSourceId, SourceConnector } from "./types";
 
@@ -279,6 +280,19 @@ async function runJob(job: CollectorJob): Promise<void> {
       // under the source alone, so one user's credentials were used for
       // another user's collection.
       userId: Number.isFinite(Number(job.userId)) ? Number(job.userId) : null,
+      /**
+       * The reader's own time zone.
+       *
+       * A timestamp that names a wall clock but no zone is the
+       * reader's clock — it is their chat history. It used to be read
+       * in the *server's* zone, so on a server in another country
+       * every message landed at the wrong hour, and often on the wrong
+       * day.
+       */
+      timezone:
+        Number.isFinite(Number(job.userId))
+          ? (await db.getUserTimezone(Number(job.userId))) ?? undefined
+          : undefined,
       onProgress: (pct: number) => {
         const next = Math.max(0, Math.min(100, Math.round(pct)));
         if (next <= job.progress) return;

@@ -10,6 +10,7 @@
  */
 import { spawn, type ChildProcess } from "child_process";
 import { ENV } from "../_core/env";
+import { zonedOffsetMinutes } from "@shared/timezone";
 import type { CollectedMessage, CollectorSourceId, CollectResult } from "./types";
 
 /** Default budget for a single collector run (30 minutes). */
@@ -241,6 +242,16 @@ export async function runCollector(
 
 export interface NormaliseCollectorOptions {
   /**
+   * The reader's own time zone.
+   *
+   * The collectors bring back the user's own history, and a timestamp
+   * that names a wall clock but no zone is the reader's clock. It used
+   * to be read in the *server's* zone, so on a server in another
+   * country every message landed at the wrong hour, and often on the
+   * wrong day.
+   */
+  timeZone?: string;
+  /**
    * Whether the collector's output was cut off.
    *
    * The output is capped, so a collector that printed more than the cap
@@ -419,14 +430,57 @@ function fromEpoch(value: number): string | undefined {
   return date.toISOString();
 }
 
+/**
+ * A timestamp that names a wall clock but no zone.
+ *
+ * "2026-03-01 14:30" is the user's own clock — it is their chat
+ * history. It used to be read in the *server's* zone, so on a server
+ * in another country every message landed at the wrong hour, and
+ * often on the wrong day.
+ */
+const ZONELESS = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+
+/**
+ * Reads a zone-less timestamp as a wall clock in the given zone.
+ *
+ * Returns null when the zone is not known, or when the value is not a
+ * wall clock after all.
+ */
+function parseZoneless(value: string, timeZone?: string): Date | null {
+  const match = ZONELESS.exec(value.trim());
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second] = match;
+  const asUtc = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour ?? "0"),
+    Number(minute ?? "0"),
+    Number(second ?? "0"),
+  );
+  if (Number.isNaN(asUtc)) return null;
+  // The offset of the zone at that wall clock. It is worked out twice:
+  // once for the wall clock read as UTC, and once for the instant it
+  // names — the difference is the offset, and it is right across a
+  // daylight-saving change.
+  const firstGuess = zonedOffsetMinutes(new Date(asUtc), timeZone);
+  const settled = zonedOffsetMinutes(new Date(asUtc - firstGuess * 60_000), timeZone);
+  return new Date(asUtc - settled * 60_000);
+}
+
 /** Normalises a timestamp of unknown shape to ISO 8601, when it can be parsed. */
-function toIsoTimestamp(value: unknown): string | undefined {
+function toIsoTimestamp(value: unknown, timeZone?: string): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value === "number") return fromEpoch(value);
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   if (/^\d+$/.test(trimmed)) return fromEpoch(Number(trimmed));
+  // A wall clock with no zone is read in the reader's own zone.
+  if (ZONELESS.test(trimmed)) {
+    const zoned = parseZoneless(trimmed, timeZone);
+    if (zoned) return zoned.toISOString();
+  }
   const parsed = Date.parse(trimmed);
   if (Number.isNaN(parsed)) return undefined;
   return new Date(parsed).toISOString();
@@ -437,6 +491,7 @@ function toMessage(
   item: unknown,
   source: CollectorSourceId,
   target?: string,
+  timeZone?: string,
 ): CollectedMessage | null {
   if (typeof item === "string") {
     const content = item.trim();
@@ -454,6 +509,7 @@ function toMessage(
   };
   const timestamp = toIsoTimestamp(
     record.timestamp ?? record.create_time ?? record.time ?? record.ts ?? record.date,
+    timeZone,
   );
   if (timestamp) message.timestamp = timestamp;
   return message;
@@ -464,6 +520,7 @@ function parseJsonLines(
   text: string,
   source: CollectorSourceId,
   target?: string,
+  timeZone?: string,
 ): CollectedMessage[] {
   const messages: CollectedMessage[] = [];
   const lines = text.split("\n");
@@ -472,7 +529,7 @@ function parseJsonLines(
     if (!trimmed.startsWith("{")) continue;
     const value = tryParseJson(trimmed);
     if (value === undefined) continue;
-    const message = toMessage(value, source, target);
+    const message = toMessage(value, source, target, timeZone);
     if (message) messages.push(message);
   }
   return messages;
@@ -522,14 +579,19 @@ function parseCollectorReport(
   text: string,
   source: CollectorSourceId,
   target?: string,
+  timeZone?: string,
 ): CollectedMessage[] {
-  const emailMessages = parseEmailReport(text, source);
+  const emailMessages = parseEmailReport(text, source, timeZone);
   if (emailMessages.length > 0) return emailMessages;
-  return parseBracketReport(text, source, target);
+  return parseBracketReport(text, source, target, timeZone);
 }
 
 /** Parses the e-mail report produced by `email_parser.py`. */
-function parseEmailReport(text: string, source: CollectorSourceId): CollectedMessage[] {
+function parseEmailReport(
+  text: string,
+  source: CollectorSourceId,
+  timeZone?: string,
+): CollectedMessage[] {
   const messages: CollectedMessage[] = [];
   const lines = text.split("\n");
   let current: CollectorMessageDraft | undefined;
@@ -553,7 +615,7 @@ function parseEmailReport(text: string, source: CollectorSourceId): CollectedMes
       current = {
         subject: subjectMatch[1].trim(),
         body: "",
-        timestamp: toIsoTimestamp(subjectMatch[2]),
+        timestamp: toIsoTimestamp(subjectMatch[2], timeZone),
       };
       continue;
     }
@@ -595,6 +657,7 @@ function parseBracketReport(
   text: string,
   source: CollectorSourceId,
   target?: string,
+  timeZone?: string,
 ): CollectedMessage[] {
   const messages: CollectedMessage[] = [];
   let section = "";
@@ -618,7 +681,7 @@ function parseBracketReport(
       content,
       source,
     };
-    const timestamp = toIsoTimestamp(time);
+    const timestamp = toIsoTimestamp(time, timeZone);
     if (timestamp) message.timestamp = timestamp;
     messages.push(message);
   }
@@ -673,7 +736,7 @@ export function parseNormalisedPayload(
   const record = parsed as { messages: unknown[]; meta?: Record<string, unknown> };
   const messages: CollectedMessage[] = [];
   for (const item of record.messages) {
-    const message = toMessage(item, source, opts.target);
+    const message = toMessage(item, source, opts.target, opts.timeZone);
     if (message) messages.push(message);
   }
   // A payload that carries messages but none of them is usable is not the
@@ -699,6 +762,7 @@ function parseCollectorMessages(
   text: string,
   source: CollectorSourceId,
   target?: string,
+  timeZone?: string,
 ): CollectedMessage[] {
   const asJson = tryParseJson(text);
   if (asJson !== undefined) {
@@ -706,7 +770,7 @@ function parseCollectorMessages(
     if (array) {
       const messages: CollectedMessage[] = [];
       for (const item of array) {
-        const message = toMessage(item, source, target);
+        const message = toMessage(item, source, target, timeZone);
         if (message) messages.push(message);
       }
       if (messages.length > 0) return messages;
@@ -719,7 +783,7 @@ function parseCollectorMessages(
   const transcript = parseRoleTranscript(text, source);
   if (transcript.length > 0) return transcript;
 
-  return parseCollectorReport(text, source, target);
+  return parseCollectorReport(text, source, target, timeZone);
 }
 
 /**
@@ -745,7 +809,7 @@ export function normaliseCollectorOutput(
   const normalised = parseNormalisedPayload(text, source, opts);
   if (normalised) return normalised;
 
-  const parsed = parseCollectorMessages(text, source, opts.target);
+  const parsed = parseCollectorMessages(text, source, opts.target, opts.timeZone);
   if (parsed.length === 0) {
     if (opts.truncated) {
       throw new Error(

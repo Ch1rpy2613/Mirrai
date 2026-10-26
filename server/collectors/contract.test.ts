@@ -703,3 +703,35 @@ describe("collector job runner", () => {
     expect(getCollectorJob(handle.id)?.status).toBe("interrupted");
   });
 });
+
+/**
+ * A timestamp that names a wall clock but no zone.
+ *
+ * It is the user's own clock — it is their chat history. It used to be
+ * read in the *server's* zone, so on a server in another country every
+ * message landed at the wrong hour, and often on the wrong day.
+ */
+describe("a timestamp with no zone in it", () => {
+  it("is read in the reader's own zone", () => {
+    const raw = JSON.stringify([
+      { sender: "张三", content: "早", timestamp: "2026-03-01 08:30" },
+    ]);
+    const result = normaliseCollectorOutput(raw, "feishu", {
+      target: "李四",
+      timeZone: "Asia/Shanghai",
+    });
+    expect(result.messages[0].timestamp).toBe("2026-03-01T00:30:00.000Z");
+  });
+
+  it("is read in the reader's own zone on the other side of the world", () => {
+    const raw = JSON.stringify([
+      { sender: "张三", content: "早", timestamp: "2026-03-01 08:30" },
+    ]);
+    const result = normaliseCollectorOutput(raw, "feishu", {
+      target: "李四",
+      timeZone: "America/New_York",
+    });
+    // New York is five hours behind Greenwich in March.
+    expect(result.messages[0].timestamp).toBe("2026-03-01T13:30:00.000Z");
+  });
+});
