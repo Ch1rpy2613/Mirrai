@@ -345,7 +345,7 @@ export default function Diary() {
                       aria-current={isToday ? "date" : undefined}
                       className={`cal-cell relative aspect-square flex items-center justify-center rounded-md text-sm
                         ${isFuture
-                          ? "text-muted-foreground/40 cursor-not-allowed"
+                          ? "text-muted-subtle cursor-not-allowed"
                           : isSelected
                             ? "bg-primary text-primary-foreground font-semibold"
                             : isToday

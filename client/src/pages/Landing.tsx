@@ -113,7 +113,7 @@ function HeroSection() {
         animate={{ y: [0, 6, 0] }}
         transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
       >
-        <ChevronDown className="w-4 h-4 text-muted-foreground/50" />
+        <ChevronDown className="w-4 h-4 text-muted-subtle" />
       </motion.div>
     </section>
   );

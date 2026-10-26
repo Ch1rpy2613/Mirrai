@@ -495,7 +495,7 @@ export default function PersonaEdit() {
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                   {t("presence.holdNote")}
                 </p>
-                <ul className="text-xs text-muted-foreground/85 leading-relaxed mt-1.5 space-y-0.5">
+                <ul className="text-xs text-muted-subtle leading-relaxed mt-1.5 space-y-0.5">
                   <li>· {t("presence.holdStops")}</li>
                   <li>· {t("presence.holdKeeps")}</li>
                 </ul>

@@ -189,7 +189,7 @@ export default function Graduation() {
                     {draft.removed.map((line: string, index: number) => (
                       <p
                         key={index}
-                        className="text-xs text-muted-foreground/60 leading-relaxed line-through"
+                        className="text-xs text-muted-subtle leading-relaxed line-through"
                       >
                         {line}
                       </p>

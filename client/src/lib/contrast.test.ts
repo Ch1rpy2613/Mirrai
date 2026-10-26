@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 
 /**
@@ -72,6 +73,41 @@ const CSS = readFileSync(
   path.resolve(__dirname, "..", "index.css"),
   "utf-8",
 );
+
+/**
+ * The opacity variants.
+ *
+ * The palette's own colours are checked above — but the interface
+ * also dims the muted foreground with an opacity ("text-muted-foreground
+ * /40"), and an opacity variant of a colour on a light background can
+ * never reach the line: at 40% it was 1.76:1, at 60% 2.46:1.
+ *
+ * Twenty-eight places used them — the "today" marker, the heatmap's
+ * legend, the weekday headings, the calendar's day numbers, the
+ * relative timestamps, the placeholders in the shared input and
+ * textarea.
+ */
+describe("the dimmed text", () => {
+  it("uses no opacity variant of the muted foreground", () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.(tsx|ts)$/.test(entry.name)) continue;
+        if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) continue;
+        const source = readFileSync(full, "utf-8");
+        const match = /text-muted-foreground\/(\d+)/.exec(source);
+        if (match) offenders.push(`${path.relative(dir, full)}: ${match[0]}`);
+      }
+    };
+    walk(path.resolve(__dirname, ".."));
+    expect(offenders).toEqual([]);
+  });
+});
 
 describe("the palette", () => {
   for (const theme of ["light", "dark"] as const) {

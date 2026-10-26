@@ -95,7 +95,7 @@ export default function CommandPalette() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("commandPalette.placeholder")}
             aria-label={t("commandPalette.placeholder")}
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-subtle outline-none"
           />
           <button
             onClick={() => setOpen(false)}

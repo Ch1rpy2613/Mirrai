@@ -1641,7 +1641,7 @@ export default function Chat() {
             <button
               onClick={() => setDismissedNotes(true)}
               aria-label={t("common.close")}
-              className="absolute top-2.5 right-2.5 text-muted-foreground/60 hover:text-foreground transition-colors"
+              className="absolute top-2.5 right-2.5 text-muted-subtle hover:text-foreground transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1881,7 +1881,7 @@ export default function Chat() {
                  * and the text was lost with it.
                  */
                 maxLength={2000}
-                rows={1} className="flex-1 min-w-0 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-foreground/50 rounded-md min-h-[44px] max-h-32 px-4 py-3" />
+                rows={1} className="flex-1 min-w-0 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-subtle rounded-md min-h-[44px] max-h-32 px-4 py-3" />
               {isSending ? (
                 <Button onClick={handleStopStreaming} aria-label={t("chat.stop")}
                   className="h-11 w-11 p-0 rounded-md flex-shrink-0">
@@ -1896,7 +1896,7 @@ export default function Chat() {
             </div>
             </>
           )}
-          <p className="hidden sm:block text-muted-foreground/35 text-[10px] mt-1.5 text-right tracking-wide">
+          <p className="hidden sm:block text-muted-subtle text-[10px] mt-1.5 text-right tracking-wide">
             {t("chat.enterToSend")}
           </p>
         </div>
@@ -1995,7 +1995,7 @@ function SearchPanel({
           <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <Label className="sr-only" htmlFor="chat-search">{t("chat.searchPlaceholder")}</Label>
           <input id="chat-search" value={query} onChange={e => handleChange(e.target.value)} autoFocus
-            placeholder={t("chat.searchPlaceholder")} className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none" />
+            placeholder={t("chat.searchPlaceholder")} className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-subtle outline-none" />
           <button onClick={onClose} aria-label={t("chat.closeSearch")} className="text-muted-foreground hover:text-foreground transition-colors"><X className="w-4 h-4" /></button>
         </div>
         {debouncedQuery && results && (
@@ -2212,9 +2212,9 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
           {showAdd && (
             <div className="mt-4 p-3.5 bg-muted/40 rounded-md border border-border space-y-2">
               <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder={t("chat.memory.titlePlaceholder")} className="w-full text-sm bg-transparent border-b border-border pb-1.5 text-foreground placeholder:text-muted-foreground/50 outline-none" />
+                placeholder={t("chat.memory.titlePlaceholder")} className="w-full text-sm bg-transparent border-b border-border pb-1.5 text-foreground placeholder:text-muted-subtle outline-none" />
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder={t("chat.memory.descriptionPlaceholder")} rows={2} className="w-full text-xs bg-transparent border-b border-border pb-1.5 text-foreground placeholder:text-muted-foreground/50 outline-none resize-none" />
+                placeholder={t("chat.memory.descriptionPlaceholder")} rows={2} className="w-full text-xs bg-transparent border-b border-border pb-1.5 text-foreground placeholder:text-muted-subtle outline-none resize-none" />
               <div className="flex gap-2">
                 <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as "memory" | "milestone" | "anniversary" | "anchor" }))}
                   className="text-xs bg-muted border border-border rounded-md px-2 py-1.5 text-foreground">

@@ -530,7 +530,7 @@ function DailyMessages({ personas }: { personas: any[] }) {
                 <span className="font-sans text-xs font-semibold text-foreground">{m.name}</span>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{m.message}</p>
               </div>
-              <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 mt-1">{t("lobby.daily.today")}</span>
+              <span className="text-[10px] text-muted-subtle flex-shrink-0 mt-1">{t("lobby.daily.today")}</span>
             </div>
           );
         })}
@@ -637,13 +637,13 @@ function ActivityHeatmap() {
         })}
       </div>
       <div className="flex items-center gap-1 mt-3 justify-end">
-        <span className="text-[9px] text-muted-foreground/60">{t("lobby.heatmap.less")}</span>
+        <span className="text-[9px] text-muted-subtle">{t("lobby.heatmap.less")}</span>
         {[0, 0.25, 0.5, 0.75, 1].map((v, i) => (
           <div key={i} className="heatmap-cell" style={{
             width: "10px", height: "10px", backgroundColor: cellColor(v),
           }} />
         ))}
-        <span className="text-[9px] text-muted-foreground/60">{t("lobby.heatmap.more")}</span>
+        <span className="text-[9px] text-muted-subtle">{t("lobby.heatmap.more")}</span>
       </div>
     </div>
   );
@@ -773,9 +773,9 @@ function ConversationStarters({ personas, onChat }: { personas: any[]; onChat: (
             <PersonaAvatar name={s.personaName} className="w-8 h-8 rounded-md text-xs flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="font-display text-xs text-foreground/85 leading-relaxed truncate">“{s.text}”</p>
-              <span className="text-[10px] text-muted-foreground/60">{t("lobby.starters.ask", { name: s.personaName })}</span>
+              <span className="text-[10px] text-muted-subtle">{t("lobby.starters.ask", { name: s.personaName })}</span>
             </div>
-            <MessageCircle className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-foreground transition-colors flex-shrink-0" />
+            <MessageCircle className="w-3.5 h-3.5 text-muted-subtle group-hover:text-foreground transition-colors flex-shrink-0" />
           </button>
         ))}
       </div>
@@ -884,14 +884,14 @@ function MiniCalendar() {
       />
       <div className="grid grid-cols-7 gap-1">
         {Array.from(t("lobby.calendar.weekdays")).map((d, i) => (
-          <div key={`${d}-${i}`} className="text-center text-[9px] text-muted-foreground/60 py-0.5">{d}</div>
+          <div key={`${d}-${i}`} className="text-center text-[9px] text-muted-subtle py-0.5">{d}</div>
         ))}
         {days.map((d, i) => (
           <div key={i} className={`cal-cell aspect-square rounded-md flex items-center justify-center text-[10px] ${
             !d ? "" :
             d.today ? "bg-primary text-primary-foreground font-bold" :
             d.active ? "bg-primary/10 text-foreground font-medium" :
-            "text-muted-foreground/40"
+            "text-muted-subtle"
           }`}>
             {d?.day || ""}
           </div>
@@ -925,7 +925,7 @@ function PersonaLeaderboard({ personas }: { personas: any[] }) {
           return (
             <div key={p.id} className="flex items-center gap-3">
               <span className={`w-5 text-center font-display text-sm font-semibold flex-shrink-0 ${
-                i === 0 ? "text-foreground" : "text-muted-foreground/60"
+                i === 0 ? "text-foreground" : "text-muted-subtle"
               }`}>{i + 1}</span>
               <div className="mood-ring-sm flex-shrink-0" style={{ "--mood-color": emotionColor(p.emotionalState) } as CSSProperties}>
                 <PersonaAvatar name={p.name} className="w-7 h-7 rounded-full text-[11px]" />
@@ -1214,7 +1214,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
       {persona.lastMessage && !isAnalyzing && (
         <div className="mt-3 px-3 py-2 bg-muted/30 rounded-md">
           <p className="text-xs text-muted-foreground truncate">{persona.lastMessage.content}</p>
-          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{relativeTime(persona.lastMessage.createdAt, locale, t)}</p>
+          <p className="text-[10px] text-muted-subtle mt-0.5">{relativeTime(persona.lastMessage.createdAt, locale, t)}</p>
         </div>
       )}
 
@@ -1376,7 +1376,7 @@ function MemoryHighlights({ personas }: { personas: any[] }) {
             <div className="flex items-center gap-1.5 mb-2">
               <PersonaAvatar name={h.name} className="w-5 h-5 rounded-md text-[10px]" />
               <span className="text-[10px] font-medium text-foreground">{h.name}</span>
-              <span className="text-[10px] text-muted-foreground/60">{h.type === "touching" ? t("lobby.memories.touching") : t("lobby.memories.shared")}</span>
+              <span className="text-[10px] text-muted-subtle">{h.type === "touching" ? t("lobby.memories.touching") : t("lobby.memories.shared")}</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{h.text}</p>
           </div>
@@ -1415,12 +1415,12 @@ function RecentActivity({ onNavigate }: { onNavigate: (personaId: number) => voi
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-foreground">{item.role === "user" ? t("lobby.activity.me") : item.personaName}</span>
-                  <span className="text-[10px] text-muted-foreground/40">→</span>
+                  <span className="text-[10px] text-muted-subtle">→</span>
                   <span className="text-xs text-muted-foreground">{item.role === "user" ? item.personaName : t("lobby.activity.me")}</span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate mt-0.5">{item.content}</p>
               </div>
-              <span className="text-[10px] text-muted-foreground/50 flex-shrink-0">{relativeTime(item.createdAt, locale, t)}</span>
+              <span className="text-[10px] text-muted-subtle flex-shrink-0">{relativeTime(item.createdAt, locale, t)}</span>
             </button>
           );
         })}
@@ -1980,11 +1980,20 @@ export default function Lobby() {
 
               {personas.length > 2 && (
                 <div className="relative mb-3">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-subtle" />
                   <input
                     type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                     placeholder={t("lobby.directory.search")}
-                    className="w-full h-10 pl-9 pr-4 text-sm bg-card border border-border rounded-md outline-none focus:border-foreground/40 placeholder:text-muted-foreground/40 transition-colors"
+                    /**
+                     * The field has a name.
+                     *
+                     * A placeholder is not a reliable accessible name —
+                     * a screen reader announced "edit text" with nothing
+                     * else, and the hint itself was at 1.76:1 against the
+                     * card, so a low-vision user could barely read it.
+                     */
+                    aria-label={t("lobby.directory.search")}
+                    className="w-full h-10 pl-9 pr-4 text-sm bg-card border border-border rounded-md outline-none focus:border-foreground/40 placeholder:text-muted-subtle transition-colors"
                   />
                 </div>
               )}
@@ -2029,7 +2038,7 @@ export default function Lobby() {
                             ? "border-cinnabar text-foreground font-medium"
                             : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}>
-                        {t(tab.labelKey)} {count > 0 && <span className="ml-1 text-[10px] text-muted-foreground/60">{count}</span>}
+                        {t(tab.labelKey)} {count > 0 && <span className="ml-1 text-[10px] text-muted-subtle">{count}</span>}
                       </button>
                     );
                   })}
@@ -2165,7 +2174,7 @@ export default function Lobby() {
       </main>
 
       <footer className="border-t border-border py-6">
-        <div className="container mx-auto flex items-center justify-between text-xs text-muted-foreground/60">
+        <div className="container mx-auto flex items-center justify-between text-xs text-muted-subtle">
           <Wordmark size="text-sm" />
           <span>{t("landing.footer.tagline")}</span>
         </div>
