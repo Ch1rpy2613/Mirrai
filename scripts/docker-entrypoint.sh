@@ -23,7 +23,14 @@ echo "[Mirrai] Applying database schema..."
 pnpm db:push -- --force
 
 echo "[Mirrai] Applying data migrations..."
-node scripts/migrate.mjs || echo "[Mirrai] The data migrations did not run."
+# The failure is fatal.
+#
+# A failed data migration is exactly the case where the schema and the
+# data disagree — the old Chinese intimacy levels mapped onto the new
+# keys, the letters and their reachability, the outbound letters. The
+# container used to carry on and serve wrong or empty data with no
+# error at all.
+node scripts/migrate.mjs
 
 echo "[Mirrai] Starting server..."
 exec node dist/index.js

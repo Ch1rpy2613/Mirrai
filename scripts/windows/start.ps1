@@ -215,13 +215,27 @@ listen_addresses = 'localhost'
     # new keys). Those are idempotent SQL files, applied in order.
     Log "Applying data migrations..."
     Push-Location $AppDir
+    # The failure is fatal.
+    #
+    # A failed data migration is exactly the case where the schema and
+    # the data disagree — the old Chinese intimacy levels mapped onto
+    # the new keys, the letters and their reachability, the outbound
+    # letters. The app used to carry on and serve wrong or empty data
+    # with no error at all.
+    $migrationFailed = $false
     try {
         & $NodeBin "scripts\migrate.mjs" 2>&1 |
             Tee-Object -FilePath (Join-Path $Logs "migrate.log")
+        if ($LASTEXITCODE -ne 0) { $migrationFailed = $true }
     } catch {
         Log "Data migration note: $($_.Exception.Message)"
+        $migrationFailed = $true
     }
     Pop-Location
+    if ($migrationFailed) {
+        Log "The data migrations did not run. The app cannot start on a half-migrated database."
+        exit 1
+    }
 
     # ─── Create .env template for user ──────────────────────────────────────
     if (-not (Test-Path $EnvFile)) {

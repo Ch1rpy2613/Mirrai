@@ -182,8 +182,17 @@ cd "$APP_DIR"
 # migrations (for example mapping the old Chinese intimacy levels onto the new
 # keys). Those are idempotent SQL files, applied in order.
 log "Applying data migrations..."
-"$NODE_BIN" scripts/migrate.mjs 2>&1 | tee -a "$LOGS/migrate.log" || \
-  log "Data migration note (may be OK)"
+# The failure is fatal.
+#
+# A failed data migration is exactly the case where the schema and the
+# data disagree — the old Chinese intimacy levels mapped onto the new
+# keys, the letters and their reachability, the outbound letters. The
+# app used to carry on and serve wrong or empty data with no error at
+# all.
+if ! "$NODE_BIN" scripts/migrate.mjs 2>&1 | tee -a "$LOGS/migrate.log"; then
+  log "The data migrations did not run. The app cannot start on a half-migrated database."
+  exit 1
+fi
 
 # ─── Create .env template for user ──────────────────────────────────────────
 if [ ! -f "$ENV_FILE" ]; then
