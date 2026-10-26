@@ -876,6 +876,14 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
                 id: primaryBinding.id,
                 label: primaryBinding.wechatName || t("settings.wechat.myWechat"),
               })}
+                /**
+                 * The name of the button.
+                 *
+                 * A `title` is not a reliable accessible name — several
+                 * screen readers ignore it when the element has nothing
+                 * else. This button destroys a WeChat binding.
+                 */
+                aria-label={t("settings.wechat.unbind")}
                 title={t("settings.wechat.unbind")}
                 className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
