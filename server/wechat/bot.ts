@@ -541,6 +541,21 @@ export async function restoreWeChatBot(userId: number): Promise<boolean> {
   const state = await db.getWechatBotState(userId);
   if (!state?.botTokenEnc) return false;
 
+  /**
+   * The user disconnected.
+   *
+   * The status was ignored and the token was enough — so the bot was
+   * restarted on the next boot, the long poll began again, and it
+   * answered the user's WeChat messages once more. The interface had
+   * said "disconnected".
+   */
+  if (state.status === "stopped") {
+    const account = getAccount(userId);
+    account.status = "stopped";
+    account.loggedInUser = null;
+    return false;
+  }
+
   const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
   const token = await decryptSecret(state.botTokenEnc);
   if (!token) {
@@ -602,8 +617,30 @@ export async function stopWeChatBot(userId: number) {
   account.status = "stopped";
   account.qrCodeUrl = null;
   account.needsVerifyCode = false;
+  // And the in-memory error goes with it — the status is read next to
+  // it, so a stale error under a "not connected" chip is a lie.
+  account.lastError = null;
+  account.loggedInUser = null;
 
-  await db.upsertWechatBotState(userId, { status: "stopped", qrCodeUrl: null, lastError: null }).catch(() => {});
+  /**
+   * The credentials go too.
+   *
+   * They were kept — and the restore path looked only for the token,
+   * so a disconnect was undone by the next restart: the long poll
+   * began again and the bot answered the user's WeChat messages once
+   * more.
+   */
+  await db.upsertWechatBotState(userId, {
+    status: "stopped",
+    qrCodeUrl: null,
+    lastError: null,
+    botTokenEnc: null,
+    accountId: null,
+    baseUrl: null,
+    wechatUserId: null,
+    loggedInUser: null,
+    syncBuf: null,
+  }).catch(() => {});
 }
 
 /**
