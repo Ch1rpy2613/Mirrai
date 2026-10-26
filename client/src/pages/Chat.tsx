@@ -14,6 +14,7 @@ import { MessageBubble, emotionOf, type Message } from "@/components/MessageBubb
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { toast } from "sonner";
 import GraduationModal from "@/components/GraduationModal";
 import { streamChat, isStreamingUnsupported } from "@/lib/chat-stream";
@@ -1616,10 +1617,19 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", category: "memory" as "memory" | "milestone" | "anniversary" | "anchor", date: "" });
 
+  /**
+   * The window.
+   *
+   * It looks modal, so it is one: the focus goes into it, Tab stays
+   * inside it, Escape closes it, and the focus comes back.
+   */
+  const dialogRef = useDialogFocus<HTMLDivElement>(true, onClose);
+
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative ml-auto w-full max-w-sm bg-card border-l border-border h-full flex flex-col animate-slide-in-right">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t("chat.memoryTimeline")}
+        className="relative ml-auto w-full max-w-sm bg-card border-l border-border h-full flex flex-col animate-slide-in-right">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="font-display font-semibold text-foreground">{t("chat.memoryTimeline")}</h3>
           <div className="flex items-center gap-2">
@@ -1747,10 +1757,13 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
 
   const mostCommon = pieData.length > 0 ? pieData.reduce((a: any, b: any) => a.value > b.value ? a : b) : null;
 
+  const reportRef = useDialogFocus<HTMLDivElement>(true, onClose);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative surface w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in">
+      <div ref={reportRef} role="dialog" aria-modal="true" aria-label={t("chat.emotionReport")}
+        className="relative surface w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in">
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-card z-10 rounded-t-lg">
           <h3 className="card-title">
             <span className="font-sans">{personaName}</span> {t("chat.emotionReport")}
