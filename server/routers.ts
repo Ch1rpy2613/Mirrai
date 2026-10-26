@@ -1536,10 +1536,34 @@ export const appRouter = router({
           role: "user" as const,
           content: copy(ctx.locale, "prompts.voiceTranscription", { duration: input.duration }),
         }];
+        /**
+         * The transcription.
+         *
+         * When it fails, the persona used to be given a placeholder as
+         * if the user had said it — so it answered "（语音消息）" in
+         * character, warmly, as though that were what the user had
+         * said. The user was never told that their voice note had not
+         * been understood.
+         *
+         * So a failure is a failure: it is said so, and no reply is
+         * composed.
+         */
         const transcription = (voiceProvider
           ? await voiceProvider.invoke(transcriptionRequest).catch(() => "")
           : await llmService.invoke({ messages: transcriptionRequest }).catch(() => "")
-        ) || copy(ctx.locale, "prompt.voicePlaceholder");
+        ).trim();
+        if (!transcription) {
+          return {
+            reply: "",
+            emotionalState: persona.emotionalState,
+            transcription: "",
+            voiceUrl: url,
+            graduationSuggested: false,
+            careNote: null,
+            crisis: false,
+            transcriptionFailed: true,
+          };
+        }
 
         let reply = "";
         let emotionalState: string = persona.emotionalState;

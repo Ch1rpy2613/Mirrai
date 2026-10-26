@@ -865,6 +865,19 @@ export default function Chat() {
               { personaId, audioContent: base64, duration, fileName: `voice-${Date.now()}.webm` },
               voiceController.signal,
             );
+            /**
+             * The voice note could not be read.
+             *
+             * The persona used to be given a placeholder as if the user
+             * had said it, and answered it in character — warmly, as
+             * though that were what the user had said. The user was
+             * never told.
+             */
+            if (result.transcriptionFailed) {
+              setMessages(prev => prev.filter(m => m.id !== streamId));
+              toast.error(t("chat.voiceNotUnderstood"));
+              return;
+            }
             setMessages(prev => prev.map(m => {
               if (m.id === streamId) return { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false };
               if (m === userMsg) return { ...m, content: result.transcription || t("chat.voiceMessage") };

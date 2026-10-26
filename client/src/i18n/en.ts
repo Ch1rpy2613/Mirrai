@@ -214,6 +214,7 @@ export const en = {
     online: "Back online",
     offline: "The connection dropped",
     imageFailed: "Could not send the image: {{message}}",
+    voiceNotUnderstood: "That voice note could not be made out, so it was not turned into text",
     voiceFailed: "Could not send the voice message: {{message}}",
     exportSuccess: "Exported",
     exportFailed: "Export failed: {{message}}",

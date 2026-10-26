@@ -212,6 +212,7 @@ export const zh = {
     online: "网络已恢复",
     offline: "网络连接已断开",
     imageFailed: "图片发送失败：{{message}}",
+    voiceNotUnderstood: "这条语音没能听清，没有转成文字",
     voiceFailed: "语音发送失败：{{message}}",
     exportSuccess: "导出成功",
     exportFailed: "导出失败：{{message}}",
