@@ -363,7 +363,14 @@ export default function Upload() {
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => {
+            // The file input is *outside* this element, so its own click
+            // cannot bubble back in here. It used to be inside, so every
+            // activation ran the handler twice — it worked only because
+            // Chromium suppresses the re-entrant click with its own
+            // in-progress guard.
+            fileInputRef.current?.click();
+          }}
           onKeyDown={e => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault(); fileInputRef.current?.click();
@@ -374,9 +381,20 @@ export default function Upload() {
             {t("upload.dropTitle")}
           </p>
           <p className="text-muted-foreground text-sm">{t("upload.formatsHint")}</p>
-          <input ref={fileInputRef} type="file" accept={ALL_ACCEPT}
-            multiple className="hidden" onChange={e => e.target.files && handleFiles(e.target.files)} />
         </div>
+        {/* The file input lives outside the drop zone, so that activating
+            the zone does not re-enter it. */}
+        <input ref={fileInputRef} type="file" accept={ALL_ACCEPT}
+          className="hidden" tabIndex={-1}
+          onChange={e => {
+            const files = e.target.files;
+            // The value is cleared, so that choosing the *same* file
+            // twice in a row fires the event again — it used to fire
+            // nothing the second time, and the second upload silently
+            // did not happen.
+            e.target.value = "";
+            if (files && files.length) handleFiles(files);
+          }} />
 
         {/* No chat logs? The questionnaire builds a persona without them. */}
         <div className="text-center mb-6 animate-fade-in-up">

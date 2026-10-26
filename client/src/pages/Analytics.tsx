@@ -35,7 +35,7 @@ export default function Analytics() {
   const { t } = useLocale();
   const [days, setDays] = useState(30);
 
-  const { data } = trpc.analytics.overview.useQuery({ days }, { enabled: isAuthenticated });
+  const { data, isLoading } = trpc.analytics.overview.useQuery({ days }, { enabled: isAuthenticated });
 
   const stats = data?.stats || { totalMessages: 0, activeDays: 0, longestStreak: 0, avgPerDay: 0 };
 
@@ -88,6 +88,16 @@ export default function Analytics() {
             {t("analytics.intro")}
           </p>
         </motion.div>
+
+        {/* The page used to show four zeroed tiles and four empty
+            charts while the query was in flight — which is
+            indistinguishable from "you have no data". The user
+            concluded that their history was gone. */}
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            {t("common.loading")}
+          </p>
+        ) : null}
 
         <motion.div
           className="stat-grid grid-cols-2 md:grid-cols-4"

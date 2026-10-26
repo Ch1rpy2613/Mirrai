@@ -21,7 +21,15 @@ interface State {
  */
 function currentLocale(): Locale {
   if (typeof window === "undefined") return "zh";
-  return (window.localStorage.getItem("mirrai-locale") as Locale) || "zh";
+  try {
+    // The storage can refuse: private mode, cookies disabled, a full
+    // quota. And this is read *during* the render of the error
+    // boundary — so a throw here happened inside the recovery screen and
+    // the app was left blank, with no way back.
+    return (window.localStorage.getItem("mirrai-locale") as Locale) || "zh";
+  } catch {
+    return "zh";
+  }
 }
 
 class ErrorBoundary extends Component<Props, State> {

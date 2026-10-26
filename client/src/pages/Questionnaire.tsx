@@ -95,7 +95,7 @@ function toggle(list: string[], value: string): string[] {
 
 export default function Questionnaire() {
   const [, navigate] = useLocation();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>(EMPTY);
 
@@ -329,7 +329,7 @@ export default function Questionnaire() {
                         const found = COMMUNICATION_STYLES.find((s) => s.key === k);
                         return found ? t(found.labelKey) : k;
                       })
-                      .join("、") || "—"}
+                      .join(locale === "en" ? ", " : "、") || "—"}
                   </dd>
                 </div>
                 <div>

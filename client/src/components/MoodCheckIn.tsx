@@ -78,12 +78,21 @@ export default function MoodCheckIn({ compact = false }: MoodCheckInProps) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={t("moodCheckIn.notePlaceholder")}
+            aria-label={t("moodCheckIn.notePlaceholder")}
             maxLength={280}
             className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary/50"
           />
           <button
             type="button"
-            onClick={() => setShowNote(false)}
+            onClick={() => {
+              // The note is thrown away, not just hidden.
+              //
+              // Cancelling only closed the field, so the text stayed in
+              // the state and was written to the next mood the user
+              // chose — a note they had said "never mind" about.
+              setNote("");
+              setShowNote(false);
+            }}
             className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             {t("common.cancel")}
