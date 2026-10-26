@@ -23,6 +23,18 @@ import { dayShiftMinutes } from "@shared/timezone";
  * hour that India, Adelaide, Kathmandu and Chatham are on, and a rounded
  * shift put the user's day boundary out by up to forty-five minutes.
  */
+/**
+ * The hour a message was written at, in the user's own calendar.
+ *
+ * The same shift as the day, for the same reason: the chart of the
+ * active hours and the chart of the days have to be on the same
+ * calendar, or the same page shows two different days.
+ */
+export function userHourColumn(timezone?: string | null) {
+  const shift = dayShiftMinutes(timezone);
+  return sql<number>`EXTRACT(HOUR FROM ${messages.createdAt} + (${sql.raw(String(shift))} * INTERVAL '1 minute'))::int`;
+}
+
 export function userDayColumn(timezone?: string | null) {
   const shift = dayShiftMinutes(timezone);
   return sql<string>`TO_CHAR(${messages.createdAt} + (${sql.raw(String(shift))} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;

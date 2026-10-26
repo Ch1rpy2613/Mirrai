@@ -558,7 +558,7 @@ export const appRouter = router({
   persona: router({
     list: protectedProcedure.query(async ({ ctx }) => getPersonasWithStats(ctx.user.id)),
 
-    stats: protectedProcedure.query(async ({ ctx }) => getUserStats(ctx.user.id)),
+    stats: protectedProcedure.query(async ({ ctx }) => getUserStats(ctx.user.id, ctx.user.timezone)),
 
     recentActivity: protectedProcedure.query(async ({ ctx }) => getRecentActivity(ctx.user.id)),
 
@@ -3624,11 +3624,15 @@ export const appRouter = router({
       .input(z.object({ days: z.number().min(1).max(365).default(30) }))
       .query(async ({ ctx, input }) => {
         const [stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution, moods] = await Promise.all([
-          getAnalyticsStats(ctx.user.id, input.days),
+          // Every chart of this answer is in the user's own calendar.
+          // The volume chart already was; the streak, the active days
+          // and the active hours were the server's — so one page showed
+          // two different calendars.
+          getAnalyticsStats(ctx.user.id, input.days, ctx.user.timezone),
           getMessageVolume(ctx.user.id, input.days, ctx.user.timezone),
           getEmotionTimeline(ctx.user.id, input.days),
           getPersonaEngagement(ctx.user.id, input.days),
-          getHourlyDistribution(ctx.user.id, input.days),
+          getHourlyDistribution(ctx.user.id, input.days, ctx.user.timezone),
           // The user's own states. The emotion timeline above is the
           // *persona's* mood, and the two are not the same thing.
           getUserMoods(ctx.user.id, input.days),

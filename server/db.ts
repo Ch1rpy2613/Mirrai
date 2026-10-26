@@ -23,7 +23,8 @@ import {
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey } from "@shared/timezone";
-import { userDayColumn } from "./_core/user-day";
+import { userDayColumn, userHourColumn } from "./_core/user-day";
+import { dayShiftMinutes } from "@shared/timezone";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -691,12 +692,24 @@ export async function getPersonasWithStats(userId: number) {
   return result;
 }
 
-export async function getUserStats(userId: number) {
+export async function getUserStats(userId: number, timezone?: string | null) {
   const db = await getDb();
   if (!db) return { totalPersonas: 0, totalChats: 0, todayChats: 0, memberSince: new Date() };
   const [personaCount] = await db.select({ c: count() }).from(personas).where(eq(personas.userId, userId));
   const [chatSum] = await db.select({ s: sum(personas.chatCount) }).from(personas).where(eq(personas.userId, userId));
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  /**
+   * The user's midnight.
+   *
+   * It was the server's — so "today's chats" on the lobby counted the
+   * wrong day for anybody who was not on the server's clock. It also
+   * gates the "five conversations in a day" achievement, so the
+   * achievement could be won with yesterday's conversations.
+   */
+  const today = new Date();
+  const shift = dayShiftMinutes(timezone);
+  today.setMinutes(today.getMinutes() + shift);
+  today.setHours(0, 0, 0, 0);
+  today.setMinutes(today.getMinutes() - shift);
   const [todayCount] = await db.select({ c: count() }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, today)));
   const [userRow] = await db.select({ createdAt: users.createdAt }).from(users).where(eq(users.id, userId));
@@ -1771,27 +1784,52 @@ export async function getPersonaEngagement(userId: number, days: number) {
     .orderBy(desc(count()));
 }
 
-export async function getHourlyDistribution(userId: number, days: number) {
+export async function getHourlyDistribution(
+  userId: number,
+  days: number,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return [];
   const since = new Date(); since.setDate(since.getDate() - days);
+  /**
+   * The hour, in the user's own calendar.
+   *
+   * It was the server's clock — the hour the message was written on
+   * the machine that wrote it. So the chart of the active hours and
+   * the chart of the days, in the same answer, were on two different
+   * calendars.
+   */
+  const hour = userHourColumn(timezone);
   return db.select({
-    hour: sql<number>`EXTRACT(HOUR FROM ${messages.createdAt})::int`,
+    hour,
     count: count(),
   }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
-    .groupBy(sql`EXTRACT(HOUR FROM ${messages.createdAt})`);
+    .groupBy(hour);
 }
 
-export async function getAnalyticsStats(userId: number, days: number) {
+export async function getAnalyticsStats(
+  userId: number,
+  days: number,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return { totalMessages: 0, activeDays: 0, longestStreak: 0, avgPerDay: 0 };
   const since = new Date(); since.setDate(since.getDate() - days);
   const [msgCount] = await db.select({ c: count() }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)));
-  const activeDaysRows = await db.select({ d: sql<string>`TO_CHAR(${messages.createdAt}, 'YYYY-MM-DD')` }).from(messages)
+  /**
+   * The days the user was active, in the user's own calendar.
+   *
+   * They were the server's days — and the volume chart in the same
+   * answer used the user's days. So the "active days" number and the
+   * chart beside it disagreed about which days those were.
+   */
+  const day = userDayColumn(timezone);
+  const activeDaysRows = await db.select({ d: day }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
-    .groupBy(sql`TO_CHAR(${messages.createdAt}, 'YYYY-MM-DD')`).orderBy(sql`TO_CHAR(${messages.createdAt}, 'YYYY-MM-DD')`);
+    .groupBy(day).orderBy(day);
   const activeDays = activeDaysRows.length;
   let longestStreak = 0, currentStreak = 0;
   for (let i = 0; i < activeDaysRows.length; i++) {
