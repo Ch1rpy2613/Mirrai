@@ -247,8 +247,21 @@ Drizzle Schema → DB Helpers → tRPC Router → React Query Hook → UI 组件
 ```bash
 pnpm eval -- --persona 1 --user 1              # 跑一次
 pnpm eval -- --persona 1 --user 1 --compare    # 带规则 / 不带规则，跑两遍比
-pnpm eval -- --persona 1 --user 1 --gate       # 退步了就退出码非零，CI 会红
+pnpm eval -- --persona 1 --user 1 --calibrate  # 量一下噪声，好知道容差该设多宽
+pnpm eval -- --persona 1 --user 1 --gate       # 退步了就退出码非零
 ```
+
+**这把尺子在你自己的机器上跑**，记录不出本机。原因有两条：仓库是公开的，
+你的记录是最私人的东西；而且这个测量是**采样**出来的——同一个分身跑两次，
+数字本来就会飘。所以 CI 上跑的是另一把闸门：
+
+```bash
+pnpm fidelity:gate
+```
+
+它查的是**确定性的**那部分：规则在不在 prompt 里、在不在该在的位置、
+未确认的候选有没有混进去、分态不完美跟没跟状态走、personaData 过一遍
+jsonb 还在不在、Layer 0 那条底线还在不在。几秒钟跑完，不花钱，每次答案一样。
 
 规则也必须过这一关：**加了规则分数没变，规则就该删掉。**
 

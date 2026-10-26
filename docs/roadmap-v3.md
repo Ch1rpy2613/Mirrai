@@ -17,6 +17,15 @@
 > `server/eval/run.test.ts`、`ImperfectionEditor`、`FidelityPanel`、`PersonaProfile`、
 > `Graduation` 的测试。补测过程中还逮到两个真 bug，见附录 E 的第 12、13 条。
 >
+> **第五轮：把闸门换成了能用的那个**。第四轮之后又量了一次闸门本身：
+> 用真实的 `ngramOverlap` 模拟「同一个分身、两次独立采样」，
+> **什么都没改，第二次比第一次差 0.02 以上的概率是 42%**——
+> 噪声是容差的 5.7 倍。这样的闸门每次都在对着没变的东西喊退步。
+>
+> 所以 CI 上跑的换成**确定性的结构闸门**（`pnpm fidelity:gate`，几秒，不花钱，
+> 不需要记录），保真测量**搬到本地**跑——记录不出本机。
+> 详见附录 E 第 33–35 条。
+>
 > **第四轮：分支审计 + 独立复核**。第三轮核的是「验收条款的字面」，
 > 第四轮换成两把更细的尺子：**（甲）逐个模块枚举每个 early return / 错误分支，
 > 看有没有测试守着**（三个 subagent 扫了 ~450 个分支，补了 200+ 条测试），
@@ -83,7 +92,7 @@ Mirrai 现在能把一个人**重建得很有质感**：七层人设、六态状
 | E2 | 生成侧跑批：用现有 pipeline 对每条 case 的 context 生成回复，落库存档 | `server/eval/run.ts`、`scripts/eval-run.ts` | `pnpm eval` 能对任意 persona 跑完整集并输出结果表 | ✅ |
 | E3 | 自动指标：① 3-gram 重合率 ② **本人 n-gram 似然差** ③ 回复长度分布的 Wasserstein 距离 ④ 情感状态判定的混淆矩阵 | `server/eval/metrics.ts` | 四个指标都有基线数字，写进 `docs/eval/baseline.md` | 🟡 指标做完了；**数字要真实记录**（附录 C） |
 | E4 | 人工盲测协议：3–5 位认识 TA 的人，同一句话二选一（真人 / 分身），记录命中率 | `docs/eval/blind-test.md`、`scripts/eval-run.ts --cases` | 协议写完；**实际跑一轮需要真人，由持有真实记录的人执行** | ✅ |
-| E5 | 回归闸门：任何触碰 persona / prompt / 蒸馏的改动，自动跑评测并与基线对比，回归超过阈值即失败 | `scripts/eval-run.ts --gate`、`.github/workflows/eval.yml` | `--gate` 在回归时退出码非零；CI 工作流已接好（需要 secrets 时才跑） | ✅ |
+| E5 | 回归闸门：任何触碰 persona / prompt / 蒸馏的改动，自动检查并拦住退步 | `scripts/fidelity-gate.ts`、`.github/workflows/fidelity.yml` | **CI 上跑的是结构闸门**（确定性、不花钱、几秒）；保真测量**留在本地**跑 | ✅（见附录 E 第 33 条） |
 | E6 | 情绪状态指标的分桶统计：按真实状态分桶，比较长度 / 句长 / 称呼使用率 | `server/eval/metrics.ts` `perState` | 每态一行：overlap + lengthGap + sentenceGap + addressGap | ✅ |
 
 > E1–E3 是纯新增，不改任何现有行为，可以先合。
@@ -304,6 +313,9 @@ pnpm eval -- --persona <id> --user <id> --gate   # 基线不得回归
 | 15 | 第三轮：E5 的闸门从来没自动跑过 | 改成 PR + push 都触发、路径过滤、人选来自仓库变量；没配置就红 | 原来那一步的条件是 `inputs.persona != ''`，而 `inputs` 只有手动触发时才有——**push 到 main 时它是被跳过的**。一个从不运行的闸门比没有闸门更坏，因为它看起来在。 |
 | 16 | 第三轮：F2 的「保留了哪几句、删掉了什么」算完就丢 | 存进 `personas.farewellDraft`，告别页上展开可见 | 第二遍的减法是整个写信过程里最有意思的一半，算出来却扔掉了。 |
 | 17 | 第三轮：X5 的「提示一次，不重复骚扰」每次都在重复 | 加 `staleNotifiedAt`，说过就记下 | 提醒只有一次的话，需要**一个记录**，否则每次打开都是新的第一次。 |
+| 33 | **第五轮：CI 上跑的闸门换了内容**——从「保真测量」换成「结构检查」 | `.github/workflows/fidelity.yml` + `scripts/fidelity-gate.ts` | 保真测量是**采样**出来的。用真实的 `ngramOverlap` 模拟「同一个分身、两次独立采样」：**什么都没改，第二次比第一次差 0.02 以上的概率是 42%**（噪声是容差的 5.7 倍）。这样的闸门会对着没变的东西喊退步——比没有闸门更坏，因为它训练人忽略红色。所以 CI 上跑的是**确定性的**那部分：规则在不在 prompt 里、在不在该在的位置、未确认的候选有没有混进去、分态不完美跟没跟状态走、personaData 过一遍 jsonb 还在不在、Layer 0 那条底线还在不在。保真测量**搬到本地**跑（记录不出本机，钱也只花在你真想量的时候）。 |
+| 34 | 第五轮：闸门的容差是猜的 | 加 `--calibrate` | 容差现在默认 0.02 / 1.0 / 0.05，是拍脑袋定的。`--calibrate` 用**同一个分身跑若干次**、什么都不改，量出数字自己会飘多远，然后照着那个宽度设容差。闸门量的是天气还是这个人，取决于容差比噪声宽还是窄。 |
+| 35 | 第五轮：闸门测量时的温度是 0.7 | 闸门和 A/B 默认温度 0（`--temperature` 可改） | 闸门问的是「这个分身穿不穿得出这句话」，不是「它平常怎么说」——前者对温度敏感得多。盲测那边才用普通采样，因为那里问的真是「平常怎么说」。 |
 | 18 | 第三轮：D1 的「每个分位数可查」当时没法查 | 加了 `replyDelayQuantile` | 画像存的是**分布**而不是一份间隔清单，所以分位数是从分布上读出来的。好处是：连**没量过的那个分位**也有答案——p97 没量过，但它有。 |
 | 19 | **第四轮：`personas.behaviorProfile` 没有迁移** | 补 `drizzle/0026_persona_behavior_profile.sql`，并加结构性测试 `server/schema-coverage.test.ts` | 计划写的「jsonb 方案不需要 SQL」说的是 `personaData` **里面**的字段；这一列是 `personas` 上**新加的一列**。没有它，升级过的安装**每一次读分身都会挂**。 |
 | 20 | 第四轮：尺子的情绪那一半只对中文有效 | locale 一路传到 `matchEmotionTrigger`；CLI 加 `--locale` | 之前 `dataset.ts` 和 `metrics.ts` 都写死了 `"zh"`。英文分身的每个状态都是 null——混淆矩阵永远是空的，perState 塌成一桶，**情绪那一项的回归闸门永远不可能响**。 |

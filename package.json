@@ -42,6 +42,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "audit:i18n": "tsx scripts/audit-cn.ts",
     "eval": "tsx scripts/eval-run.ts",
+    "fidelity:gate": "tsx scripts/fidelity-gate.ts",
     "setup:redis": "tsx scripts/setup-redis.ts"
   },
   "dependencies": {

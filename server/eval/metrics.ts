@@ -465,6 +465,7 @@ export function evaluateGate(
   baseline: EvalMetrics | null,
   metrics: EvalMetrics,
   variant = "default",
+  tolerances: { overlap?: number; likelihoodGap?: number; emotionAccuracy?: number } = {},
 ): GateOutcome {
   if (!baseline) {
     return {
@@ -485,7 +486,7 @@ export function evaluateGate(
         "the last run was of the other variant, so there is nothing to compare against; nothing was checked",
     };
   }
-  const report = compareToBaseline(baseline, metrics);
+  const report = compareToBaseline(baseline, metrics, tolerances);
   if (report.regressed) {
     return {
       regressed: true,

@@ -80,7 +80,7 @@ const locale = (flag("locale") ?? "zh") === "en" ? "en" : "zh";
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
   );
   process.exit(1);
 }
@@ -184,6 +184,7 @@ if (compare) {
     trainingTexts: training,
     variant: "default",
     locale,
+    temperature,
   });
   const withoutThem = await runEval({
     persona,
@@ -192,6 +193,7 @@ if (compare) {
     trainingTexts: training,
     variant: "withoutRules",
     locale,
+    temperature,
   });
 
   const row = (label: string, a: number, b: number, better: "higher" | "closer") => {
@@ -233,6 +235,59 @@ if (compare) {
   process.exit(0);
 }
 
+/**
+ * The calibration.
+ *
+ * The tolerances above are a guess. A guess is not good enough for a
+ * gate, because the measurement is sampled: two runs of an unchanged
+ * persona do not agree, and if the tolerance is narrower than that
+ * disagreement the gate is measuring the weather.
+ *
+ * So this runs the same persona several times, with nothing changed,
+ * and reports how far the numbers move. The tolerances are then set from
+ * that spread rather than from a guess — and the guess can be replaced
+ * with a number that means something.
+ */
+if (calibrate) {
+  const runs: EvalMetrics[] = [];
+  for (let i = 0; i < calibrateRuns; i++) {
+    console.log(`[eval] calibration run ${i + 1} of ${calibrateRuns}…`);
+    runs.push(
+      await runEval({
+        persona,
+        userId,
+        cases,
+        trainingTexts: training,
+        variant,
+        locale,
+        temperature,
+      }),
+    );
+  }
+
+  const spread = (values: number[]): { min: number; max: number; width: number } => {
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    return { min, max, width: max - min };
+  };
+
+  console.log("");
+  console.log("[eval] how far the numbers move when nothing has changed:");
+  const overlaps = spread(runs.map((r) => r.overlap));
+  const likelihoods = spread(runs.map((r) => r.likelihoodGap));
+  const emotions = spread(runs.map((r) => r.emotionAccuracy));
+  console.log(`  overlap        ${overlaps.min.toFixed(4)} … ${overlaps.max.toFixed(4)}   (moves ${overlaps.width.toFixed(4)})`);
+  console.log(`  likelihoodGap  ${likelihoods.min.toFixed(4)} … ${likelihoods.max.toFixed(4)}   (moves ${likelihoods.width.toFixed(4)})`);
+  console.log(`  emotionAccuracy ${emotions.min.toFixed(4)} … ${emotions.max.toFixed(4)}   (moves ${emotions.width.toFixed(4)})`);
+  console.log("");
+  console.log("[eval] Set the tolerances wider than that spread, or the gate is");
+  console.log("[eval] measuring the weather rather than the persona:");
+  console.log("  pnpm eval -- --tolerance-overlap " + (overlaps.width * 1.5).toFixed(3) +
+    " --tolerance-likelihood " + (likelihoods.width * 1.5).toFixed(3) +
+    " --tolerance-emotion " + (emotions.width * 1.5).toFixed(3));
+  process.exit(0);
+}
+
 const metrics = await runEval({
   persona,
   userId,
@@ -240,6 +295,7 @@ const metrics = await runEval({
   trainingTexts: training,
   variant,
   locale,
+  temperature,
 });
 
 console.log("");
@@ -298,7 +354,7 @@ if (save) {
   console.log(`[eval] run ${id} saved`);
 }
 
-const outcome = evaluateGate(baseline, metrics, variant);
+const outcome = evaluateGate(baseline, metrics, variant, tolerances);
 console.log("");
 if (outcome.regressed) {
   console.error(`[eval] ${outcome.note}`);

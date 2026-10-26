@@ -1,0 +1,79 @@
+name: Persona structure
+
+# The gate that can actually gate.
+#
+# The third phase built a ruler: one of the person's real lines is held
+# back, and the rebuilt persona has to say it again, and the numbers are
+# compared with the last run's. That measurement is the honest one — and
+# it is also *sampled*, so two runs of an unchanged persona differ by
+# more than the gate's tolerance about 42% of the time.
+#
+# A gate that cries wolf that often does not gate anything. So this job
+# checks the things that are *decided* rather than sampled: that the
+# rules are in the prompt as a hard constraint and in the right place,
+# that an unconfirmed candidate never reaches the prompt, that the
+# imperfection follows the state the prompt states, that the persona's
+# data survives the round trip through the database's jsonb, and that
+# Layer 0 still says the persona cannot carry a message out of the app.
+#
+# None of that costs a model call, none of it needs the person's
+# records, and none of it has a distribution. It runs in a second and
+# it is the same answer every time.
+#
+# The fidelity measurement is not thrown away — it is moved to where it
+# can be run honestly, on the person's own machine, against their own
+# records:
+#
+#     pnpm eval -- --persona 1 --user 1 --compare
+#
+# and its numbers are written into docs/eval/baseline.md for a human to
+# read.
+on:
+  pull_request:
+    paths:
+      - "server/_core/persona-*.ts"
+      - "server/chat/prompt.ts"
+      - "server/chat/service.ts"
+      - "server/chat/farewell*.ts"
+      - "server/chat/outbound.ts"
+      - "server/skill-engine/**"
+      - "shared/micro-rules.ts"
+      - "shared/imperfection.ts"
+      - "shared/copy/prompt.ts"
+      - "drizzle/schema.ts"
+      - "scripts/fidelity-gate.ts"
+  push:
+    branches: [main]
+    paths:
+      - "server/_core/persona-*.ts"
+      - "server/chat/prompt.ts"
+      - "server/chat/service.ts"
+      - "server/chat/farewell*.ts"
+      - "server/chat/outbound.ts"
+      - "server/skill-engine/**"
+      - "shared/micro-rules.ts"
+      - "shared/imperfection.ts"
+      - "shared/copy/prompt.ts"
+      - "drizzle/schema.ts"
+      - "scripts/fidelity-gate.ts"
+  workflow_dispatch:
+
+jobs:
+  structure:
+    name: Does the persona still have everything it needs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check the persona's structure
+        run: pnpm fidelity:gate
