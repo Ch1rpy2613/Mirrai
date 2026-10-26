@@ -484,22 +484,6 @@ describe("the memories", () => {
   });
 });
 
-describe("the persona's state", () => {
-  it("puts the persona on hold", async () => {
-    await db.setPersonaPresence(1, 3, "quiet");
-    expect(last().values.presence).toBe("quiet");
-    expect(whereOf().flatMap((c) => c.params)).toContain(3);
-  });
-
-  it("lists the conversation summaries, newest first", async () => {
-    registry.select.chat_summaries = [{ id: 1 }];
-    await db.getChatSummaries(1, 3, 5);
-
-    expect(orderOf()[0].sql).toContain('"chat_summaries"."createdAt" desc');
-    expect(last().limit).toBe(5);
-  });
-});
-
 describe("the safety record", () => {
   it("lists the events newest first", async () => {
     registry.select.safety_events = [{ id: 1 }];
@@ -515,35 +499,6 @@ describe("the safety record", () => {
     expect(last().values.handled).toBe(true);
     expect(last().values.resolvedAt).toBeInstanceOf(Date);
     expect(whereOf().flatMap((c) => c.params)).toContain(3);
-  });
-});
-
-describe("the channels", () => {
-  it("binds a channel and says which row it was", async () => {
-    registry.returning.channel_bindings = [{ id: 12 }];
-    const id = await db.createChannelBinding({
-      userId: 3,
-      channel: "feishu",
-      channelUserId: "u_1",
-    } as any);
-
-    expect(id).toBe(12);
-  });
-
-  it("lists the users with a state for a channel, without repeats", async () => {
-    registry.select.channel_states = [{ userId: 3 }, { userId: 3 }, { userId: 4 }];
-    const users = await db.getChannelStateUsers("feishu");
-
-    expect(users).toEqual([3, 4]);
-  });
-});
-
-describe("the questionnaire", () => {
-  it("lists the answers newest first", async () => {
-    registry.select.persona_questionnaire_answers = [{ id: 1 }];
-    await db.getQuestionnaireAnswers(1, 3);
-
-    expect(orderOf()[0].sql).toContain('"persona_questionnaire_answers"."createdAt" desc');
   });
 });
 
@@ -580,23 +535,6 @@ describe("the collected material", () => {
     expect(sql).toContain("asc");
   });
 
-  it("lists the sources newest first", async () => {
-    registry.select.collection_sources = [{ id: 1 }];
-    await db.getCollectionSources(3);
-
-    expect(orderOf()[0].sql).toContain('"collection_sources"."createdAt" desc');
-  });
-
-  it("writes a source and says which row it was", async () => {
-    registry.returning.collection_sources = [{ id: 31 }];
-    const id = await db.upsertCollectionSource({
-      userId: 3,
-      source: "feishu",
-      status: "pending",
-    } as any);
-
-    expect(id).toBe(31);
-  });
 });
 
 describe("the collection jobs", () => {

@@ -14,8 +14,8 @@ import {
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
   InsertChatSummary, InsertSafetyEvent, InsertGraduationAssessment,
-  InsertChannelBinding, InsertPersonaTemplate, InsertPersonaQuestionnaireAnswer,
-  InsertResearchProfile, InsertCollectedMessage, InsertCollectionSource,
+  InsertPersonaTemplate, InsertPersonaQuestionnaireAnswer,
+  InsertResearchProfile, InsertCollectedMessage,
   InsertCollectionJob,
   InsertEvalCase, InsertEvalRun, InsertOutboundLetter,
   userMoods, relationshipEvents, letters, memoryExtractions,
@@ -2660,21 +2660,6 @@ export async function setGraduationStatus(
     .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
 }
 
-/**
- * Sets whether the app may reach out about a persona.
- *
- * "quiet" is the user asking for space. It is separate from the graduation
- * ritual, which records whether the goodbye has happened.
- */
-export async function setPersonaPresence(
-  personaId: number, userId: number,
-  presence: "active" | "quiet" | "asleep",
-) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  await db.update(personas).set({ presence, updatedAt: new Date() })
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
-}
 
 // ─── Conversation summary helpers ──────────────────────────────────────────
 
@@ -2694,13 +2679,6 @@ export async function getLatestChatSummary(personaId: number, userId: number) {
   return rows[0];
 }
 
-export async function getChatSummaries(personaId: number, userId: number, limit = 3) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(chatSummaries)
-    .where(and(eq(chatSummaries.personaId, personaId), eq(chatSummaries.userId, userId)))
-    .orderBy(desc(chatSummaries.createdAt)).limit(limit);
-}
 
 // ─── Safety event helpers ──────────────────────────────────────────────────
 
@@ -2777,12 +2755,6 @@ export async function getLatestGraduationAssessment(personaId: number, userId: n
 
 // ─── Channel helpers ───────────────────────────────────────────────────────
 
-export async function createChannelBinding(data: InsertChannelBinding) {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const [result] = await db.insert(channelBindings).values(data).returning({ id: channelBindings.id });
-  return result.id;
-}
 
 export async function getChannelBindingsByUserId(userId: number, channel?: string) {
   const db = await getDb();
@@ -2907,15 +2879,6 @@ export async function upsertChannelState(
   return result.id;
 }
 
-/** Lists the users that have state for a channel, used to restore on boot. */
-export async function getChannelStateUsers(channel: string): Promise<number[]> {
-  const db = await getDb();
-  if (!db) return [];
-  const rows = await db.select({ userId: channelStates.userId })
-    .from(channelStates)
-    .where(eq(channelStates.channel, channel));
-  return Array.from(new Set(rows.map((r) => r.userId)));
-}
 
 // ─── Persona template helpers ──────────────────────────────────────────────
 
@@ -2980,16 +2943,6 @@ export async function createQuestionnaireAnswers(data: InsertPersonaQuestionnair
   return result.id;
 }
 
-export async function getQuestionnaireAnswers(personaId: number, userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(personaQuestionnaireAnswers)
-    .where(and(
-      eq(personaQuestionnaireAnswers.personaId, personaId),
-      eq(personaQuestionnaireAnswers.userId, userId),
-    ))
-    .orderBy(desc(personaQuestionnaireAnswers.createdAt));
-}
 
 /**
  * Appends a correction entry to a persona's log.
@@ -3027,17 +2980,6 @@ export async function createResearchProfile(data: InsertResearchProfile) {
   return result.id;
 }
 
-/** Updates the research artefacts of an existing row. */
-export async function updateResearchProfile(
-  id: number,
-  userId: number,
-  data: Partial<InsertResearchProfile>,
-) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(researchProfiles).set(data)
-    .where(and(eq(researchProfiles.id, id), eq(researchProfiles.userId, userId)));
-}
 
 /** The research artefacts of a persona, newest first. */
 export async function getResearchProfilesByPersonaId(
@@ -3178,21 +3120,7 @@ export async function getCollectedMessagesForPersona(
 
 // ─── Collection source helpers ────────────────────────────────────────────
 
-export async function getCollectionSources(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(collectionSources)
-    .where(eq(collectionSources.userId, userId))
-    .orderBy(desc(collectionSources.createdAt));
-}
 
-export async function upsertCollectionSource(data: InsertCollectionSource) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const [result] = await db.insert(collectionSources).values(data)
-    .returning({ id: collectionSources.id });
-  return result.id;
-}
 
 // ─── Collection job helpers ───────────────────────────────────────────────
 
@@ -3418,14 +3346,6 @@ export async function getLastMessageAt(personaId: number, userId: number) {
   return rows[0]?.createdAt;
 }
 
-/** Counts a user's messages since a point in time. */
-export async function getMessageCountSince(userId: number, since: Date) {
-  const db = await getDb();
-  if (!db) return 0;
-  const [result] = await db.select({ c: count() }).from(messages)
-    .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)));
-  return result?.c || 0;
-}
 
 /**
  * Counts the messages the *user* sent since a point in time.
