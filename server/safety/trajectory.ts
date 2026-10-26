@@ -18,6 +18,19 @@ import { copy } from "@shared/copy";
 
 export type Trajectory = "improving" | "stable" | "worsening";
 
+/**
+ * A percentage, in the range a percentage is in.
+ *
+ * A fraction (0.4) is read as forty per cent — the panel says what
+ * the number is — and anything outside the range is brought back
+ * inside it.
+ */
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const percent = value > 0 && value <= 1 ? value * 100 : value;
+  return Math.round(Math.min(100, Math.max(0, percent)) * 10) / 10;
+}
+
 export interface TrajectoryAssessment {
   trajectory: Trajectory;
   /** Percentage 0-100 of messages carrying regret language. */
@@ -93,8 +106,8 @@ export async function assessTrajectory(params: {
   const localGratitude = ratioOf(userMessages, GRATITUDE_PATTERNS);
 
   let trajectory: Trajectory = "stable";
-  let regretRatio = localRegret;
-  let gratitudeRatio = localGratitude;
+  let regretRatio = clampPercent(localRegret);
+  let gratitudeRatio = clampPercent(localGratitude);
   let note: string | undefined;
 
   try {
@@ -115,6 +128,16 @@ export async function assessTrajectory(params: {
     }
     if (typeof parsed?.regretRatio === "number") regretRatio = parsed.regretRatio;
     if (typeof parsed?.gratitudeRatio === "number") gratitudeRatio = parsed.gratitudeRatio;
+    /**
+     * The ratios are percentages.
+     *
+     * They come from the model, and the model sometimes answers with
+     * a fraction, or with a number that is not a percentage at all —
+     * so the panel showed "1400%" and "0.4%". The panel says what
+     * they are, so they have to be in the range they say.
+     */
+    regretRatio = clampPercent(regretRatio);
+    gratitudeRatio = clampPercent(gratitudeRatio);
     if (typeof parsed?.note === "string") note = parsed.note.slice(0, 120);
   } catch (e) {
     console.warn("[Safety] Trajectory assessment failed, using keyword ratios:", (e as Error).message);
