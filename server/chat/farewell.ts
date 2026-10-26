@@ -18,8 +18,9 @@
  */
 import type { Persona } from "../../drizzle/schema";
 import { buildSystemPrompt } from "../_core/persona-utils";
-import { resolveProviderForUser } from "../llm/user-provider";
-import { llmService } from "../llm";
+import { llmService, type LLMProvider } from "../llm";
+import { withTimeout } from "../llm/timeout";
+import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import {
   assembleFarewellContext,
@@ -206,29 +207,45 @@ async function writeSinglePassLetter(params: {
     { role: "user" as const, content: userPrompt },
   ];
 
-  // The user's own provider.
+  /**
+   * The user's own provider.
+   *
+   * The server's default is used only when the user has no provider of
+   * their own: the farewell letter is the most private thing the app
+   * ever writes, and it must not end up on the operator's account.
+   */
+  let provider: LLMProvider | undefined;
+  let mayUseServerProvider = false;
   try {
-    const provider = await resolveProviderForUser({
+    const resolved = await resolveProviderForUserWithOwnership({
       userId,
       providerName: persona.llmProvider ?? undefined,
     });
-    if (provider) {
-      const response = await provider.invoke(messages);
-      if (response?.trim()) return response.trim();
-    }
+    provider = resolved.provider;
+    mayUseServerProvider = !resolved.owned;
   } catch (e) {
-    console.warn(
-      "[Graduation] The user's provider could not write the letter:",
-      e,
-    );
+    console.warn("[Graduation] The provider could not be resolved:", e);
   }
 
-  // The server's default provider.
-  try {
-    const response = await llmService.invoke({ messages });
-    if (response?.trim()) return response.trim();
-  } catch (e) {
-    console.warn("[Graduation] No provider could write the letter:", e);
+  if (provider) {
+    try {
+      const response = await withTimeout(provider.invoke(messages));
+      if (response?.trim()) return response.trim();
+    } catch (e) {
+      console.warn(
+        "[Graduation] The user's provider could not write the letter:",
+        e,
+      );
+    }
+  }
+
+  if (mayUseServerProvider) {
+    try {
+      const response = await llmService.invoke({ messages });
+      if (response?.trim()) return response.trim();
+    } catch (e) {
+      console.warn("[Graduation] No provider could write the letter:", e);
+    }
   }
 
   return fallbackFarewellLetter(persona, locale);

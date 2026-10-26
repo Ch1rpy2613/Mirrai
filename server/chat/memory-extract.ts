@@ -166,12 +166,30 @@ export async function extractMemories(params: {
    * were never looked at again.
    */
   let understood = false;
-  try {
-    parsed = JSON.parse(extractJsonArrayText(response) ?? "[]");
-    understood = true;
-  } catch {
+  /**
+   * The array, or null when the answer is not an array at all.
+   *
+   * The fallback used to be `?? "[]"`, which made a reply that was not
+   * JSON at all — a refusal, a truncated answer, a sentence — parse as
+   * an empty list. So the reply was *understood*, and the window was
+   * marked as extracted: those messages were never looked at again, and
+   * the user had no way of knowing.
+   *
+   * So the two are separate now: no array means the answer could not be
+   * read, and an empty array means there was nothing to remember.
+   */
+  const arrayText = extractJsonArrayText(response);
+  if (arrayText === null) {
     parsed = [];
     console.warn("[Memories] The extraction could not be read — the messages are kept for the next run.");
+  } else {
+    try {
+      parsed = JSON.parse(arrayText);
+      understood = true;
+    } catch {
+      parsed = [];
+      console.warn("[Memories] The extraction could not be read — the messages are kept for the next run.");
+    }
   }
   const items = Array.isArray(parsed) ? parsed : [];
   const seen: Array<{ title: string; description?: string | null }> = [];

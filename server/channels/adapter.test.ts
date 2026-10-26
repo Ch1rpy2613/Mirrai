@@ -70,6 +70,22 @@ vi.mock("../llm", () => ({
   llmService: { invoke: (...a: unknown[]) => invoke(...a) },
 }));
 
+/**
+ * The provider resolution.
+ *
+ * The ownership matters: the environment-configured provider is the
+ * operator's account, and it may only be used when the user has no
+ * provider of their own.
+ */
+const resolveProviderForUser = vi.fn();
+vi.mock("../llm/user-provider", () => ({
+  resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForUserWithOwnership: async (params: unknown) => {
+    const provider = await resolveProviderForUser(params as any);
+    return { provider, owned: Boolean(provider) };
+  },
+}));
+
 import type { ChannelAdapter } from "./types";
 import { wechatAdapter } from "./wechat";
 import { feishuAdapter } from "./feishu";

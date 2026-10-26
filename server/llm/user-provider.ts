@@ -72,6 +72,19 @@ export function invalidateUserProviderCache(userId?: number) {
 }
 
 /**
+ * Whether the user has a provider of their own.
+ *
+ * This is the question that decides whether the environment-configured
+ * provider may be used at all: a user who configured a key of their own
+ * chose it on purpose, and their conversation must not end up on the
+ * operator's account — or on the operator's bill.
+ */
+export async function userHasOwnProvider(userId: number): Promise<boolean> {
+  const configs = await db.getLlmConfigsByUserId(userId);
+  return configs.length > 0;
+}
+
+/**
  * Resolves the provider to use for a given user and optional requested name.
  *
  * Returns undefined when no provider is available at all.
@@ -80,6 +93,24 @@ export async function resolveProviderForUser(params: {
   userId: number;
   providerName?: string;
 }): Promise<LLMProvider | undefined> {
+  const { provider } = await resolveProviderForUserWithOwnership(params);
+  return provider;
+}
+
+/**
+ * Resolves the provider for a user, and says whose it is.
+ *
+ * The distinction is the whole point. The environment-configured
+ * provider is the *operator's* account and the operator's bill, so it
+ * may only be used when the user has no provider of their own. When the
+ * provider is the user's, the operator's must not be tried afterwards:
+ * that is how a user's private conversation ended up on somebody else's
+ * account whenever their provider had a bad minute.
+ */
+export async function resolveProviderForUserWithOwnership(params: {
+  userId: number;
+  providerName?: string;
+}): Promise<{ provider: LLMProvider | undefined; owned: boolean }> {
   const { userId, providerName } = params;
   const configs = await db.getLlmConfigsByUserId(userId);
 
@@ -103,7 +134,7 @@ export async function resolveProviderForUser(params: {
       );
     }
     const chosen = wanted ?? configs.find((c) => c.isDefault) ?? configs[0];
-    return buildUserProvider(userId, chosen);
+    return { provider: await buildUserProvider(userId, chosen), owned: true };
   }
 
   // The user has configured nothing, so the environment-configured
@@ -121,7 +152,7 @@ export async function resolveProviderForUser(params: {
       `[LLM] Unknown provider "${providerName}" — falling back to the default provider.`,
     );
   }
-  return registry.get(requested);
+  return { provider: registry.get(requested), owned: false };
 }
 
 /**

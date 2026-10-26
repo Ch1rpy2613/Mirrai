@@ -21,11 +21,21 @@ vi.mock("../llm", () => ({
   },
 }));
 
+const fakeProvider = {
+  name: "test",
+  isConfigured: () => true,
+  invoke: (...a: unknown[]) => invokeWithProvider(...a),
+};
 vi.mock("../llm/user-provider", () => ({
-  resolveProviderForUser: async () => ({
-    name: "test",
-    isConfigured: () => true,
-    invoke: (...a: unknown[]) => invokeWithProvider(...a),
+  resolveProviderForUser: async () => fakeProvider,
+  /**
+   * The ownership matters: the environment-configured provider is the
+   * operator's account, and it may only be used when the user has no
+   * provider of their own.
+   */
+  resolveProviderForUserWithOwnership: async () => ({
+    provider: fakeProvider,
+    owned: true,
   }),
 }));
 

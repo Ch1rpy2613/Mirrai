@@ -39,6 +39,15 @@ vi.mock("../llm", () => ({
 const resolveProviderForUser = vi.fn();
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  /**
+   * The ownership matters: the environment-configured provider is the
+   * operator's account, and it may only be used when the user has no
+   * provider of their own. A provider that came back is the user's own.
+   */
+  resolveProviderForUserWithOwnership: async (params: unknown) => {
+    const provider = await resolveProviderForUser(params as any);
+    return { provider, owned: Boolean(provider) };
+  },
 }));
 
 import {

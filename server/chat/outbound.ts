@@ -28,8 +28,8 @@
  */
 import { copy } from "@shared/copy";
 import { extractJsonObject } from "../_core/json";
-import { llmService } from "../llm";
-import { resolveProviderForUser } from "../llm/user-provider";
+import { llmService, type LLMProvider } from "../llm";
+import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 
 export interface OutboundCandidate {
   /** The user's own words, copied exactly. */
@@ -581,22 +581,38 @@ async function collectWithModel(params: {
 
   let raw: string | null = null;
 
-  // The user's own provider first, the server's default second — the same
-  // order the farewell letter uses, so a user who configured a key is not
-  // answered by somebody else's account.
+  /**
+   * The user's own provider.
+   *
+   * The server's default is used only when the user has no provider of
+   * their own. It used to be the other way round: the user's provider
+   * was tried first, and when it failed the whole request — the user's
+   * transcript — was sent again to the operator's account.
+   */
+  let provider: LLMProvider | undefined;
+  let mayUseServerProvider = false;
   try {
-    const provider = await resolveProviderForUser({ userId: params.userId });
-    if (provider) {
-      raw = await llmService.invokeWithProvider(provider, request);
-    }
+    const resolved = await resolveProviderForUserWithOwnership({
+      userId: params.userId,
+    });
+    provider = resolved.provider;
+    mayUseServerProvider = !resolved.owned;
   } catch (e) {
-    console.warn(
-      "[Outbound] The user's provider could not pick the candidates:",
-      (e as Error).message,
-    );
+    console.warn("[Outbound] The provider could not be resolved:", (e as Error).message);
+  }
+  if (provider) {
+    try {
+      // Through the service, so the deadline and the retry policy apply.
+      raw = await llmService.invokeWithProvider(provider, request);
+    } catch (e) {
+      console.warn(
+        "[Outbound] The user's provider could not pick the candidates:",
+        (e as Error).message,
+      );
+    }
   }
 
-  if (!raw?.trim()) {
+  if (!raw?.trim() && mayUseServerProvider) {
     try {
       raw = await llmService.invoke(request);
     } catch (e) {

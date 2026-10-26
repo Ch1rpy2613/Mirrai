@@ -23,6 +23,15 @@ vi.mock("../llm", () => ({
 
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  /**
+   * The ownership matters: the environment-configured provider is the
+   * operator's account, and it may only be used when the user has no
+   * provider of their own. A provider that came back is the user's own.
+   */
+  resolveProviderForUserWithOwnership: async (params: unknown) => {
+    const provider = await resolveProviderForUser(params as any);
+    return { provider, owned: Boolean(provider) };
+  },
 }));
 
 import {
@@ -716,7 +725,29 @@ describe("asking a model which words were never said out loud", () => {
     expect(candidates[0].weight).toBe(1);
   });
 
-  it("asks the server's own provider when the user's provider said nothing", async () => {
+  it("does not ask the server's own provider when the user's provider said nothing", async () => {
+    // The server's provider is the operator's account. A user who
+    // configured a key of their own chose it on purpose, and their
+    // transcript must not be handed to somebody else's account because
+    // their provider had a bad minute.
+    invokeWithProvider.mockResolvedValue("   ");
+    invoke.mockResolvedValue(
+      JSON.stringify({ items: [{ messageId: 1, text: "我害怕" }], note: "" }),
+    );
+
+    const { candidates } = await collectOutboundCandidates({
+      userId: 1,
+      personaId: 1,
+      messages: conversation,
+    });
+
+    expect(invoke).not.toHaveBeenCalled();
+    // The local selection still finds the candidates, without a model.
+    expect(candidates.length).toBeGreaterThan(0);
+  });
+
+  it("asks the server's own provider when the user has none of their own", async () => {
+    resolveProviderForUser.mockResolvedValue(undefined);
     invokeWithProvider.mockResolvedValue("   ");
     invoke.mockResolvedValue(
       JSON.stringify({ items: [{ messageId: 1, text: "我害怕" }], note: "" }),

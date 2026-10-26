@@ -21,8 +21,8 @@ import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { buildSystemPrompt } from "../_core/persona-utils";
 import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
-import { resolveProviderForUser } from "../llm/user-provider";
-import { llmService } from "../llm";
+import { llmService, type LLMProvider } from "../llm";
+import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { buildUserContextBlock, isUserMood } from "@shared/user-side";
 import { zonedHour, zonedOffsetHours } from "@shared/timezone";
 import { mayReachOut, type Presence } from "@shared/graduation-mode";
@@ -179,19 +179,35 @@ export async function composeProactiveMessage(params: {
   ];
 
   let text = "";
+  /**
+   * The user's own provider.
+   *
+   * The server's default is used only when the user has no provider of
+   * their own: their conversation must not end up on the operator's
+   * account because their provider had a bad minute.
+   */
+  let provider: LLMProvider | undefined;
+  let mayUseServerProvider = false;
   try {
-    const provider = await resolveProviderForUser({
+    const resolved = await resolveProviderForUserWithOwnership({
       userId: params.userId,
       providerName: (persona as any).llmProvider ?? undefined,
     });
-    if (provider) {
-      text = await provider.invoke(messages);
-    }
+    provider = resolved.provider;
+    mayUseServerProvider = !resolved.owned;
   } catch (e) {
-    console.warn("[Proactive] The user's provider failed:", (e as Error).message);
+    console.warn("[Proactive] The provider could not be resolved:", (e as Error).message);
+  }
+  if (provider) {
+    try {
+      // Through the service, so the deadline and the retry policy apply.
+      text = await llmService.invokeWithProvider(provider, { messages });
+    } catch (e) {
+      console.warn("[Proactive] The user's provider failed:", (e as Error).message);
+    }
   }
 
-  if (!text?.trim()) {
+  if (!text?.trim() && mayUseServerProvider) {
     try {
       text = await llmService.invoke({ messages });
     } catch (e) {

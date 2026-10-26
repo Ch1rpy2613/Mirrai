@@ -6,6 +6,7 @@ import { ClaudeProvider } from "./providers/claude";
 import { OllamaProvider } from "./providers/ollama";
 import { XunfeiProvider } from "./providers/xunfei";
 import { DifyProvider } from "./providers/dify";
+import { resolveProviderForUser, userHasOwnProvider } from "./user-provider";
 
 const registry = new ProviderRegistry();
 
@@ -273,7 +274,7 @@ function isVersionError(err: unknown): boolean {
  * app's requests open for a quarter of an hour, while the model kept
  * running and the bill kept growing.
  */
-const PROVIDER_TIMEOUT_MS = 120_000;
+export const PROVIDER_TIMEOUT_MS = 120_000;
 
 /**
  * The signal for one attempt: the caller's own, and a deadline.
@@ -414,5 +415,65 @@ export class LLMService {
 }
 
 export const llmService = new LLMService();
+
+/**
+ * Runs a request for a user, on their own provider when they have one.
+ *
+ * The environment-configured provider is used **only** when the user has
+ * not configured one of their own.
+ *
+ * It used to be the other way round: the user's provider was tried
+ * first, and when it failed — or answered with nothing — the whole
+ * request was sent again to the operator's account. So a user who had
+ * configured a key of their own had their private messages, their
+ * letters and their memories handed to somebody else's account,
+ * whenever their provider had a bad minute.
+ *
+ * The user chose a provider of their own for a reason. When nothing
+ * answers, the caller falls back to something local — a letter the app
+ * writes itself — rather than to somebody else's key.
+ *
+ * The request goes through the service, so the timeout and the retry
+ * policy apply here too.
+ *
+ * Returns null when nothing answered.
+ */
+export async function invokeForUser(params: {
+  userId: number;
+  providerName?: string;
+  messages: LLMMessage[];
+  options?: LLMOptions;
+}): Promise<string | null> {
+  try {
+    const provider = await resolveProviderForUser({
+      userId: params.userId,
+      providerName: params.providerName,
+    });
+    if (provider) {
+      const text = await llmService.invokeWithProvider(provider, {
+        messages: params.messages,
+        options: params.options,
+      });
+      if (text?.trim()) return text;
+    }
+  } catch (e) {
+    console.warn("[LLM] The user's provider failed:", (e as Error).message);
+  }
+
+  // Only when the user has nothing of their own.
+  if (await userHasOwnProvider(params.userId)) return null;
+
+  try {
+    const text = await llmService.invoke({
+      messages: params.messages,
+      options: params.options,
+    });
+    return text?.trim() ? text : null;
+  } catch (e) {
+    console.warn("[LLM] No provider could answer:", (e as Error).message);
+    return null;
+  }
+}
+
 export { registry };
 export type { LLMMessage, LLMOptions, InvokeParams, LLMProvider, LLMStreamChunk };

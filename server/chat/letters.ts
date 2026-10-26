@@ -8,8 +8,8 @@ import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { buildSystemPrompt } from "../_core/persona-utils";
 import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
-import { resolveProviderForUser } from "../llm/user-provider";
-import { llmService } from "../llm";
+import { llmService, type LLMProvider } from "../llm";
+import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import {
   buildLetterReplyInstruction,
   resolveReplyAt,
@@ -230,24 +230,43 @@ export async function composeLetterReply(params: {
     { role: "user" as const, content: instruction },
   ];
 
+  /**
+   * The user's own provider.
+   *
+   * The server's default is used only when the user has no provider of
+   * their own: their letter is theirs, and it must not end up on the
+   * operator's account.
+   */
+  let provider: LLMProvider | undefined;
+  let mayUseServerProvider = false;
   try {
-    const provider = await resolveProviderForUser({
+    const resolved = await resolveProviderForUserWithOwnership({
       userId: (persona as any).userId,
       providerName: (persona as any).llmProvider ?? undefined,
     });
-    if (provider) {
-      const response = await provider.invoke(messages);
-      if (response?.trim()) return response.trim();
-    }
+    provider = resolved.provider;
+    mayUseServerProvider = !resolved.owned;
   } catch (e) {
-    console.warn("[Letters] The user's provider could not answer:", (e as Error).message);
+    console.warn("[Letters] The provider could not be resolved:", (e as Error).message);
   }
 
-  try {
-    const response = await llmService.invoke({ messages });
-    if (response?.trim()) return response.trim();
-  } catch (e) {
-    console.warn("[Letters] No provider could answer the letter:", (e as Error).message);
+  if (provider) {
+    try {
+      // Through the service, so the deadline and the retry policy apply.
+      const response = await llmService.invokeWithProvider(provider, { messages });
+      if (response?.trim()) return response.trim();
+    } catch (e) {
+      console.warn("[Letters] The user's provider could not answer:", (e as Error).message);
+    }
+  }
+
+  if (mayUseServerProvider) {
+    try {
+      const response = await llmService.invoke({ messages });
+      if (response?.trim()) return response.trim();
+    } catch (e) {
+      console.warn("[Letters] No provider could answer the letter:", (e as Error).message);
+    }
   }
 
   return "";

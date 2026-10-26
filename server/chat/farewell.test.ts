@@ -43,6 +43,15 @@ const providerInvoke = vi.fn();
 const resolveProviderForUser = vi.fn();
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  /**
+   * The ownership matters: the environment-configured provider is the
+   * operator's account, and it may only be used when the user has no
+   * provider of their own. A provider that came back is the user's own.
+   */
+  resolveProviderForUserWithOwnership: async (params: unknown) => {
+    const provider = await resolveProviderForUser(params as any);
+    return { provider, owned: Boolean(provider) };
+  },
 }));
 
 /**
@@ -219,16 +228,19 @@ describe("the letter", () => {
     expect(letter).toBe(fallbackFarewellLetter(persona));
   });
 
-  it("falls to the server's provider when the user's provider fails", async () => {
+  it("does not fall to the server's provider when the user's provider fails", async () => {
+    // The server's provider is the operator's account. A user who
+    // configured a key of their own chose it on purpose — and the
+    // farewell letter is the most private thing the app ever writes.
     invokeWithProvider.mockRejectedValue(new Error("the provider is down"));
     providerInvoke.mockRejectedValue(new Error("the user's provider is down"));
     defaultInvoke.mockResolvedValue("服务器写的信");
 
     const letter = await writeFarewellLetter({ persona, userId: 1 });
 
-    // The user's key first, the server's second: a misconfigured provider
-    // must not cost the goodbye its letter.
-    expect(letter).toBe("服务器写的信");
+    expect(defaultInvoke).not.toHaveBeenCalled();
+    // The ritual still happens: the app writes the letter itself.
+    expect(letter).toBe(fallbackFarewellLetter(persona));
   });
 
   it("writes the letter with the server's provider when the user has none", async () => {
