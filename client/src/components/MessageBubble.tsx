@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { EMOTIONS, type EmotionDefinition } from "@/lib/emotions";
+import { SAFE_REHYPE_PLUGINS } from "@/lib/safe-markdown";
 
 /**
  * A message in the conversation.
@@ -227,7 +228,13 @@ export function MessageBubble({
       return <span>{msg.content}<span className="inline-block w-1 h-4 bg-primary/40 ml-0.5 animate-pulse" /></span>;
     }
     if (isUser) return <span>{msg.content}</span>;
-    return <Streamdown className="letter-prose letter-prose--chat" parseIncompleteMarkdown>{msg.content}</Streamdown>;
+    return (
+      <Streamdown
+        className="letter-prose letter-prose--chat"
+        parseIncompleteMarkdown
+        rehypePlugins={SAFE_REHYPE_PLUGINS}
+      >{msg.content}</Streamdown>
+    );
   };
 
   return (

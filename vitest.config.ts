@@ -35,6 +35,21 @@ export default defineConfig({
       ["client/**/*.test.dom.tsx", "jsdom"],
     ],
     setupFiles: ["client/src/test/setup.ts"],
+    /**
+     * `streamdown` is loaded into the test process rather than left to
+     * Node.
+     *
+     * It imports KaTeX's stylesheet, and Node cannot load a `.css` file
+     * — so an externalised `streamdown` fails at import time and the test
+     * that renders the real markdown pipeline cannot run. Letting Vite
+     * handle it means the stylesheet is stubbed, which is all a test
+     * needs.
+     */
+    server: {
+      deps: {
+        inline: ["streamdown"],
+      },
+    },
     include: [
       "server/**/*.test.ts",
       "server/**/*.spec.ts",

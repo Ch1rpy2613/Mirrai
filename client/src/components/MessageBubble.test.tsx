@@ -34,8 +34,12 @@ vi.mock("sonner", () => ({
 // The markdown renderer pulls in a stylesheet, which the test environment
 // cannot load. The bubble only needs it to render the persona's words, so
 // it is stood in for.
+//
+// The plugin chain is exported as well, because the safe chain is built
+// from it — see `client/src/lib/safe-markdown.ts`.
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: unknown }) => <div>{children as any}</div>,
+  defaultRehypePlugins: { harden: {}, raw: {}, katex: {} },
 }));
 
 // The real dictionary, so a missing key fails the test rather than
