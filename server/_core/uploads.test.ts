@@ -20,10 +20,12 @@ describe("isOwnedByUser", () => {
     expect(isOwnedByUser("tts/2/abcdef0123456789.mp3", 1)).toBe(false);
   });
 
-  it("allows the legacy speech folder to any signed-in user", () => {
-    // Files written before speech was scoped per user. They stay readable so
-    // old history still plays.
-    expect(isOwnedByUser("tts/legacy/abcdef.mp3", 1)).toBe(true);
+  it("does not let the path decide who owns a legacy speech file", () => {
+    // Files written before speech was scoped per user have no owner in
+    // their path, and their names are the hash of the text they were
+    // made from — so two people who asked for the same words share one
+    // file. The path cannot say whose it is; the conversation can.
+    expect(isOwnedByUser("tts/legacy/abcdef.mp3", 1)).toBe(false);
   });
 
   it("refuses an unknown scope", () => {

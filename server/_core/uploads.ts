@@ -13,6 +13,7 @@
  */
 import type { Request, Response, NextFunction } from "express";
 import { authenticateRequest } from "./auth";
+import { userHasMessageWithMediaUrl } from "../db";
 
 /** Prefixes whose second path segment is the owning user's id. */
 const USER_SCOPED = new Set(["personas", "chat", "tts"]);
@@ -28,7 +29,15 @@ export function isOwnedByUser(relKey: string, userId: number): boolean {
 
   if (scope === "tts") {
     // Files written before TTS output was scoped per user.
-    if (owner === "legacy") return true;
+    //
+    // They have no owner in their path, so the path cannot say whose
+    // they are — and their names are the hash of the text they were
+    // made from, so two people who asked for the same words share one
+    // file. Every signed-in user could fetch it.
+    //
+    // They are served to the people whose own conversation points at
+    // them: `legacyFileBelongsToUser` checks that.
+    if (owner === "legacy") return false;
     return owner === String(userId);
   }
 
@@ -37,6 +46,22 @@ export function isOwnedByUser(relKey: string, userId: number): boolean {
   }
 
   return false;
+}
+
+/**
+ * Whether a file written before the TTS output was scoped belongs to a
+ * user.
+ *
+ * It belongs to the people whose own conversation points at it.
+ */
+export async function legacyFileBelongsToUser(
+  relKey: string,
+  userId: number,
+): Promise<boolean> {
+  const parts = relKey.replace(/^\/+/, "").split("/");
+  if (parts.length < 3 || parts[0] !== "tts" || parts[1] !== "legacy") return false;
+  const url = `/uploads/${parts.join("/")}`;
+  return userHasMessageWithMediaUrl(userId, url);
 }
 
 /**
@@ -58,8 +83,10 @@ export function uploadsAuthGuard(
   }
 
   authenticateRequest(req)
-    .then((user) => {
-      if (!isOwnedByUser(relKey, user.id)) {
+    .then(async (user) => {
+      const owned = isOwnedByUser(relKey, user.id) ||
+        (await legacyFileBelongsToUser(relKey, user.id));
+      if (!owned) {
         // 404 rather than 403: a stranger should not learn that the file
         // exists.
         res.status(404).json({ error: "Not found" });

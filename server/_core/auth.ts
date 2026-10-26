@@ -41,6 +41,13 @@ async function rejectIfRateLimited(req: Request, res: Response): Promise<boolean
   return true;
 }
 
+/** Whether the database refused a row because a unique key was taken. */
+function isUniqueViolation(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code;
+  // Postgres's SQLSTATE for a unique violation.
+  return code === "23505";
+}
+
 export async function createSessionToken(
   userId: number,
   name: string,
@@ -148,11 +155,29 @@ export function registerAuthRoutes(app: Express) {
 
       const passwordHash = await hashPassword(password);
 
-      const userId = await db.createUser({
-        username,
-        passwordHash,
-        name: username,
-      });
+      /**
+       * The name has to be free.
+       *
+       * It was checked before the insert, and the insert can still lose
+       * the race — two registrations of the same name at the same
+       * moment. The database refuses the second one, and the refusal
+       * was reported as "registration failed": a 500 and a message
+       * about something being broken, for a name that is simply taken.
+       */
+      let userId: number;
+      try {
+        userId = await db.createUser({
+          username,
+          passwordHash,
+          name: username,
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          res.status(409).json({ error: copy(locale, "errors.usernameTaken") });
+          return;
+        }
+        throw error;
+      }
 
       const token = await createSessionToken(userId, username, 0);
       const cookieOptions = getSessionCookieOptions(req);

@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const authenticateRequest = vi.fn();
 const getUserById = vi.fn();
+const userHasMessageWithMediaUrl = vi.fn();
 
 // The mock path is resolved relative to this test file.
 vi.mock("./db", () => ({
   getUserById: (...args: unknown[]) => getUserById(...args),
+  userHasMessageWithMediaUrl: (...args: unknown[]) => userHasMessageWithMediaUrl(...args),
 }));
 
 vi.mock("./_core/auth", () => ({
@@ -83,11 +85,13 @@ describe("isOwnedByUser", () => {
     expect(isOwnedByUser("", 7)).toBe(false);
   });
 
-  it("keeps the legacy speech folder readable", () => {
-    // Files written before speech was scoped per user. They stay readable so
-    // old history still plays.
-    expect(isOwnedByUser("tts/legacy/abcdef.mp3", 7)).toBe(true);
-    expect(isOwnedByUser("tts/legacy/abcdef.mp3", 99)).toBe(true);
+  it("does not let the path decide who owns a legacy speech file", () => {
+    // Files written before speech was scoped per user have no owner in
+    // their path, and their names are the hash of the text they were
+    // made from — so two people who asked for the same words share one
+    // file. The conversation decides whose it is, not the path.
+    expect(isOwnedByUser("tts/legacy/abcdef.mp3", 7)).toBe(false);
+    expect(isOwnedByUser("tts/legacy/abcdef.mp3", 99)).toBe(false);
   });
 });
 
@@ -96,6 +100,8 @@ describe("uploadsAuthGuard", () => {
     authenticateRequest.mockReset();
     getUserById.mockReset();
     getUserById.mockResolvedValue(makeUser(7));
+    userHasMessageWithMediaUrl.mockReset();
+    userHasMessageWithMediaUrl.mockResolvedValue(false);
   });
 
   it("lets a signed-in owner through", async () => {
@@ -140,8 +146,9 @@ describe("uploadsAuthGuard", () => {
     expect(res.json).toHaveBeenCalledWith({ error: "Not found" });
   });
 
-  it("lets the legacy speech folder through for any signed-in user", async () => {
+  it("lets a legacy speech file through to the person whose conversation points at it", async () => {
     authenticateRequest.mockResolvedValue(makeUser(9));
+    userHasMessageWithMediaUrl.mockResolvedValue(true);
     const req = createRequest("/tts/legacy/abcdef.mp3");
     const res = createResponse();
     const next = vi.fn() as NextFunction;
@@ -151,6 +158,20 @@ describe("uploadsAuthGuard", () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("refuses a legacy speech file to somebody else's conversation", async () => {
+    authenticateRequest.mockResolvedValue(makeUser(9));
+    userHasMessageWithMediaUrl.mockResolvedValue(false);
+    const req = createRequest("/tts/legacy/abcdef.mp3");
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    uploadsAuthGuard(req, res, next);
+    await flush();
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 
   it("decodes the path before checking the owner", async () => {

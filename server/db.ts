@@ -923,6 +923,31 @@ export async function getFileSummaryTitles(ids: number[], userId: number) {
 }
 
 /**
+ * Whether a message of this user's points at a given file.
+ *
+ * The files written before the TTS output was scoped per user have no
+ * owner in their path, so the path cannot say whose they are. Their
+ * names are the hash of the text they were made from, so two people
+ * who asked for the same words share one file — and every signed-in
+ * user could fetch it.
+ *
+ * So the file is served to the people whose own conversation points at
+ * it, and to nobody else.
+ */
+export async function userHasMessageWithMediaUrl(
+  userId: number,
+  mediaUrl: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.select({ id: messages.id })
+    .from(messages)
+    .where(and(eq(messages.userId, userId), eq(messages.mediaUrl, mediaUrl)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
  * One file, by its id.
  *
  * Scoped by the owner, so a file id that was guessed reaches nothing.
