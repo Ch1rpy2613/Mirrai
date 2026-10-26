@@ -737,13 +737,31 @@ async function* runConversationTurn(
   // The care note is decided before the reply is stored, so it can be part
   // of what the persona actually says — the plan asks for the persona itself
   // to say the caring words, not for a separate system notice.
-  const signals = await evaluateUsage({
-    userId,
-    personaId: persona.id,
-    now: now.getTime(),
-    timezone: usageTimezone,
-  });
-  const careNote = pickCareNote(signals, locale);
+  /**
+   * The signals.
+   *
+   * The evaluation was not guarded — and it runs *after* the reply has
+   * been produced and *before* it is stored. So a transient database
+   * error in the safety layer turned a reply that had already been
+   * written into a failure: the user's message was stored, the reply
+   * was not, and the transcript kept their words with nothing under
+   * them.
+   *
+   * A safety layer that cannot answer is a safety layer that says
+   * nothing — it must not take the conversation down with it.
+   */
+  let signals: Awaited<ReturnType<typeof evaluateUsage>> | undefined;
+  try {
+    signals = await evaluateUsage({
+      userId,
+      personaId: persona.id,
+      now: now.getTime(),
+      timezone: usageTimezone,
+    });
+  } catch (e) {
+    console.warn("[Safety] Could not evaluate the usage:", e);
+  }
+  const careNote = signals ? pickCareNote(signals, locale) : null;
 
   if (careNote) {
     await db.createSafetyEvent({
