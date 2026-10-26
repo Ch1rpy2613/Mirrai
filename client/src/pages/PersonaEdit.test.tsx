@@ -124,6 +124,28 @@ describe("editing a persona", () => {
     };
   });
 
+  it("gives every field a name a screen reader can read out", () => {
+    // Fifteen of the twenty-four controls on this page had no
+    // accessible name at all: the label was not tied to the control, so
+    // a screen reader announced "text field" and nothing else — on the
+    // page that edits the persona.
+    render(<PersonaEdit />);
+
+    const unnamed: string[] = [];
+    for (const field of screen.getAllByRole("textbox")) {
+      const name = field.getAttribute("aria-label") ?? "";
+      const id = field.getAttribute("id");
+      const label = id ? document.querySelector(`label[for="${id}"]`) : null;
+      if (!name && !label?.textContent?.trim()) unnamed.push(field.outerHTML.slice(0, 80));
+    }
+    for (const field of screen.getAllByRole("combobox")) {
+      const id = field.getAttribute("id");
+      const label = id ? document.querySelector(`label[for="${id}"]`) : null;
+      if (!label?.textContent?.trim()) unnamed.push(field.outerHTML.slice(0, 80));
+    }
+    expect(unnamed).toEqual([]);
+  });
+
   it("shows the persona's own realism level", () => {
     render(<PersonaEdit />);
     const slider = screen.getByRole("slider") as HTMLInputElement;

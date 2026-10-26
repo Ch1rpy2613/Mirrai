@@ -58,7 +58,18 @@ function downloadBase64(fileName: string, base64: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
+function TagInput({
+  tags,
+  onChange,
+  id,
+  label,
+}: {
+  tags: string[];
+  onChange: (t: string[]) => void;
+  /** The name of the field, so a screen reader knows what is being typed. */
+  id: string;
+  label: string;
+}) {
   const { t } = useLocale();
   const [input, setInput] = useState("");
   const add = () => {
@@ -73,6 +84,7 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) 
             <span key={i} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border bg-card text-foreground/80">
               {tag}
               <button onClick={() => onChange(tags.filter((_, j) => j !== i))}
+                aria-label={`${label}: ${tag}`}
                 className="text-muted-foreground hover:text-destructive transition-colors">
                 <X className="w-3 h-3" />
               </button>
@@ -81,10 +93,11 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) 
         </div>
       )}
       <div className="flex gap-2">
-        <Input value={input} onChange={e => setInput(e.target.value)}
+        <Input id={id} value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          aria-label={label}
           placeholder={t("personaEdit.tagPlaceholder")} className="h-8 text-sm flex-1" />
-        <Button size="sm" variant="ghost" onClick={add} className="h-8 px-2 rounded-md">
+        <Button size="sm" variant="ghost" onClick={add} className="h-8 px-2 rounded-md" aria-label={label}>
           <Plus className="w-3.5 h-3.5" />
         </Button>
       </div>
@@ -361,25 +374,25 @@ export default function PersonaEdit() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.name")}</Label>
-              <Input value={name} onChange={e => setName(e.target.value)} />
+              <Label htmlFor="persona-name" className="text-xs text-muted-foreground">{t("personaEdit.name")}</Label>
+              <Input id="persona-name" value={name} onChange={e => setName(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.relationship")}</Label>
-              <Input value={relationshipDesc} onChange={e => setRelationshipDesc(e.target.value)} />
+              <Label htmlFor="persona-relationship" className="text-xs text-muted-foreground">{t("personaEdit.relationship")}</Label>
+              <Input id="persona-relationship" value={relationshipDesc} onChange={e => setRelationshipDesc(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.togetherFromLabel")}</Label>
-              <Input type="date" value={togetherFrom} onChange={e => setTogetherFrom(e.target.value)} />
+              <Label htmlFor="persona-together-from" className="text-xs text-muted-foreground">{t("personaEdit.togetherFromLabel")}</Label>
+              <Input id="persona-together-from" type="date" value={togetherFrom} onChange={e => setTogetherFrom(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.togetherToLabel")}</Label>
-              <Input type="date" value={togetherTo} onChange={e => setTogetherTo(e.target.value)} />
+              <Label htmlFor="persona-together-to" className="text-xs text-muted-foreground">{t("personaEdit.togetherToLabel")}</Label>
+              <Input id="persona-together-to" type="date" value={togetherTo} onChange={e => setTogetherTo(e.target.value)} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("personaEdit.providerLabel")}</Label>
-            <select value={llmProvider} onChange={e => setLlmProvider(e.target.value)}
+            <Label htmlFor="persona-provider" className="text-xs text-muted-foreground">{t("personaEdit.providerLabel")}</Label>
+            <select id="persona-provider" value={llmProvider} onChange={e => setLlmProvider(e.target.value)}
               className={selectClass}>
               <option value="">{t("personaEdit.providerDefault")}</option>
               {providers.data?.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
@@ -426,8 +439,8 @@ export default function PersonaEdit() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("proactive.label")}</Label>
-            <select value={String(proactiveHours)} onChange={e => setProactiveHours(Number(e.target.value))}
+            <Label htmlFor="persona-proactive" className="text-xs text-muted-foreground">{t("proactive.label")}</Label>
+            <select id="persona-proactive" value={String(proactiveHours)} onChange={e => setProactiveHours(Number(e.target.value))}
               className={selectClass}>
               <option value="0">{t("proactive.off")}</option>
               <option value="24">{t("proactive.daily")}</option>
@@ -439,8 +452,8 @@ export default function PersonaEdit() {
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("reachability.label")}</Label>
-            <select value={reachability} onChange={e => setReachability(e.target.value as Reachability)}
+            <Label htmlFor="persona-reachability" className="text-xs text-muted-foreground">{t("reachability.label")}</Label>
+            <select id="persona-reachability" value={reachability} onChange={e => setReachability(e.target.value as Reachability)}
               className={selectClass}>
               <option value="reachable">{t("reachability.reachable")}</option>
               <option value="unreachable">{t("reachability.unreachable")}</option>
@@ -450,8 +463,8 @@ export default function PersonaEdit() {
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("personaEdit.timezoneLabel")}</Label>
-            <Input value={timezone} onChange={e => setTimezone(e.target.value)}
+            <Label htmlFor="persona-timezone" className="text-xs text-muted-foreground">{t("personaEdit.timezoneLabel")}</Label>
+            <Input id="persona-timezone" value={timezone} onChange={e => setTimezone(e.target.value)}
               placeholder={t("personaEdit.timezonePlaceholder")} />
             <p className="text-xs text-muted-foreground leading-relaxed">
               {t("personaEdit.timezoneNote")}
@@ -559,10 +572,11 @@ export default function PersonaEdit() {
                 typing, rather than like an assistant answering. It was
                 a number in the prompt with no way to reach it. */}
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">
+              <Label htmlFor="persona-realism" className="text-xs text-muted-foreground">
                 {t("personaEdit.realism")} · {realismLevel}
               </Label>
               <input
+                id="persona-realism"
                 type="range"
                 min={0}
                 max={100}
@@ -577,22 +591,22 @@ export default function PersonaEdit() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.personality")}</Label>
-              <Textarea value={personality} onChange={e => setPersonality(e.target.value)} rows={3} />
+              <Label htmlFor="persona-personality" className="text-xs text-muted-foreground">{t("personaEdit.personality")}</Label>
+              <Textarea id="persona-personality" value={personality} onChange={e => setPersonality(e.target.value)} rows={3} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.speakingStyle")}</Label>
-              <Textarea value={speakingStyle} onChange={e => setSpeakingStyle(e.target.value)} rows={2} />
+              <Label htmlFor="persona-speaking-style" className="text-xs text-muted-foreground">{t("personaEdit.speakingStyle")}</Label>
+              <Textarea id="persona-speaking-style" value={speakingStyle} onChange={e => setSpeakingStyle(e.target.value)} rows={2} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">{t("personaEdit.nickname")}</Label>
-                <Input value={nickname} onChange={e => setNickname(e.target.value)}
+                <Label htmlFor="persona-nickname" className="text-xs text-muted-foreground">{t("personaEdit.nickname")}</Label>
+                <Input id="persona-nickname" value={nickname} onChange={e => setNickname(e.target.value)}
                   placeholder={t("personaEdit.nicknamePlaceholder")} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">{t("personaEdit.attachmentStyle")}</Label>
-                <select value={attachmentStyle} onChange={e => setAttachmentStyle(e.target.value)}
+                <Label htmlFor="persona-attachment-style" className="text-xs text-muted-foreground">{t("personaEdit.attachmentStyle")}</Label>
+                <select id="persona-attachment-style" value={attachmentStyle} onChange={e => setAttachmentStyle(e.target.value)}
                   className={selectClass}>
                   <option value="">{t("personaEdit.notSet")}</option>
                   {ATTACHMENT_STYLES.map(option => (
@@ -604,13 +618,14 @@ export default function PersonaEdit() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.catchphrasesLabel")}</Label>
-              <TagInput tags={catchphrases} onChange={setCatchphrases} />
+              <Label htmlFor="persona-catchphrases" className="text-xs text-muted-foreground">{t("personaEdit.catchphrasesLabel")}</Label>
+              <TagInput id="persona-catchphrases" label={t("personaEdit.catchphrasesLabel")}
+                tags={catchphrases} onChange={setCatchphrases} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">{t("personaEdit.loveLanguage")}</Label>
-                <select value={loveLanguage} onChange={e => setLoveLanguage(e.target.value)}
+                <Label htmlFor="persona-love-language" className="text-xs text-muted-foreground">{t("personaEdit.loveLanguage")}</Label>
+                <select id="persona-love-language" value={loveLanguage} onChange={e => setLoveLanguage(e.target.value)}
                   className={selectClass}>
                   <option value="">{t("personaEdit.notSet")}</option>
                   {LOVE_LANGUAGES.map(option => (
@@ -621,25 +636,26 @@ export default function PersonaEdit() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">{t("personaEdit.conflictStyle")}</Label>
-                <Input value={conflictStyle} onChange={e => setConflictStyle(e.target.value)} />
+                <Label htmlFor="persona-conflict-style" className="text-xs text-muted-foreground">{t("personaEdit.conflictStyle")}</Label>
+                <Input id="persona-conflict-style" value={conflictStyle} onChange={e => setConflictStyle(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.memories")}</Label>
-              <Textarea value={memories} onChange={e => setMemories(e.target.value)} rows={3} />
+              <Label htmlFor="persona-memories" className="text-xs text-muted-foreground">{t("personaEdit.memories")}</Label>
+              <Textarea id="persona-memories" value={memories} onChange={e => setMemories(e.target.value)} rows={3} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.touchingMoments")}</Label>
-              <Textarea value={touchingMoments} onChange={e => setTouchingMoments(e.target.value)} rows={2} />
+              <Label htmlFor="persona-touching-moments" className="text-xs text-muted-foreground">{t("personaEdit.touchingMoments")}</Label>
+              <Textarea id="persona-touching-moments" value={touchingMoments} onChange={e => setTouchingMoments(e.target.value)} rows={2} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.starterQuestions")}</Label>
-              <TagInput tags={starterQuestions} onChange={setStarterQuestions} />
+              <Label htmlFor="persona-starter-questions" className="text-xs text-muted-foreground">{t("personaEdit.starterQuestions")}</Label>
+              <TagInput id="persona-starter-questions" label={t("personaEdit.starterQuestions")}
+                tags={starterQuestions} onChange={setStarterQuestions} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.customInstructions")}</Label>
-              <Textarea value={customInstructions} onChange={e => setCustomInstructions(e.target.value)}
+              <Label htmlFor="persona-custom-instructions" className="text-xs text-muted-foreground">{t("personaEdit.customInstructions")}</Label>
+              <Textarea id="persona-custom-instructions" value={customInstructions} onChange={e => setCustomInstructions(e.target.value)}
                 rows={3} placeholder={t("personaEdit.customInstructionsPlaceholder")} />
             </div>
             <Button size="sm" onClick={savePersonaData} disabled={updateDataMutation.isPending}
@@ -674,8 +690,9 @@ export default function PersonaEdit() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("personaEdit.correctionLabel")}</Label>
+              <Label htmlFor="persona-correction" className="text-xs text-muted-foreground">{t("personaEdit.correctionLabel")}</Label>
               <Textarea
+                id="persona-correction"
                 value={correction}
                 onChange={(e) => setCorrection(e.target.value)}
                 rows={3}
