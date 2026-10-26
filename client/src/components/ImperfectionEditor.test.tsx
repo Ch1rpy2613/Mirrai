@@ -113,20 +113,38 @@ describe("the imperfection, per state", () => {
     expect(distant.deviations).toContain("不解释");
   });
 
-  it("puts the defaults back", async () => {
+  it("keeps the user's own words when the defaults are put back", async () => {
     render(<ImperfectionEditor personaId={1} />);
     // The user has something of their own in one of the states.
     expect(screen.getByDisplayValue("极短句")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText(translate("zh", "imperfection.restoreDefaults")));
 
-    // Their own words are gone, and the generic default is back.
+    // Their own words are still there.
     //
-    // The button used to put back what the user had saved — "what you
-    // saved, plus the defaults for the gaps" — so it only threw away
-    // the unsaved edits and the user's own deviations survived. It
-    // looked completely inert.
-    expect(screen.queryByDisplayValue("极短句")).not.toBeInTheDocument();
-    expect(screen.getByDisplayValue(/极短句|短句/)).toBeInTheDocument();
+    // The button used to put the six generic defaults in the whole
+    // draft — so what the user wrote was gone the moment the next Save
+    // went through, with no undo. The defaults are a starting point
+    // for the states the user has not written anything for; they are
+    // not a replacement for what the user wrote.
+    expect(screen.getByDisplayValue("极短句")).toBeInTheDocument();
+  });
+
+  it("fills a state the user has not written with the default", async () => {
+    // The user has written one state, and left the other five empty.
+    merged = [
+      { state: "distant", deviations: ["极短句"] },
+      { state: "warm", deviations: [] },
+      { state: "playful", deviations: [] },
+      { state: "nostalgic", deviations: [] },
+      { state: "melancholy", deviations: [] },
+      { state: "happy", deviations: [] },
+    ];
+    render(<ImperfectionEditor personaId={1} />);
+
+    await userEvent.click(screen.getByText(translate("zh", "imperfection.restoreDefaults")));
+
+    // The gap is filled with the generic default.
+    expect(screen.getByDisplayValue(/短句/)).toBeInTheDocument();
   });
 });

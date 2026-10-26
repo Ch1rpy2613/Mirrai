@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Save, RotateCcw } from "lucide-react";
 import { EMOTIONS, EMOTION_KEYS, type EmotionKey } from "@/lib/emotions";
-import { defaultImperfectionProfile, type ImperfectionEntry } from "@shared/imperfection";
+import { mergeImperfectionDefaults, type ImperfectionEntry } from "@shared/imperfection";
 
 /**
  * Imperfection, per state.
@@ -71,12 +71,16 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
   }
 
   function restoreDefaults() {
-    // The defaults, and not what the user has saved.
-    //
-    // `merged` is "what you saved, plus the defaults for the gaps" — so
-    // the button only threw away the unsaved edits and the user's own
-    // deviations survived untouched. It looked completely inert.
-    setDraft(defaultImperfectionProfile(locale === "en" ? "en" : "zh"));
+    /**
+     * The defaults for the gaps, and the user's own words for the rest.
+     *
+     * It used to put the six generic defaults in the whole draft — so
+     * the user's own written imperfections were gone the moment the
+     * next Save went through, with no undo. The defaults are a
+     * starting point for the states the user has not written anything
+     * for; they are not a replacement for what the user wrote.
+     */
+    setDraft(mergeImperfectionDefaults(draft, locale === "en" ? "en" : "zh"));
   }
 
   /**
