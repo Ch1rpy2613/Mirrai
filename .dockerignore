@@ -9,6 +9,13 @@ build-macos
 !.env.example
 uploads
 *.log
+# The generated skill packages and the compiled Python.
+#
+# They are not in the repository either — but the image was built
+# from the working directory, so the developer's own were copied in.
+skill-engine/skills/
+__pycache__/
+*.pyc
 .DS_Store
 docs
 README.md

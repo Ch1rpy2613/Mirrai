@@ -11,7 +11,14 @@ RUN pnpm build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable
+# The package manager is fetched *here*, while the image is being
+# built — not on the first start.
+#
+# `corepack enable` only installs the shim: the pnpm itself is
+# downloaded into a cache on first use, and that cache lives in the
+# build stage. So the container reached for the npm registry on every
+# start, and an air-gapped install could not start at all.
+RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
 
 # Redis, so the rate limits mean the same thing in every process and the
 # scheduler does not deliver the same reminder twice. The app finds this
