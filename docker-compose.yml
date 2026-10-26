@@ -36,8 +36,17 @@ services:
     environment:
       DATABASE_URL: postgresql://mirrai:mirrai@db:5432/mirrai
       REDIS_URL: redis://redis:6379
+      # The first-run administrator's password is written here, and it
+      # has to survive the container being rebuilt.
+      #
+      # The data root used to fall back to the parent of the uploads
+      # directory — which is inside the container's writable layer, so
+      # `docker compose up --build` threw the operator's only copy of the
+      # generated password away.
+      MIRRAI_DATA_ROOT: /app/data
     volumes:
       - uploads:/app/uploads
+      - data:/app/data
     depends_on:
       db:
         condition: service_healthy
@@ -47,3 +56,4 @@ services:
 volumes:
   pgdata:
   uploads:
+  data:
