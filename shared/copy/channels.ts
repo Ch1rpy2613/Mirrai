@@ -148,6 +148,18 @@ export const CHANNELS = {
     zh: "消息没有发出去：{{reason}}",
     en: "The message was not sent: {{reason}}",
   },
+  /**
+   * The delivery failed.
+   *
+   * It used to borrow the wording of a failed *reply* — so the user
+   * was told "the message was not sent: the reply could not be
+   * produced just now — please send it again", which is about two
+   * different failures and says nothing useful about either.
+   */
+  "channels.deliveryFailed": {
+    zh: "通道没有把这条消息送达。",
+    en: "The channel did not deliver this message.",
+  },
   "channels.replyFailed": {
     zh: "刚才没能说出话来，请再发一次。",
     en: "The reply could not be produced just now — please send it again.",

@@ -116,7 +116,9 @@ export async function handleWeixinMessage(
     const { noteDeliveryFailure } = await import("./bot");
     noteDeliveryFailure(
       userId,
-      copy(locale, "channels.messageFailed", { reason: copy(locale, "channels.replyFailed") }),
+      // The reason is about the delivery — not about the reply, which
+      // was produced perfectly well.
+      copy(locale, "channels.messageFailed", { reason: copy(locale, "channels.deliveryFailed") }),
     );
   }
 }
