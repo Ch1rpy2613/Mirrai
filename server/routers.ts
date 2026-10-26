@@ -1136,7 +1136,7 @@ export const appRouter = router({
 
         // The memories each turn recalled, with their titles.
         const ids = rows.flatMap((m: any) => parseRecalledIds(m.recalledMemoryIds));
-        const titles = await getMemoryTitles(ids);
+        const titles = await getMemoryTitles(ids, ctx.user.id);
         return rows.map((m: any) => ({
           ...m,
           recalled: parseRecalledIds(m.recalledMemoryIds).map((id: number) => ({
@@ -1772,7 +1772,13 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotAnalyzed") });
         }
 
-        const templateId = `${input.name.trim().replace(/\s+/g, "-").toLowerCase()}-${Date.now().toString(36)}`;
+        // The id has to be unique.
+        //
+        // It used to end with the clock, so two templates of the same
+        // name created in the same millisecond shared an id — and the
+        // export and the instantiate both take the *first* match, so one
+        // shadowed the other.
+        const templateId = `${input.name.trim().replace(/\s+/g, "-").toLowerCase()}-${nanoid()}`;
         const id = await createUserTemplate({
           userId: ctx.user.id,
           templateId,
@@ -1825,7 +1831,7 @@ export const appRouter = router({
         }
 
         const template = normalizeTemplate(parsed);
-        const templateId = `${template.id}-${Date.now().toString(36)}`;
+        const templateId = `${template.id}-${nanoid()}`;
         const id = await createUserTemplate({
           userId: ctx.user.id,
           templateId,

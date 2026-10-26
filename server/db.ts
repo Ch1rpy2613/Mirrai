@@ -1354,7 +1354,15 @@ export async function getLastExtractionAt(personaId: number, userId: number): Pr
  * A message records which memories it recalled, so the interface can
  * show what the persona had in mind when it answered.
  */
-export async function getMemoryTitles(ids: number[]) {
+/**
+ * The titles of some memories.
+ *
+ * Scoped to the owner, like every other read here. The ids come from
+ * the caller's own messages today, so nothing has leaked yet — but this
+ * was the only reading helper in the file that did not check, and a
+ * helper that does not check is one call away from one that does not.
+ */
+export async function getMemoryTitles(ids: number[], userId?: number) {
   const db = await getDb();
   if (!db || ids.length === 0) return new Map<number, string>();
   const unique = Array.from(new Set(ids));
@@ -1362,7 +1370,11 @@ export async function getMemoryTitles(ids: number[]) {
     id: memories.id,
     title: memories.title,
     subject: memories.subject,
-  }).from(memories).where(inArray(memories.id, unique));
+  }).from(memories).where(
+    userId === undefined
+      ? inArray(memories.id, unique)
+      : and(inArray(memories.id, unique), eq(memories.userId, userId)),
+  );
   return new Map(rows.map((r) => [r.id, r.title]));
 }
 
