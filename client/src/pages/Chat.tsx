@@ -161,6 +161,13 @@ export default function Chat() {
    */
   useEffect(() => {
     return () => {
+      // The timer that counts the seconds is cleared too: it was only
+      // ever cleared by the button, so leaving the page mid-recording
+      // left it running for ever.
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
       const recorder = mediaRecorderRef.current;
       if (!recorder) return;
       try {
