@@ -1,6 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { isUniqueViolation } from "./_core/auth";
+import { withKeyLock } from "./_core/lock";
 import { requestAbortSignal } from "./_core/context";
 import { extractMemories } from "./chat/memory-extract";
 import { systemRouter } from "./_core/systemRouter";
@@ -3760,32 +3761,47 @@ export const appRouter = router({
         locale: z.enum(["zh", "en"]).default("zh"),
       }))
       .mutation(async ({ ctx, input }) => {
-        const persona = await getPersonaById(input.personaId, ctx.user.id);
-        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        /**
+         * The mining and the saving take turns.
+         *
+         * Both are a read followed by a write — the rules that are
+         * there now, plus the new ones, written back. So two runs at
+         * once (two tabs, a double click) both read the same list, and
+         * the second write undid the first one's work: the rules the
+         * first run found were gone, and the user was told they had
+         * been mined.
+         *
+         * And a save that landed between the mining's read and its
+         * write was overwritten the same way.
+         */
+        return await withKeyLock(`micro-rules:${input.personaId}`, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
-        const mined = await mineMicroRules({
-          userId: ctx.user.id,
-          locale: input.locale,
-          messages: rows.map((row) => ({
-            content: row.content,
-            timestamp: row.timestamp,
-            // In the collected records the other person is the assistant.
-            role: row.role,
-          })),
-        });
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const mined = await mineMicroRules({
+            userId: ctx.user.id,
+            locale: input.locale,
+            messages: rows.map((row) => ({
+              content: row.content,
+              timestamp: row.timestamp,
+              // In the collected records the other person is the assistant.
+              role: row.role,
+            })),
+          });
 
-        const existing = normalizeMicroRules((persona.personaData as any)?.microRules);
-        const known = new Set(existing.map((rule) => rule.trigger.join("|")));
-        const fresh = mined.filter((rule) => !known.has(rule.trigger.join("|")));
-        const rules = normalizeMicroRules([...existing, ...fresh]);
-        await updatePersona(input.personaId, ctx.user.id, {
-          personaData: {
-            ...((persona.personaData as any) || {}),
-            microRules: rules,
-          },
+          const existing = normalizeMicroRules((persona.personaData as any)?.microRules);
+          const known = new Set(existing.map((rule) => rule.trigger.join("|")));
+          const fresh = mined.filter((rule) => !known.has(rule.trigger.join("|")));
+          const rules = normalizeMicroRules([...existing, ...fresh]);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: {
+              ...((persona.personaData as any) || {}),
+              microRules: rules,
+            },
+          });
+          return { rules: fresh };
         });
-        return { rules: fresh };
       }),
 
     /**
@@ -3812,15 +3828,18 @@ export const appRouter = router({
         })).max(200),
       }))
       .mutation(async ({ ctx, input }) => {
-        const persona = await getPersonaById(input.personaId, ctx.user.id);
-        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const rules = normalizeMicroRules(input.rules);
-        const merged = {
-          ...((persona.personaData as any) || {}),
-          microRules: rules,
-        };
-        await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
-        return { rules };
+        // The save and the mining take turns — see the note there.
+        return await withKeyLock(`micro-rules:${input.personaId}`, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const rules = normalizeMicroRules(input.rules);
+          const merged = {
+            ...((persona.personaData as any) || {}),
+            microRules: rules,
+          };
+          await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
+          return { rules };
+        });
       }),
   }),
 
