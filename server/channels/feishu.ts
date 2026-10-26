@@ -361,15 +361,34 @@ export class FeishuAdapter implements ChannelAdapter {
       appSecret: credentials.appSecret,
     });
 
+    /**
+     * The send.
+     *
+     * A failure here used to be swallowed: the SDK's `create` returns
+     * an object with a `code` in it rather than throwing, so a
+     * rejected message — a revoked permission, a chat that is gone —
+     * looked exactly like a delivered one, and the user was told their
+     * message had arrived.
+     *
+     * So the code in the answer is read, and a failure is raised.
+     */
     const sendText = async (targetId: string, text: string) => {
-      await client.im.v1.message.create({
+      const result = (await client.im.v1.message.create({
         params: { receive_id_type: "chat_id" },
         data: {
           receive_id: targetId,
           msg_type: "text",
           content: JSON.stringify({ text }),
         },
-      });
+      })) as { code?: number; msg?: string } | undefined;
+      const code = result?.code;
+      if (typeof code === "number" && code !== 0) {
+        throw new Error(
+          copy(locale, "errors.feishuSendFailed", {
+            message: result?.msg || String(code),
+          }),
+        );
+      }
     };
 
     const dispatcher = new lark.EventDispatcher().register({
