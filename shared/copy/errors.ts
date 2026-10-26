@@ -177,6 +177,10 @@ export const ERRORS = {
     zh: "技能导出失败",
     en: "The skill could not be exported",
   },
+  "errors.evalAlreadyRunning": {
+    zh: "这次评测还在跑，请等它跑完。",
+    en: "This evaluation is still running — wait for it to finish.",
+  },
   "errors.rateLimited": {
     zh: "请求过于频繁，请稍后再试",
     en: "Too many requests — please try again in a moment",

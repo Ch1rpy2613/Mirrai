@@ -3610,6 +3610,14 @@ export async function getEvalCases(personaId: number, userId: number) {
  * The snapshot matters: a run is only meaningful next to the persona
  * that produced it, and the persona changes.
  */
+/**
+ * How many runs of the evaluation are kept for a persona.
+ *
+ * Every run stores a full snapshot of the persona, so the table grew
+ * for ever — and nothing ever pruned it, unlike the collector's jobs.
+ */
+const MAX_EVAL_RUNS_PER_PERSONA = 20;
+
 export async function saveEvalRun(
   personaId: number,
   userId: number,
@@ -3624,6 +3632,33 @@ export async function saveEvalRun(
     metricsJson: metrics,
     personaSnapshot: personaSnapshot ?? null,
   }).returning({ id: evalRuns.id });
+
+  /**
+   * The old runs go.
+   *
+   * They are pruned after the new one is written, so the run that was
+   * just made is never the one that is removed.
+   */
+  const old = await db
+    .select({ id: evalRuns.id })
+    .from(evalRuns)
+    .where(and(eq(evalRuns.personaId, personaId), eq(evalRuns.userId, userId)))
+    .orderBy(desc(evalRuns.id))
+    // One more than the limit: the surplus is the tail of this list.
+    .limit(MAX_EVAL_RUNS_PER_PERSONA + 1);
+  const surplus = old.slice(MAX_EVAL_RUNS_PER_PERSONA);
+  if (surplus.length > 0) {
+    await db
+      .delete(evalRuns)
+      .where(
+        inArray(
+          evalRuns.id,
+          surplus.map((row) => row.id),
+        ),
+      )
+      .catch(() => undefined);
+  }
+
   return result.id;
 }
 

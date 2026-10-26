@@ -161,6 +161,16 @@ async function resolveAvatarImage(avatarUrl: string | null): Promise<Buffer> {
  *
  * Matches the 50 MB JSON body limit the server is configured with.
  */
+/**
+ * The evaluation runs that are in flight.
+ *
+ * A run is up to twelve model calls, and the rate limit allows ten a
+ * minute — so a double click started two runs, wrote two rows, and
+ * left the comparison with the last run depending on which of them
+ * finished last.
+ */
+const runningEvals = new Set<string>();
+
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 /**
@@ -3389,6 +3399,21 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
+        /**
+         * One run at a time.
+         *
+         * The rate limit allows ten a minute, and a run is up to
+         * twelve model calls — so a double click started two runs,
+         * wrote two rows, and left the comparison with the last run
+         * depending on which of them finished last.
+         */
+        const runKey = `${ctx.user.id}:${input.personaId}:${input.variant}`;
+        if (runningEvals.has(runKey)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: copy(input.locale, "errors.evalAlreadyRunning"),
+          });
+        }
         const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
         const messages = rows.map((row) => ({
           id: row.id,
@@ -3427,14 +3452,28 @@ export const appRouter = router({
           );
         }
 
-        const metrics = await runEval({
-          persona,
-          userId: ctx.user.id,
-          cases,
-          trainingTexts: trainingTexts(messages, cases),
-          variant: input.variant,
-          locale: input.locale,
-        });
+        /**
+         * The run is claimed.
+         *
+         * It is claimed here and not before — so the checks above,
+         * which can throw, do not leave the run marked as running for
+         * ever. And there is no `await` between the check and the
+         * claim, so two requests cannot both get past it.
+         */
+        runningEvals.add(runKey);
+        let metrics: Awaited<ReturnType<typeof runEval>>;
+        try {
+          metrics = await runEval({
+            persona,
+            userId: ctx.user.id,
+            cases,
+            trainingTexts: trainingTexts(messages, cases),
+            variant: input.variant,
+            locale: input.locale,
+          });
+        } finally {
+          runningEvals.delete(runKey);
+        }
         // The run is always kept. The comparison with the last run is
         // only meaningful if there is a last run — and the variant is
         // stored with it, because a run with the rules switched off is
