@@ -870,7 +870,7 @@ export const zh = {
       statFiles: "文件",
       exportTitle: "数据导出",
       exportNote: "下载你的全部数据",
-      exportDescription: "导出你的所有数据，包括个人资料、分身信息和对话记录。数据将以 JSON 格式下载。",
+      exportDescription: "导出你的资料、分身信息和对话记录——JSON 或 Markdown 两种格式。单个分身的对话最多一万条。",
       exportJson: "导出全部数据（JSON）",
       exportMarkdown: "导出为 Markdown",
       exporting: "导出中...",
@@ -1544,7 +1544,7 @@ export const zh = {
    */
   distillation: {
     title: "蒸馏模式",
-    note: "选一个模式，决定这次蒸馏用多少素材、多高的精度、要花几次模型调用。",
+    note: "选一个模式，决定这次蒸馏用多少素材、多高的精度。",
     calls: "约 {{count}} 次模型调用",
     sample: "最多分析 {{count}} 字聊天记录",
     photos: "最多描述 {{count}} 张照片",

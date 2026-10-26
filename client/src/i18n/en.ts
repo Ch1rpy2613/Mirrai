@@ -876,7 +876,7 @@ export const en = {
       statFiles: "Files",
       exportTitle: "Data export",
       exportNote: "Download all of your data",
-      exportDescription: "Export everything — profile, personas and conversations. The download is a JSON file.",
+      exportDescription: "Export your profile, your personas and your conversations — as JSON or as Markdown. Up to ten thousand messages per persona.",
       exportJson: "Export everything (JSON)",
       exportMarkdown: "Export as Markdown",
       exporting: "Exporting…",
@@ -1551,7 +1551,7 @@ export const en = {
    */
   distillation: {
     title: "Distillation mode",
-    note: "Pick a mode to decide how much material this run reads, how precise it is, and how many model calls it costs.",
+    note: "Pick a mode: it decides how much material this distillation reads and how careful it is.",
     calls: "About {{count}} model calls",
     sample: "Reads up to {{count}} characters of chat history",
     photos: "Describes up to {{count}} photos",
