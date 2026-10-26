@@ -17,6 +17,46 @@ function resolveJwtSecret(): string {
   return "dev-secret-change-me";
 }
 
+/**
+ * The database URL, checked.
+ *
+ * The connection is lazy: `drizzle(url)` does not open it, so a URL
+ * that is wrong in any way is not noticed until the first query — and
+ * the first query is usually a read that returns nothing. The app then
+ * behaves as though the user had no personas and no messages, which is
+ * indistinguishable from the data being gone.
+ *
+ * So the shape is checked when the environment is read, and a URL that
+ * cannot be right is named plainly.
+ */
+function resolveDatabaseUrl(): string {
+  const raw = process.env.DATABASE_URL ?? "";
+  if (!raw.trim()) return "";
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(
+      "DATABASE_URL is not a URL. It should look like: " +
+        "postgresql://user:password@host:5432/database",
+    );
+  }
+  const postgres = ["postgres:", "postgresql:"];
+  if (!postgres.includes(parsed.protocol)) {
+    throw new Error(
+      `DATABASE_URL must be a PostgreSQL URL, not "${parsed.protocol}". It should look like: ` +
+        "postgresql://user:password@host:5432/database",
+    );
+  }
+  if (!parsed.hostname) {
+    throw new Error(
+      "DATABASE_URL has no host. It should look like: " +
+        "postgresql://user:password@host:5432/database",
+    );
+  }
+  return raw;
+}
+
 function parseOriginList(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -72,7 +112,7 @@ function resolveSkillEngineDir(): string {
 
 export const ENV = {
   cookieSecret: resolveJwtSecret(),
-  databaseUrl: process.env.DATABASE_URL ?? "",
+  databaseUrl: resolveDatabaseUrl(),
   isProduction: process.env.NODE_ENV === "production",
 
   defaultLlmProvider: process.env.DEFAULT_LLM_PROVIDER ?? "openai",
