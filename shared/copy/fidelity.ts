@@ -73,38 +73,6 @@ export const FIDELITY = {
 
   // ── The rules, in the interface ─────────────────────────────────────────
 
-  "labels.microRules.title": {
-    zh: "判别规则",
-    en: "Discriminative rules",
-  },
-  "labels.microRules.hint": {
-    zh: "散文会被读成大意，规则不会。你知道的那种最锋利的区别，写在这里。",
-    en: "Prose is read as meaning; rules are not. The sharpest distinction you know goes here.",
-  },
-  "labels.microRules.empty": {
-    zh: "还没有规则。从聊天记录里挖一批，或者自己写一条。",
-    en: "No rules yet. Mine some from the records, or write one yourself.",
-  },
-  "labels.microRules.add": {
-    zh: "加一条规则",
-    en: "Add a rule",
-  },
-  "labels.microRules.edit": {
-    zh: "编辑",
-    en: "Edit",
-  },
-  "labels.microRules.save": {
-    zh: "保存",
-    en: "Save",
-  },
-  "labels.microRules.cancel": {
-    zh: "取消",
-    en: "Cancel",
-  },
-  "labels.microRules.delete": {
-    zh: "删掉",
-    en: "Delete",
-  },
   "labels.microRules.mine": {
     zh: "从记录里挖",
     en: "Mine from the records",
@@ -120,54 +88,6 @@ export const FIDELITY = {
   "labels.microRules.minedNone": {
     zh: "记录里没有找到足够的对比对。",
     en: "The records did not contain enough contrasts.",
-  },
-  "labels.microRules.trigger": {
-    zh: "触发词",
-    en: "Trigger",
-  },
-  "labels.microRules.triggerHint": {
-    zh: "用顿号或逗号分开",
-    en: "Separated by commas",
-  },
-  "labels.microRules.meaning": {
-    zh: "含义",
-    en: "Meaning",
-  },
-  "labels.microRules.rendering": {
-    zh: "这时候你会怎么做",
-    en: "What you do then",
-  },
-  "labels.microRules.evidence": {
-    zh: "依据",
-    en: "Evidence",
-  },
-  "labels.microRules.evidenceEmpty": {
-    zh: "没有依据。",
-    en: "No evidence.",
-  },
-  "labels.microRules.verified": {
-    zh: "已确认，会生效",
-    en: "Confirmed — in effect",
-  },
-  "labels.microRules.unverified": {
-    zh: "候选，还没确认",
-    en: "Candidate — not confirmed",
-  },
-  "labels.microRules.confirm": {
-    zh: "确认",
-    en: "Confirm",
-  },
-  "labels.microRules.source": {
-    zh: "来源",
-    en: "Source",
-  },
-  "labels.microRules.sourceAuto": {
-    zh: "从记录里挖到的",
-    en: "Mined from the records",
-  },
-  "labels.microRules.sourceManual": {
-    zh: "你写的",
-    en: "Written by you",
   },
 
   // ── The imperfection, in the interface ───────────────────────────────────
@@ -208,133 +128,25 @@ export const FIDELITY = {
 
   // ── The ruler ───────────────────────────────────────────────────────────
 
-  "labels.eval.title": {
-    zh: "像不像",
-    en: "Does it still sound like them",
-  },
-  "labels.eval.hint": {
-    zh: "用真实记录里扣下的一句当标准答案，看重建出来的分身能不能写得出。",
-    en: "A real line is held back from the records, and the rebuilt persona has to produce it.",
-  },
-  "labels.eval.cases": {
-    zh: "标答",
-    en: "Cases",
-  },
-  "labels.eval.run": {
-    zh: "跑一次",
-    en: "Run it",
-  },
-  "labels.eval.running": {
-    zh: "正在跑…",
-    en: "Running…",
-  },
-  "labels.eval.metrics": {
-    zh: "指标",
-    en: "Metrics",
-  },
-  "labels.eval.ngram": {
-    zh: "三字重合率",
-    en: "3-gram overlap",
-  },
   // The measures have their own labels in the client dictionary
   // (`fidelity.*`), where the interface actually shows them — and
   // there they are said in words, because a difference of
   // log-probabilities means nothing to a reader on its own. The keys
   // that used to live here were never shown by anything.
-  "labels.eval.emotion": {
-    zh: "情绪判断",
-    en: "Emotion agreement",
-  },
-  "labels.eval.ks": {
-    zh: "时间分布差",
-    en: "Timing distance",
-  },
   "labels.eval.noCases": {
     zh: "还没有标答。导入聊天记录后可以自动切一组出来。",
     en: "No cases yet. Import the chat records and a set can be cut from them.",
   },
-  "labels.eval.buildCases": {
-    zh: "切一组标答",
-    en: "Cut a set of cases",
-  },
-  "labels.eval.blindTest": {
-    zh: "真人还是分身",
-    en: "Real person or persona",
-  },
 
   // ── The way out ──────────────────────────────────────────────────────────
 
-  "labels.outbound.title": {
-    zh: "带回去的话",
-    en: "Words to take back",
-  },
-  "labels.outbound.hint": {
-    zh: "这些是你只在这里说过、还没对本人说过的话。系统不代发，只把它们摆在这里，由你决定说不说。",
-    en: "These are things you said here and never said to them. Nothing is sent for you — they are laid out, and you decide.",
-  },
-  "labels.outbound.empty": {
-    zh: "还没有。从你们的对话里找找那些只在这里说过的话。",
-    en: "None yet. We can look through the conversation for the things only said here.",
-  },
   "labels.outbound.collect": {
     zh: "找一找",
     en: "Look for them",
   },
-  "labels.outbound.collecting": {
-    zh: "正在找…",
-    en: "Looking…",
-  },
   "labels.outbound.collected": {
     zh: "找到 {{count}} 句。",
     en: "Found {{count}}.",
-  },
-  "labels.outbound.collectedNone": {
-    zh: "没有找到只在这里说过的话。",
-    en: "Nothing was said only here.",
-  },
-  "labels.outbound.status": {
-    zh: "状态",
-    en: "Status",
-  },
-  "labels.outbound.statusDraft": {
-    zh: "还在写",
-    en: "Still writing",
-  },
-  "labels.outbound.statusReady": {
-    zh: "可以带走了",
-    en: "Ready to take",
-  },
-  "labels.outbound.statusSent": {
-    zh: "已经说过了",
-    en: "Already said",
-  },
-  "labels.outbound.statusDropped": {
-    zh: "不说了",
-    en: "Never mind",
-  },
-  "labels.outbound.markSent": {
-    zh: "我说过了",
-    en: "I said it",
-  },
-  "labels.outbound.drop": {
-    zh: "不说了",
-    en: "Never mind",
-  },
-  "labels.outbound.dropConfirm": {
-    zh: "确定不再带这句话了吗？",
-    en: "Are you sure you will not take this one?",
-  },
-  "labels.outbound.source": {
-    zh: "来自",
-    en: "From",
-  },
-  "labels.outbound.forSelf": {
-    zh: "留给自己的",
-    en: "For yourself",
-  },
-  "labels.outbound.staleHint": {
-    zh: "这句话已经放了 {{days}} 天了。它不会自己消失。",
-    en: "This has been waiting {{days}} days. It will not go away on its own.",
   },
 
   // ── The prompts ──────────────────────────────────────────────────────────

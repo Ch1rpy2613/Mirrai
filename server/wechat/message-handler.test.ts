@@ -5,10 +5,12 @@ const getPersonaById = vi.fn();
 const handleCommand = vi.fn();
 const handlePersonaChat = vi.fn();
 const sendWeixinText = vi.fn();
+const getUserLocale = vi.fn();
 
 vi.mock("../db", () => ({
   getWechatBindingByUserId: (...a: unknown[]) => getWechatBindingByUserId(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
+  getUserLocale: (...a: unknown[]) => getUserLocale(...a),
 }));
 
 vi.mock("./commands", () => ({
@@ -42,7 +44,9 @@ beforeEach(() => {
   handleCommand.mockReset();
   handlePersonaChat.mockReset();
   sendWeixinText.mockReset();
+  getUserLocale.mockReset();
 
+  getUserLocale.mockResolvedValue("zh");
   getWechatBindingByUserId.mockResolvedValue({ id: 1, personaId: 7, wechatUserId: "wx-user-1" });
   getPersonaById.mockResolvedValue({ id: 7, graduationStatus: null });
   handleCommand.mockResolvedValue({ handled: false });

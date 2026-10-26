@@ -86,6 +86,13 @@ export interface CollectInput {
    * wrong day.
    */
   timezone?: string;
+  /**
+   * The language the reader reads.
+   *
+   * The collectors report what went wrong in words, and those words
+   * are read by a person.
+   */
+  locale?: "zh" | "en";
   /** Progress sink (0..100) injected by the job runner. */
   onProgress?: (pct: number) => void;
   /** Cancellation signal injected by the job runner. */
@@ -616,13 +623,20 @@ const emailConnector: SourceConnector = {
     // Nothing to restore.
   },
   async collect(input: CollectInput): Promise<CollectResult> {
+    /**
+     * The message says what to do.
+     *
+     * It used to be an English sentence about a missing option — so a
+     * Chinese reader was told, in English, that a collector required
+     * `options.file`.
+     */
     if (!input.options?.file) {
-      throw new Error(
-        'Collector "email" requires options.file (path to a .eml / .mbox / .txt export)',
-      );
+      throw new Error(copy(input.locale ?? "zh", "errors.collectorNeedsFile"));
     }
     if (!input.target) {
-      throw new Error('Collector "email" requires a target (the sender whose mail is kept)');
+      throw new Error(
+        copy(input.locale ?? "zh", "errors.collectorNeedsTarget", { source: sourceLabel(emailConnector, input.locale ?? "zh") }),
+      );
     }
     const { stdout, stdoutTruncated } = await runCollector(emailConnector.tool, emailConnector.args(input), {
       onProgress: input.onProgress,
@@ -671,12 +685,12 @@ const wechatExportConnector: SourceConnector = {
   },
   async collect(input: CollectInput): Promise<CollectResult> {
     if (!input.options?.file) {
-      throw new Error(
-        'Collector "wechat_export" requires options.file (path to the exported chat history)',
-      );
+      throw new Error(copy(input.locale ?? "zh", "errors.collectorNeedsFile"));
     }
     if (!input.target) {
-      throw new Error('Collector "wechat_export" requires a target (the person to keep)');
+      throw new Error(
+        copy(input.locale ?? "zh", "errors.collectorNeedsTarget", { source: sourceLabel(wechatExportConnector, input.locale ?? "zh") }),
+      );
     }
     const { stdout, stdoutTruncated } = await runCollector(
       wechatExportConnector.tool,

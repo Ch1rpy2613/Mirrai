@@ -410,7 +410,17 @@ export const appRouter = router({
 
     getProfile: protectedProcedure.query(async ({ ctx }) => {
       const user = await getUserById(ctx.user.id);
-      if (!user) throw new TRPCError({ code: "NOT_FOUND" });
+      /**
+       * The session is valid but the user is gone.
+       *
+       * It happens: the account is deleted on another device, or the
+       * database is restored from a backup taken before it existed. The
+       * message says what happened instead of the bare "not found" the
+       * interface would have shown for a missing page.
+       */
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.userNotFound") });
+      }
       return {
         id: user.id,
         username: user.username,

@@ -120,10 +120,6 @@ export const CHANNELS = {
     zh: "还没有设置默认分身。请在网页端「设置」里选择要对话的分身。",
     en: "No default persona is set. Choose one in the settings on the web.",
   },
-  "channels.graduationHint": {
-    zh: "\n\n（如果你觉得是时候了，回复「/毕业」我来写最后一封信。）",
-    en: "\n\n(If you think it is time, reply “/graduate” and I will write the last letter.)",
-  },
   /**
    * The note the bridge appends when a farewell is due.
    *
@@ -134,21 +130,9 @@ export const CHANNELS = {
     zh: "\n\n如果哪天想好好说声再见，随时发 /毕业，我会给你写封信。",
     en: "\n\nIf you ever want to say goodbye properly, send /graduate and I'll write you a letter.",
   },
-  "channels.userBanned": {
-    zh: "这个账号已经被停用了。",
-    en: "This account has been disabled.",
-  },
-  "channels.channelNotConnected": {
-    zh: "这个通道还没有连接。",
-    en: "This channel is not connected yet.",
-  },
   "channels.replyFailed": {
     zh: "刚才没能说出话来，请再发一次。",
     en: "The reply could not be produced just now — please send it again.",
-  },
-  "channels.messageFailed": {
-    zh: "消息没有发出去：{{reason}}",
-    en: "The message was not sent: {{reason}}",
   },
 
   /** The names the channels are known by. */

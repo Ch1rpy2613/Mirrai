@@ -220,10 +220,6 @@ export const PROMPT = {
     en: "User",
   },
   /** The persona, as the transcript names it. */
-  "prompt.rolePersona": {
-    zh: "分身",
-    en: "Persona",
-  },
   /**
    * The same two, with the punctuation that follows them.
    *
@@ -297,10 +293,6 @@ export const PROMPT = {
     en: "【Summary of earlier conversations】",
   },
   /** The section the quoted message goes in. */
-  "prompt.quotedSectionHeading": {
-    zh: "【对方回复的那一句】",
-    en: "【The line being replied to】",
-  },
   /**
    * The quoted message, heading and all.
    *
@@ -340,10 +332,6 @@ export const PROMPT = {
     en: "[image]",
   },
   /** The text that stands in for a voice message that could not be read. */
-  "prompt.voicePlaceholder": {
-    zh: "（语音消息）",
-    en: "(voice message)",
-  },
 
   // ── How the persona is doing, and what time it is ───────────────────────
 

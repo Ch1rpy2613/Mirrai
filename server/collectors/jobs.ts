@@ -293,6 +293,16 @@ async function runJob(job: CollectorJob): Promise<void> {
         Number.isFinite(Number(job.userId))
           ? (await db.getUserTimezone(Number(job.userId))) ?? undefined
           : undefined,
+      /**
+       * The language the reader reads.
+       *
+       * The collectors report what went wrong in words, and those words
+       * are read by a person.
+       */
+      locale:
+        Number.isFinite(Number(job.userId))
+          ? ((await db.getUserLocale(Number(job.userId)).catch(() => "zh" as const)) ?? "zh")
+          : "zh",
       onProgress: (pct: number) => {
         const next = Math.max(0, Math.min(100, Math.round(pct)));
         if (next <= job.progress) return;

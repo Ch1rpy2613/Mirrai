@@ -10,30 +10,6 @@ import type { CopyTable } from "./index";
 
 export const CONTENT = {
   /** The guided questionnaire — the way in when there are no chat logs. */
-  "questionnaire.intro": {
-    zh: "还没有聊天记录也没关系。回答几个问题，先把 TA 搭出来。",
-    en: "No chat history is fine. Answer a few questions and the persona starts from there.",
-  },
-  "questionnaire.placeholder": {
-    zh: "想到什么就写什么，写得越具体越好",
-    en: "Write whatever comes to mind — the more specific the better",
-  },
-  "questionnaire.researchProfile": {
-    zh: "调查方向",
-    en: "What to look into",
-  },
-  "questionnaire.intake": {
-    zh: "你手上的材料",
-    en: "What you have",
-  },
-  "questionnaire.skip": {
-    zh: "跳过",
-    en: "Skip",
-  },
-  "questionnaire.finish": {
-    zh: "完成",
-    en: "Finish",
-  },
   "questionnaire.step": {
     zh: "第 {{current}} / {{total}} 步",
     en: "Step {{current}} of {{total}}",
@@ -43,30 +19,6 @@ export const CONTENT = {
   "collectors.slack": {
     zh: "Slack",
     en: "Slack",
-  },
-  "collectors.unknownSource": {
-    zh: "未知的采集来源",
-    en: "That collection source is not known",
-  },
-  "collectors.loginNeeded": {
-    zh: "需要先登录 {{source}}",
-    en: "You need to sign in to {{source}} first",
-  },
-  "collectors.collecting": {
-    zh: "正在采集 {{source}} 的聊天记录……",
-    en: "Collecting the chat history from {{source}}…",
-  },
-  "collectors.done": {
-    zh: "采集完成：{{count}} 条消息",
-    en: "Finished: {{count}} messages",
-  },
-  "collectors.failed": {
-    zh: "采集失败：{{reason}}",
-    en: "Could not collect: {{reason}}",
-  },
-  "collectors.noAccess": {
-    zh: "没有拿到访问权限，请重新登录 {{source}}",
-    en: "No access was granted — sign in to {{source}} again",
   },
 
   /** The questionnaire's answers, turned into words about a person. */

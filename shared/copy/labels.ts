@@ -54,34 +54,6 @@ export const LABELS = {
   },
 
   /** The fields of an exported character card. */
-  "labels.card.personality": {
-    zh: "性格",
-    en: "Personality",
-  },
-  "labels.card.attachmentStyle": {
-    zh: "依恋类型",
-    en: "Attachment style",
-  },
-  "labels.card.loveLanguage": {
-    zh: "爱的语言",
-    en: "Love language",
-  },
-  "labels.card.conflictStyle": {
-    zh: "争吵方式",
-    en: "How they argue",
-  },
-  "labels.card.speakingStyle": {
-    zh: "说话方式",
-    en: "How they speak",
-  },
-  "labels.card.catchphrases": {
-    zh: "常用语气词",
-    en: "Favourite words",
-  },
-  "labels.card.nickname": {
-    zh: "称呼对方",
-    en: "What they call you",
-  },
   /**
    * The disclosure the card carries into other tools.
    *

@@ -115,15 +115,20 @@ describe("the server's copy", () => {
       collectSource("shared", (relativePath) => relativePath === "copy" || relativePath.startsWith("copy/")) +
       collectSource("scripts");
 
-    // The namespaces whose keys are reached through a variable rather than
-    // written out — `copy(locale, STYLE_KEYS[kind])` — cannot be found by
-    // a plain search, so they are exempt.
+    /**
+     * The namespaces whose keys are reached through a template.
+     *
+     * `labels.imperfection.${state}` cannot be found by a plain search,
+     * so the namespaces used that way are exempt.
+     *
+     * It used to be exempt for every namespace that had one literal
+     * call in it — the pattern matched *any* quoted string with a dot
+     * in it, so `copy(locale, "errors.unknownProvider")` made the whole
+     * "errors" namespace exempt, and every key under it was invisible
+     * to this test. Thirteen namespaces and a hundred and eighty-three
+     * keys were being skipped that way.
+     */
     const dynamic = new Set<string>();
-    for (const match of source.matchAll(/"([A-Za-z0-9_.]+)\.[A-Za-z0-9_]+"/g)) {
-      dynamic.add(match[1]);
-    }
-    // A namespace reached through a template literal:
-    // `labels.imperfection.${state}`.
     for (const match of source.matchAll(/`([A-Za-z0-9_.]+)\./g)) {
       dynamic.add(match[1]);
     }

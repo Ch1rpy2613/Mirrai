@@ -57,6 +57,10 @@ export const ERRORS = {
     zh: "这个来源需要一个文件：请先上传要导入的聊天记录或邮件",
     en: "This source needs a file: upload the chat log or the mail export first",
   },
+  "errors.collectorNeedsTarget": {
+    zh: "这个来源需要一个名字：请填写要保留谁的记录",
+    en: "This source needs a name: say whose messages you want to keep",
+  },
   "errors.personaAlreadyGraduated": {
     zh: "这个分身已经毕业了",
     en: "This persona has already graduated",
@@ -177,18 +181,6 @@ export const ERRORS = {
     zh: "请求过于频繁，请稍后再试",
     en: "Too many requests — please try again in a moment",
   },
-  "errors.unsupportedFileType": {
-    zh: "不支持的文件类型：{{type}}",
-    en: "That file type is not supported: {{type}}",
-  },
-  "errors.missingExtension": {
-    zh: "文件缺少扩展名（{{allowed}}）",
-    en: "The file has no extension ({{allowed}})",
-  },
-  "errors.unsupportedExtension": {
-    zh: "不支持的文件扩展名：{{ext}}（允许：{{allowed}}）",
-    en: "That file extension is not supported: {{ext}} (allowed: {{allowed}})",
-  },
   "errors.usernamePasswordRequired": {
     zh: "用户名和密码不能为空",
     en: "A username and a password are required",
@@ -224,10 +216,6 @@ export const ERRORS = {
   "errors.tooManyAttempts": {
     zh: "尝试次数过多，请稍后再试",
     en: "Too many attempts — please try again in a moment",
-  },
-  "errors.tooManyRequests": {
-    zh: "请求过于频繁",
-    en: "Too many requests",
   },
 
   /** The Feishu channel could not be set up or reached. */

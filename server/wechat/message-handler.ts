@@ -21,9 +21,17 @@ export async function handleWeixinMessage(
   const text = parsed.text?.trim();
   if (!text) return;
 
+  const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
   const binding = await db.getWechatBindingByUserId(parsed.fromUserId, userId);
   if (!binding) {
-    await sendText(userId, parsed, "还没有设置默认分身。请在网页端「设置 → 微信」里选择要对话的分身。");
+    /**
+     * In the reader's own language.
+     *
+     * The message was hard-coded Chinese — so an English user on
+     * WeChat was told, in Chinese, to go and set a default persona on
+     * the web.
+     */
+    await sendText(userId, parsed, copy(locale, "channels.noDefaultPersonaWechat"));
     return;
   }
 
@@ -73,7 +81,7 @@ export async function handleWeixinMessage(
      * unanswered.
      */
     console.warn("[WeChat] Could not answer:", (e as Error).message);
-    await sendText(userId, parsed, copy(await db.getUserLocale(userId), "channels.replyFailed"));
+    await sendText(userId, parsed, copy(locale, "channels.replyFailed"));
     return;
   }
 
