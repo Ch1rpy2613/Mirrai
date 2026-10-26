@@ -1963,11 +1963,28 @@ export default function Lobby() {
             </section>
           </>
         ) : (
-          <EmptyState
-            onCreate={() => setShowCreate(true)}
-            onTryIt={handleTryIt}
-            sandboxPending={sandboxPending}
-          />
+          <>
+            <EmptyState
+              onCreate={() => setShowCreate(true)}
+              onTryIt={handleTryIt}
+              sandboxPending={sandboxPending}
+            />
+            {/**
+             * The templates are here too.
+             *
+             * The "start from a template" button in the create dialog
+             * scrolls to this section — and the section was only
+             * rendered when the user already had a persona. So on the
+             * empty state the button did nothing at all: the dialog
+             * closed and nothing happened. And the empty state is
+             * precisely the user who has no chat logs to upload and
+             * needs a way in.
+             */}
+            <TemplateLibrarySection
+              onCreated={(id) => { refetch(); navigate(`/chat/${id}`); }}
+              onQuestionnaire={() => navigate("/persona/new/questionnaire")}
+            />
+          </>
         )}
       </main>
 
