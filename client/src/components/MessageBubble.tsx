@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown, Trash2, Loader2, Play, Pause, Volume2,
@@ -102,6 +102,41 @@ function TTSButton({ text }: { text: string }) {
     { enabled: showVoices },
   );
 
+  // The clip stops when the bubble goes away.
+  //
+  // The audio element was never paused and never released, so the
+  // speech carried on after the user had navigated off, and its
+  // `onended` then set state on a component that was no longer there.
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  // The voice menu closes when the user clicks anywhere else.
+  //
+  // There was no click-outside handler anywhere in the interface, so the
+  // menu stayed open over the conversation until a voice was picked.
+  const menuRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!showVoices) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setShowVoices(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowVoices(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showVoices]);
+
   const handlePlay = async () => {
     if (audioUrl && audioRef.current) {
       if (playing) { audioRef.current.pause(); setPlaying(false); }
@@ -125,16 +160,16 @@ function TTSButton({ text }: { text: string }) {
   };
 
   return (
-    <span className="relative inline-flex items-center">
+    <span className="relative inline-flex items-center" ref={menuRef}>
     <button onClick={handlePlay} disabled={loading} title={t("chat.tts")} aria-label={t("chat.tts")}
-      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
+      className="text-muted-foreground/70 hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className={`w-3 h-3 ${playing ? "text-foreground" : ""}`} />}
     </button>
     <button
       onClick={() => setShowVoices((value) => !value)}
       title={t("chat.ttsVoice")}
       aria-label={t("chat.ttsVoice")}
-      className="text-muted-foreground/50 hover:text-muted-foreground transition-colors p-1 -m-1"
+      className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-1 -m-1"
     >
       <ChevronDown className="w-2.5 h-2.5" />
     </button>
@@ -240,7 +275,15 @@ export function MessageBubble({
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4 animate-fade-in-up`}>
       {!isUser && (
-        <PersonaAvatar name={personaName} className="w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5" />
+        <>
+          {/* The persona's name, for a screen reader.
+              The avatar is `aria-hidden`, and the name was nowhere else
+              in the bubble — so a reader could not tell which persona a
+              given message came from, which in an app with several of
+              them is the context that matters. */}
+          <span className="sr-only">{personaName}</span>
+          <PersonaAvatar name={personaName} className="w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5" />
+        </>
       )}
       <div className={`max-w-[78%] sm:max-w-[75%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && mood && showMood && (
@@ -321,7 +364,7 @@ export function MessageBubble({
           )}
         </div>
         {msg.createdAt && !msg.isStreaming && (
-          <span className="text-[11px] text-muted-foreground/50 px-1 flex items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground/70 px-1 flex items-center gap-1.5">
             {new Date(msg.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
             {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-mood-happy/10 text-mood-happy">{t("chat.channelWechat")}</span>}
             {!isUser && msg.messageType !== "voice" && <TTSButton text={msg.content} />}
@@ -333,12 +376,24 @@ export function MessageBubble({
                 {msg.content && (
                   <button
                     type="button"
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(msg.content);
+                    onClick={async () => {
+                      // The write is awaited and reported.
+                      //
+                      // It used to be fired and forgotten: a browser that
+                      // refuses the write — an insecure context, a
+                      // permission that was not given — showed nothing at
+                      // all, and there is no handler anywhere in the
+                      // interface for an unhandled rejection.
+                      try {
+                        await navigator.clipboard.writeText(msg.content);
+                        toast.success(t("chat.copied"));
+                      } catch {
+                        toast.error(t("chat.copyFailed"));
+                      }
                     }}
                     title={t("chat.copy")}
                     aria-label={t("chat.copy")}
-                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <Copy className="w-3 h-3" />
                   </button>
@@ -349,7 +404,7 @@ export function MessageBubble({
                     onClick={() => onQuote(msg)}
                     title={t("chat.quote")}
                     aria-label={t("chat.quote")}
-                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <CornerUpLeft className="w-3 h-3" />
                   </button>
@@ -360,7 +415,7 @@ export function MessageBubble({
                     onClick={() => { setDraft(msg.content); setEditing(true); }}
                     title={t("chat.edit")}
                     aria-label={t("chat.edit")}
-                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <Pencil className="w-3 h-3" />
                   </button>
@@ -371,7 +426,7 @@ export function MessageBubble({
                     onClick={() => onRegenerate(msg)}
                     title={t("chat.regenerate")}
                     aria-label={t("chat.regenerate")}
-                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
+                    className="text-muted-foreground/70 hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <RefreshCw className="w-3 h-3" />
                   </button>
@@ -382,7 +437,7 @@ export function MessageBubble({
                     onClick={() => onDelete(msg)}
                     title={t("chat.delete")}
                     aria-label={t("chat.delete")}
-                    className="text-muted-foreground/40 hover:text-destructive transition-colors p-0.5"
+                    className="text-muted-foreground/70 hover:text-destructive transition-colors p-0.5"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>

@@ -170,6 +170,7 @@ export const en = {
   },
 
   chat: {
+    digitalPersona: "Digital persona",
     placeholder: "Say something to {{name}}...",
     send: "Send",
     stop: "Stop generating",
@@ -224,6 +225,8 @@ export const en = {
     noResults: "No matching messages",
     channelWechat: "WeChat",
     copy: "Copy",
+    copied: "Copied",
+    copyFailed: "Could not copy",
     quote: "Reply to this",
     recalled: "They remembered {{count}} things",
     lastContact: "Last spoke {{days}} days ago",

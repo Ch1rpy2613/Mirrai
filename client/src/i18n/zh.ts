@@ -162,6 +162,13 @@ export const zh = {
   },
 
   chat: {
+    /**
+     * The label that says what this is.
+     *
+     * It used to be written into the component, in Chinese — so an
+     * English user saw 「数字分身」 on every persona card.
+     */
+    digitalPersona: "数字分身",
     placeholder: "对 {{name}} 说点什么...",
     send: "发送",
     stop: "停止生成",
@@ -216,6 +223,8 @@ export const zh = {
     noResults: "没有找到相关消息",
     channelWechat: "微信",
     copy: "复制",
+    copied: "已复制",
+    copyFailed: "复制失败",
     quote: "回复这一条",
     recalled: "TA 想起了 {{count}} 件事",
     lastContact: "上次联系 {{days}} 天前",
