@@ -112,6 +112,23 @@ function idempotencyKey(source: string, timestamp: Date | null, content: string)
 }
 
 /**
+ * The idempotency key of a message that has no timestamp.
+ *
+ * The timestamp is what keeps two messages of the same minute apart —
+ * but a message without one contributed nothing to the key, so every
+ * message of the same text collapsed into one. Three "嗯" in a row —
+ * which is what a chat log is full of — were stored once.
+ *
+ * So the occurrence is part of the key: the first "嗯" is one message,
+ * the second is another, and the third is a third. It is stable: the
+ * same history collected twice produces the same keys, and the import
+ * stays idempotent.
+ */
+function untimedKey(source: string, content: string, occurrence: number): string {
+  return `${source}||${content}#${occurrence}`;
+}
+
+/**
  * Imports collected messages into the persona.
  *
  * The import is idempotent: a message that is already there — same source,
@@ -136,11 +153,23 @@ export async function importCollectedMessages(params: {
     params.source,
   );
 
-  const seen = new Set(
-    existing.map((m) =>
-      idempotencyKey(m.source ?? params.source, m.timestamp ?? null, m.content),
-    ),
-  );
+  const seen = new Set<string>();
+  /**
+   * How many of each untimed message are already there.
+   *
+   * The count is what tells the first "嗯" from the second.
+   */
+  const untimedCounts = new Map<string, number>();
+  for (const m of existing) {
+    if (m.timestamp) {
+      seen.add(idempotencyKey(m.source ?? params.source, m.timestamp, m.content));
+      continue;
+    }
+    const source = m.source ?? params.source;
+    const occurrence = untimedCounts.get(m.content) ?? 0;
+    untimedCounts.set(m.content, occurrence + 1);
+    seen.add(untimedKey(source, m.content, occurrence));
+  }
 
   /**
    * The rows that are actually new, gathered first.
@@ -150,9 +179,23 @@ export async function importCollectedMessages(params: {
    * the collection sat there for an hour.
    */
   const rows = [];
+  /**
+   * How many of each untimed message this batch holds.
+   *
+   * It starts at zero: the first "嗯" of the batch is the first "嗯"
+   * that was stored, so a re-collected history matches itself.
+   */
+  const batchCounts = new Map<string, number>();
   for (const message of params.messages) {
     const timestamp = message.timestamp ? new Date(message.timestamp) : null;
-    const key = idempotencyKey(params.source, timestamp, message.content);
+    let key: string;
+    if (timestamp) {
+      key = idempotencyKey(params.source, timestamp, message.content);
+    } else {
+      const occurrence = batchCounts.get(message.content) ?? 0;
+      batchCounts.set(message.content, occurrence + 1);
+      key = untimedKey(params.source, message.content, occurrence);
+    }
     if (seen.has(key)) continue;
     seen.add(key);
 

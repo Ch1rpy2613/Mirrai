@@ -108,6 +108,50 @@ describe("importCollectedMessages", () => {
     expect(createCollectedMessages.mock.calls[0][0][0].content).toBe("在的");
   });
 
+  it("keeps the repeated messages that have no timestamp", async () => {
+    // Three "嗯" in a row is what a chat log is full of.
+    //
+    // The timestamp is what keeps two messages of the same minute
+    // apart — but a message without one contributed nothing to the
+    // key, so every message of the same text collapsed into one.
+    getCollectedMessageKeys.mockResolvedValue([]);
+
+    await importCollectedMessages({
+      personaId: 1,
+      userId: 2,
+      source: "feishu",
+      messages: [
+        { role: "assistant", content: "嗯" },
+        { role: "assistant", content: "嗯" },
+        { role: "assistant", content: "嗯" },
+      ],
+    });
+
+    expect(createCollectedMessages).toHaveBeenCalledTimes(1);
+    expect(createCollectedMessages.mock.calls[0][0]).toHaveLength(3);
+  });
+
+  it("does not add the repeated messages again when they are collected twice", async () => {
+    getCollectedMessageKeys.mockResolvedValue([
+      { source: "feishu", timestamp: null, content: "嗯" },
+      { source: "feishu", timestamp: null, content: "嗯" },
+      { source: "feishu", timestamp: null, content: "嗯" },
+    ]);
+
+    await importCollectedMessages({
+      personaId: 1,
+      userId: 2,
+      source: "feishu",
+      messages: [
+        { role: "assistant", content: "嗯" },
+        { role: "assistant", content: "嗯" },
+        { role: "assistant", content: "嗯" },
+      ],
+    });
+
+    expect(createCollectedMessages).not.toHaveBeenCalled();
+  });
+
   it("treats a message with no timestamp as its own entry", async () => {
     getCollectedMessageKeys.mockResolvedValue([
       {
