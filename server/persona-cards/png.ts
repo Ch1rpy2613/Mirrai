@@ -16,6 +16,19 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { inflateSync } from "zlib";
 
+/**
+ * How much a compressed text chunk may inflate to.
+ *
+ * `zTXt` and `iTXt` hold deflated text, and deflate is a compression
+ * format: a kilobyte of it can be a gigabyte out. Without a limit a
+ * character card whose metadata chunk was crafted — or simply written by
+ * a program that made a mistake — could make the server allocate as
+ * much memory as it could get, and the whole instance goes down with it.
+ *
+ * The metadata of a character card is a few kilobytes. This is generous.
+ */
+const MAX_INFLATED_TEXT_BYTES = 8 * 1024 * 1024;
+
 /** The eight-byte PNG file signature. */
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -151,7 +164,12 @@ function parseTextChunk(type: string, data: Buffer): { key: string; text: string
     const compressionMethod = data[separator + 1];
     if (compressionMethod !== 0) return null; // unknown compression method
     try {
-      return { key, text: decodeTextBytes(inflateSync(data.slice(separator + 2))) };
+      return {
+        key,
+        text: decodeTextBytes(
+          inflateSync(data.slice(separator + 2), { maxOutputLength: MAX_INFLATED_TEXT_BYTES }),
+        ),
+      };
     } catch {
       return null; // a broken chunk must not abort the whole import
     }
@@ -174,7 +192,12 @@ function parseTextChunk(type: string, data: Buffer): { key: string; text: string
     const payload = data.slice(cursor);
     try {
       if (compressionFlag === 1) {
-        return { key, text: decodeTextBytes(inflateSync(payload)) };
+        return {
+          key,
+          text: decodeTextBytes(
+            inflateSync(payload, { maxOutputLength: MAX_INFLATED_TEXT_BYTES }),
+          ),
+        };
       }
       return { key, text: payload.toString("utf8") };
     } catch {
