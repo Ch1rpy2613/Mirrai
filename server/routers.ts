@@ -68,7 +68,7 @@ import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
 import { inferEmotionalState } from "./_core/emotion";
 import { getCrisisResources } from "./safety/resources";
-import { isValidTimeZone, previousDateKey, zonedDateKey } from "@shared/timezone";
+import { isRealDayKey, isValidTimeZone, previousDateKey, zonedDateKey } from "@shared/timezone";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
@@ -449,6 +449,16 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const date = input.date ?? zonedDateKey(new Date(), ctx.user.timezone);
+        /**
+         * The date is a real day.
+         *
+         * It was only checked against a pattern, so "9999-99-99" and
+         * "2026-02-30" were accepted and stored — and then the day
+         * could never be a day the chart could show.
+         */
+        if (!isRealDayKey(date)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.invalidDateFormat") });
+        }
         const mood = await upsertUserMood({
           userId: ctx.user.id,
           date,

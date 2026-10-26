@@ -243,6 +243,26 @@ export function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Whether a string is a day that exists.
+ *
+ * "9999-99-99" and "2026-02-30" have the right shape and are not
+ * days. A pattern check alone cannot tell the difference, so a day
+ * like that could be stored — and then it could never be a day the
+ * chart could show.
+ */
+export function isRealDayKey(dayKey: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1) return false;
+  // The last day of the month.
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return day <= lastDay;
+}
+
 /** Whether a time zone name is one this runtime understands. */
 export function isValidTimeZone(timeZone: string | null | undefined): boolean {
   if (!timeZone) return false;
