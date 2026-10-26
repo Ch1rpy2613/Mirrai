@@ -66,9 +66,19 @@ export default function SafetyTransparency() {
                     {t(`safetyPanel.trajectories.${assessment.trajectory}` as any)}
                   </span>
                 </div>
-                <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
                   <span>{t("safetyPanel.regret")} {assessment.regretRatio}%</span>
                   <span>{t("safetyPanel.gratitude")} {assessment.gratitudeRatio}%</span>
+                  {/* The date it was made.
+                      The panel showed the events with their dates and
+                      the assessments without one — so a reading from
+                      six months ago looked exactly like one from this
+                      morning. */}
+                  {assessment.createdAt && (
+                    <span className="text-muted-subtle">
+                      {new Date(assessment.createdAt).toLocaleDateString(locale)}
+                    </span>
+                  )}
                 </div>
                 {assessment.note && (
                   <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
