@@ -267,7 +267,24 @@ export async function createLetter(params: {
 }
 
 /** The letters to a persona, newest first. */
-export async function getLetters(personaId: number, userId: number, limit = 50) {
+/**
+ * How many letters there are.
+ *
+ * The box showed the newest fifty and said nothing about the rest, so
+ * the fifty-first simply disappeared from the screen while it was still
+ * in the export. The number is what tells the user that.
+ */
+export async function countLetters(personaId: number, userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db
+    .select({ value: count() })
+    .from(letters)
+    .where(and(eq(letters.personaId, personaId), eq(letters.userId, userId)));
+  return Number(row?.value ?? 0);
+}
+
+export async function getLetters(personaId: number, userId: number, limit = 200) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(letters)

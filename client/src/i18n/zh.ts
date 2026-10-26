@@ -1356,6 +1356,8 @@ export const zh = {
     deliver: "交给 TA",
     deliverNote: "交给 TA 的信会在一天左右之后回信——真人不会秒回，这一条是故意的。",
     kept: "信写好了。它不会被回答——这是你选的。",
+    noteSaved: "记下来了。等你们重新联系上的时候再说。",
+    moreCount: "还有 {{count}} 封更早的信没有显示。",
     delivered: "信写好了，已经交给 TA。",
     statusPrivate: "只写下来了",
     statusWaiting: "等回信",

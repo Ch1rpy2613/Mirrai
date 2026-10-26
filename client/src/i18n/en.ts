@@ -1363,6 +1363,8 @@ export const en = {
     deliver: "Hand it over",
     deliverNote: "A letter that is handed over is answered about a day later — real people do not reply in three seconds, and that is the point.",
     kept: "The letter is written. It will not be answered — that was your choice.",
+    noteSaved: "Noted. It will wait until you are in touch again.",
+    moreCount: "{{count}} older letters are not shown.",
     delivered: "The letter is written, and it has been handed over.",
     statusPrivate: "Kept",
     statusWaiting: "Waiting for an answer",

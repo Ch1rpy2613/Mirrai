@@ -213,7 +213,9 @@ describe("the letters", () => {
     expect(whereOf()[0].sql).toContain('"letters"."userId"');
     expect(whereOf()[0].params).toContain(3);
     expect(orderOf()[0].sql).toContain('"letters"."createdAt" desc');
-    expect(last().limit).toBe(50);
+    // The limit was fifty — so the fifty-first letter simply
+    // disappeared from the box while it was still in the export.
+    expect(last().limit).toBe(200);
   });
 
   it("lists only the notes that are waiting", async () => {

@@ -95,6 +95,17 @@ export function getBuiltinTemplates(): PersonaTemplate[] {
     );
   }
 
-  cachedBuiltins = templates;
+  /**
+   * The empty list is not cached.
+   *
+   * The comment above says the empty library was cached for ever, and
+   * that it was fixed — but the assignment was unconditional, so an
+   * empty result was still cached for the life of the process. So a
+   * deployment whose template directory was missing on the first read
+   * had no library at all, for ever, even after the files were there.
+   */
+  if (templates.length > 0) {
+    cachedBuiltins = templates;
+  }
   return templates;
 }

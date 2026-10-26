@@ -48,9 +48,20 @@ export default function LetterBox({ personaId }: { personaId: number }) {
       setMood("");
       setShowWrite(false);
       toast.success(
-        data.letter?.status === "waiting"
-          ? t("letters.delivered")
-          : t("letters.kept"),
+        /**
+         * A note to say later is not a letter.
+         *
+         * The message was chosen by the status alone — and a note is
+         * written as private, so the person who pressed "say it later"
+         * was told "the letter is written. It will not be answered —
+         * that is your choice." Which is true of the letter, and
+         * nonsense of the note.
+         */
+        data.letter?.kind === "todo"
+          ? t("letters.noteSaved")
+          : data.letter?.status === "waiting"
+            ? t("letters.delivered")
+            : t("letters.kept"),
       );
     },
     onError: (e) => toast.error(e.message),
@@ -65,6 +76,8 @@ export default function LetterBox({ personaId }: { personaId: number }) {
 
   const letters = (data?.letters ?? []).filter((l: any) => l.kind !== "todo");
   const todos = todosData?.todos ?? [];
+  // How many there are, not how many are shown.
+  const total = (data?.total ?? 0) as number;
 
   return (
     <div className="space-y-4">
@@ -139,6 +152,13 @@ export default function LetterBox({ personaId }: { personaId: number }) {
             </li>
           ))}
         </ol>
+      )}
+
+      {/* The letters that are not on the screen. */}
+      {total > letters.length && (
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {t("letters.moreCount", { count: total - letters.length })}
+        </p>
       )}
 
       {todos.length > 0 && (

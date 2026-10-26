@@ -49,7 +49,7 @@ import {
   createQuestionnaireAnswers, getActiveReminders, dismissReminder,
   appendPersonaCorrection,
   upsertUserMood, getUserMoods,
-  createLetter, getLetters, getDueLetters, getLastLetterReplyAt,
+  createLetter, getLetters, countLetters, getDueLetters, getLastLetterReplyAt,
   answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes,
   createRelationshipEvent, getRelationshipEvents, deleteRelationshipEvent,
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
@@ -3430,7 +3430,9 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         const letters = await getLetters(input.personaId, ctx.user.id);
-        return { letters };
+        // How many there are, not how many are shown.
+        const total = await countLetters(input.personaId, ctx.user.id);
+        return { letters, total };
       }),
 
     write: protectedProcedure
