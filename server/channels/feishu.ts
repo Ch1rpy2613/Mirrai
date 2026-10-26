@@ -106,6 +106,34 @@ const conversationChains = new Map<string, Promise<unknown>>();
 /** How many conversations may run at once across all chats of a user. */
 const MAX_CONCURRENT_CONVERSATIONS = 4;
 
+/** The conversations running now, per user. */
+const runningConversations = new Map<number, number>();
+
+/**
+ * Waits until there is room for one more conversation of this user.
+ *
+ * The limit used to be declared and never used: the chain serialises the
+ * messages of one chat, but nothing stopped a user with many chats from
+ * starting a conversation in each of them at once. Each one is a model
+ * call that writes to the same persona, so the bill grew without limit
+ * and the replies to different chats interleaved.
+ *
+ * Returns the function that gives the room back.
+ */
+async function waitForRoom(userId: number): Promise<() => void> {
+  for (;;) {
+    const running = runningConversations.get(userId) ?? 0;
+    if (running < MAX_CONCURRENT_CONVERSATIONS) break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  runningConversations.set(userId, (runningConversations.get(userId) ?? 0) + 1);
+  return () => {
+    const left = (runningConversations.get(userId) ?? 1) - 1;
+    if (left <= 0) runningConversations.delete(userId);
+    else runningConversations.set(userId, left);
+  };
+}
+
 export async function handleFeishuEvent(params: {
   userId: number;
   event: {
@@ -261,11 +289,17 @@ export class FeishuAdapter implements ChannelAdapter {
         const run = (async () => {
           // The previous message in this chat is answered first.
           if (previous) await previous.catch(() => undefined);
-          await handleFeishuEvent({
-            userId,
-            event: data?.event ?? {},
-            sendText,
-          });
+          // And there is room for this one.
+          const giveTheRoomBack = await waitForRoom(userId);
+          try {
+            await handleFeishuEvent({
+              userId,
+              event: data?.event ?? {},
+              sendText,
+            });
+          } finally {
+            giveTheRoomBack();
+          }
         })().catch((e) => console.error("[Feishu] Failed to handle event:", e));
 
         if (chatId) {
