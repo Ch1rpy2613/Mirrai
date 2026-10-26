@@ -2235,6 +2235,79 @@ export async function deleteMessage(messageId: number, userId: number): Promise<
  * the messages of every other conversation the user had — the history of
  * another persona, destroyed by a button in this one.
  */
+/**
+ * A message, as it is kept so that it can be put back.
+ */
+export interface MessageSnapshot {
+  role: string;
+  content: string;
+  emotionalState: string | null;
+  messageType: string | null;
+  mediaUrl: string | null;
+  replyToId: number | null;
+  createdAt: Date;
+}
+
+/**
+ * The messages from a given one onwards, oldest first.
+ *
+ * They are read so that they can be put back: a regeneration replaces a
+ * turn, and the turn it replaces has to survive a failure.
+ */
+export async function getMessagesFrom(
+  messageId: number,
+  personaId: number,
+  userId: number,
+): Promise<MessageSnapshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    role: messages.role,
+    content: messages.content,
+    emotionalState: messages.emotionalState,
+    messageType: messages.messageType,
+    mediaUrl: messages.mediaUrl,
+    replyToId: messages.replyToId,
+    createdAt: messages.createdAt,
+  })
+    .from(messages)
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      gte(messages.id, messageId),
+    ))
+    .orderBy(asc(messages.id));
+}
+
+/**
+ * Writes a set of messages back.
+ *
+ * The ids are new ones, and the order is the order they are given in —
+ * so a turn that is put back reads the same way it did before.
+ */
+export async function restoreMessages(
+  rows: MessageSnapshot[],
+  personaId: number,
+  userId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db || rows.length === 0) return 0;
+  for (const row of rows) {
+    await db.insert(messages).values({
+      personaId,
+      userId,
+      role: row.role as "user" | "assistant",
+      content: row.content,
+      emotionalState: row.emotionalState,
+      messageType: row.messageType as any,
+      mediaUrl: row.mediaUrl,
+      replyToId: row.replyToId,
+      createdAt: row.createdAt,
+    });
+  }
+  return rows.length;
+}
+
 export async function deleteMessagesFrom(
   messageId: number,
   personaId: number,

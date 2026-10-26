@@ -22,6 +22,7 @@ import {
   createMessage,
   getPersonaFileById, getMessagesByPersonaId, clearMessagesByPersonaId, searchMessages,
   updateUserMessage, deleteMessage, deleteMessagesFrom, getPreviousMessage,
+  getMessagesFrom, restoreMessages,
   getMessagesBefore, hasOlderMessages, searchAllMessages,
   createWechatBinding, getWechatBindingsByUserId, deleteWechatBinding, setWechatBindingPersona,
   getSkillJobById, updateSkillJob, getLlmConfigsByUserId, upsertLlmConfig, setDefaultLlmConfig, getDefaultLlmConfig,
@@ -1326,11 +1327,23 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotFound") });
         }
 
+        /**
+         * The turn that is being replaced is kept, so that it can be put
+         * back.
+         *
+         * The old turn used to be deleted before the model was asked.
+         * So a provider that was having a bad minute took the user's
+         * question *and* the persona's answer away for good, and the
+         * page showed an empty bubble — with no error, because the
+         * failure is reported as an event and the event was not read.
+         */
+        const replaced = await getMessagesFrom(previous.id, input.personaId, ctx.user.id);
         const removed = await deleteMessagesFrom(previous.id, input.personaId, ctx.user.id);
         if (removed === 0) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotFound") });
 
         let reply = "";
         let emotionalState: string = persona.emotionalState;
+        let failure: string | null = null;
         for await (const event of runConversation({
           persona,
           userId: ctx.user.id,
@@ -1342,6 +1355,17 @@ export const appRouter = router({
         })) {
           if (event.type === "delta") reply += event.text;
           else if (event.type === "emotion") emotionalState = event.state;
+          else if (event.type === "error") failure = event.message;
+        }
+        if (failure || !reply) {
+          // Whatever the failed turn wrote is taken away, and the turn
+          // it was going to replace is put back.
+          await deleteMessagesFrom(previous.id, input.personaId, ctx.user.id).catch(() => 0);
+          await restoreMessages(replaced, input.personaId, ctx.user.id).catch(() => 0);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: copy(ctx.locale, "errors.regenerateFailed"),
+          });
         }
         return { reply, emotionalState };
       }),

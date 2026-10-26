@@ -9,6 +9,10 @@
 import type { CopyTable } from "./index";
 
 export const ERRORS = {
+  "errors.regenerateFailed": {
+    zh: "这次没能重新生成回答，原来的回答还在",
+    en: "The reply could not be generated this time — the old one is still there",
+  },
   "errors.personaNotReady": {
     zh: "分身还未准备好，请先完成 AI 解析",
     en: "This persona is not ready yet — finish the analysis first",
