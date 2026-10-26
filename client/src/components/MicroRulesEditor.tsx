@@ -50,7 +50,12 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
       toast.success(t("microRules.saved"));
       refetch();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      // The change did not stick, so the list on the screen goes back to
+      // what the server has.
+      setLocalRules(null);
+      toast.error(e.message);
+    },
   });
   const mineMutation = trpc.microRule.mine.useMutation({
     onSuccess: (result: { rules: unknown[] }) => {
@@ -64,7 +69,6 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const rules: MicroRule[] = data?.rules ?? [];
   const [draft, setDraft] = useState<Partial<MicroRule> | null>(null);
   /**
    * What the user has typed into the trigger field.
@@ -75,7 +79,22 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
   const [triggerText, setTriggerText] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  /**
+   * The rules as they are on the screen.
+   *
+   * The list comes from the server, and the server is only refreshed
+   * after a save has come back. So two changes in quick succession —
+   * confirming two mined rules, say — built the second request from
+   * the list as it was *before* the first change, and the first change
+   * was undone. The user was told "saved" twice.
+   *
+   * So the list on the screen is the one the next change is made from.
+   */
+  const [localRules, setLocalRules] = useState<MicroRule[] | null>(null);
+  const rules: MicroRule[] = localRules ?? data?.rules ?? [];
+
   function save(rulesToSave: MicroRule[]) {
+    setLocalRules(rulesToSave);
     saveMutation.mutate({ personaId, rules: rulesToSave });
   }
 

@@ -97,6 +97,47 @@ describe("the rules", () => {
     expect(sent.rules[0].verified).toBe(true);
   });
 
+  it("does not lose the first change when two changes come in quick succession", async () => {
+    // The list comes from the server, and the server is only refreshed
+    // after a save has come back — so the second request was built from
+    // the list as it was *before* the first change, and the first change
+    // was undone. The user was told "saved" twice.
+    rules = [
+      {
+        id: "r1",
+        trigger: ["随便你"],
+        meaning: "她真的生气了",
+        rendering: "更短",
+        confidence: 0.8,
+        source: "auto",
+        verified: false,
+        evidence: [],
+      },
+      {
+        id: "r2",
+        trigger: ["随便"],
+        meaning: "她只是累了",
+        rendering: "更软",
+        confidence: 0.8,
+        source: "auto",
+        verified: false,
+        evidence: [],
+      },
+    ];
+    render(<MicroRulesEditor personaId={1} />);
+
+    const confirmButtons = screen.getAllByText(translate("zh", "microRules.confirm"));
+    await userEvent.click(confirmButtons[0]);
+    await userEvent.click(confirmButtons[1]);
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    const first = save.mock.calls[0][0].rules;
+    const second = save.mock.calls[1][0].rules;
+    // The second request carries both changes.
+    expect(second.find((r: any) => r.id === "r1").verified).toBe(true);
+    expect(second.find((r: any) => r.id === "r2").verified).toBe(true);
+  });
+
   it("lets the user change a rule they already confirmed", async () => {
     // A rule the user confirmed is a rule the user wrote — and a rule
     // they wrote is one they can change. Without this, a mined rule they
