@@ -1158,6 +1158,36 @@ export const appRouter = router({
          * person who pressed "import into the persona" on a persona
          * with no material lost the personality they had built.
          */
+        /**
+         * One run at a time per persona — across every process.
+         *
+         * The guard was a set in one process's memory: two instances of
+         * the app would each have their own, and the user paid twice
+         * for the model calls — and the run that finished *last* wrote
+         * the persona, so a re-run could be replaced by the older
+         * analysis.
+         *
+         * The shared state is the persona's own row.
+         */
+        if (persona.analysisStatus === "analyzing") {
+          const jobId = (persona as any).skillJobId ?? null;
+          const job = jobId
+            ? await getSkillJobById(jobId, ctx.user.id).catch(() => undefined)
+            : undefined;
+          // A run that was written to recently is alive. One that has
+          // not been touched for a while belongs to a process that has
+          // gone, and it must not block the user for ever.
+          const alive = job
+            ? Date.now() - new Date(job.updatedAt as Date).getTime() < 10 * 60_000
+            : false;
+          if (alive) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: copy(ctx.locale, "errors.distillationAlreadyRunning"),
+            });
+          }
+        }
+
         const material = await getFilesByPersonaId(input.id, ctx.user.id, {
           withExtractedMemory: true,
         });

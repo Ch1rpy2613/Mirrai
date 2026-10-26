@@ -52,6 +52,17 @@ export const ERRORS = {
    * describe a person it had heard nothing about, it invented one, and
    * the invention replaced the persona the user already had.
    */
+  /**
+   * A run is already going.
+   *
+   * The guard was a set in one process's memory — so two instances of
+   * the app each started their own run, the user paid twice, and the
+   * run that finished last wrote the persona.
+   */
+  "errors.distillationAlreadyRunning": {
+    zh: "这个分身的蒸馏还在进行中，请等它结束。",
+    en: "This persona is still being distilled — please wait for the run to finish.",
+  },
   "errors.nothingToDistil": {
     zh: "还没有可以分析的材料：请先上传聊天记录，或先收集一些。",
     en: "There is nothing to analyse yet: upload some chat logs, or collect some first.",
