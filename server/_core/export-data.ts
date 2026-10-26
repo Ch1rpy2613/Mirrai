@@ -142,7 +142,9 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
       db.getDiaryEntries(userId, persona.id, 10000),
       db.getEmotionSnapshots(persona.id, userId, 36500),
       db.getRelationshipEvents(persona.id, userId, 1000),
-      db.getLetters(persona.id, userId, 1000),
+      // Ten thousand, like the other lists — a thousand dropped the
+      // *oldest* letters, from a bundle that says "all of my data".
+      db.getLetters(persona.id, userId, 10000),
     ]);
     const intimacyData = await db.getIntimacyData(persona.id, userId);
     const intimacy = computeIntimacy(intimacyData);
