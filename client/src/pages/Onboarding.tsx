@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowRight, Check, KeyRound, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -52,8 +52,22 @@ export default function Onboarding() {
   // and the update is scheduled during the render that asked for it.
   const hasProvider =
     Boolean(setup.data?.hasLlmProvider) || Boolean(setup.data?.hasUserProvider);
+  /**
+   * The provider step is skipped — once.
+   *
+   * It used to be skipped every time the step became "provider", so
+   * the button that takes the user *back* to the model service bounced
+   * them straight out again. And the button exists precisely for the
+   * user who already has a provider: the one who wants to add their own
+   * key alongside the instance's.
+   */
+  const providerSkipped = useRef(false);
   useEffect(() => {
-    if (hasProvider && step === "provider") setStep("persona");
+    if (providerSkipped.current) return;
+    if (hasProvider && step === "provider") {
+      providerSkipped.current = true;
+      setStep("persona");
+    }
   }, [hasProvider, step]);
 
   if (authLoading || setup.isLoading) {
