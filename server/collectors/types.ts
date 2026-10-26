@@ -154,7 +154,6 @@ export interface SourceConnector {
  * <source>_config.json`; Mirrai reads the same files so the operator only has
  * to run the `--setup` flow of the tool once.
  */
-const COLLECTOR_CONFIG_DIR = path.join(os.homedir(), ".colleague-skill");
 
 /**
  * The file each collector reads its credentials from.
@@ -169,20 +168,6 @@ const CONNECTOR_CONFIG_FILES: Record<CollectorSourceId, string> = {
   email: "email_config.json",
   wechat_export: "wechat_export_config.json",
 };
-
-/** Reads one of the collectors' credential files, if it exists and is valid JSON. */
-function readCollectorConfig(fileName: string): Record<string, unknown> | undefined {
-  const filePath = path.join(COLLECTOR_CONFIG_DIR, fileName);
-  if (!existsSync(filePath)) return undefined;
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : undefined;
-  } catch {
-    // A corrupt config file is treated as "not configured" — the collector
-    // itself prints the "--setup" hint when it cannot read it.
-    return undefined;
-  }
-}
 
 /**
  * Credentials that were restored from the database (already decrypted).
@@ -240,8 +225,20 @@ export function clearRestoredCredentials(
 /**
  * Collects the credential values a connector should use.
  *
- * Priority: explicitly supplied config → credentials restored from the
- * database → the collector's own config file.
+ * Priority: explicitly supplied config → the credentials restored for
+ * *this* user.
+ *
+ * There is deliberately no third source.
+ *
+ * The machine's own configuration file — `~/.colleague-skill/<source>
+ * _config.json` — used to be the last one. It holds the credentials of
+ * whoever ran the collector's `--setup` on this machine: the operator.
+ * So a user who had never authorised a source still got a run, and the
+ * run authenticated as the operator — and the operator's chat history
+ * was imported into the user's own persona.
+ *
+ * That is the same cross-user leak the shared in-memory slot was, with
+ * the operator as the "other user".
  */
 function collectCredentials(
   source: CollectorSourceId,
@@ -262,14 +259,12 @@ function collectCredentials(
   const restored = userId === undefined || userId === null
     ? undefined
     : restoredCredentials.get(restoredKey(source, userId));
-  const saved = configFile ? readCollectorConfig(configFile) : undefined;
 
   const values: CollectorCredentials = {};
   for (const key of keys) {
     const value =
       configString(inline, key) ??
-      configString(restored, key) ??
-      configString(saved, key);
+      configString(restored, key);
     if (value) values[key] = value;
   }
   return values;
@@ -403,6 +398,17 @@ async function collectViaOutputDir(
      * without this every collection ran as the operator.
      */
     const credentialFile = writeCredentialFile(connector, effective, outputDir);
+    /**
+     * A source that needs credentials and has none is not run.
+     *
+     * The collector used to be started anyway — and it read the
+     * machine's own configuration file, so it ran as the operator. Now
+     * there is nothing for it to read, so the run says what is missing
+     * instead of importing somebody else's history.
+     */
+    if (!credentialFile && (connector.credentialKeys ?? []).length > 0) {
+      throw new Error(copy(effective.locale ?? "zh", "errors.collectorNeedsAuthorization"));
+    }
     if (credentialFile) args.push("--config", credentialFile);
     const { stdout, stderr } = await runCollector(connector.tool, args, {
       onProgress: input.onProgress,

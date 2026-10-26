@@ -297,6 +297,18 @@ export const ERRORS = {
     zh: "微信消息发送失败：机器人未登录或会话已失效。",
     en: "The WeChat message was not sent: the bot is not logged in, or the conversation has expired.",
   },
+  /**
+   * A source that needs credentials, and has none.
+   *
+   * The machine's own configuration file is deliberately not a source:
+   * it holds the credentials of whoever set the collector up on this
+   * machine, and a collection that used them imported the operator's
+   * own history into the user's persona.
+   */
+  "errors.collectorNeedsAuthorization": {
+    zh: "这个来源还没有授权。填好凭据并点「授权」，再开始采集。",
+    en: "This source has not been authorised yet. Fill in the credentials and press Authorise, then start the collection.",
+  },
   "errors.wechatNoBinding": {
     zh: "还没有绑定任何微信会话。",
     en: "No WeChat conversation is bound yet.",

@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
+import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import path from "node:path";
 import {
   clearRestoredCredentials,
   connectorCredentials,
@@ -56,6 +58,35 @@ describe("the credentials of a collector source", () => {
     const feishu = getCollector("feishu")!;
     const credentials = connectorCredentials(feishu, { target: "someone" });
     expect(credentials.user_access_token).toBeUndefined();
+  });
+
+  it("do not come from the machine's own configuration file", () => {
+    // The machine's file holds the credentials of whoever set the
+    // collector up here: the operator. So a user who had never
+    // authorised a source still got a run, and the run authenticated as
+    // the operator — and the operator's chat history was imported into
+    // the user's own persona.
+    const home = process.env.HOME ?? "";
+    const configDir = path.join(home, ".colleague-skill");
+    const configPath = path.join(configDir, "feishu_config.json");
+    let wrote = false;
+    try {
+      mkdirSync(configDir, { recursive: true });
+      writeFileSync(
+        configPath,
+        JSON.stringify({ user_access_token: "the-operators-token" }),
+        { mode: 0o600 },
+      );
+      wrote = true;
+
+      const feishu = getCollector("feishu")!;
+      const credentials = connectorCredentials(feishu, { target: "someone", userId: 1 });
+      expect(credentials.user_access_token).toBeUndefined();
+    } finally {
+      if (wrote) {
+        try { unlinkSync(configPath); } catch { /* it was not ours */ }
+      }
+    }
   });
 
   it("do not go on the command line", () => {
