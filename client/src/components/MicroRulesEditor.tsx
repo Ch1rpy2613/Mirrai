@@ -184,12 +184,27 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
     // An edited rule replaces the one it was edited from; a new one is
     // added. The id is what tells them apart.
     const exists = rules.some((r) => r.id === edited.id);
-    save(
-      exists
-        ? rules.map((r) => (r.id === edited.id ? edited : r))
-        : [...rules, edited],
+    /**
+     * The draft stays open until the save has landed.
+     *
+     * It used to close the moment the button was pressed — so a save
+     * that failed took the rule the user had just written with it, and
+     * there was nothing left to retry.
+     */
+    saveMutation.mutate(
+      {
+        personaId,
+        rules: exists
+          ? rules.map((r) => (r.id === edited.id ? edited : r))
+          : [...rules, edited],
+      },
+      {
+        onSuccess: () => {
+          setDraft(null);
+          setTriggerText("");
+        },
+      },
     );
-    setDraft(null);
   }
 
   return (
@@ -341,9 +356,9 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
               <X className="mr-1 h-3.5 w-3.5" />
               {t("microRules.cancel")}
             </Button>
-            <Button size="sm" onClick={saveDraft}>
+            <Button size="sm" onClick={saveDraft} disabled={saveMutation.isPending}>
               <Save className="mr-1 h-3.5 w-3.5" />
-              {t("microRules.save")}
+              {saveMutation.isPending ? t("common.saving") : t("microRules.save")}
             </Button>
           </div>
         </div>
