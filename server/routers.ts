@@ -2758,7 +2758,19 @@ export const appRouter = router({
       .input(z.object({ providerName: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         assertKnownProvider(input.providerName, ctx.locale);
-        await setDefaultLlmConfig(ctx.user.id, input.providerName);
+        /**
+         * The default is set, or it is not.
+         *
+         * The provider name is checked against the *registry*, not
+         * against the rows this user has — so naming a provider they
+         * never saved changed nothing, and the user was told it had.
+         * The next conversation then failed with "no default
+         * provider".
+         */
+        const changed = await setDefaultLlmConfig(ctx.user.id, input.providerName);
+        if (!changed) {
+          throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.providerNotConfigured") });
+        }
         invalidateUserProviderCache(ctx.user.id);
         return { success: true };
       }),
