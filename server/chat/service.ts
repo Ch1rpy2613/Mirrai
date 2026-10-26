@@ -705,7 +705,17 @@ async function* runConversationTurn(
    */
   const chatCount = await db.incrementChatCount(persona.id, userId);
   await db.updatePersona(persona.id, userId, {
-    lastChatAt: new Date(),
+    /**
+     * The moment of the turn.
+     *
+     * It used to be the wall clock, while the rest of the turn — the
+     * timestamps on the messages, the quiet hours, the day the turn
+     * belongs to — uses the moment the caller passed in. So a turn
+     * that was given a time of its own was still recorded as having
+     * happened now, and the silence the persona keeps was measured
+     * from the wrong moment.
+     */
+    lastChatAt: now,
     emotionalState: newEmotionalState as any,
   });
 
