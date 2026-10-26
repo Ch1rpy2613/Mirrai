@@ -13,9 +13,12 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 const getMemoriesByPersonaId = vi.fn();
 const getLatestChatSummary = vi.fn();
 
+const getRelationshipEvents = vi.fn();
+
 vi.mock("../db", () => ({
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getLatestChatSummary: (...a: unknown[]) => getLatestChatSummary(...a),
+  getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
 }));
 
 const retrieveMemories = vi.fn();
@@ -106,6 +109,7 @@ describe("the context the letter is written from", () => {
     twoPass.mockImplementation(realTwoPass.value as any);
     getMemoriesByPersonaId.mockResolvedValue([]);
     getLatestChatSummary.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
     retrieveMemories.mockResolvedValue([]);
     resolveProviderForUser.mockResolvedValue({
       name: "Test",
@@ -133,6 +137,34 @@ describe("the context the letter is written from", () => {
     expect(prompt.userPrompt).toContain("小A");
   });
 
+  it("knows where the relationship actually stands", async () => {
+    /**
+     * The phase.
+     *
+     * The conversation resolves it from the relationship events and
+     * hands it to the prompt. The letter did not — so the prompt fell
+     * back to the default, "you are still feeling each other out" — and
+     * the goodbye letter for somebody the user had already broken up
+     * with was written in the register of a brand-new relationship.
+     */
+    getRelationshipEvents.mockResolvedValue([
+      {
+        id: 1,
+        userId: 1,
+        personaId: 1,
+        kind: "breakup",
+        title: "我们分手了",
+        detail: "",
+        happenedAt: new Date("2026-01-01T00:00:00Z"),
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+      },
+    ]);
+
+    const prompt = await buildFarewellPrompt({ persona, userId: 1 });
+
+    expect(prompt.systemPrompt).not.toContain("互相试探");
+  });
+
   it("is written in the language the letter is written in", async () => {
     const prompt = await buildFarewellPrompt({ persona, userId: 1, locale: "en" });
 
@@ -151,6 +183,7 @@ describe("the letter", () => {
     twoPass.mockImplementation(realTwoPass.value as any);
     getMemoriesByPersonaId.mockResolvedValue([]);
     getLatestChatSummary.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
     retrieveMemories.mockResolvedValue([]);
     resolveProviderForUser.mockResolvedValue({
       name: "Test",
@@ -323,6 +356,7 @@ describe("the letter and whether it is the full one", () => {
     twoPass.mockImplementation(realTwoPass.value as any);
     getMemoriesByPersonaId.mockResolvedValue([]);
     getLatestChatSummary.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
     retrieveMemories.mockResolvedValue([]);
     resolveProviderForUser.mockResolvedValue({
       name: "Test",

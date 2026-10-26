@@ -797,6 +797,28 @@ describe("the two passes together", () => {
     warn.mockRestore();
   });
 
+  it("degrades when the second pass answers in prose", async () => {
+    /**
+     * The letter, and the five sentences.
+     *
+     * The second pass is asked for JSON — the letter, the sentences it
+     * kept, the sentences it removed. When the model answered in prose
+     * instead, the answer could not be cut, so the raw candidates were
+     * used — and the run reported itself as a *success*. So the
+     * graduation page presented five disjoint sentences as the
+     * farewell letter, and nothing said otherwise.
+     */
+    invokeWithProvider
+      .mockResolvedValueOnce(CANDIDATE_LINES.join("\n"))
+      .mockResolvedValueOnce(CANDIDATE_LINES.join("\n"));
+
+    const result = await writeFarewellLetterInTwoPasses({ persona, userId: 1 });
+
+    expect(result.degraded).toBe(true);
+    expect(result.reason).toBe("raw-candidates");
+    expect(result.letter).toBe(CANDIDATE_LINES.join("\n"));
+  });
+
   it("degrades when the first pass finds nothing", async () => {
     invokeWithProvider.mockResolvedValue("");
 
@@ -886,7 +908,19 @@ describe("the two passes together", () => {
   it("does not cut the work off before the budget runs out", async () => {
     vi.useFakeTimers();
     try {
-      invokeWithProvider.mockResolvedValue(CANDIDATE_LINES.join("\n"));
+      // The first pass proposes the sentences; the second cuts them
+      // into a letter. The answer of the second pass is JSON, so this
+      // test is about the budget and not about an answer that cannot be
+      // read.
+      invokeWithProvider
+        .mockResolvedValueOnce(CANDIDATE_LINES.join("\n"))
+        .mockResolvedValue(
+          JSON.stringify({
+            letter: CANDIDATE_LINES.join("\n"),
+            kept: CANDIDATE_LINES,
+            removed: [],
+          }),
+        );
 
       const pending = writeFarewellLetterInTwoPasses({ persona, userId: 1 });
       await vi.advanceTimersByTimeAsync(FAREWELL_TWO_PASS_TIMEOUT_MS - 1000);

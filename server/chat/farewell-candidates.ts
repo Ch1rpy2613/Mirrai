@@ -570,11 +570,17 @@ export function parseFarewellEdit(
   // An answer that cannot be read cannot be cut. The candidates are then
   // the letter — which is the honest outcome: they were written for this
   // moment and nothing has been added to them.
+  //
+  // But it is not a *letter* either: it is the sentences the model
+  // proposed, one after another. The caller has to be told, so it can
+  // say so — the run reported itself as a success, and the graduation
+  // page presented five disjoint sentences as the farewell letter.
   if (!parsed || typeof parsed !== "object") {
     return {
       letter: candidateTexts.join("\n"),
       kept: [...candidateTexts],
       removed: [],
+      rawFallback: true,
     };
   }
 

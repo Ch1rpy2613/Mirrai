@@ -22,6 +22,11 @@ import { llmService, type LLMProvider } from "../llm";
 import { withTimeout } from "../llm/timeout";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
+import * as db from "../db";
+import {
+  buildRelationshipSection,
+  resolveRelationshipPhase,
+} from "@shared/user-side";
 import {
   assembleFarewellContext,
   writeFarewellLetterInTwoPasses,
@@ -61,12 +66,27 @@ export async function buildFarewellPrompt(params: {
     now: params.now,
   });
 
+  /**
+   * Where the relationship actually stands.
+   *
+   * The conversation resolves this from the relationship events and
+   * hands it to the prompt. The letter did not — so the prompt fell
+   * back to the default, "you are still feeling each other out" — and
+   * the goodbye letter for somebody the user had already broken up
+   * with was written in the register of a brand-new relationship.
+   */
+  const now = params.now ?? new Date();
+  const events = await db.getRelationshipEvents(persona.id, userId, 20).catch(() => []);
+  const phase = resolveRelationshipPhase(events as any);
+
   const systemPrompt = buildSystemPrompt(persona, {
     anchorSection: context.anchorSection,
     memorySection: context.memorySection,
     summarySection: context.summarySection,
     locale,
-    now: params.now ?? new Date(),
+    now,
+    relationshipEvents: buildRelationshipSection(events as any, phase, locale, now),
+    relationshipPhase: phase,
   });
 
   const userPrompt = copy(locale, "prompts.farewellLetter", {
@@ -196,7 +216,10 @@ async function writeSinglePassLetter(params: {
     userPrompt = prompt.userPrompt;
   } catch (e) {
     console.warn("[Graduation] Could not assemble the farewell context:", e);
-    systemPrompt = buildSystemPrompt(persona);
+    // The locale matters: without it the prompt is Chinese, and an
+    // English user was handed a Chinese system prompt and an English
+    // one — a sentence in two languages at once.
+    systemPrompt = buildSystemPrompt(persona, { locale });
     userPrompt = copy(locale, "prompts.farewellLetterShort", {
       name: persona.name,
     });

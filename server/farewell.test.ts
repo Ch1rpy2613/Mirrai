@@ -6,9 +6,12 @@ const retrieveMemories = vi.fn();
 const resolveProviderForUser = vi.fn();
 const invoke = vi.fn();
 
+const getRelationshipEvents = vi.fn();
+
 vi.mock("./db", () => ({
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getLatestChatSummary: (...a: unknown[]) => getLatestChatSummary(...a),
+  getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
 }));
 
 vi.mock("./chat/retrieval", () => ({
@@ -73,6 +76,7 @@ describe("buildFarewellPrompt", () => {
     retrieveMemories.mockReset();
     getMemoriesByPersonaId.mockResolvedValue([]);
     getLatestChatSummary.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
     retrieveMemories.mockResolvedValue([]);
   });
 
@@ -117,6 +121,7 @@ describe("writeFarewellLetter", () => {
     invoke.mockReset();
     getMemoriesByPersonaId.mockResolvedValue([]);
     getLatestChatSummary.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
     retrieveMemories.mockResolvedValue([]);
   });
 

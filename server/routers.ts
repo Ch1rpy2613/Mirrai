@@ -2549,7 +2549,10 @@ export const appRouter = router({
         }
 
         const memories = await getMemoriesByPersonaId(input.personaId, ctx.user.id);
-        const systemPrompt = buildSystemPrompt(persona);
+        // The card is localised with the reader's language everywhere
+        // except the system prompt — which stayed Chinese, so an English
+        // card carried a Chinese prompt.
+        const systemPrompt = buildSystemPrompt(persona, { locale: ctx.locale });
 
         // The opening lines come from the persona's scene, so the card starts
         // the conversation the way the app does.
