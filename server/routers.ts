@@ -3330,6 +3330,27 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => getDiaryByDate(input.personaId, ctx.user.id, input.date)),
 
+    /**
+     * Whether a day has anything to write about.
+     *
+     * The page offered "write this day's diary" for every past day —
+     * and the server always refused the days without messages, so the
+     * user's only feedback was an error toast. The button is now only
+     * offered when there is something to write from.
+     */
+    hasMessages: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        date: z.string().refine(isRealDayKey, { message: "Not a day." }),
+      }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const timezone = await getUserTimezone(ctx.user.id);
+        const rows = await getMessagesByDate(input.personaId, ctx.user.id, input.date, timezone);
+        return { count: rows.length };
+      }),
+
     getDates: protectedProcedure
       .input(z.object({ personaId: z.number().optional() }))
       .query(async ({ ctx, input }) => getDiaryDates(ctx.user.id, input.personaId)),

@@ -1083,6 +1083,7 @@ export const en = {
     prevMonth: "Previous month",
     nextMonth: "Next month",
     writeDay: "Write this day",
+    noMessagesThatDay: "There was no conversation that day, so there is nothing to write about.",
     recent: "Recent entries",
     recentKicker: "Latest",
     arc: "Emotional arc",

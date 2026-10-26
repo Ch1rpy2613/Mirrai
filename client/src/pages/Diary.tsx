@@ -190,6 +190,19 @@ export default function Diary() {
     { personaId: selectedPersonaId || 0, date: selectedDate || "" },
     { enabled: isAuthenticated && !!selectedPersonaId && !!selectedDate }
   );
+  /**
+   * Whether the selected day has anything to write about.
+   *
+   * The button was offered for every past day, and the server always
+   * refused the days without messages — so the user's only feedback was
+   * an error toast.
+   */
+  const { data: dayMessages } = trpc.diary.hasMessages.useQuery(
+    { personaId: selectedPersonaId || 0, date: selectedDate || "" },
+    { enabled: isAuthenticated && !!selectedPersonaId && !!selectedDate }
+  );
+  const dayHasMessages = (dayMessages?.count ?? 0) > 0;
+  const dayMessagesKnown = dayMessages !== undefined;
 
   const generateMutation = trpc.diary.generate.useMutation({
     onSuccess: () => {
@@ -372,12 +385,23 @@ export default function Diary() {
                   <h2 className="section-title">
                     {parseLocalDate(selectedDate).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" })}
                   </h2>
-                  {!dayEntry && selectedDate <= todayStr && (
+                  {/**
+                   * The button is only offered when there is something
+                   * to write from.
+                   *
+                   * It was offered for every past day — and the server
+                   * always refused the days without messages, so the
+                   * user's only feedback was an error toast.
+                   */}
+                  {!dayEntry && selectedDate <= todayStr && dayHasMessages && (
                     <Button size="sm" onClick={() => handleGenerate(selectedDate)} disabled={generating}
                       className="gap-1.5">
                       {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PenLine className="w-3.5 h-3.5" />}
                       {t("diary.writeDay")}
                     </Button>
+                  )}
+                  {!dayEntry && selectedDate <= todayStr && dayMessagesKnown && !dayHasMessages && (
+                    <p className="text-xs text-muted-subtle">{t("diary.noMessagesThatDay")}</p>
                   )}
                 </div>
                 {dayEntry && (

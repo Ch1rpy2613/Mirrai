@@ -1078,6 +1078,13 @@ export const zh = {
     prevMonth: "上个月",
     nextMonth: "下个月",
     writeDay: "写下这一天",
+    /**
+     * A day with nothing to write about.
+     *
+     * The button was offered anyway, and the server refused — so the
+     * user's only feedback was an error toast.
+     */
+    noMessagesThatDay: "这一天没有对话，没有可以写的东西。",
     recent: "最近日记",
     recentKicker: "近期",
     arc: "情绪弧线",
