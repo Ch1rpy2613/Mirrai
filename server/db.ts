@@ -420,10 +420,18 @@ export async function getUserMessageCountForPersonaSince(
 export async function getUserMoods(userId: number, days = 30) {
   const db = await getDb();
   if (!db) return [];
-  const since = new Date();
-  since.setDate(since.getDate() - days);
+  /**
+   * The window is applied to the *day* of the mood.
+   *
+   * It was applied to `createdAt` — when the row was written. So a
+   * mood recorded today for a day three weeks ago was inside a "last
+   * thirty days" chart although its day was outside it, and a mood
+   * recorded yesterday for today was outside a "last seven days" chart
+   * although its day was inside it. The chart plots the day.
+   */
+  const since = localDateKey(new Date(Date.now() - days * 86_400_000));
   return db.select().from(userMoods)
-    .where(and(eq(userMoods.userId, userId), gte(userMoods.createdAt, since)))
+    .where(and(eq(userMoods.userId, userId), gte(userMoods.date, since)))
     .orderBy(asc(userMoods.date));
 }
 

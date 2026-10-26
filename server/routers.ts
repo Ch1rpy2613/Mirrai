@@ -3002,9 +3002,18 @@ export const appRouter = router({
         // app uses to stop the anniversaries and to speak about the past
         // rather than the present.
         if (input.kind === "breakup" && !persona.togetherTo) {
+          /**
+           * The day it ended, in the user's own calendar.
+           *
+           * It was the UTC day: so a breakup at seven in the morning on
+           * the first of January was recorded as the thirty-first of
+           * December for anybody east of Greenwich. And that date is
+           * what stops the anniversaries, marks the relationship as
+           * over in the prompt, and switches the letter-reply register.
+           */
+          const happenedAt = input.happenedAt ? new Date(input.happenedAt) : new Date();
           await updatePersona(input.personaId, ctx.user.id, {
-            togetherTo: (input.happenedAt ? new Date(input.happenedAt) : new Date())
-              .toISOString().slice(0, 10),
+            togetherTo: zonedDateKey(happenedAt, ctx.user.timezone),
           });
         }
         if ((input.kind === "reunion" || input.kind === "reconciliation") && persona.togetherTo) {
