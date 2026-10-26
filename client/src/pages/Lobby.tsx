@@ -1647,6 +1647,29 @@ export default function Lobby() {
   const [filterTab, setFilterTab] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [showSort, setShowSort] = useState(false);
+  /**
+   * The sort menu.
+   *
+   * It used to stay open until the user picked an option or pressed
+   * the button again — Escape did nothing, and a click somewhere else
+   * on the page did nothing either.
+   */
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!showSort) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowSort(false);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (!sortMenuRef.current?.contains(e.target as Node)) setShowSort(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [showSort]);
   /** The graduated personas are folded away by default. */
   const [showGraduated, setShowGraduated] = useState(false);
   /** The bulk selection. */
@@ -1847,16 +1870,26 @@ export default function Lobby() {
                 title={t("lobby.directory.title")}
                 right={
                   <div className="flex items-center gap-2 mb-0.5">
-                    <div className="relative">
+                    <div className="relative" ref={sortMenuRef}>
                       <button onClick={() => setShowSort(!showSort)}
+                        /**
+                         * The button says whether the menu is open.
+                         *
+                         * It did not, so a screen reader announced a
+                         * plain button where there was a menu.
+                         */
+                        aria-expanded={showSort}
+                        aria-haspopup="menu"
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
                         <ArrowUpDown className="w-3 h-3" />
                         {t(SORT_OPTIONS.find(s => s.key === sortBy)?.labelKey ?? "lobby.sort.recent")}
                       </button>
                       {showSort && (
-                        <div className="absolute right-0 top-6 surface py-1 z-20 min-w-[110px]">
+                        <div role="menu" aria-label={t("lobby.sort.label")}
+                          className="absolute right-0 top-6 surface py-1 z-20 min-w-[110px]">
                           {SORT_OPTIONS.map(opt => (
-                            <button key={opt.key} onClick={() => { setSortBy(opt.key); setShowSort(false); }}
+                            <button key={opt.key} role="menuitem"
+                              onClick={() => { setSortBy(opt.key); setShowSort(false); }}
                               className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors ${
                                 sortBy === opt.key ? "text-cinnabar font-medium" : "text-muted-foreground"
                               }`}>

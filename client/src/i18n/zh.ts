@@ -342,6 +342,7 @@ export const zh = {
       new: "初识",
     },
     sort: {
+      label: "排序方式",
       recent: "最近对话",
       created: "创建时间",
       chats: "对话最多",

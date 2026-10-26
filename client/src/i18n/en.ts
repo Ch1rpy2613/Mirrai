@@ -344,6 +344,7 @@ export const en = {
       new: "Newly Met",
     },
     sort: {
+      label: "Sort by",
       recent: "Recent chats",
       created: "Created",
       chats: "Most chats",
