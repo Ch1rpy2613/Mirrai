@@ -39,7 +39,8 @@ vi.mock("./chat/service", () => ({
    * another turn of the same persona. The mock runs the work straight
    * away, which is what the real one does when nobody else is waiting.
    */
-  withPersonaTurn: (...a: unknown[]) => withPersonaTurn(...a),
+  withPersonaTurn: (personaId: number, work: () => Promise<unknown>) =>
+    withPersonaTurn(personaId, work),
 }));
 
 import { appRouter } from "./routers";
