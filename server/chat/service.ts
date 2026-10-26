@@ -26,7 +26,7 @@ import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } 
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { buildPromptForPersona } from "./prompt";
-import { localDateKey, zonedDateKey } from "@shared/timezone";
+import { dayShiftMinutes, localDateKey, zonedDateKey } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 
 export type ChatMode = "stream" | "once";
@@ -751,10 +751,24 @@ async function* runConversationTurn(
    * user who sent one message in the morning and nine more at night
    * showed a count of one.
    */
+  /**
+   * The count is the number of messages of the *user's* day.
+   *
+   * The window was the server's midnight — so for anybody not on the
+   * server's clock the count attached to a day was off by a day's
+   * boundary: the first hours of the user's day were counted as the
+   * day before, and the last hours of the day before were counted as
+   * this one.
+   */
+  const dayStart = new Date(now.getTime());
+  const shift = dayShiftMinutes(timezone);
+  dayStart.setMinutes(dayStart.getMinutes() + shift);
+  dayStart.setHours(0, 0, 0, 0);
+  dayStart.setMinutes(dayStart.getMinutes() - shift);
   const messageCount = await db.getUserMessageCountForPersonaSince(
     persona.id,
     userId,
-    new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+    dayStart,
   );
   if (!existing) {
     await db.createEmotionSnapshot({
