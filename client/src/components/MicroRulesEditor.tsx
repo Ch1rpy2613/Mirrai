@@ -312,23 +312,26 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
       {draft ? (
         <div className="space-y-3 rounded-md border border-border p-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">{t("microRules.trigger")}</Label>
+            <Label className="text-xs" htmlFor="micro-rule-trigger">{t("microRules.trigger")}</Label>
             <Input
+              id="micro-rule-trigger"
               value={triggerText}
               placeholder={t("microRules.triggerHint")}
               onChange={(e) => setTriggerText(e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t("microRules.meaning")}</Label>
+            <Label className="text-xs" htmlFor="micro-rule-meaning">{t("microRules.meaning")}</Label>
             <Textarea
+              id="micro-rule-meaning"
               value={draft.meaning ?? ""}
               onChange={(e) => setDraft({ ...draft, meaning: e.target.value })}
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t("microRules.rendering")}</Label>
+            <Label className="text-xs" htmlFor="micro-rule-rendering">{t("microRules.rendering")}</Label>
             <Textarea
+              id="micro-rule-rendering"
               value={draft.rendering ?? ""}
               onChange={(e) => setDraft({ ...draft, rendering: e.target.value })}
             />

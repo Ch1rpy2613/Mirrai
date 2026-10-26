@@ -4,6 +4,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Send, Search, Check, X, Pencil, BookMarked } from "lucide-react";
 import { daysWaiting, isStale } from "@shared/outbound";
@@ -200,7 +201,8 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
 
             {editing === letter.id ? (
               <div className="space-y-2">
-                <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} />
+                <Label className="sr-only" htmlFor={`outbound-letter-${letter.id}`}>{t("outbound.editLabel")}</Label>
+                <Textarea id={`outbound-letter-${letter.id}`} value={text} onChange={(e) => setText(e.target.value)} rows={3} />
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
                     {t("microRules.cancel")}

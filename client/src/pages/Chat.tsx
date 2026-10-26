@@ -13,6 +13,7 @@ import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { MessageBubble, emotionOf, type Message } from "@/components/MessageBubble";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import GraduationModal from "@/components/GraduationModal";
 import { streamChat, isStreamingUnsupported } from "@/lib/chat-stream";
@@ -1442,7 +1443,14 @@ export default function Chat() {
                   <Moon className="w-3 h-3" /> {t("chat.theyAreAsleep")}
                 </p>
               )}
-              <Textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
+              {/**
+               * The composer is named.
+               *
+               * It had a placeholder and nothing else, so a screen
+               * reader announced it as "edit text".
+               */}
+              <Label className="sr-only" htmlFor="chat-composer">{t("chat.placeholder", { name: persona?.name || t("common.them") })}</Label>
+              <Textarea id="chat-composer" ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown} placeholder={t("chat.placeholder", { name: persona?.name || t("common.them") })}
                 rows={1} className="flex-1 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-foreground/50 rounded-md min-h-[44px] max-h-32 px-4 py-3" />
               {isSending ? (
@@ -1524,7 +1532,8 @@ function SearchPanel({
       <div className="container max-w-2xl mx-auto py-3">
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-md border border-border bg-muted/40">
           <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <input value={query} onChange={e => handleChange(e.target.value)} autoFocus
+          <Label className="sr-only" htmlFor="chat-search">{t("chat.searchPlaceholder")}</Label>
+          <input id="chat-search" value={query} onChange={e => handleChange(e.target.value)} autoFocus
             placeholder={t("chat.searchPlaceholder")} className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none" />
           <button onClick={onClose} aria-label={t("chat.closeSearch")} className="text-muted-foreground hover:text-foreground transition-colors"><X className="w-4 h-4" /></button>
         </div>

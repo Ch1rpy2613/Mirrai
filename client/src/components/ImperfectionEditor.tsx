@@ -116,8 +116,9 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
                   {t(definition.descKey)}
                 </span>
               </div>
-              <Label className="text-xs">{t("imperfection.deviations")}</Label>
+              <Label className="text-xs" htmlFor={`imperfection-${state}`}>{t("imperfection.deviations")}</Label>
               <Textarea
+                id={`imperfection-${state}`}
                 // The separator follows the interface's language: the
                 // full-width semicolon is Chinese typography, and an
                 // English reader had Chinese punctuation inserted into

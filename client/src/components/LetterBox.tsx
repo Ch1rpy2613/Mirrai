@@ -5,6 +5,7 @@ import { PenLine, Send, Trash2, Clock, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { USER_MOODS, type UserMood } from "@shared/user-side";
 
 /**
@@ -135,7 +136,16 @@ export default function LetterBox({ personaId }: { personaId: number }) {
 
       {showWrite ? (
         <div className="space-y-3 rounded-xl border border-border p-4">
+          {/**
+           * The field is named.
+           *
+           * It had a placeholder and nothing else, so a screen reader
+           * announced it as "edit text" — and clicking the label did
+           * nothing, because there was no label.
+           */}
+          <Label className="sr-only" htmlFor="letter-body">{t("letters.placeholder")}</Label>
           <Textarea
+            id="letter-body"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder={t("letters.placeholder")}
@@ -143,9 +153,17 @@ export default function LetterBox({ personaId }: { personaId: number }) {
             rows={7}
             className="text-sm leading-relaxed"
           />
-          <div className="flex gap-1.5">
+          {/**
+           * The kind is a choice, and the choice is said out loud.
+           *
+           * The two buttons and the six moods showed their state only
+           * in colour, so a screen-reader user got no feedback that a
+           * choice had been made.
+           */}
+          <div className="flex gap-1.5" role="group" aria-label={t("letters.kindLabel")}>
             <button
               type="button"
+              aria-pressed={kind === "letter"}
               onClick={() => setKind("letter")}
               className={`text-[0.625rem] px-2.5 py-1 rounded border transition-colors ${
                 kind === "letter"
@@ -157,6 +175,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
             </button>
             <button
               type="button"
+              aria-pressed={kind === "todo"}
               onClick={() => setKind("todo")}
               className={`text-[0.625rem] px-2.5 py-1 rounded border transition-colors ${
                 kind === "todo"
@@ -167,11 +186,12 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               {t("letters.kindTodo")}
             </button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={t("moodCheckIn.title")}>
             {USER_MOODS.map((option) => (
               <button
                 key={option}
                 type="button"
+                aria-pressed={mood === option}
                 onClick={() => setMood(mood === option ? "" : option)}
                 className={`text-[0.625rem] px-2 py-0.5 rounded border transition-colors ${
                   mood === option

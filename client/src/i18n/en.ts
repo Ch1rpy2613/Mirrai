@@ -1229,6 +1229,7 @@ export const en = {
    */
   outbound: {
     title: "Words to take back",
+    editLabel: "These words",
     hint: "These are things you said here and never said to them. Nothing is sent for you — they are laid out, and you decide.",
     empty: "None yet. We can look through the conversation for the things only said here.",
     collect: "Look for them",
@@ -1382,6 +1383,7 @@ export const en = {
     remove: "Delete this letter",
     removeConfirm: "Delete this letter? What was written will not be kept.",
     kindLetter: "A letter to them",
+    kindLabel: "What this letter is",
     kindTodo: "When they come back",
     todoTitle: "When they come back",
     todoNote: "Write it down for the moment you are in touch again. Nobody is going to rush you.",

@@ -1223,6 +1223,7 @@ export const zh = {
    */
   outbound: {
     title: "带回去的话",
+    editLabel: "这句话",
     hint: "这些是你只在这里说过、还没对本人说过的话。系统不代发，只把它们摆在这里，由你决定说不说。",
     empty: "还没有。从你们的对话里找找那些只在这里说过的话。",
     collect: "找一找",
@@ -1375,6 +1376,7 @@ export const zh = {
     remove: "删掉这封信",
     removeConfirm: "删掉这封信？写下的内容不会留下。",
     kindLetter: "写给 TA 的信",
+    kindLabel: "这封信是什么",
     kindTodo: "等 TA 回来再说",
     todoTitle: "等 TA 回来再说",
     todoNote: "记下来，等你们重新联系上的时候再说。不会有人催你。",

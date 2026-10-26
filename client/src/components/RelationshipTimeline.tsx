@@ -97,8 +97,9 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
       {showForm ? (
         <div className="space-y-3 rounded-xl border border-border p-4">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("relationship.kind")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="relationship-kind">{t("relationship.kind")}</Label>
             <select
+              id="relationship-kind"
               value={kind}
               onChange={(e) => setKind(e.target.value as RelationshipEventKind)}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
@@ -109,8 +110,9 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("relationship.title")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="relationship-title">{t("relationship.title")}</Label>
             <Input
+              id="relationship-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t("relationship.titlePlaceholder")}
@@ -119,8 +121,9 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("relationship.detail")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="relationship-detail">{t("relationship.detail")}</Label>
             <textarea
+              id="relationship-detail"
               value={detail}
               onChange={(e) => setDetail(e.target.value)}
               placeholder={t("relationship.detailPlaceholder")}
