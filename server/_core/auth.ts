@@ -75,6 +75,20 @@ export async function verifySession(
   }
 }
 
+/**
+ * A hash of a password nobody has.
+ *
+ * The sign-in answers in the same time whether or not the account
+ * exists — otherwise the time it takes to answer says whether the
+ * name is taken, and the names can be found one at a time.
+ */
+let decoyHash: string | null = null;
+
+async function getDecoyHash(): Promise<string> {
+  if (!decoyHash) decoyHash = await hashPassword("a password nobody has");
+  return decoyHash;
+}
+
 export async function authenticateRequest(req: Request): Promise<User> {
   const cookies = parseCookies(req.headers.cookie);
   const sessionCookie = cookies.get(COOKIE_NAME);
@@ -162,13 +176,20 @@ export function registerAuthRoutes(app: Express) {
 
     try {
       const user = await db.getUserByUsername(username);
-      if (!user || !user.passwordHash) {
-        res.status(401).json({ error: copy(locale, "errors.invalidCredentials") });
-        return;
-      }
-
-      const valid = await verifyPassword(password, user.passwordHash);
-      if (!valid) {
+      /**
+       * The password is checked either way.
+       *
+       * It used to be checked only for an account that exists — and the
+       * hashing is the slow part, so the answer came back much faster
+       * for a name that is not taken. The time it took to answer said
+       * whether the account existed, and the names could be found one
+       * at a time.
+       */
+      const valid = await verifyPassword(
+        password,
+        user?.passwordHash ?? (await getDecoyHash()),
+      );
+      if (!user || !valid) {
         res.status(401).json({ error: copy(locale, "errors.invalidCredentials") });
         return;
       }
