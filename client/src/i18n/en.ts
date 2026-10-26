@@ -991,6 +991,8 @@ export const en = {
 
   upload: {
     formats: ".txt / .csv / images / video",
+    unsupportedType: "That kind of file is not accepted: {{name}}. Upload a .txt, a .csv, an image or a video.",
+    fileTooLarge: "That file is too large: {{name}}. One file cannot be over 50 MB.",
     analyzing: "Learning their personality…",
     failed: "Analysis failed",
     noChatLogs: "No chat logs? Build one with the questionnaire",
@@ -1010,6 +1012,7 @@ export const en = {
     uploaded: "Uploaded",
     uploading: "Uploading",
     uploadFailed: "Upload failed",
+    dismissFailed: "Hide the failed upload of {{name}}",
     uploadError: "Upload failed: {{message}}",
     uploadSuccess: "{{name}} uploaded",
     analysisStarted: "The AI analysis has started",

@@ -4,7 +4,7 @@ import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  ArrowLeft, Loader2, ChevronRight, Check
+  ArrowLeft, Loader2, ChevronRight, Check, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DistillationModePicker from "@/components/DistillationModePicker";
@@ -103,13 +103,38 @@ function IntakeGaps({ inputMeta }: { inputMeta: unknown }) {
   );
 }
 
-function detectFileType(file: File): "chat_txt" | "chat_csv" | "image" | "video" {
-  const ext = file.name.split(".").pop()?.toLowerCase();
+/**
+ * The kind of a file, or null when the app does not accept it.
+ *
+ * Everything that was not a `.txt` or a `.csv` used to be called an
+ * image — so a dropped `.pdf` was uploaded as an image, and the server
+ * refused it *after* the whole file had been base64-encoded in the tab
+ * and pushed over the wire.
+ *
+ * The `accept` attribute only constrains the file picker. A drag and
+ * drop goes straight past it.
+ */
+function detectFileType(file: File): "chat_txt" | "chat_csv" | "image" | "video" | null {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "txt") return "chat_txt";
   if (ext === "csv") return "chat_csv";
   if (file.type.startsWith("video/")) return "video";
-  return "image";
+  if (file.type.startsWith("image/")) return "image";
+  // The browser may not know the type — the extension is the fallback.
+  if (/\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(file.name)) return "image";
+  if (/\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(file.name)) return "video";
+  return null;
 }
+
+/**
+ * The largest file the app accepts.
+ *
+ * The server refuses anything larger, but it refuses it after the whole
+ * file has been read into the page and turned into a string — so
+ * dragging a large video made the browser encode hundreds of megabytes
+ * before anything was said.
+ */
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -220,6 +245,15 @@ export default function Upload() {
     for (const file of Array.from(fileList)) {
       const key = `${file.name}-${Date.now()}`;
       const fileType = detectFileType(file);
+      if (!fileType) {
+        // The kind is checked before the file is read, not after.
+        toast.error(t("upload.unsupportedType", { name: file.name }));
+        continue;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(t("upload.fileTooLarge", { name: file.name }));
+        continue;
+      }
       setUploadingFiles(prev => ({ ...prev, [key]: "uploading" }));
       try {
         const content = await fileToBase64(file);
@@ -447,7 +481,24 @@ export default function Upload() {
                       <Loader2 className="w-3 h-3 animate-spin" />{t("upload.uploading")}
                     </span>
                   ) : (
-                    <span className="text-xs text-destructive flex-shrink-0">{t("upload.uploadFailed")}</span>
+                    <span className="inline-flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-destructive">{t("upload.uploadFailed")}</span>
+                      {/* A failed upload used to stay in the panel for
+                          ever: it could not be cleared and the file
+                          could not be tried again from here. */}
+                      <button
+                        type="button"
+                        onClick={() => setUploadingFiles(prev => {
+                          const next = { ...prev };
+                          delete next[key];
+                          return next;
+                        })}
+                        aria-label={t("upload.dismissFailed", { name: key.replace(/-\d+$/, "") })}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
                   )}
                 </div>
               ))}

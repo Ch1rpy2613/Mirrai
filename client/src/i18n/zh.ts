@@ -985,6 +985,8 @@ export const zh = {
 
   upload: {
     formats: "支持 .txt / .csv / 图片 / 视频",
+    unsupportedType: "不支持的文件类型：{{name}}。请上传 .txt、.csv、图片或视频。",
+    fileTooLarge: "文件太大：{{name}}。单个文件不能超过 50 MB。",
     analyzing: "正在分析 TA 的性格…",
     failed: "分析失败",
     noChatLogs: "没有聊天记录？用问卷创建",
@@ -1004,6 +1006,7 @@ export const zh = {
     uploaded: "已上传",
     uploading: "上传中",
     uploadFailed: "上传失败",
+    dismissFailed: "不再显示 {{name}} 的上传失败提示",
     uploadError: "上传失败：{{message}}",
     uploadSuccess: "{{name}} 上传成功",
     analysisStarted: "AI 解析已开始",
