@@ -603,6 +603,66 @@ describe("collector job runner", () => {
     expect(statuses).toEqual(["queued", "running", "completed"]);
   });
 
+  it("reports a collection that found nothing as a failure, with the reason", async () => {
+    /**
+     * The reason was thrown away.
+     *
+     * The collector writes its explanation into the transcript — "the
+     * bot is not in the chat", "Playwright is not installed" — and the
+     * server read the JSON payload first and never opened the
+     * transcript. So the run was reported as a *success* with zero
+     * messages, the persona was then distilled from nothing, and the
+     * real reason was nowhere.
+     */
+    const note = "未找到 张三 的消息记录。\n可能原因：\n- 群聊采集：bot 未被添加到相关群聊";
+    configureCollectors([
+      {
+        id: "feishu",
+        label: "fake:feishu",
+        requiresBrowser: false,
+        tool: "fake_collector.py",
+        args: () => [],
+        checkAuth: async (): Promise<CollectorAuthState> => ({ ok: true }),
+        collect: async () => ({
+          messages: [],
+          meta: { total: 0, source: "feishu", note },
+        }),
+      },
+    ]);
+
+    const handle = await enqueueCollectorJob({
+      userId: "user-1",
+      personaId: "persona-1",
+      source: "feishu",
+      input: { target: "张三" },
+    });
+
+    const finished = await waitForCollectorJob(handle.id, 5000);
+
+    expect(finished.status).toBe("failed");
+    expect(finished.error).toContain("bot 未被添加到相关群聊");
+    expect(finished.messageCount).toBe(0);
+  });
+
+  it("still reports an empty collection with no explanation as a success", async () => {
+    // There is a difference between "there was nothing there" and "here
+    // is why there was nothing there", and only the second one is a
+    // failure.
+    configureCollectors([fakeConnector("feishu", async () => ({ messages: [] }))]);
+
+    const handle = await enqueueCollectorJob({
+      userId: "user-1",
+      personaId: "persona-1",
+      source: "feishu",
+      input: { target: "张三" },
+    });
+
+    const finished = await waitForCollectorJob(handle.id, 5000);
+
+    expect(finished.status).toBe("completed");
+    expect(finished.messageCount).toBe(0);
+  });
+
   it("never runs more than one collector at a time", async () => {
     let active = 0;
     let maxActive = 0;

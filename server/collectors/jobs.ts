@@ -396,6 +396,24 @@ async function runJob(job: CollectorJob): Promise<void> {
       }
     }
 
+    /**
+     * Nothing was collected, and the collector said why.
+     *
+     * The run is reported as a success with zero messages — and the
+     * persona is then distilled from nothing. The reason the collector
+     * had written down ("the bot is not in the chat", "Playwright is
+     * not installed") was in the transcript, which the server never
+     * opened.
+     *
+     * So the run is reported as what it was: a failure, with the
+     * collector's own words.
+     */
+    const note = result.meta?.note;
+    if (result.messages.length === 0 && note) {
+      settle(job, "failed", note);
+      return;
+    }
+
     settle(job, "completed");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

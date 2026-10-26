@@ -41,7 +41,21 @@ export interface CollectedMessage {
 
 export interface CollectResult {
   messages: CollectedMessage[];
-  meta: { total: number; source: CollectorSourceId; truncated?: boolean };
+  meta: {
+    total: number;
+    source: CollectorSourceId;
+    truncated?: boolean;
+    /**
+     * What the collector said, when it found nothing.
+     *
+     * The collectors write the reason into their transcript — "the bot
+     * is not in the chat", "Playwright is not installed", "not logged
+     * in" — and the server read the JSON payload first and never opened
+     * the transcript. So the run was reported as a *success* with zero
+     * messages, and the reason was thrown away.
+     */
+    note?: string;
+  };
 }
 
 export interface CollectorAuthState {
@@ -328,6 +342,23 @@ function readCollectorTranscript(outputDir: string): string | undefined {
 const MAX_COLLECTOR_TRANSCRIPT_BYTES = 1024 * 1024;
 
 /**
+ * The collector's own words, as one short note.
+ *
+ * The transcript is a Markdown report — a heading, a list of reasons,
+ * some configuration instructions. What the user needs is the reason,
+ * not the whole document, and it is shown in a plain-text line.
+ */
+function tidyCollectorNote(transcript: string): string | undefined {
+  const lines = transcript
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*#{1,6}\s*/, "").replace(/^\s*[-*]\s*/, "").trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return undefined;
+  const note = lines.slice(0, 8).join("\n");
+  return note.length > 600 ? `${note.slice(0, 600)}…` : note;
+}
+
+/**
  * Runs a collector that writes its transcript into `--output-dir`.
  *
  * The directory is created per run and removed afterwards so a failed run
@@ -420,7 +451,26 @@ async function collectViaOutputDir(
       limit: input.limit,
       timeZone: input.timezone,
     });
-    if (normalised) return normalised;
+    if (normalised) {
+      /**
+       * Nothing was found — and the collector says why.
+       *
+       * The JSON payload is read first, so the transcript was never
+       * opened: the run was reported as a *success* with zero messages,
+       * and the reason the collector had written down — "the bot is not
+       * in the chat", "Playwright is not installed", "not logged in" —
+       * was thrown away. So the persona was then distilled from nothing,
+       * and the real reason was nowhere.
+       */
+      if (normalised.messages.length === 0) {
+        const transcript = readCollectorTranscript(outputDir);
+        const note = transcript ? tidyCollectorNote(transcript) : undefined;
+        if (note) {
+          return { ...normalised, meta: { ...normalised.meta, note } };
+        }
+      }
+      return normalised;
+    }
 
     const transcript = readCollectorTranscript(outputDir);
     const raw = transcript ?? stdout;
