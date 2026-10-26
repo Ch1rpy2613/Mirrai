@@ -740,25 +740,76 @@ export async function getPersonasByUserId(userId: number) {
   return db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
 }
 
+/**
+ * The user's personas, with the little the lobby shows about each.
+ *
+ * The three numbers used to be asked for one persona at a time — so
+ * the lobby, which is the first screen of the app, made one round trip
+ * per persona plus three. Four queries do the same work.
+ */
 export async function getPersonasWithStats(userId: number) {
   const db = await getDb();
   if (!db) return [];
   const list = await db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
-  const result = [];
-  for (const p of list) {
-    const [lastMsgRow] = await db.select({ content: messages.content, createdAt: messages.createdAt })
-      .from(messages).where(eq(messages.personaId, p.id)).orderBy(desc(messages.createdAt)).limit(1);
-    const [fileCountRow] = await db.select({ c: count() }).from(personaFiles).where(eq(personaFiles.personaId, p.id));
-    const [bindingRow] = await db.select({ c: count() }).from(wechatBindings)
-      .where(and(eq(wechatBindings.personaId, p.id), eq(wechatBindings.isActive, true)));
-    result.push({
-      ...p,
-      lastMessage: lastMsgRow ? { content: (lastMsgRow.content || "").slice(0, 60), createdAt: lastMsgRow.createdAt } : null,
-      fileCount: fileCountRow?.c || 0,
-      wechatBound: (bindingRow?.c || 0) > 0,
+  if (list.length === 0) return [];
+  const ids = list.map((p) => p.id);
+
+  // The newest message of each persona.
+  const lastMessages = await db
+    .selectDistinct({
+      personaId: messages.personaId,
+      content: messages.content,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .where(and(
+      eq(messages.userId, userId),
+      inArray(messages.personaId, ids),
+    ))
+    .orderBy(desc(messages.createdAt));
+
+  // The number of files of each persona.
+  const fileCounts = await db.select({
+    personaId: personaFiles.personaId,
+    c: count(),
+  })
+    .from(personaFiles)
+    .where(and(
+      eq(personaFiles.userId, userId),
+      inArray(personaFiles.personaId, ids),
+    ))
+    .groupBy(personaFiles.personaId);
+
+  // Whether each persona is bound to a WeChat conversation.
+  const bindings = await db.select({
+    personaId: wechatBindings.personaId,
+    c: count(),
+  })
+    .from(wechatBindings)
+    .where(and(
+      eq(wechatBindings.userId, userId),
+      eq(wechatBindings.isActive, true),
+      inArray(wechatBindings.personaId, ids),
+    ))
+    .groupBy(wechatBindings.personaId);
+
+  const lastByPersona = new Map<number, { content: string; createdAt: Date }>();
+  for (const row of lastMessages) {
+    if (lastByPersona.has(row.personaId)) continue;
+    lastByPersona.set(row.personaId, {
+      content: (row.content || "").slice(0, 60),
+      createdAt: row.createdAt,
     });
   }
-  return result;
+  const filesByPersona = new Map(fileCounts.map((r) => [r.personaId, Number(r.c)]));
+  const bindingsByPersona = new Map(bindings.map((r) => [r.personaId, Number(r.c)]));
+
+  return list.map((p) => ({
+    ...p,
+    lastMessage: lastByPersona.get(p.id) ?? null,
+    fileCount: filesByPersona.get(p.id) ?? 0,
+    wechatBound: (bindingsByPersona.get(p.id) ?? 0) > 0,
+  }));
 }
 
 export async function getUserStats(userId: number, timezone?: string | null) {
