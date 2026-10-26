@@ -723,7 +723,21 @@ export const appRouter = router({
       }),
 
     updatePersonaData: protectedProcedure
-      .input(z.object({ id: z.number(), personaData: z.record(z.string(), z.any()) }))
+      .input(z.object({
+        id: z.number(),
+        /**
+         * The persona's own fields.
+         *
+         * Bounded: the record was accepted in any shape and any size,
+         * and it is stored in one JSON column that every read of the
+         * persona brings back — and that every prompt is built from.
+         */
+        personaData: z.record(z.string(), z.unknown()).refine(
+          (value) => Object.keys(value).length <= 60 &&
+            JSON.stringify(value).length <= 200_000,
+          "The persona's fields are too large",
+        ),
+      }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
