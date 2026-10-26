@@ -161,7 +161,16 @@ export async function extractMemories(params: {
    * same messages were sent to the model again on every later run.
    */
   const fresh = batch;
-  if (fresh.length < 3) return { added: [], skipped: 0 };
+  /**
+   * Even a short batch is worth reading.
+   *
+   * A batch of one or two was given up on — and the run was *not*
+   * marked, so the same one or two messages were read again on every
+   * later run, and were never extracted. A single message can hold a
+   * fact ("my birthday is the 3rd"), and the run happens at most once
+   * a day, so the model call is worth it.
+   */
+  if (fresh.length < 1) return { added: [], skipped: 0 };
 
   // The transcript is read by the model, so the name it gives the user is
   // in the language the persona is speaking.
