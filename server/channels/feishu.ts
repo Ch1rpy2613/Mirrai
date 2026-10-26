@@ -155,7 +155,15 @@ export async function handleFeishuEvent(params: {
     return;
   }
 
-  const personaId = getActivePersonaId(chatId, defaultPersonaId);
+  /**
+   * The persona this conversation is talking to.
+   *
+   * The user id matters: the overrides are keyed by the user as well
+   * as the conversation, and without it the lookup falls back to "the
+   * first key that ends with this conversation" — across every user.
+   * It happens to be safe only because the chat ids are unique.
+   */
+  const personaId = getActivePersonaId(chatId, defaultPersonaId, userId);
   const reply = await handleChannelChat({
     userId,
     conversationKey: chatId,

@@ -31,7 +31,14 @@ export class WechatAdapter implements ChannelAdapter {
 
   async stop(userId: number): Promise<void> {
     await stopWeChatBot(userId);
-    clearAllActivePersonas();
+    /**
+     * Only this user's overrides.
+     *
+     * The whole map was cleared — so one user stopping their WeChat
+     * channel reset the persona that every other user had chosen in
+     * their own conversation.
+     */
+    clearAllActivePersonas(userId);
   }
 
   async status(userId: number): Promise<ChannelStatus> {
