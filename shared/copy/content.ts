@@ -82,14 +82,6 @@ export const CONTENT = {
     zh: "习惯先道歉，哪怕不是自己的错",
     en: "Apologises first, even when it was not their fault",
   },
-  /**
-   * The love-language questions.
-   *
-   * They were here with these names, and the interface asks for them
-   * under `questionnaire.loveLanguages.*` — so these six were a second
-   * copy of six sentences that nothing read. The interface's names are
-   * the ones that are read.
-   */
   "questionnaire.togetherFrom": {
     zh: "从 {{date}} 开始",
     en: "since {{date}}",

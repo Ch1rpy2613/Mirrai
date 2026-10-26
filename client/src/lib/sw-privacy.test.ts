@@ -169,9 +169,20 @@ describe("the service worker", () => {
     // never changes means the cache is never invalidated, and the files
     // in it that the build does not hash — the manifest, the icons, the
     // font — stay at the version from the first install, for ever.
+    //
+    // The check used to be `expect(match?.[1]).toBeTruthy()` — which
+    // passes for the placeholder the build replaces, and for any other
+    // string at all. So it could not fail.
     const source = readFileSync(SW_PATH, "utf-8");
     const match = /const CACHE_VERSION = "([^"]+)"/.exec(source);
-    expect(match?.[1]).toBeTruthy();
+    expect(match, "the service worker has no cache name at all").not.toBeNull();
+    // The placeholder is what the build replaces, so the name has to be
+    // *in* the source — and the build's job is to write over it.
+    expect(match![1]).toBe("mirrai-BUILD");
+    // And the name it becomes has to be the hash of the files it
+    // caches.
+    const publicDir = path.dirname(SW_PATH);
+    expect(serviceWorkerCacheVersion(publicDir)).toMatch(/^mirrai-[0-9a-f]{12}$/);
   });
 
   it("is given a name that changes when the files it caches change", () => {
