@@ -657,7 +657,7 @@ export default function Chat() {
           personaId,
           message: text,
           locale: locale === "en" ? "en" : "zh",
-          replyToId: typeof replyTo?.id === "number" ? replyTo.id : undefined,
+          replyToId: serverMessageId(replyTo?.id),
           signal: controller.signal,
           callbacks: {
             onDelta: appendDelta,
@@ -705,7 +705,7 @@ export default function Chat() {
             personaId,
             message: text,
             locale: locale === "en" ? "en" : "zh",
-            replyToId: typeof replyTo?.id === "number" ? replyTo.id : undefined,
+            replyToId: serverMessageId(replyTo?.id),
           },
           controller.signal,
         );
@@ -837,9 +837,7 @@ export default function Chat() {
       setMessages(prev => {
         const index = prev.findIndex((m) => m.id === msg.id);
         if (index < 0) return prev;
-        const userIndex = prev.slice(0, index).findLastIndex?.(
-          (m) => m.role === "user",
-        ) ?? -1;
+        const userIndex = lastUserMessageIndex(prev, index);
         const cut = userIndex >= 0 ? userIndex : index;
         const question = prev[cut];
         return [
@@ -1904,6 +1902,37 @@ export default function Chat() {
 }
 
 // ─── SEARCH PANEL ────────────────────────────────────────────────────────────
+
+/**
+ * The server's id for a message on the screen.
+ *
+ * A message that has just been written is on the screen with a local
+ * id — "ai-412" or "temp-173…" — until the next poll replaces it with
+ * the number the server gave it. The reply-to was only sent for the
+ * numeric ones, so replying to a message that was still local sent
+ * nothing: the persona answered the message before it instead.
+ */
+function serverMessageId(id: string | number | undefined): number | undefined {
+  if (typeof id === "number") return id;
+  if (typeof id !== "string") return undefined;
+  const digits = /^ai-(\d+)$/.exec(id);
+  if (digits) return Number(digits[1]);
+  return undefined;
+}
+
+/**
+ * The index of the user's own question before a message.
+ *
+ * `findLastIndex` is not in every browser — and where it is missing,
+ * the optional call returned nothing, so the cut landed on the answer
+ * itself and the user's question was replaced by it.
+ */
+function lastUserMessageIndex(messages: Message[], before: number): number {
+  for (let i = Math.min(before, messages.length) - 1; i >= 0; i--) {
+    if (messages[i].role === "user") return i;
+  }
+  return -1;
+}
 
 function SearchPanel({
   personaId,
