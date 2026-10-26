@@ -228,6 +228,22 @@ async function startPersonaDistillation(params: {
   const { personaId, userId, name } = params;
   const locale = params.locale ?? "zh";
 
+  /**
+   * One run at a time per persona.
+   *
+   * Two runs could be started at once: a double click, two tabs, or an
+   * API client. The user paid twice for the model calls, and — the
+   * worse half — the run that finished *last* wrote the persona, so a
+   * re-run could be replaced by the older analysis.
+   */
+  if (runningDistillations.has(personaId)) {
+    console.warn(
+      `[SkillEngine] A distillation for persona ${personaId} is already running.`,
+    );
+    return;
+  }
+  runningDistillations.add(personaId);
+
   try {
     const files = await getFilesByPersonaId(personaId, userId);
     const chatContent = files
@@ -277,8 +293,18 @@ async function startPersonaDistillation(params: {
       analysisStatus: "error",
       analysisMessage: copy(locale, "persona.analysisFailed"),
     }).catch(() => {});
+  } finally {
+    runningDistillations.delete(personaId);
   }
 }
+
+/**
+ * The personas whose distillation is running.
+ *
+ * It lives in this process: two instances of the app would each have
+ * their own, and the database's own state is the one that is shared.
+ */
+const runningDistillations = new Set<number>();
 
 /**
  * Rejects a provider name that is not registered.
