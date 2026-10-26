@@ -3242,6 +3242,17 @@ export async function createCollectedMessage(data: InsertCollectedMessage) {
  * chat log of fifty thousand lines was fifty thousand round trips to
  * the database, and the collection sat there for an hour.
  */
+/**
+ * Writes the collected messages.
+ *
+ * The whole batch goes in one transaction.
+ *
+ * The chunks were written one at a time with no transaction, so a
+ * failure in the seventh of thirty left fourteen hundred rows committed
+ * — and the caller swallowed the failure and reported success, so the
+ * job settled as "completed" with a count that did not match what was
+ * stored. Now either all of it is there or none of it is.
+ */
 export async function createCollectedMessages(
   rows: InsertCollectedMessage[],
 ): Promise<number> {
@@ -3250,10 +3261,12 @@ export async function createCollectedMessages(
   // Postgres takes at most a thousand parameters in one statement, and
   // a row has five of them.
   const chunkSize = 200;
-  for (let start = 0; start < rows.length; start += chunkSize) {
-    const chunk = rows.slice(start, start + chunkSize);
-    await db.insert(collectedMessages).values(chunk);
-  }
+  await db.transaction(async (tx) => {
+    for (let start = 0; start < rows.length; start += chunkSize) {
+      const chunk = rows.slice(start, start + chunkSize);
+      await tx.insert(collectedMessages).values(chunk);
+    }
+  });
   return rows.length;
 }
 

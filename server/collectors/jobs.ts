@@ -377,14 +377,19 @@ async function runJob(job: CollectorJob): Promise<void> {
     const userId = Number(job.userId);
     if (Number.isFinite(personaId) && Number.isFinite(userId)) {
       const { importCollectedMessages } = await import("./db-store");
+      /**
+       * The import is not allowed to fail quietly.
+       *
+       * The failure was caught here and the job settled as
+       * "completed" — with a message count that did not match what was
+       * stored. So the user was told the collection worked, and the
+       * persona had none of it.
+       */
       const added = await importCollectedMessages({
         personaId,
         userId,
         source: job.source,
         messages: result.messages,
-      }).catch((e) => {
-        console.warn("[Collectors] Could not store the collected messages:", e);
-        return 0;
       });
       if (added > 0) {
         console.log(`[Collectors] Imported ${added} message(s) into persona ${personaId}`);
