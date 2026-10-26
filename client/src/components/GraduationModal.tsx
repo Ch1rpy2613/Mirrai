@@ -148,12 +148,19 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={t("graduation.moment")}
+        /**
+         * The dialog is named by its own heading.
+         *
+         * The name used to be fixed — so in the manual variant the
+         * accessible name did not contain the visible label, and a
+         * screen reader read something the reader could not see.
+         */
+        aria-labelledby="graduation-modal-title"
         tabIndex={-1}
         className="relative bg-card border border-border rounded-lg w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in"
       >
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h3 className="card-title">
+          <h3 id="graduation-modal-title" className="card-title">
             {variant === "manual" ? t("graduation.manualMoment") : t("graduation.moment")}
           </h3>
           <button onClick={dismiss} className="app-nav-icon" aria-label={t("common.close")}>
