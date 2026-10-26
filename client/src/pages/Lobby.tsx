@@ -1767,6 +1767,8 @@ export default function Lobby() {
    * on the page did nothing either.
    */
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  /** The sort's button — the menu returns the focus to it. */
+  const sortButtonRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (!showSort) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -2026,7 +2028,7 @@ export default function Lobby() {
                 right={
                   <div className="flex items-center gap-2 mb-0.5">
                     <div className="relative" ref={sortMenuRef}>
-                      <button onClick={() => setShowSort(!showSort)}
+                      <button ref={sortButtonRef} onClick={() => setShowSort(!showSort)}
                         /**
                          * The button says whether the menu is open.
                          *
@@ -2040,11 +2042,36 @@ export default function Lobby() {
                         {t(SORT_OPTIONS.find(s => s.key === sortBy)?.labelKey ?? "lobby.sort.recent")}
                       </button>
                       {showSort && (
+                        /**
+                         * A menu that behaves like a menu.
+                         *
+                         * It had the roles of a menu and none of the
+                         * behaviour: the arrow keys did nothing and the
+                         * focus never moved into it, so a keyboard user
+                         * had to Tab through it — and a screen reader
+                         * announced a menu whose items could not be
+                         * reached the way a menu's items are.
+                         */
                         <div role="menu" aria-label={t("lobby.sort.label")}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                              setShowSort(false);
+                              sortButtonRef.current?.focus();
+                              return;
+                            }
+                            if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+                            event.preventDefault();
+                            const index = SORT_OPTIONS.findIndex((o) => o.key === sortBy);
+                            const step = event.key === "ArrowDown" ? 1 : -1;
+                            const next = SORT_OPTIONS[(index + step + SORT_OPTIONS.length) % SORT_OPTIONS.length];
+                            setSortBy(next.key);
+                            document.getElementById(`lobby-sort-${next.key}`)?.focus();
+                          }}
                           className="absolute right-0 top-6 surface py-1 z-20 min-w-[110px]">
                           {SORT_OPTIONS.map(opt => (
-                            <button key={opt.key} role="menuitem"
-                              onClick={() => { setSortBy(opt.key); setShowSort(false); }}
+                            <button key={opt.key} id={`lobby-sort-${opt.key}`} role="menuitem"
+                              tabIndex={-1}
+                              onClick={() => { setSortBy(opt.key); setShowSort(false); sortButtonRef.current?.focus(); }}
                               className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors ${
                                 sortBy === opt.key ? "text-cinnabar font-medium" : "text-muted-foreground"
                               }`}>
