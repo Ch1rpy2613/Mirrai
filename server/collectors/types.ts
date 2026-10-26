@@ -593,6 +593,19 @@ const dingtalkConnector: SourceConnector = {
     setRestoredCredentials("dingtalk", credentials, userId);
   },
   async collect(input: CollectInput): Promise<CollectResult> {
+    /**
+     * The browser profile has to be named.
+     *
+     * DingTalk's message history is read by driving a browser, and the
+     * browser's login *is* the credential. The collector used to fall
+     * back to the machine's own Chrome profile — the operator's, with
+     * the operator's DingTalk logged in — so a user who asked for a
+     * collection got the operator's chat history, imported into their
+     * own persona.
+     */
+    if (!input.options?.chrome_profile) {
+      throw new Error(copy(input.locale ?? "zh", "errors.collectorNeedsChromeProfile"));
+    }
     return collectViaOutputDir(dingtalkConnector, input);
   },
 };

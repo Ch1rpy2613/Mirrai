@@ -630,7 +630,24 @@ def collect_messages_browser(
 
     import re
 
-    profile = chrome_profile or get_default_chrome_profile()
+    if not chrome_profile:
+        # The browser profile is the credential.
+        #
+        # The collector used to fall back to the machine's own Chrome
+        # profile — the operator's, with the operator's DingTalk logged
+        # in. So a user who asked for a collection got the *operator's*
+        # chat history, imported into their own persona.
+        #
+        # So there is no fallback: the profile has to be named, and it
+        # has to be the user's own.
+        return (
+            "# 消息记录\n\n"
+            "⚠️  浏览器采集需要一个你自己的 Chrome Profile 路径（--chrome-profile）。\n"
+            "浏览器的登录状态就是凭据，所以它必须是你自己的；"
+            "服务器不会替你挑一个默认的。\n",
+            [],
+        )
+    profile = chrome_profile
     print(f"  启动浏览器抓取钉钉消息（{'无头' if headless else '有界面'}）...", file=sys.stderr)
 
     report_progress(0.1)

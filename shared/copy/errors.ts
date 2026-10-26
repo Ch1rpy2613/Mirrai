@@ -305,6 +305,18 @@ export const ERRORS = {
    * machine, and a collection that used them imported the operator's
    * own history into the user's persona.
    */
+  /**
+   * The browser profile a collector needs.
+   *
+   * The DingTalk collector reads the chat history by driving a browser,
+   * and the browser's login *is* the credential. So the profile has to
+   * be named, and it has to be the user's own — the collector used to
+   * fall back to the machine's Chrome, which is the operator's.
+   */
+  "errors.collectorNeedsChromeProfile": {
+    zh: "钉钉的消息记录是通过浏览器采集的，需要你指定自己的 Chrome Profile 路径。浏览器的登录状态就是凭据，所以它必须是你自己的。",
+    en: "DingTalk's message history is read through a browser, and the browser's login is the credential — so it has to be your own Chrome profile, named explicitly.",
+  },
   "errors.collectorNeedsAuthorization": {
     zh: "这个来源还没有授权。填好凭据并点「授权」，再开始采集。",
     en: "This source has not been authorised yet. Fill in the credentials and press Authorise, then start the collection.",
