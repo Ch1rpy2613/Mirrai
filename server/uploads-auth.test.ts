@@ -42,12 +42,14 @@ function createResponse() {
   const res = {
     status: vi.fn(),
     json: vi.fn(),
+    setHeader: vi.fn(),
   };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
   return res as unknown as Response & {
     status: ReturnType<typeof vi.fn>;
     json: ReturnType<typeof vi.fn>;
+    setHeader: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -102,6 +104,24 @@ describe("uploadsAuthGuard", () => {
     getUserById.mockResolvedValue(makeUser(7));
     userHasMessageWithMediaUrl.mockReset();
     userHasMessageWithMediaUrl.mockResolvedValue(false);
+  });
+
+  it("keeps the files out of the shared caches", async () => {
+    // The static server marks them as `public`, which tells every proxy
+    // between here and the user that the answer may be kept and shared.
+    // These are the user's own photographs and chat logs.
+    authenticateRequest.mockResolvedValue(makeUser(7));
+    const req = createRequest("/personas/7/3/photo.png");
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    uploadsAuthGuard(req, res, next);
+    await flush();
+
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "Cache-Control",
+      "private, no-store",
+    );
   });
 
   it("lets a signed-in owner through", async () => {

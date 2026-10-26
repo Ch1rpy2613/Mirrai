@@ -82,6 +82,15 @@ export function uploadsAuthGuard(
     return;
   }
 
+  /**
+   * The files are private.
+   *
+   * The static server marks them as `public`, which tells every proxy
+   * between here and the user that the answer may be kept and shared.
+   * These are the user's own photographs and chat logs.
+   */
+  res.setHeader("Cache-Control", "private, no-store");
+
   authenticateRequest(req)
     .then(async (user) => {
       const owned = isOwnedByUser(relKey, user.id) ||
