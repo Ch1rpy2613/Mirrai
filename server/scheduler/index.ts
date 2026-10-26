@@ -45,6 +45,9 @@ let timer: ReturnType<typeof setInterval> | null = null;
  */
 let sweeping = false;
 
+/** The first sweep, ten seconds after the scheduler starts. */
+let firstSweep: NodeJS.Timeout | null = null;
+
 /** Runs everything the scheduler is responsible for. */
 async function tick(): Promise<void> {
   await runReminderSweep();
@@ -100,9 +103,11 @@ export function startScheduler(): void {
   // Do not hold the process open just for the scheduler.
   timer.unref?.();
 
-  setTimeout(() => {
+  firstSweep = setTimeout(() => {
+    firstSweep = null;
     runTick().catch((e) => console.warn("[Scheduler] The first sweep failed:", e));
-  }, 10_000).unref?.();
+  }, 10_000);
+  firstSweep.unref?.();
 
   console.log("[Scheduler] Started");
 }
@@ -112,4 +117,15 @@ export function stopScheduler(): void {
   if (!timer) return;
   clearInterval(timer);
   timer = null;
+  /**
+   * The first sweep is cleared too.
+   *
+   * The interval was cleared and the ten-second timeout was not — so a
+   * scheduler that had been stopped still ran one tick, ten seconds
+   * after it was told to stop.
+   */
+  if (firstSweep) {
+    clearTimeout(firstSweep);
+    firstSweep = null;
+  }
 }
