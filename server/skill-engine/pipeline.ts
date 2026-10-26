@@ -1265,7 +1265,48 @@ async function runSkillPipelineOnce(
       }
     })();
 
-    const personaData = mergeUserDecisions(enrichedData, previous, microRules, locale);
+    /**
+     * The persona is read again, right before the write.
+     *
+     * Between the read above and the write there is a model call — so
+     * a correction typed in the persona editor in that window ("she
+     * actually says X, not Y") was written, the toast said it was
+     * applied, and a minute later the distillation finished and put
+     * the persona back exactly as it was before the correction. The
+     * correction log kept the record; the persona did not.
+     *
+     * So the persona is read again, and if it has changed, the user's
+     * own words win.
+     */
+    const changedWhileRunning = await (async () => {
+      try {
+        const persona = await db.getPersonaById(personaId, userId);
+        const latest = (persona?.personaData as Partial<PersonaData>) || {};
+        return JSON.stringify(latest) !== JSON.stringify(previous);
+      } catch {
+        return false;
+      }
+    })();
+
+    const personaData = changedWhileRunning
+      ? {
+          ...enrichedData,
+          ...(await (async () => {
+            try {
+              const persona = await db.getPersonaById(personaId, userId);
+              return (persona?.personaData as Partial<PersonaData>) || {};
+            } catch {
+              return {};
+            }
+          })()),
+        }
+      : mergeUserDecisions(enrichedData, previous, microRules, locale);
+
+    if (changedWhileRunning) {
+      console.warn(
+        "[SkillEngine] The persona was changed while the run was going — the newer version was kept.",
+      );
+    }
 
     /**
      * The facts in the upload become memories.
