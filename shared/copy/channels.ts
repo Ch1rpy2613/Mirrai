@@ -19,6 +19,7 @@ export const CHANNELS = {
       "/分身列表 — 查看所有可用分身",
       "/当前分身 — 查看当前正在对话的分身",
       "/毕业 — 生成告别信并完成毕业",
+      "/帮助 — 显示这份列表",
     ].join("\n"),
     en: [
       "Commands:",
@@ -26,6 +27,7 @@ export const CHANNELS = {
       "/personas — list your personas",
       "/current — show who you are talking to",
       "/graduate — write the farewell letter and graduate",
+      "/help — show this list",
     ].join("\n"),
   },
   "channels.useUsage": {
