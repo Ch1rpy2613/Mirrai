@@ -108,8 +108,8 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
    * another — but it is let go of as soon as the server's list arrives.
    */
   useEffect(() => {
-    if (data) setLocalRules(null);
-  }, [data]);
+    if (data?.rules) setLocalRules(null);
+  }, [data?.rules]);
 
   function save(rulesToSave: MicroRule[]) {
     setLocalRules(rulesToSave);
