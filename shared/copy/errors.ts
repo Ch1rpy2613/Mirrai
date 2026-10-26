@@ -29,6 +29,10 @@ export const ERRORS = {
     zh: "该分身未毕业",
     en: "This persona has not graduated",
   },
+  "errors.noProviderConfigured": {
+    zh: "还没有可以用的模型服务：请先在设置里配置一个",
+    en: "There is no model service to use yet: configure one in the settings first",
+  },
   "errors.collectorFileMismatch": {
     zh: "这个文件不属于所选的分身",
     en: "That file does not belong to the chosen persona",

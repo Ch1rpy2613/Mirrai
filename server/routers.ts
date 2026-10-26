@@ -9,7 +9,11 @@ import { TRPCError } from "@trpc/server";
 import { llmService, registry } from "./llm";
 import type { InvokeParams, InvokeResult } from "./llm/types";
 import { getTextContent } from "./llm/types";
-import { invalidateUserProviderCache, resolveProviderForUser } from "./llm/user-provider";
+import {
+  invalidateUserProviderCache,
+  resolveProviderForUser,
+  resolveProviderForUserWithOwnership,
+} from "./llm/user-provider";
 import { storagePut } from "./storage";
 import {
   createPersona, getPersonasByUserId, getPersonaById, updatePersona, deletePersona,
@@ -2768,12 +2772,35 @@ export const appRouter = router({
         if (!chatText.trim()) {
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.emptyMessagesThatDay") });
         }
-        const response = await llmService.invoke({
-          messages: [
-            { role: "system", content: copy(ctx.locale, "prompts.diaryWriting") },
-            { role: "user", content: chatText.slice(0, 6000) },
-          ],
+        /**
+         * The user's own provider.
+         *
+         * The diary is written from the user's own conversation of that
+         * day. It was always written with the operator's provider — the
+         * environment-configured one — so a user who had configured a
+         * key of their own still had their private conversation sent to
+         * the operator's account, and billed to the operator.
+         */
+        const { provider, owned } = await resolveProviderForUserWithOwnership({
+          userId: ctx.user.id,
+          providerName: persona.llmProvider ?? undefined,
         });
+        const messages = [
+          { role: "system" as const, content: copy(ctx.locale, "prompts.diaryWriting") },
+          { role: "user" as const, content: chatText.slice(0, 6000) },
+        ];
+        let response = "";
+        if (provider) {
+          response = await llmService.invokeWithProvider(provider, { messages });
+        }
+        if (!response.trim() && !owned) {
+          // The operator's provider may only be used when the user has
+          // no provider of their own.
+          response = await llmService.invoke({ messages });
+        }
+        if (!response.trim()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.noProviderConfigured") });
+        }
         const parsed = (extractJsonObject(response) ?? {}) as {
           summary?: string;
           highlights?: string[];
