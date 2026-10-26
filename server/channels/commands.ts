@@ -17,6 +17,7 @@ import type { Persona } from "../../drizzle/schema";
 import type { ChannelId } from "./types";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, detectLocale, type Locale } from "@shared/copy";
+import { getUserLocale } from "../db";
 import { CHANNEL_COMMANDS } from "@shared/copy/channels";
 
 /**
@@ -165,9 +166,21 @@ export async function handleCommand(params: {
 
   const { command, args } = parsed;
 
-  // The language the person is writing in is the language they should be
-  // answered in.
-  const locale = detectLocale(params.text);
+  /**
+   * The language they are answered in.
+   *
+   * It was detected from the whole line — so `/use 小B` was Chinese,
+   * because the persona's *name* is Chinese, and an English user was
+   * answered in Chinese after switching persona.
+   *
+   * The user's own saved language is the rule: it is the one they
+   * chose, it does not change from message to message, and it is the
+   * same answer whichever door they came in by. The text is only a
+   * fallback, and only for the *command's own* words — never for the
+   * argument.
+   */
+  const locale = await getUserLocale(params.userId).catch(() => null)
+    ?? detectLocale(command);
 
   switch (command) {
     case CHANNEL_COMMANDS.use.zh:

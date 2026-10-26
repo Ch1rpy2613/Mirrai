@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const getPersonasByUserId = vi.fn();
 const getRecentEmotionTrend = vi.fn();
 const getUserTimezone = vi.fn();
+const getUserLocale = vi.fn();
 const getMessageCountInRange = vi.fn();
 const setGraduationStatus = vi.fn();
 const invoke = vi.fn();
@@ -15,6 +16,7 @@ vi.mock("../db", () => ({
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getMessageCountInRange: (...a: unknown[]) => getMessageCountInRange(...a),
   setGraduationStatus: (...a: unknown[]) => setGraduationStatus(...a),
+  getUserLocale: (...a: unknown[]) => getUserLocale(...a),
 }));
 
 vi.mock("../llm", () => ({
@@ -60,6 +62,9 @@ beforeEach(() => {
   getPersonasByUserId.mockResolvedValue(personas);
   getRecentEmotionTrend.mockResolvedValue([]);
   getUserTimezone.mockResolvedValue("Asia/Shanghai");
+  // The user's own language is the rule now — the text is only a
+  // fallback for it.
+  getUserLocale.mockResolvedValue("zh");
   getMessageCountInRange.mockResolvedValue(0);
 });
 
