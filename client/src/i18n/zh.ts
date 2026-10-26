@@ -1500,6 +1500,7 @@ export const zh = {
     remove: "删掉这条",
     removeConfirm: "删掉这条记录？",
     kind: "类型",
+    happenedAt: "什么时候（可选）",
     titlePlaceholder: "例如：上周复合了",
     detail: "细节（可选）",
     detailPlaceholder: "想记多少写多少",

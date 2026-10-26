@@ -1507,6 +1507,7 @@ export const en = {
     remove: "Remove this",
     removeConfirm: "Delete this record?",
     kind: "Kind",
+    happenedAt: "When it happened (optional)",
     titlePlaceholder: "e.g. we got back together last week",
     detail: "Details (optional)",
     detailPlaceholder: "As much as you want to write",

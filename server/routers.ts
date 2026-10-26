@@ -3489,20 +3489,46 @@ export const appRouter = router({
         ]),
         title: z.string().min(1).max(200),
         detail: z.string().max(2000).optional(),
-        /** When it happened, as an ISO date. Defaults to now. */
-        happenedAt: z.string().datetime().optional(),
+        /**
+         * When it happened.
+         *
+         * An ISO instant, or a day — "2024-03-14" — because that is
+         * what a person knows about a moment ("we met that day"), and
+         * the form asks for it in that shape.
+         *
+         * A day used to be impossible: the field wanted an ISO
+         * *datetime*, so a date the user typed was refused, and the
+         * event was recorded as "now" instead — which is a fact about
+         * the record, not about what happened.
+         */
+        happenedAt: z.union([
+          z.string().datetime(),
+          z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        ]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
+        /**
+         * The moment the event happened.
+         *
+         * A day is the middle of that day, in the user's own time —
+         * so the date it is filed under is the day the user meant, and
+         * not the day before it for anybody west of Greenwich.
+         */
+        const happenedAt = input.happenedAt
+          ? (/^\d{4}-\d{2}-\d{2}$/.test(input.happenedAt)
+            ? new Date(`${input.happenedAt}T12:00:00Z`)
+            : new Date(input.happenedAt))
+          : undefined;
         const event = await createRelationshipEvent({
           userId: ctx.user.id,
           personaId: input.personaId,
           kind: input.kind,
           title: input.title,
           detail: input.detail ?? null,
-          happenedAt: input.happenedAt ? new Date(input.happenedAt) : undefined,
+          happenedAt,
         });
 
         /**

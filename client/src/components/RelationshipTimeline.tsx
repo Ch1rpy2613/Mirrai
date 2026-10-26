@@ -43,6 +43,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
       setTitle("");
       setDetail("");
       setKind("news");
+      setHappenedAt("");
       if (result?.crisis) setShowCrisis(true);
     },
     onError: (e) => toast.error(e.message),
@@ -55,6 +56,15 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
   const [kind, setKind] = useState<RelationshipEventKind>("news");
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
+  /**
+   * When it happened.
+   *
+   * The form had no way to say — so every entry was recorded as "now",
+   * which is a fact about the record and not about what happened. The
+   * timeline is the user's own account of the relationship, and the
+   * day is the part they know.
+   */
+  const [happenedAt, setHappenedAt] = useState("");
   const [showForm, setShowForm] = useState(false);
 
   const events = data?.events ?? [];
@@ -138,6 +148,17 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
             </select>
           </div>
           <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground" htmlFor="relationship-happened-at">{t("relationship.happenedAt")}</Label>
+            <Input
+              id="relationship-happened-at"
+              type="date"
+              value={happenedAt}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setHappenedAt(e.target.value)}
+              className="h-9 rounded-md text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground" htmlFor="relationship-title">{t("relationship.title")}</Label>
             <Input
               id="relationship-title"
@@ -170,6 +191,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                 kind,
                 title: title.trim(),
                 detail: detail.trim() || undefined,
+                happenedAt: happenedAt || undefined,
               })}
             >
               {addEvent.isPending ? t("common.saving") : t("common.save")}
