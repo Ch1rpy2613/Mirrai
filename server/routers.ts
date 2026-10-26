@@ -1799,8 +1799,16 @@ export const appRouter = router({
     setCredentials: protectedProcedure
       .input(z.object({
         channel: z.enum(["wechat", "feishu"]),
-        appId: z.string().min(1).max(128),
-        appSecret: z.string().min(1).max(256),
+        /**
+         * Either half may be left out.
+         *
+         * The one that was left out keeps the value it had — so a user
+         * rotating the secret does not have to retype the app id,
+         * which they cannot see, because it is never shown to them
+         * again.
+         */
+        appId: z.string().min(1).max(128).optional(),
+        appSecret: z.string().min(1).max(256).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (input.channel !== "feishu") {

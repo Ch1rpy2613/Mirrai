@@ -1287,7 +1287,16 @@ function FeishuSection() {
 
   const connected = status.data?.connected === true;
   const lastError = (status.data?.detail as { error?: string } | null | undefined)?.error;
-  const canSave = appId.trim().length > 0 && appSecret.trim().length > 0 && !setCredentials.isPending;
+  /**
+   * The save is possible with one of the two.
+   *
+   * Both were demanded, and neither was ever filled in from the
+   * server — so rotating only the secret meant retyping the app id,
+   * which the user cannot see.
+   */
+  const canSave =
+    (appId.trim().length > 0 || appSecret.trim().length > 0) &&
+    !setCredentials.isPending;
 
   return (
     <section className="surface p-5 sm:p-6">
@@ -1360,8 +1369,10 @@ function FeishuSection() {
         <Button size="sm" className="rounded-md px-5" disabled={!canSave}
           onClick={() => setCredentials.mutate({
             channel: "feishu",
-            appId: appId.trim(),
-            appSecret: appSecret.trim(),
+            // Only what the user typed: the half that was left out
+            // keeps the value it had.
+            ...(appId.trim() ? { appId: appId.trim() } : {}),
+            ...(appSecret.trim() ? { appSecret: appSecret.trim() } : {}),
           })}>
           {setCredentials.isPending ? t("common.saving") : t("settings.channels.saveCredentials")}
         </Button>

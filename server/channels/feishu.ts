@@ -222,8 +222,27 @@ export class FeishuAdapter implements ChannelAdapter {
   requiresCredentials = true;
 
   /** Stores the app credentials for a user, encrypted. */
-  async setCredentials(userId: number, credentials: FeishuCredentials): Promise<void> {
-    const encrypted = await encryptSecret(JSON.stringify(credentials));
+  /**
+   * Stores the credentials.
+   *
+   * Either half may be left out, and the one that was left out keeps
+   * the value it had. So a user who is rotating the secret does not
+   * have to retype the app id — which they cannot see, because it is
+   * never shown to them again.
+   */
+  async setCredentials(
+    userId: number,
+    credentials: Partial<FeishuCredentials>,
+  ): Promise<void> {
+    const stored = await readCredentials(userId);
+    const merged: FeishuCredentials = {
+      appId: credentials.appId ?? stored?.appId ?? "",
+      appSecret: credentials.appSecret ?? stored?.appSecret ?? "",
+    };
+    if (!merged.appId || !merged.appSecret) {
+      throw new Error("Both the app id and the app secret are needed.");
+    }
+    const encrypted = await encryptSecret(JSON.stringify(merged));
     await db.upsertChannelState(userId, CHANNEL_ID, {
       credentialsEnc: encrypted,
       status: "configured",
