@@ -64,12 +64,26 @@ export interface FarewellDraft {
   kept: string[];
   /** The lines the second pass cut. */
   removed: string[];
+  /**
+   * Whether the letter is only the raw candidates.
+   *
+   * The second pass is not allowed to add material — so when it tried
+   * to, the kept lines were used instead. And the kept lines *are* the
+   * candidates: five separate sentences, joined by newlines. That is
+   * not a letter, and the run reported itself as a success.
+   */
+  rawFallback?: boolean;
 }
 
 /** Why the letter was not written in two passes. */
 export type FarewellFallbackReason =
   /** The two-pass path could not run at all. */
   | "two-pass-unavailable"
+  /**
+   * The second pass tried to add material, so the raw candidates were
+   * used instead — and those are not a letter.
+   */
+  | "raw-candidates"
   /** The model failed, or answered with something unusable. */
   | "model-failed"
   /** The first pass produced no candidate worth keeping. */
@@ -452,6 +466,21 @@ export async function writeFarewellLetterInTwoPasses(params: {
         reason: "model-failed",
       };
     }
+    if (outcome.draft.rawFallback) {
+      /**
+       * The letter is the raw candidates.
+       *
+       * Five separate sentences, joined by newlines. The run said it
+       * was a success — and the graduation page presented five disjoint
+       * sentences as the farewell letter.
+       */
+      return {
+        letter: outcome.draft.letter.trim(),
+        draft: outcome.draft,
+        degraded: true,
+        reason: "raw-candidates",
+      };
+    }
     return {
       letter: outcome.draft.letter.trim(),
       draft: outcome.draft,
@@ -568,7 +597,14 @@ export function parseFarewellEdit(
   }
 
   const fallback = kept.length ? kept : candidateTexts;
-  return { letter: fallback.join("\n"), kept, removed };
+  return {
+    letter: fallback.join("\n"),
+    kept,
+    removed,
+    // The letter is the raw candidates, not a letter. The caller is
+    // told, so it can say so.
+    rawFallback: true,
+  };
 }
 
 /**
