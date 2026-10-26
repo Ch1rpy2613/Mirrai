@@ -902,6 +902,7 @@ export const zh = {
     skipLater: "跳过",
     apiKeyLabel: "API Key",
     toLobby: "回到大厅",
+    toUpload: "上传聊天记录",
     providerRequired: "请选择一个 AI 提供商",
     providerSaved: "AI 提供商已保存",
     saveFailed: "保存失败：{{message}}",

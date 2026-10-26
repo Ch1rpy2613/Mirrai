@@ -24,7 +24,9 @@ export default function Onboarding() {
   const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
-  const [step, setStep] = useState<Step>("provider");
+  const [step, setStep] = useState<"provider" | "persona" | "done">("provider");
+  /** The persona the wizard created, so the "done" step can offer it. */
+  const [createdPersonaId, setCreatedPersonaId] = useState<number | null>(null);
   const [providerName, setProviderName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -92,14 +94,26 @@ export default function Onboarding() {
       return;
     }
     try {
-      const id = await createPersona.mutateAsync({
+      const created = await createPersona.mutateAsync({
         name: personaName.trim(),
         relationshipDesc: relationshipDesc.trim() || undefined,
         togetherFrom: togetherFrom.trim() || undefined,
       });
       toast.success(t("onboarding.created"));
+      /**
+       * The confirmation comes first.
+       *
+       * The step and the navigation were set in the same breath, so
+       * the router won and the "done" step never painted: the wizard
+       * has a success screen that could never be seen, and the user
+       * was dropped straight onto the upload page with no
+       * acknowledgement of what had just been created.
+       *
+       * The upload page is where the work continues, and the "done"
+       * step offers it.
+       */
       setStep("done");
-      navigate(`/upload/${id}`);
+      setCreatedPersonaId(created.id);
     } catch (e: any) {
       toast.error(t("onboarding.createFailed", { message: e?.message ?? t("errors.unknown") }));
     }
@@ -278,9 +292,16 @@ export default function Onboarding() {
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary">
               <Check className="w-6 h-6" />
             </div>
-            <Button className="w-full" onClick={() => navigate("/")}>
-              {t("onboarding.toLobby")}
-            </Button>
+            <div className="flex flex-col gap-2">
+              {createdPersonaId && (
+                <Button className="w-full" onClick={() => navigate(`/upload/${createdPersonaId}`)}>
+                  {t("onboarding.toUpload")}
+                </Button>
+              )}
+              <Button variant="ghost" className="w-full" onClick={() => navigate("/")}>
+                {t("onboarding.toLobby")}
+              </Button>
+            </div>
           </div>
         )}
       </div>
