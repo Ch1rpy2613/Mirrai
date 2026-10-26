@@ -1102,7 +1102,24 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return { status: persona.analysisStatus, progress: persona.analysisProgress, message: persona.analysisMessage };
+        return {
+          status: persona.analysisStatus,
+          progress: persona.analysisProgress,
+          message: persona.analysisMessage,
+          /**
+           * The id of the run in progress.
+           *
+           * The upload page read it from the *persona* — which is only
+           * refetched when the run is over. So during the run the page
+           * held the value from before: on a first run there was no job
+           * at all, so the stage, the attempt number and the intake
+           * gaps were never shown; and on a re-run the job id was the
+           * *previous* run's, whose stage was already "complete" — so
+           * the page showed the old run's stage for the whole duration
+           * of the new one.
+           */
+          skillJobId: persona.skillJobId ?? null,
+        };
       }),
 
     triggerAnalysis: protectedProcedure.use(rateLimit(RATE_LIMITS.llmHeavy))

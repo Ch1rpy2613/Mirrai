@@ -232,10 +232,19 @@ export default function Upload() {
     }
   }, [analysisStatus?.status]);
 
-  // The persona carries the id of the distillation job, which knows the real
-  // pipeline stage — "正在分析人物性格" is a summary, the job knows whether it
-  // is researching, auditing or building.
-  const jobId = persona?.skillJobId ?? null;
+  /**
+   * The id of the distillation job, which knows the real pipeline stage
+   * — "正在分析人物性格" is a summary, the job knows whether it is
+   * researching, auditing or building.
+   *
+   * It comes from the *status*, which is polled — not from the persona,
+   * which is only refetched when the run is over. So the page used to
+   * hold the id of the previous run: on a first run there was no job at
+   * all, and the stage, the attempt number and the intake gaps were
+   * never shown; and on a re-run the page showed the old run's stage
+   * for the whole duration of the new one.
+   */
+  const jobId = analysisStatus?.skillJobId ?? null;
   const { data: jobStatus, error: jobStatusError } = trpc.skillEngine.getJobStatus.useQuery(
     { jobId: jobId ?? 0 },
     {
