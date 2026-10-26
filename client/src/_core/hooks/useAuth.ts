@@ -60,6 +60,19 @@ export function useAuth(options?: UseAuthOptions) {
     if (!redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
+    /**
+     * A failed request is not a signed-out user.
+     *
+     * `auth.me` is a public procedure that answers `null` for somebody
+     * who is not signed in — and a *failed* request also leaves the
+     * user undefined. With the retry turned off, one failed request was
+     * enough: the server restarting, the laptop waking from sleep, or
+     * a momentary network drop threw the user to the sign-in page even
+     * though the session cookie was still perfectly valid.
+     *
+     * So the redirect happens only when the server answered.
+     */
+    if (meQuery.error || meQuery.data === undefined) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
@@ -69,6 +82,8 @@ export function useAuth(options?: UseAuthOptions) {
     redirectPath,
     logoutMutation.isPending,
     meQuery.isLoading,
+    meQuery.error,
+    meQuery.data,
     state.user,
   ]);
 

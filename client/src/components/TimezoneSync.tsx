@@ -15,6 +15,22 @@ export default function TimezoneSync() {
   const { user, isAuthenticated } = useAuth();
   const updateProfile = trpc.user.updateProfile.useMutation();
   const sent = useRef(false);
+  const attempts = useRef(0);
+
+  /**
+   * The mutation's `mutate` is stable; the mutation *object* is not.
+   *
+   * The effect depended on the object, which is a new one on every
+   * render — so the effect body ran after every render. It was normally
+   * harmless, because the `sent` flag stopped it. But the failure
+   * handler cleared that flag, so a rejected request produced: error →
+   * re-render → effect → the same failing request again → error → …
+   * one failing request per render, for as long as the page was open.
+   *
+   * The server rejects a zone it does not know, so a browser whose zone
+   * name the server's ICU cannot place was enough.
+   */
+  const mutate = updateProfile.mutate;
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -26,17 +42,19 @@ export default function TimezoneSync() {
     if (!zone) return;
 
     sent.current = true;
-    updateProfile.mutate(
+    mutate(
       { timezone: zone },
       {
         onError: () => {
           // A failed sync is not worth a message; the user can still set
-          // the zone by hand in the settings.
-          sent.current = false;
+          // the zone by hand in the settings. It is tried a few times
+          // and then left alone.
+          attempts.current += 1;
+          sent.current = attempts.current < 3;
         },
       },
     );
-  }, [isAuthenticated, user, updateProfile]);
+  }, [isAuthenticated, user, mutate]);
 
   return null;
 }
