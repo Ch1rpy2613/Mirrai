@@ -1316,6 +1316,8 @@ export const zh = {
     importFailed: "导入失败：{{message}}",
     note: "这是 SillyTavern 的 PNG v2 角色卡，其他工具也能识别。",
     pickFile: "选择一个 PNG 角色卡文件",
+    notAPng: "那不是一个 PNG 角色卡：{{name}}。",
+    tooLarge: "角色卡太大：{{name}}。一个角色卡不能超过 {{limit}}。",
   },
 
   reminders: {

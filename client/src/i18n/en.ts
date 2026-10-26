@@ -1323,6 +1323,8 @@ export const en = {
     importFailed: "Import failed: {{message}}",
     note: "This is a SillyTavern PNG v2 character card — other tools can read it too.",
     pickFile: "Choose a PNG character card file",
+    notAPng: "That is not a PNG character card: {{name}}.",
+    tooLarge: "That character card is too large: {{name}}. One card cannot be over {{limit}}.",
   },
 
   reminders: {

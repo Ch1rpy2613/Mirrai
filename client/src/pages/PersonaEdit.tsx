@@ -22,6 +22,14 @@ import LetterBox from "@/components/LetterBox";
 import MicroRulesEditor from "@/components/MicroRulesEditor";
 import ImperfectionEditor from "@/components/ImperfectionEditor";
 import { useLocale } from "@/contexts/LocaleContext";
+
+/**
+ * The largest character card the app will import.
+ *
+ * The server's own limit — twenty million base64 characters, about
+ * fifteen megabytes decoded.
+ */
+const MAX_CARD_UPLOAD_BYTES = 15 * 1024 * 1024;
 import type { GraduationMode } from "@shared/graduation-mode";
 
 /* The values written to the persona, not display strings — the server stores
@@ -248,6 +256,25 @@ export default function PersonaEdit() {
   });
 
   const handleCardFile = async (file: File) => {
+    /**
+     * The kind and the size are checked before the file is read.
+     *
+     * The file used to be read into memory first — so a file of any
+     * size could take the tab with it, and a file the server would
+     * refuse came back as a raw English validation message in a
+     * Chinese interface.
+     */
+    if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
+      toast.error(t("personaCard.notAPng", { name: file.name }));
+      return;
+    }
+    if (file.size > MAX_CARD_UPLOAD_BYTES) {
+      toast.error(t("personaCard.tooLarge", {
+        name: file.name,
+        limit: `${Math.round(MAX_CARD_UPLOAD_BYTES / 1024 / 1024)} MB`,
+      }));
+      return;
+    }
     let fileContent: string;
     try {
       fileContent = await fileToBase64(file);
