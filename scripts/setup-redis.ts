@@ -75,8 +75,13 @@ function installCommand(): { command: string; args: string[]; label: string } | 
   }
   if (platform === "linux" && has("apt-get")) {
     return {
-      command: "apt-get",
-      args: ["install", "-y", "redis-server"],
+      // apt-get installs into the system directories, so it needs to be
+      // run as the superuser. It was run without, so it failed with
+      // EACCES on any machine where the user was not already root —
+      // and the script then printed the instructions, which say to use
+      // sudo.
+      command: "sudo",
+      args: ["apt-get", "install", "-y", "redis-server"],
       label: "apt",
     };
   }
