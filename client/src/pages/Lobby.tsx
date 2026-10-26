@@ -148,25 +148,44 @@ function relativeTime(date: string | Date, locale: string, t: Translate): string
  * together was then off by one — and the anniversary fell on the wrong
  * day, which is the one number on this page that has to be right.
  */
-function dayStart(value: string | Date): number {
+function dayStart(value: string | Date): number | null {
   if (typeof value === "string") {
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+    /**
+     * Both shapes.
+     *
+     * "2021-05" is what the editor asks for — the placeholder says so
+     * — and it was not matched by the day pattern, so it fell through
+     * to `new Date("2021-05")`, which is midnight in *Greenwich*. The
+     * day was then read back in the browser's zone, so west of
+     * Greenwich the start day became the day before: the count was one
+     * too many, and the anniversary banner fired a day early.
+     */
+    const match = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(value.trim());
     if (match) {
       return new Date(
         Number(match[1]),
         Number(match[2]) - 1,
-        Number(match[3]),
+        match[3] ? Number(match[3]) : 1,
       ).getTime();
     }
   }
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return Date.now();
+  /**
+   * A date that cannot be read is no date.
+   *
+   * It used to be "now" — so a start date typed as anything but a date
+   * ("去年") made the card say "together for 1 day" *and* "today is
+   * the anniversary!", both of them false, on the card the user looks
+   * at first.
+   */
+  if (Number.isNaN(date.getTime())) return null;
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-function daysBetween(from: string | Date, to?: string | Date): number {
+function daysBetween(from: string | Date, to?: string | Date): number | null {
   const start = dayStart(from);
   const end = dayStart(to ?? new Date());
+  if (start === null || end === null) return null;
   return Math.max(1, Math.round((end - start) / 86400000));
 }
 
@@ -182,8 +201,9 @@ function getMilestone(chatCount: number) {
 }
 
 function getDaysUntilAnniversary(togetherFrom: string): number | null {
-  const start = new Date(dayStart(togetherFrom));
-  if (Number.isNaN(start.getTime())) return null;
+  const startMs = dayStart(togetherFrom);
+  if (startMs === null) return null;
+  const start = new Date(startMs);
   /**
    * The difference is counted in days, not in milliseconds.
    *
@@ -213,7 +233,8 @@ function getMissYouLevel(lastChatAt: string | Date | null): "lobby.missYou.stron
 
 function getCompatibilityScore(persona: any): number {
   const chatWeight = Math.min((persona.chatCount || 0) / 100, 1) * 40;
-  const daysWeight = persona.togetherFrom ? Math.min(daysBetween(persona.togetherFrom) / 365, 1) * 30 : 15;
+  const daysTogether = persona.togetherFrom ? daysBetween(persona.togetherFrom) : null;
+  const daysWeight = daysTogether ? Math.min(daysTogether / 365, 1) * 30 : 15;
   const dataWeight = persona.personaData ? 20 : 0;
   const recentWeight = persona.lastChatAt && (Date.now() - new Date(persona.lastChatAt).getTime()) < 86400000 * 3 ? 10 : 0;
   return Math.min(99, Math.round(chatWeight + daysWeight + dataWeight + recentWeight));
@@ -945,11 +966,27 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
   const isReady = persona.analysisStatus === "ready";
   const isGraduated = persona.graduationStatus === "graduated";
   const pd = (persona.personaData as any) || {};
-  const togetherDays = persona.togetherFrom ? daysBetween(persona.togetherFrom, persona.togetherTo || undefined) : null;
+  // A start date that cannot be read is no start date — so the card
+  // says nothing about the days together rather than saying "1 day".
+  const togetherDays = persona.togetherFrom
+    ? daysBetween(persona.togetherFrom, persona.togetherTo || undefined)
+    : null;
   const traits = [pd.personality, pd.speakingStyle].filter(Boolean).join(locale === "en" ? ", " : "，").slice(0, 50);
   const milestone = getMilestone(persona.chatCount || 0);
   const MilestoneIcon = milestone?.icon;
-  const anniversary = persona.togetherFrom ? getDaysUntilAnniversary(persona.togetherFrom) : null;
+  /**
+   * The anniversary.
+   *
+   * It was read from the start date alone — so a persona the user had
+   * broken up with, or one that had graduated and fallen asleep, still
+   * said "today is the anniversary!" on the card, while the same card
+   * said "together for N days" in the past tense. And the graduation
+   * page promises "no more anniversary reminders".
+   */
+  const anniversary =
+    persona.togetherFrom && !persona.togetherTo && !isGraduated
+      ? getDaysUntilAnniversary(persona.togetherFrom)
+      : null;
   const catchphrases: string[] = pd.catchphrases || [];
   const missLevel = getMissYouLevel(persona.lastChatAt);
   const compatibility = isReady ? getCompatibilityScore(persona) : null;
@@ -1693,7 +1730,11 @@ export default function Lobby() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
 
-  const { data: personas, refetch } = trpc.persona.list.useQuery(undefined, {
+  const {
+    data: personas,
+    refetch,
+    isError: personasFailed,
+  } = trpc.persona.list.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchInterval: (query) => {
       const list = query.state.data;
@@ -1773,7 +1814,15 @@ export default function Lobby() {
     return <PageLoader />;
   }
 
-  const hasPersonas = personas && personas.length > 0;
+  /**
+   * Whether the user has any personas.
+   *
+   * A failed request leaves the list empty — so the page said "you have
+   * no personas, create your first" and offered to make one. That is a
+   * claim about the user's own data, and it was simply false: one
+   * network blip replaced their whole list with an invitation.
+   */
+  const hasPersonas = !personasFailed && personas && personas.length > 0;
 
   const handleTryIt = () => {
     if (sandboxPending) return;
@@ -2070,6 +2119,25 @@ export default function Lobby() {
               <TipsSection />
             </section>
           </>
+        ) : personasFailed ? (
+          /**
+           * The list could not be read.
+           *
+           * The failure used to render the empty state — "you have no
+           * personas, create your first digital persona" — so one
+           * network blip replaced the user's whole list with an
+           * invitation to make a new one.
+           */
+          <div className="text-center py-16">
+            <p className="text-sm text-muted-foreground">{t("common.error")}</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-3 text-xs underline underline-offset-2 hover:text-foreground"
+            >
+              {t("common.retry")}
+            </button>
+          </div>
         ) : (
           <>
             <EmptyState
