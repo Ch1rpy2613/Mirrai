@@ -39,6 +39,13 @@ function flag(name: string): string | undefined {
   return value && !value.startsWith("--") ? value : undefined;
 }
 
+/** A number from the command line, or nothing when it is not one. */
+function numberOrUndefined(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 const personaId = Number(flag("persona"));
 const userId = Number(flag("user"));
 const variant = (flag("variant") ?? "default") as "default" | "withoutRules";
@@ -78,9 +85,38 @@ const maxCases = Number(flag("max") ?? 12);
  */
 const locale = (flag("locale") ?? "zh") === "en" ? "en" : "zh";
 
+/**
+ * The temperature the generation runs at.
+ *
+ * It was never declared — the file did not compile, so the whole
+ * evaluation threw a ReferenceError on every path.
+ */
+const temperature = Number(flag("temperature") ?? 0.7);
+
+/**
+ * The calibration.
+ *
+ * "How far do the numbers move when nothing has changed?" — the
+ * tolerances are set from that spread rather than from a guess.
+ */
+const calibrate = args.includes("--calibrate");
+const calibrateRuns = Math.max(1, Number(flag("calibrate-runs") ?? 3));
+
+/**
+ * The tolerances the gate uses.
+ *
+ * Each one is how far a number may move before it counts as a
+ * regression. They are a guess until they are calibrated.
+ */
+const tolerances = {
+  overlap: numberOrUndefined(flag("tolerance-overlap")),
+  likelihoodGap: numberOrUndefined(flag("tolerance-likelihood")),
+  emotionAccuracy: numberOrUndefined(flag("tolerance-emotion")),
+};
+
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
   );
   process.exit(1);
 }
@@ -123,6 +159,21 @@ console.log(
     (stored.length ? " (the stored ones)" : ""),
 );
 
+/**
+ * The persona and the training texts.
+ *
+ * They were declared further down — after the branches that use them —
+ * so the `--pairs` branch could not reach them. The declarations are
+ * here now, before the first use.
+ */
+const persona = await db.getPersonaById(personaId, userId);
+if (!persona) {
+  console.error("No such persona.");
+  process.exit(1);
+}
+
+const training = trainingTexts(records, cases);
+
 if (pairs) {
   // The blind test needs the two lines side by side: the real one and
   // the one the persona said. It is a human measurement — a person who
@@ -155,14 +206,6 @@ if (onlyCases) {
   }
   process.exit(0);
 }
-
-const persona = await db.getPersonaById(personaId, userId);
-if (!persona) {
-  console.error("No such persona.");
-  process.exit(1);
-}
-
-const training = trainingTexts(records, cases);
 
 /**
  * The A/B.
