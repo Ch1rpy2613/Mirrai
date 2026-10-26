@@ -467,8 +467,17 @@ export default function Chat() {
       const a = document.createElement("a");
       a.href = url;
       a.download = result.fileName;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      /**
+       * The URL is released a moment later.
+       *
+       * It was released straight away — and the browser may not have
+       * started the download by then, so the file arrived empty or not
+       * at all.
+       */
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success(t("chat.exportSuccess"));
     } catch (e: any) { toast.error(t("chat.exportFailed", { message: e.message })); }
   };
