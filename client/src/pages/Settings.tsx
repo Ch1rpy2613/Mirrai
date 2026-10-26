@@ -961,6 +961,13 @@ function WeChatBindingsSection({
   });
 
   const [selectedPersonaId, setSelectedPersonaId] = useState("");
+  /**
+   * The persona each binding is pointed at.
+   *
+   * One picker for every binding — the picker is per binding, so each
+   * conversation can be pointed at a different persona.
+   */
+  const [personaByBinding, setPersonaByBinding] = useState<Record<number, string>>({});
   const [unbindTarget, setUnbindTarget] = useState<{ id: number; label: string } | null>(null);
 
   const personaNameById = new Map((personas.data ?? []).map(p => [p.id, p.name]));
@@ -970,6 +977,32 @@ function WeChatBindingsSection({
   // The ClawBot conversation is always with the account owner, so a single
   // binding (the default persona) is the norm.
   const primaryBinding = bindingsData[0];
+
+  /** The persona a binding is pointed at — the one chosen, or the one it has. */
+  function personaForBinding(bindingId: number): string {
+    const chosen = personaByBinding[bindingId];
+    if (chosen) return chosen;
+    const binding = bindingsData.find((b: any) => b.id === bindingId);
+    return binding?.personaId ? String(binding.personaId) : "";
+  }
+
+  /** Points a binding at a different persona. */
+  function setBindingPersona(bindingId: number, value: string) {
+    setPersonaByBinding((prev) => ({ ...prev, [bindingId]: value }));
+  }
+
+  /** Saves the persona of one binding. */
+  function handleSetDefaultFor(binding: any) {
+    const personaId = Number(personaForBinding(binding.id));
+    if (!personaId) return;
+    const wechatUserId = binding.wechatUserId ?? loggedInUser;
+    if (!wechatUserId) return;
+    setDefault.mutate({
+      wechatUserId,
+      personaId,
+      wechatName: binding.wechatName ?? undefined,
+    });
+  }
 
   function handleSetDefault() {
     const personaId = Number(selectedPersonaId);
@@ -1005,62 +1038,80 @@ function WeChatBindingsSection({
       ) : bindings.isError ? (
         <LoadFailure onRetry={() => bindings.refetch()} />
       ) : primaryBinding ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3 py-3.5 border-b border-border">
-            <div className="min-w-0">
-              <p className="text-sm text-foreground font-medium truncate">
-                {primaryBinding.wechatName || t("settings.wechat.myWechat")}
-              </p>
-              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                {t("settings.wechat.replyingWith", { name: personaNameById.get(primaryBinding.personaId) ?? `#${primaryBinding.personaId}` })}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <StatusChip tone="success">{t("settings.wechat.active")}</StatusChip>
-              <button onClick={() => setUnbindTarget({
-                id: primaryBinding.id,
-                label: primaryBinding.wechatName || t("settings.wechat.myWechat"),
-              })}
-                /**
-                 * The name of the button.
-                 *
-                 * A `title` is not a reliable accessible name — several
-                 * screen readers ignore it when the element has nothing
-                 * else. This button destroys a WeChat binding.
-                 */
-                aria-label={t("settings.wechat.unbind")}
-                title={t("settings.wechat.unbind")}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+        /**
+         * Every binding.
+         *
+         * Only the first one was shown — the rest were counted, and
+         * that was all. So a user with two conversations on WeChat could
+         * see the number "2" and one of them: the second conversation
+         * could not be pointed at a different persona, and it could not
+         * be unbound either. (It was unbound by the fix before this
+         * one, when the mirror was left behind — but the button was
+         * still only on the first.)
+         */
+        <div className="space-y-5">
+          {bindingsData.map((binding: any) => (
+            <div key={binding.id} className="space-y-3">
+              <div className="flex items-center justify-between gap-3 py-3.5 border-b border-border">
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground font-medium truncate">
+                    {binding.wechatName || t("settings.wechat.myWechat")}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    {t("settings.wechat.replyingWith", { name: personaNameById.get(binding.personaId) ?? `#${binding.personaId}` })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <StatusChip tone="success">{t("settings.wechat.active")}</StatusChip>
+                  <button onClick={() => setUnbindTarget({
+                    id: binding.id,
+                    label: binding.wechatName || t("settings.wechat.myWechat"),
+                  })}
+                    /**
+                     * The name of the button.
+                     *
+                     * A `title` is not a reliable accessible name — several
+                     * screen readers ignore it when the element has nothing
+                     * else. This button destroys a WeChat binding.
+                     */
+                    aria-label={t("settings.wechat.unbind")}
+                    title={t("settings.wechat.unbind")}
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground" id="wechat-reply-persona-label" htmlFor="wechat-reply-persona">{t("settings.wechat.replyPersona")}</Label>
-            <div className="flex gap-2">
-              <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
-                <SelectTrigger id="wechat-reply-persona" aria-labelledby="wechat-reply-persona-label" className="h-9 rounded-md text-sm w-full">
-                  <SelectValue placeholder={t("settings.wechat.selectPersona")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {readyPersonas.map(p => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button size="sm" className="rounded-md px-4 flex-shrink-0"
-                disabled={!selectedPersonaId || setDefault.isPending || readyPersonas.length === 0}
-                onClick={handleSetDefault}>
-                {setDefault.isPending ? t("common.saving") : t("common.save")}
-              </Button>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground" id={`wechat-reply-persona-label-${binding.id}`} htmlFor={`wechat-reply-persona-${binding.id}`}>{t("settings.wechat.replyPersona")}</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={personaForBinding(binding.id)}
+                    onValueChange={(value) => setBindingPersona(binding.id, value)}
+                  >
+                    <SelectTrigger id={`wechat-reply-persona-${binding.id}`} aria-labelledby={`wechat-reply-persona-label-${binding.id}`} className="h-9 rounded-md text-sm w-full">
+                      <SelectValue placeholder={t("settings.wechat.selectPersona")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {readyPersonas.map(p => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="rounded-md px-4 flex-shrink-0"
+                    disabled={!personaForBinding(binding.id) || setDefault.isPending || readyPersonas.length === 0}
+                    onClick={() => handleSetDefaultFor(binding)}>
+                    {setDefault.isPending ? t("common.saving") : t("common.save")}
+                  </Button>
+                </div>
+              </div>
             </div>
-            {readyPersonas.length === 0 && (
-              <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
-                {t("settings.wechat.noAnalyzed")}
-              </p>
-            )}
-          </div>
+          ))}
+          {readyPersonas.length === 0 && (
+            <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
+              {t("settings.wechat.noAnalyzed")}
+            </p>
+          )}
         </div>
       ) : connected && loggedInUser ? (
         /**
