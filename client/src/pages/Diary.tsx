@@ -217,7 +217,18 @@ export default function Diary() {
   const weekdays = Array.from(t("diary.weekdays"));
 
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
-  const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
+  /**
+   * The calendar stops at the current month.
+   *
+   * There is nothing to write in a month that has not happened, so
+   * walking forward only showed an empty grid of dimmed days.
+   */
+  const todayPartsNow = parseLocalDate(todayStr);
+  const atCurrentMonth = year === todayPartsNow.getFullYear() && month === todayPartsNow.getMonth();
+  const nextMonth = () => {
+    if (atCurrentMonth) return;
+    if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1);
+  };
 
   const handleGenerate = async (date: string) => {
     if (!selectedPersonaId) return;
@@ -286,7 +297,7 @@ export default function Diary() {
                 <span className="font-display text-base font-semibold text-foreground">
                   {new Date(year, month, 1).toLocaleDateString(locale, { year: "numeric", month: "long" })}
                 </span>
-                <button onClick={nextMonth} className="app-nav-icon" aria-label={t("diary.nextMonth")}>
+                <button onClick={nextMonth} className="app-nav-icon" aria-label={t("diary.nextMonth")} disabled={atCurrentMonth}>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -301,8 +312,18 @@ export default function Diary() {
                   const hasDiary = datesSet.has(dateStr);
                   const isToday = dateStr === todayStr;
                   const isSelected = dateStr === selectedDate;
+                  /**
+                   * A day that has not happened yet.
+                   *
+                   * The server refuses to write a diary for a future
+                   * day — and the button looked perfectly ordinary, so
+                   * the user's only feedback was an error toast. The
+                   * future days are dimmed and cannot be picked.
+                   */
+                  const isFuture = dateStr > todayStr;
                   return (
-                    <button key={day} onClick={() => setSelectedDate(dateStr)}
+                    <button key={day} onClick={() => { if (!isFuture) setSelectedDate(dateStr); }}
+                      disabled={isFuture}
                       /* The cell says only the number of the day, so a
                          screen reader announced a grid of "1", "2", "3" —
                          with no month, no year, no weekday and no word
@@ -315,7 +336,13 @@ export default function Diary() {
                       })}${hasDiary ? ` · ${t("diary.hasEntry")}` : ""}`}
                       aria-current={isToday ? "date" : undefined}
                       className={`cal-cell relative aspect-square flex items-center justify-center rounded-md text-sm
-                        ${isSelected ? "bg-primary text-primary-foreground font-semibold" : isToday ? "border border-foreground/40 font-medium text-foreground" : "text-foreground/80 hover:bg-muted"}`}>
+                        ${isFuture
+                          ? "text-muted-foreground/40 cursor-not-allowed"
+                          : isSelected
+                            ? "bg-primary text-primary-foreground font-semibold"
+                            : isToday
+                              ? "border border-foreground/40 font-medium text-foreground"
+                              : "text-foreground/80 hover:bg-muted"}`}>
                       {day}
                       {hasDiary && <span className={`absolute bottom-1 w-1 h-1 ${isSelected ? "bg-primary-foreground" : "bg-cinnabar"}`} />}
                     </button>
@@ -337,7 +364,7 @@ export default function Diary() {
                   <h2 className="section-title">
                     {parseLocalDate(selectedDate).toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" })}
                   </h2>
-                  {!dayEntry && (
+                  {!dayEntry && selectedDate <= todayStr && (
                     <Button size="sm" onClick={() => handleGenerate(selectedDate)} disabled={generating}
                       className="gap-1.5">
                       {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PenLine className="w-3.5 h-3.5" />}
