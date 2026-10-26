@@ -3489,7 +3489,7 @@ export const appRouter = router({
         const events = await getRelationshipEvents(
           input.personaId,
           ctx.user.id,
-          input.limit ?? 50,
+          input.limit ?? 200,
         );
         return { events, phase: resolveRelationshipPhase(events) };
       }),
@@ -3612,11 +3612,27 @@ export const appRouter = router({
    */
   letter: router({
     list: protectedProcedure
-      .input(z.object({ personaId: z.number() }))
+      .input(z.object({
+        personaId: z.number(),
+        /**
+         * The id of the oldest letter on the page.
+         *
+         * The list stopped at two hundred and there was no way to reach
+         * the rest — the letters existed in the export and not in the
+         * product.
+         */
+        before: z.number().optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      }))
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const letters = await getLetters(input.personaId, ctx.user.id);
+        const letters = await getLetters(
+          input.personaId,
+          ctx.user.id,
+          input.limit ?? 50,
+          input.before,
+        );
         // How many there are, not how many are shown.
         const total = await countLetters(input.personaId, ctx.user.id);
         return { letters, total };

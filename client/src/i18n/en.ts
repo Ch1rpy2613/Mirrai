@@ -1391,6 +1391,7 @@ export const en = {
     kept: "The letter is written. It will not be answered — that was your choice.",
     noteSaved: "Noted. It will wait until you are in touch again.",
     moreCount: "{{count}} older letters are not shown.",
+    loadOlder: "Show older letters",
     delivered: "The letter is written, and it has been handed over.",
     statusPrivate: "Kept",
     statusWaiting: "Waiting for an answer",

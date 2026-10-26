@@ -27,6 +27,14 @@ export default function LetterBox({ personaId }: { personaId: number }) {
   const utils = trpc.useUtils();
 
   const { data, isLoading, isError } = trpc.letter.list.useQuery({ personaId });
+  /**
+   * The older letters.
+   *
+   * The list stopped at two hundred and there was no way to reach the
+   * rest — so the letters existed in the export and not in the product.
+   */
+  const [older, setOlder] = useState<any[]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const { data: todosData } = trpc.letter.todos.useQuery({ personaId });
   const [showWrite, setShowWrite] = useState(false);
   const [body, setBody] = useState("");
@@ -74,7 +82,31 @@ export default function LetterBox({ personaId }: { personaId: number }) {
     onError: (e) => toast.error(e.message),
   });
 
-  const letters = (data?.letters ?? []).filter((l: any) => l.kind !== "todo");
+  /** Asks for the page before the oldest one on the screen. */
+  const loadOlder = async () => {
+    const shown = [...(data?.letters ?? []), ...older];
+    const oldest = shown[shown.length - 1];
+    if (!oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await utils.letter.list.fetch({
+        personaId,
+        before: oldest.id,
+        limit: 50,
+      });
+      const known = new Set(shown.map((l: any) => l.id));
+      setOlder((current) => [
+        ...current,
+        ...(page.letters ?? []).filter((l: any) => !known.has(l.id)),
+      ]);
+    } catch (e) {
+      toast.error((e as Error)?.message || t("errors.unknown"));
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  const letters = [...(data?.letters ?? []), ...older].filter((l: any) => l.kind !== "todo");
   const todos = todosData?.todos ?? [];
   // How many there are, not how many are shown.
   const total = (data?.total ?? 0) as number;
@@ -156,9 +188,19 @@ export default function LetterBox({ personaId }: { personaId: number }) {
 
       {/* The letters that are not on the screen. */}
       {total > letters.length && (
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {t("letters.moreCount", { count: total - letters.length })}
-        </p>
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("letters.moreCount", { count: total - letters.length })}
+          </p>
+          <button
+            type="button"
+            onClick={loadOlder}
+            disabled={loadingOlder}
+            className="text-xs px-3 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {loadingOlder ? t("common.loading") : t("letters.loadOlder")}
+          </button>
+        </div>
       )}
 
       {todos.length > 0 && (

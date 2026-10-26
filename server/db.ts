@@ -274,21 +274,54 @@ export async function createLetter(params: {
  * the fifty-first simply disappeared from the screen while it was still
  * in the export. The number is what tells the user that.
  */
+/**
+ * How many letters a persona has.
+ *
+ * Only the letters — the notes for later are counted separately. The
+ * count used to include them, and the panel compares it against the
+ * list it is showing — which has the notes *out* of it. So a user with
+ * five letters and three notes was told "there are three older letters
+ * that are not shown", and the three were in the box below, written out
+ * as notes.
+ */
 export async function countLetters(personaId: number, userId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
   const [row] = await db
     .select({ value: count() })
     .from(letters)
-    .where(and(eq(letters.personaId, personaId), eq(letters.userId, userId)));
+    .where(and(
+      eq(letters.personaId, personaId),
+      eq(letters.userId, userId),
+      eq(letters.kind, "letter"),
+    ));
   return Number(row?.value ?? 0);
 }
 
-export async function getLetters(personaId: number, userId: number, limit = 200) {
+/**
+ * The letters, newest first.
+ *
+ * `before` is the id of the oldest letter on the page — so the ones
+ * older than it can be asked for. Without it the list stopped at two
+ * hundred and there was no way to reach the rest: the letters existed
+ * in the export and not in the product.
+ */
+export async function getLetters(
+  personaId: number,
+  userId: number,
+  limit = 200,
+  before?: number,
+) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(letters)
-    .where(and(eq(letters.personaId, personaId), eq(letters.userId, userId)))
+    .where(and(
+      eq(letters.personaId, personaId),
+      eq(letters.userId, userId),
+      ...(before
+        ? [sql`"createdAt" < (SELECT "createdAt" FROM "letters" WHERE "id" = ${before} AND "personaId" = ${personaId} AND "userId" = ${userId})`]
+        : []),
+    ))
     .orderBy(desc(letters.createdAt))
     .limit(limit);
 }
