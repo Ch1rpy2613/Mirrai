@@ -788,7 +788,14 @@ export function parseNormalisedPayload(
   return {
     messages: limited,
     meta: {
-      total: limited.length,
+      /**
+       * How many there were.
+       *
+       * The total was the length of the *kept* list — so a collection
+       * that was cut short said it had found exactly as many messages
+       * as it kept, and nothing said the rest were left behind.
+       */
+      total: messages.length,
       source,
       truncated: (limit !== undefined && messages.length >= limit) || payloadTruncated,
     },
@@ -871,6 +878,6 @@ export function normaliseCollectorOutput(
 
   return {
     messages,
-    meta: { total: messages.length, source, truncated },
+    meta: { total: parsed.length, source, truncated },
   };
 }

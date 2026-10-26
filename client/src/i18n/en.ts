@@ -813,6 +813,7 @@ export const en = {
       noJobs: "No collection jobs yet.",
       notStarted: "Not started yet",
       messageCount: "{{count}} messages",
+      truncatedAt: "({{count}} were found — this run took only some of them)",
       collapse: "Hide details",
       expand: "Show details",
       jobId: "Job ID",

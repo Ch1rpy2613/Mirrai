@@ -3426,6 +3426,8 @@ export async function upsertCollectionJob(
         status: data.status,
         progress: data.progress,
         messageCount: data.messageCount,
+        foundCount: data.foundCount,
+        truncated: data.truncated,
         error: data.error,
         personaId: data.personaId,
         startedAt: data.startedAt,

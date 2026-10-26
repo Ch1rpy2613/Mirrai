@@ -870,6 +870,16 @@ export const collectionJobs = pgTable("collection_jobs", {
   status: varchar("status", { length: 32 }).default("queued").notNull(),
   progress: integer("progress").default(0).notNull(),
   messageCount: integer("messageCount").default(0).notNull(),
+  /**
+   * How many messages the collector found, before the limit.
+   *
+   * The count that was kept was the same as the count that was found,
+   * so a collection that was cut short said it had found exactly as
+   * many as it kept.
+   */
+  foundCount: integer("foundCount").default(0).notNull(),
+  /** Whether the collection was cut short at the limit. */
+  truncated: boolean("truncated").default(false).notNull(),
   error: text("error"),
   /** Where the raw collector output was written. */
   rawPath: text("rawPath"),

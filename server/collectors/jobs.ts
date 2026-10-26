@@ -29,6 +29,16 @@ export interface CollectorJob {
   /** 0..100. */
   progress: number;
   messageCount: number;
+  /**
+   * How many messages the collector found, before the limit.
+   *
+   * The count that was kept was the same as the count that was found
+   * — so a collection that was cut short said it had found exactly as
+   * many as it kept, and nothing said the rest were left behind.
+   */
+  foundCount?: number;
+  /** Whether the collection was cut short. */
+  truncated?: boolean;
   error?: string;
   startedAt?: string;
   finishedAt?: string;
@@ -356,6 +366,9 @@ async function runJob(job: CollectorJob): Promise<void> {
     const result = await connector.collect(input);
     job.result = result;
     job.messageCount = result.messages.length;
+    // How many there were, and whether the collection was cut short.
+    job.foundCount = result.meta?.total ?? result.messages.length;
+    job.truncated = result.meta?.truncated === true;
     job.progress = 100;
 
     // The collected messages belong to the persona, not just to the job
@@ -484,6 +497,8 @@ export async function enqueueCollectorJob(
     status: "queued",
     progress: 0,
     messageCount: 0,
+    foundCount: 0,
+    truncated: false,
   };
 
   store.save(job);

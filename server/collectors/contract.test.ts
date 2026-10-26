@@ -327,7 +327,10 @@ describe("the normalised collector payload", () => {
     const result = normaliseCollectorOutput(JSON.stringify(payload), "feishu", { limit: 1 });
 
     expect(result.messages).toHaveLength(1);
-    expect(result.meta.total).toBe(1);
+    // The total is how many were *found* — so a collection that was
+    // cut short can say so. It used to be the length of the kept list,
+    // which said the opposite.
+    expect(result.meta.total).toBe(payload.messages.length);
     expect(result.meta.truncated).toBe(true);
   });
 

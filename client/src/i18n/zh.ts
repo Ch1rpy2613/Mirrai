@@ -807,6 +807,7 @@ export const zh = {
       noJobs: "还没有采集任务。",
       notStarted: "尚未开始",
       messageCount: "{{count}} 条",
+      truncatedAt: "（一共找到了 {{count}} 条，这次只拿了一部分）",
       collapse: "收起详情",
       expand: "查看详情",
       jobId: "任务 ID",

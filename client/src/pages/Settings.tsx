@@ -2000,7 +2000,23 @@ function DataSourcesTab() {
                     }>
                       {COLLECTOR_STATUS_LABELS[job.status] ? t(COLLECTOR_STATUS_LABELS[job.status]) : t("settings.sources.jobStatus.unknown")}
                     </StatusChip>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{t("settings.sources.messageCount", { count: job.messageCount })}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {t("settings.sources.messageCount", { count: job.messageCount })}
+                    </span>
+                    {/**
+                        * The collection was cut short.
+
+                        The count that was kept was the same as the count
+                        that was found, so a collection that stopped at
+                        the limit said it had found exactly as many
+                        messages as it kept — and the rest were simply
+                        gone.
+                        */}
+                    {job.truncated && (
+                      <span className="text-xs text-muted-subtle whitespace-nowrap">
+                        {t("settings.sources.truncatedAt", { count: job.foundCount ?? job.messageCount })}
+                      </span>
+                    )}
                   </div>
                 </div>
 
