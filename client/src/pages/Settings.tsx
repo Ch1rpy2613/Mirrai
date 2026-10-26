@@ -638,6 +638,27 @@ function ProfileTab() {
   );
 }
 
+/**
+ * A panel that could not be loaded.
+ *
+ * A failed request leaves the list empty — so the panel said "you have
+ * none of these". That is a claim about the user's own data, and it was
+ * simply false. And there was no way to try again.
+ */
+function LoadFailure({ onRetry }: { onRetry?: () => void }) {
+  const { t } = useLocale();
+  return (
+    <div className="py-6 text-center space-y-2" role="alert">
+      <p className="text-sm text-destructive">{t("common.error")}</p>
+      {onRetry && (
+        <Button size="sm" variant="outline" className="rounded-md" onClick={onRetry}>
+          {t("common.retry")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 // ─── AI SETTINGS TAB ─────────────────────────────────────────────────────────
 
 function AISettingsTab() {
@@ -962,6 +983,8 @@ function WeChatBindingsSection({
 
       {bindings.isLoading ? (
         <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+      ) : bindings.isError ? (
+        <LoadFailure onRetry={() => bindings.refetch()} />
       ) : primaryBinding ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 py-3.5 border-b border-border">
@@ -1360,6 +1383,8 @@ function ChannelsTab({ onOpenTab }: { onOpenTab: (key: TabKey) => void }) {
         <SectionHeader note={t("settings.channels.overviewNote")} title={t("settings.channels.overviewTitle")} />
         {channels.isLoading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : channels.isError ? (
+          <LoadFailure onRetry={() => channels.refetch()} />
         ) : (
           <div>
             {(channels.data ?? []).map(channel => (
@@ -1729,6 +1754,8 @@ function DataSourcesTab() {
         <SectionHeader note={t("settings.sources.availableNote")} title={t("settings.sources.availableTitle")} />
         {sources.isLoading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : sources.isError ? (
+          <LoadFailure onRetry={() => sources.refetch()} />
         ) : (
           <div className="space-y-2.5">
             {sourceList.map(source => (
@@ -1920,6 +1947,8 @@ function DataSourcesTab() {
         <SectionHeader note={t("settings.sources.jobsNote")} title={t("settings.sources.jobsTitle")} />
         {jobs.isLoading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : jobs.isError ? (
+          <LoadFailure onRetry={() => jobs.refetch()} />
         ) : (jobs.data ?? []).length === 0 ? (
           <p className="text-xs text-muted-foreground">{t("settings.sources.noJobs")}</p>
         ) : (
@@ -2228,6 +2257,8 @@ function TemplateLibraryTab() {
           )} />
         {templates.isLoading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</div>
+        ) : templates.isError ? (
+          <LoadFailure onRetry={() => templates.refetch()} />
         ) : (
           <div className="space-y-6">
             {[
