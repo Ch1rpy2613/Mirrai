@@ -34,17 +34,32 @@ describe("the day a message belongs to", () => {
   });
 
   it("moves the timestamp into the user's calendar", () => {
-    // The shift is the difference between the user's clock and the
-    // server's, so it depends on where the server is — but it has to
-    // carry the half hour of a half-hour zone.
-    const shift = dayShiftMinutes("Asia/Kolkata");
-    expect(Math.abs(shift % 60)).toBe(30);
+    // The zone names are used, so Postgres works out the offset of
+    // *every* row — a shift in minutes is fixed at "now", and an hour
+    // is enough to put a message on the neighbouring day for the days
+    // on the far side of a daylight-saving change.
     const sql = dialect.sqlToQuery(userDayColumn("Asia/Kolkata")).sql;
-    expect(sql).toContain(`${shift} * INTERVAL '1 minute'`);
+    expect(sql).toContain("AT TIME ZONE");
+    expect(sql).toContain("'Asia/Kolkata'");
   });
 
   it("does not move the timestamp when there is no zone", () => {
     const sql = dialect.sqlToQuery(userDayColumn(null)).sql;
     expect(sql).toContain("0 * INTERVAL '1 minute'");
+  });
+
+  it("falls back to the shift when the zone is not one the runtime knows", () => {
+    // The user's zone is a free string in their profile, so it cannot
+    // be written into the SQL as it is — and a name the runtime does
+    // not know would make Postgres refuse the query outright.
+    const shift = dayShiftMinutes("Not/AZone");
+    const sql = dialect.sqlToQuery(userDayColumn("Not/AZone")).sql;
+    expect(sql).toContain(`${shift} * INTERVAL '1 minute'`);
+    expect(sql).not.toContain("Not/AZone");
+  });
+
+  it("refuses a zone name that tries to be something else", () => {
+    const sql = dialect.sqlToQuery(userDayColumn("UTC'; DROP TABLE messages; --")).sql;
+    expect(sql).not.toContain("DROP TABLE");
   });
 });
