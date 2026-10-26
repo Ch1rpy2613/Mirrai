@@ -23,6 +23,20 @@ import type { MicroRule } from "@shared/micro-rules";
  * it means, what the person does about it, and the messages it was read
  * off. A rule the user cannot check is a rule the user cannot trust.
  */
+/**
+ * An id for a rule the user wrote.
+ *
+ * It was the clock alone, so two rules written in the same millisecond
+ * got the same id — and the id is what tells an edited rule from a new
+ * one, so the second would have replaced the first instead of being
+ * added beside it.
+ */
+let manualCounter = 0;
+function manualId(): string {
+  manualCounter += 1;
+  return `manual-${Date.now()}-${manualCounter}`;
+}
+
 export default function MicroRulesEditor({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
   // The punctuation follows the interface's language: the full-width
