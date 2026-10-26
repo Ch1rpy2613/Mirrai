@@ -485,7 +485,19 @@ export const diaryEntries = pgTable("diary_entries", {
   reflection: text("reflection"),
   messageCount: integer("messageCount").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * One diary per day.
+   *
+   * The generation read the day and then wrote it, in two steps — so
+   * two requests that passed the read together both wrote, and the user
+   * was billed twice for one day and found two entries for it.
+   *
+   * The database is what should prevent it, not the interface.
+   */
+  personaUserDateUnique: uniqueIndex("diary_entries_persona_user_date_idx")
+    .on(table.personaId, table.userId, table.date),
+}));
 
 export type DiaryEntry = typeof diaryEntries.$inferSelect;
 export type InsertDiaryEntry = typeof diaryEntries.$inferInsert;
@@ -822,7 +834,17 @@ export const collectionSources = pgTable("collection_sources", {
   status: varchar("status", { length: 32 }).default("stopped").notNull(),
   lastSyncedAt: timestamp("lastSyncedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * One row per source and user.
+   *
+   * The authorisation read the table and then wrote to it — so two
+   * presses of the button wrote two rows, and the reader took the
+   * first of an unordered select: possibly the older credentials.
+   */
+  userSourceUnique: uniqueIndex("collection_sources_user_source_idx")
+    .on(table.userId, table.source),
+}));
 
 export type CollectionSource = typeof collectionSources.$inferSelect;
 export type InsertCollectionSource = typeof collectionSources.$inferInsert;

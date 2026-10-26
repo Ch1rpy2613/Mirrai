@@ -329,7 +329,14 @@ export async function saveCollectionSource(params: {
       .update(collectionSources)
       .set({
         label: params.label ?? null,
-        authState,
+        /**
+         * The authorisation result that is already stored is kept.
+         *
+         * It was written unconditionally — so a call without one wiped
+         * it, and the source looked unauthorised again with no
+         * explanation.
+         */
+        authState: params.authState ?? existing[0].authState,
         /**
          * The credentials that are already stored are kept.
          *
@@ -346,14 +353,35 @@ export async function saveCollectionSource(params: {
     return;
   }
 
-  await client.insert(collectionSources).values({
-    userId: params.userId,
-    source: params.source,
-    label: params.label ?? null,
-    authState,
-    config,
-    status: params.status ?? "stopped",
-  });
+  /**
+   * The insert is an upsert.
+   *
+   * Two presses of the button both found nothing and both inserted —
+   * and the reader took the first of an unordered select, so it could
+   * be the row with the older credentials. There is a unique index on
+   * `(userId, source)` now, so the second insert would be refused
+   * outright; the upsert is what makes it an update instead.
+   */
+  await client
+    .insert(collectionSources)
+    .values({
+      userId: params.userId,
+      source: params.source,
+      label: params.label ?? null,
+      authState,
+      config,
+      status: params.status ?? "stopped",
+    })
+    .onConflictDoUpdate({
+      target: [collectionSources.userId, collectionSources.source],
+      set: {
+        label: params.label ?? null,
+        authState: params.authState ?? null,
+        config,
+        status: params.status ?? "stopped",
+        lastSyncedAt: new Date(),
+      },
+    });
 }
 
 /**

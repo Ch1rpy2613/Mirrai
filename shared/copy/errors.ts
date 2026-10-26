@@ -317,6 +317,17 @@ export const ERRORS = {
     zh: "钉钉的消息记录是通过浏览器采集的，需要你指定自己的 Chrome Profile 路径。浏览器的登录状态就是凭据，所以它必须是你自己的。",
     en: "DingTalk's message history is read through a browser, and the browser's login is the credential — so it has to be your own Chrome profile, named explicitly.",
   },
+  /**
+   * The day already has a diary.
+   *
+   * The day is unique in the database now, so two generations that
+   * passed the check together cannot both write — and the second one
+   * is told what happened instead of a database error.
+   */
+  "errors.diaryAlreadyExists": {
+    zh: "这一天已经有日记了。",
+    en: "This day already has a diary.",
+  },
   "errors.collectorNeedsAuthorization": {
     zh: "这个来源还没有授权。填好凭据并点「授权」，再开始采集。",
     en: "This source has not been authorised yet. Fill in the credentials and press Authorise, then start the collection.",

@@ -27,7 +27,14 @@ const client = vi.hoisted(() => ({
   insert: () => ({
     values: (values: Record<string, unknown>) => {
       dbState.inserted.push(values);
-      return { then: (resolve: (value: unknown) => unknown) => resolve(undefined) };
+      return {
+        // The insert is an upsert now, so it carries the conflict
+        // clause with it.
+        onConflictDoUpdate: () => ({
+          then: (resolve: (value: unknown) => unknown) => resolve(undefined),
+        }),
+        then: (resolve: (value: unknown) => unknown) => resolve(undefined),
+      };
     },
   }),
 }));

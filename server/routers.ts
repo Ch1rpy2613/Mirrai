@@ -1,5 +1,6 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { isUniqueViolation } from "./_core/auth";
 import { requestAbortSignal } from "./_core/context";
 import { extractMemories } from "./chat/memory-extract";
 import { systemRouter } from "./_core/systemRouter";
@@ -3194,15 +3195,31 @@ export const appRouter = router({
           quotes?: string[];
           reflection?: string | null;
         };
-        const id = await createDiaryEntry({
-          personaId: input.personaId, userId: ctx.user.id, date,
-          summary: parsed.summary || copy(ctx.locale, "persona.diaryFallbackSummary"),
-          highlights: parsed.highlights || [],
-          emotionalArc: parsed.emotionalArc || {},
-          quotes: parsed.quotes || [],
-          reflection: parsed.reflection || null,
-          messageCount: msgs.length,
-        });
+        /**
+         * The write.
+         *
+         * The day is unique in the database now, so two generations
+         * that passed the check together cannot both write — the second
+         * one is told the day already has a diary, which is what the
+         * check at the top of the procedure says.
+         */
+        let id: number;
+        try {
+          id = await createDiaryEntry({
+            personaId: input.personaId, userId: ctx.user.id, date,
+            summary: parsed.summary || copy(ctx.locale, "persona.diaryFallbackSummary"),
+            highlights: parsed.highlights || [],
+            emotionalArc: parsed.emotionalArc || {},
+            quotes: parsed.quotes || [],
+            reflection: parsed.reflection || null,
+            messageCount: msgs.length,
+          });
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            throw new TRPCError({ code: "CONFLICT", message: copy(ctx.locale, "errors.diaryAlreadyExists") });
+          }
+          throw error;
+        }
         return { id };
       }),
 

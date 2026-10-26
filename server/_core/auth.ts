@@ -42,7 +42,7 @@ async function rejectIfRateLimited(req: Request, res: Response): Promise<boolean
 }
 
 /** Whether the database refused a row because a unique key was taken. */
-function isUniqueViolation(error: unknown): boolean {
+export function isUniqueViolation(error: unknown): boolean {
   const code = (error as { code?: unknown })?.code;
   // Postgres's SQLSTATE for a unique violation.
   return code === "23505";
