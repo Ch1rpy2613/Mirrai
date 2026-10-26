@@ -49,6 +49,20 @@ async function startServer() {
     app.set("trust proxy", ENV.trustedProxies);
   }
 
+  /**
+   * The body limit for the sign-in routes.
+   *
+   * The whole app parses up to fifty megabytes of JSON, which the
+   * character-card import and the file uploads need. The auth routes
+   * need a username and a password — so they get their own, small
+   * limit, and they are registered *before* the large one.
+   *
+   * Without it an unauthenticated client could make the server buffer
+   * and parse fifty megabytes per request, at any address it liked.
+   */
+  app.use("/api/auth", express.json({ limit: "32kb" }));
+  app.use("/api/auth", express.urlencoded({ limit: "32kb", extended: true }));
+
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
