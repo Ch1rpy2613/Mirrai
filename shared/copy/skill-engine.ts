@@ -49,6 +49,18 @@ export const SKILL_ENGINE = {
     zh: "性格蒸馏失败，请重试",
     en: "The distillation failed — please try again",
   },
+  /**
+   * The reason the run failed.
+   *
+   * The reason used to be nowhere: the persona got a fixed sentence
+   * and the job kept the real one, which the interface only showed
+   * when the run had succeeded. So there was no way to tell a bad key
+   * from a bad upload.
+   */
+  "skill.analysisFailedReason": {
+    zh: "性格蒸馏失败：{{reason}}",
+    en: "The distillation failed: {{reason}}",
+  },
   "skill.researchNote": {
     zh: "## 研究笔记（来自公开资料研究阶段）\n\n{{notes}}",
     en: "## Research notes (from the public-source stage)\n\n{{notes}}",

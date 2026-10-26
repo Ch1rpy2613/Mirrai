@@ -36,6 +36,7 @@ import {
 import { normalizeMicroRules, type MicroRule } from "@shared/micro-rules";
 import { normalizeImperfectionProfile } from "@shared/imperfection";
 import { ENV } from "../_core/env";
+import { safeErrorMessage } from "../_core/safe-error";
 import * as db from "../db";
 import {
   resolveCelebrityProfile,
@@ -818,7 +819,7 @@ export async function runSkillPipeline(input: PipelineInput): Promise<void> {
       if (jobId) {
         // The retry count is on the one row, so it can be counted.
         await db
-          .updateSkillJob(jobId, input.userId, { retryCount: attempt - 1 })
+          .updateSkillJob(jobId, input.userId, { retryCount: attempt })
           .catch((e) => console.warn("[SkillEngine] Job update failed:", e));
       }
       if (attempt >= maxAttempts) return;
@@ -1434,7 +1435,7 @@ async function runSkillPipelineOnce(
     // The retry count lives on the job, so the UI can tell "this failed
     // three times" from "this failed once".
     await db
-      .updateSkillJob(jobId, userId, { retryCount: Math.max(0, attempt - 1) })
+      .updateSkillJob(jobId, userId, { retryCount: Math.max(0, attempt) })
       .catch(() => undefined);
 
     if (attempt < maxAttempts) {
@@ -1450,16 +1451,25 @@ async function runSkillPipelineOnce(
       throw error;
     }
 
+    /**
+     * Why the run failed.
+     *
+     * The reason is shown to the user — a failed distillation used to
+     * say only "the analysis failed", so there was no way to tell a bad
+     * key from a bad upload. The reason is the provider's own error,
+     * so it is stripped of the endpoint and the credentials first.
+     */
+    const reason = safeErrorMessage(error);
     await setJobStage(
       {
         pipelineStage: "error",
-        stageMessage: `Pipeline failed: ${error}`,
+        stageMessage: reason,
       },
       jobId,
     );
     await db.updatePersona(personaId, userId, {
       analysisStatus: "error",
-      analysisMessage: copy(locale, "skill.analysisFailed"),
+      analysisMessage: copy(locale, "skill.analysisFailedReason", { reason }),
     });
   }
 }
