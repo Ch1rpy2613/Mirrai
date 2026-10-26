@@ -1,4 +1,5 @@
 import { Check } from "lucide-react";
+import { useRef } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
 import {
   DISTILLATION_PRESETS,
@@ -23,9 +24,45 @@ interface Props {
 
 export default function DistillationModePicker({ value, onChange, disabled }: Props) {
   const { t } = useLocale();
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * The arrow keys move between the options.
+   *
+   * A group of radio buttons is one control, so the arrow keys are what
+   * moves inside it — and the tab key should move *out* of it, not
+   * through it. Without this, a keyboard user had to tab through every
+   * preset to reach the next control, and could not tell which one was
+   * selected without tabbing to it.
+   */
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const index = DISTILLATION_PRESETS.findIndex((preset) => preset.id === value);
+    const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+    const next =
+      DISTILLATION_PRESETS[
+        (index + step + DISTILLATION_PRESETS.length) % DISTILLATION_PRESETS.length
+      ];
+    if (!next) return;
+    onChange(next.id);
+    // The focus follows the selection.
+    requestAnimationFrame(() => {
+      const group = groupRef.current;
+      const options = group?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+      options?.[DISTILLATION_PRESETS.findIndex((preset) => preset.id === next.id)]?.focus();
+    });
+  };
 
   return (
-    <div className="space-y-2" role="radiogroup" aria-label={t("distillation.title")}>
+    <div
+      ref={groupRef}
+      className="space-y-2"
+      role="radiogroup"
+      aria-label={t("distillation.title")}
+      onKeyDown={onKeyDown}
+    >
       {DISTILLATION_PRESETS.map((preset) => {
         const selected = preset.id === value;
         return (
@@ -33,6 +70,7 @@ export default function DistillationModePicker({ value, onChange, disabled }: Pr
             key={preset.id}
             type="button"
             role="radio"
+            tabIndex={selected ? 0 : -1}
             aria-checked={selected}
             disabled={disabled}
             onClick={() => onChange(preset.id)}
