@@ -85,6 +85,11 @@ jobs:
       # standing configuration for the automatic runs.
       EVAL_PERSONA: ${{ inputs.persona || vars.EVAL_PERSONA }}
       EVAL_USER: ${{ inputs.user || vars.EVAL_USER }}
+      # The records, if they are configured. It lives here rather than on
+      # the step because the `secrets` context cannot be used in a
+      # step's `if` — GitHub rejects the whole workflow for that, and
+      # the job never starts.
+      EVAL_RECORDS: ${{ secrets.EVAL_RECORDS_SQL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -116,9 +121,7 @@ jobs:
         #
         # Without them the measurement has nothing to measure, and the
         # gate says so and fails, rather than passing on nothing.
-        if: ${{ secrets.EVAL_RECORDS_SQL != '' }}
-        env:
-          EVAL_RECORDS: ${{ secrets.EVAL_RECORDS_SQL }}
+        if: ${{ env.EVAL_RECORDS != '' }}
         run: |
           echo "$EVAL_RECORDS" | base64 --decode > /tmp/records.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /tmp/records.sql
