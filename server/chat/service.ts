@@ -686,6 +686,14 @@ async function* runConversationTurn(
     }
   }
 
+  /**
+   * The user's own time zone.
+   *
+   * The limits are the user's: "five messages a day" means five messages
+   * in the user's day, not in the server's.
+   */
+  const usageTimezone = await db.getUserTimezone(userId);
+
   // The care note is decided before the reply is stored, so it can be part
   // of what the persona actually says — the plan asks for the persona itself
   // to say the caring words, not for a separate system notice.
@@ -693,8 +701,10 @@ async function* runConversationTurn(
     userId,
     personaId: persona.id,
     now: now.getTime(),
+    timezone: usageTimezone,
   });
   const careNote = pickCareNote(signals, locale);
+
   if (careNote) {
     await db.createSafetyEvent({
       userId,

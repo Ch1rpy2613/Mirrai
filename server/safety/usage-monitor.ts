@@ -8,6 +8,7 @@
  */
 import * as db from "../db";
 import { copy } from "@shared/copy";
+import { dayShiftMinutes, zonedDateKey } from "@shared/timezone";
 
 /** A single unbroken conversation longer than this triggers a check-in. */
 export const LONG_SESSION_MS = 2 * 60 * 60 * 1000;
@@ -38,10 +39,26 @@ export interface UsageSignals {
   dailyCounts: number[];
 }
 
-function startOfToday(): Date {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
+/**
+ * The start of the user's own day, in the server's own clock.
+ *
+ * The messages are stored with the server's wall clock — so the start of
+ * the user's day has to be expressed in it too.
+ *
+ * It used to be the *server's* midnight, and the day key it was looked
+ * up under was the *UTC* date: three calendars for one measurement. So
+ * the "five messages a day" limit, and — worse — the dependency signal
+ * built from the daily counts, were measured on a shifted series. On any
+ * server that is not on UTC the last, partial day was dropped and every
+ * other day was looked up under the wrong key.
+ */
+function startOfUserDay(now: Date, timezone?: string | null): Date {
+  const start = new Date(now.getTime());
+  const shift = dayShiftMinutes(timezone, now);
+  start.setMinutes(start.getMinutes() + shift);
+  start.setHours(0, 0, 0, 0);
+  start.setMinutes(start.getMinutes() - shift);
+  return start;
 }
 
 /**
@@ -60,28 +77,34 @@ export async function evaluateUsage(params: {
   userId: number;
   personaId: number;
   now?: number;
+  /** The user's own time zone. */
+  timezone?: string | null;
 }): Promise<UsageSignals> {
-  const now = params.now ?? Date.now();
+  const nowMs = params.now ?? Date.now();
+  const now = new Date(nowMs);
+  const timezone = params.timezone ?? null;
 
   const sessionStart = await db
     .getSessionStartAt(params.personaId, params.userId, SESSION_GAP_MS)
     .catch(() => null);
-  const sessionDurationMs = sessionStart ? now - sessionStart.getTime() : 0;
+  const sessionDurationMs = sessionStart ? nowMs - sessionStart.getTime() : 0;
 
   const dailyMessageCount = await db.getUserMessageCountSince(
     params.userId,
-    startOfToday(),
+    startOfUserDay(now, timezone),
   );
 
-  const since = new Date(now);
+  const since = new Date(now.getTime());
   since.setDate(since.getDate() - 14);
-  const rows = await db.getDailyUserChatCounts(params.userId, 14);
+  // The rows are filed under the user's own day keys.
+  const rows = await db.getDailyUserChatCounts(params.userId, 14, timezone);
   const byDate = new Map(rows.map((r) => [r.date, Number(r.count)]));
   const dailyCounts: number[] = [];
   for (let i = 13; i >= 0; i--) {
-    const date = new Date(now);
+    const date = new Date(now.getTime());
     date.setDate(date.getDate() - i);
-    dailyCounts.push(byDate.get(date.toISOString().slice(0, 10)) ?? 0);
+    // The key is the user's day, not the UTC date.
+    dailyCounts.push(byDate.get(zonedDateKey(date, timezone)) ?? 0);
   }
 
   const recentWeek = dailyCounts.slice(7).reduce((a, b) => a + b, 0);
