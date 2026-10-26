@@ -7,10 +7,12 @@ const handleCommand = vi.fn();
 const getActivePersonaId = vi.fn();
 
 const getChannelDefaultPersona = vi.fn();
+const getUserLocale = vi.fn();
 
 vi.mock("../db", () => ({
   getChannelBinding: (...a: unknown[]) => getChannelBinding(...a),
   getChannelDefaultPersona: (...a: unknown[]) => getChannelDefaultPersona(...a),
+  getUserLocale: (...a: unknown[]) => getUserLocale(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
 }));
 
@@ -59,6 +61,8 @@ describe("handleFeishuEvent", () => {
     handleCommand.mockReset();
     getActivePersonaId.mockReset();
     getChannelDefaultPersona.mockReset();
+    getUserLocale.mockReset();
+    getUserLocale.mockResolvedValue("zh");
     // The channel's own choice, unless a test says otherwise.
     getChannelDefaultPersona.mockResolvedValue(undefined);
 

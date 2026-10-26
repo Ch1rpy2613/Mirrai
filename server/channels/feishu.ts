@@ -181,9 +181,18 @@ export async function handleFeishuEvent(params: {
   const text = extractMessageText(event.message ?? {});
   if (!text || !text.trim()) return;
 
-  // The language the person is writing in is the language they should be
-  // answered in — the channel has no language switch of its own.
-  const locale = detectLocale(text);
+  /**
+   * The language the persona answers in.
+   *
+   * It used to be detected from each message — so the same conversation
+   * could change language halfway through, and an English user who
+   * never touched the switch got Chinese on WeChat and English here.
+   *
+   * The user's own saved language is the rule on both sides now: it is
+   * the one they chose, it does not change from message to message, and
+   * it is the same answer whichever door they came in by.
+   */
+  const locale = await db.getUserLocale(userId).catch(() => "zh" as Locale);
 
   /**
    * The persona this conversation talks to.
