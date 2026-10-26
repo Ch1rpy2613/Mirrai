@@ -176,6 +176,11 @@ export default function Diary() {
     try {
       await generateMutation.mutateAsync({ personaId: selectedPersonaId, date });
       setSelectedDate(date);
+    } catch {
+      // The failure used to be thrown past the handler and nowhere
+      // else: the button stopped spinning, the day was not written, and
+      // nothing said why.
+      toast.error(t("diary.generateFailedShort"));
     } finally { setGenerating(false); }
   };
 

@@ -101,6 +101,7 @@ export const zh = {
 
   common: {
     loading: "加载中…",
+    error: "出了点问题。",
     save: "保存",
     cancel: "取消",
     delete: "删除",
@@ -1022,6 +1023,7 @@ export const zh = {
     reflection: "回望",
     generateSuccess: "日记生成成功",
     generateFailed: "生成失败：{{message}}",
+    generateFailedShort: "生成失败。",
     deleted: "已删除",
     kicker: "每日回顾",
     intro: "把一天的对话收成一封信，留给以后的自己。",

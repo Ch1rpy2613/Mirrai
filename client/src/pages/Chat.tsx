@@ -74,6 +74,41 @@ export default function Chat() {
   const { t, locale } = useLocale();
 
   const [messages, setMessages] = useState<Message[]>([]);
+
+  /**
+   * The blob URLs made for the pictures and the voice messages the user
+   * has just sent.
+   *
+   * They were never released. A blob URL holds its blob in memory for
+   * as long as it exists, and it exists until it is revoked — so a
+   * long chat with a lot of pictures leaked every one of them, and the
+   * tab got heavier and heavier for as long as it was open.
+   *
+   * A URL is released when the message it belongs to is gone — the
+   * history arrives from the server with the server's own URL in its
+   * place — and when the page is left.
+   */
+  const localUrls = useRef(new Set<string>());
+  useEffect(() => {
+    const urls = localUrls.current;
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
+  useEffect(() => {
+    const urls = localUrls.current;
+    if (urls.size === 0) return;
+    const stillInUse = new Set(
+      messages.map((m) => m.mediaUrl).filter((url): url is string => Boolean(url)),
+    );
+    for (const url of Array.from(urls)) {
+      if (!stillInUse.has(url)) {
+        URL.revokeObjectURL(url);
+        urls.delete(url);
+      }
+    }
+  }, [messages]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [currentState, setCurrentState] = useState("warm");
@@ -702,6 +737,7 @@ export default function Chat() {
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
       const localUrl = URL.createObjectURL(file);
+      localUrls.current.add(localUrl);
       const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: t("chat.imageMessage"), messageType: "image", mediaUrl: localUrl, createdAt: new Date() };
       setMessages(prev => [...prev, userMsg]);
       const streamId = `stream-${Date.now()}`;
@@ -767,6 +803,7 @@ export default function Chat() {
           setIsSending(true);
 
           const localUrl = URL.createObjectURL(blob);
+          localUrls.current.add(localUrl);
           const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: t("chat.voiceMessage"), messageType: "voice", mediaUrl: localUrl, mediaDuration: duration, createdAt: new Date() };
           setMessages(prev => [...prev, userMsg]);
           const streamId = `stream-${Date.now()}`;

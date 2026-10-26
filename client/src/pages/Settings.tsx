@@ -937,8 +937,12 @@ function DataManagementTab() {
   const deleteAccount = trpc.user.deleteAccount.useMutation({
     onSuccess: () => {
       toast.success(t("settings.data.accountDeleted"));
-      logout();
-      navigate(getLoginUrl());
+      // The logout is awaited: the account is gone, so the session has
+      // to go with it, and a failure to log out has to be reported
+      // rather than swallowed.
+      void logout()
+        .catch((e: any) => toast.error(e?.message ?? t("common.error")))
+        .finally(() => navigate(getLoginUrl()));
     },
     onError: (e: any) => toast.error(e.message),
   });

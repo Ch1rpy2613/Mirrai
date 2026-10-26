@@ -109,6 +109,7 @@ export const en = {
 
   common: {
     loading: "Loading…",
+    error: "Something went wrong.",
     save: "Save",
     cancel: "Cancel",
     delete: "Delete",
@@ -1028,6 +1029,7 @@ export const en = {
     reflection: "Reflection",
     generateSuccess: "Diary written",
     generateFailed: "Could not write the diary: {{message}}",
+    generateFailedShort: "The diary could not be written.",
     deleted: "Deleted",
     kicker: "Daily review",
     intro: "Fold a day of conversation into a letter, for yourself later.",

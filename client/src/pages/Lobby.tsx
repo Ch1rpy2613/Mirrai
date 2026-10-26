@@ -1714,7 +1714,11 @@ export default function Lobby() {
               className="app-nav-icon" title={t("lobby.nav.settings")} aria-label={t("lobby.nav.settings")}>
               <Settings className="w-4 h-4" />
             </button>
-            <button onClick={() => { logout(); navigate(getLoginUrl()); }}
+            {/* The logout is awaited. It used to be fired and forgotten,
+                so a failure was an unhandled rejection in the console
+                and the user was still moved to the login page — signed
+                in, on a page they cannot use. */}
+            <button onClick={() => { void logout().finally(() => navigate(getLoginUrl())); }}
               className="app-nav-icon" title={t("lobby.nav.logout")} aria-label={t("lobby.nav.logout")}>
               <LogOut className="w-4 h-4" />
             </button>
