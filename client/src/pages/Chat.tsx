@@ -69,6 +69,17 @@ export default function Chat() {
    * place — and when the page is left.
    */
   const localUrls = useRef(new Set<string>());
+  /**
+   * How many uploads are in flight.
+   *
+   * A picture is shown on screen as soon as it is picked, with a local
+   * URL — the server's copy does not exist yet. So while the upload is
+   * on its way, the poll has nothing to say about that bubble, and it
+   * took it away: the user's photo vanished from the screen mid-upload,
+   * and its URL was released, so the bubble was left with a broken
+   * image.
+   */
+  const pendingUploads = useRef(0);
   useEffect(() => {
     const urls = localUrls.current;
     return () => {
@@ -500,8 +511,20 @@ export default function Chat() {
       const older = prev.filter((m) => !known.has(m.id) && typeof m.id === "number");
       // The ones still being written.
       const pending = prev.filter((m) => !known.has(m.id) && m.isStreaming);
-      if (older.length === 0 && pending.length === 0) return fromServer;
-      return [...older, ...fromServer, ...pending];
+      /**
+       * The uploads that are still on their way.
+       *
+       * A picture is on screen with a local URL — the server's copy
+       * does not exist until the upload has finished. So the poll, which
+       * knows nothing about it, took the bubble away in the middle:
+       * the user's photo vanished from the screen, and its URL was
+       * released, so the bubble was left with a broken image.
+       */
+      const uploading = pendingUploads.current > 0
+        ? prev.filter((m) => !known.has(m.id) && typeof m.id === "string" && !m.isStreaming && m.mediaUrl)
+        : [];
+      if (older.length === 0 && pending.length === 0 && uploading.length === 0) return fromServer;
+      return [...older, ...fromServer, ...pending, ...uploading];
     });
     /**
      * A full page of history means there is probably more behind it.
@@ -1022,6 +1045,7 @@ export default function Chat() {
       const base64 = (reader.result as string).split(",")[1];
       const localUrl = URL.createObjectURL(file);
       localUrls.current.add(localUrl);
+      pendingUploads.current += 1;
       const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: t("chat.imageMessage"), messageType: "image", mediaUrl: localUrl, createdAt: new Date() };
       setMessages(prev => [...prev, userMsg]);
       const streamId = `stream-${Date.now()}`;
@@ -1064,6 +1088,9 @@ export default function Chat() {
       }
       finally {
         abortRef.current = null;
+        // The upload is done — the server's copy of the picture exists
+        // now, and the poll will bring it.
+        pendingUploads.current = Math.max(0, pendingUploads.current - 1);
         setIsSending(false);
       }
     };
@@ -1112,6 +1139,7 @@ export default function Chat() {
 
           const localUrl = URL.createObjectURL(blob);
           localUrls.current.add(localUrl);
+          pendingUploads.current += 1;
           const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: t("chat.voiceMessage"), messageType: "voice", mediaUrl: localUrl, mediaDuration: duration, createdAt: new Date() };
           setMessages(prev => [...prev, userMsg]);
           const streamId = `stream-${Date.now()}`;
@@ -1162,6 +1190,9 @@ export default function Chat() {
           }
           finally {
             abortRef.current = null;
+            // The upload is done — the server's copy of the recording
+            // exists now, and the poll will bring it.
+            pendingUploads.current = Math.max(0, pendingUploads.current - 1);
             setIsSending(false);
           }
         };
