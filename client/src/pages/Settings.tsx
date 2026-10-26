@@ -232,7 +232,7 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
 
 function ProfileTab() {
   const { t, locale } = useLocale();
-  const { data: profile, refetch } = trpc.user.getProfile.useQuery();
+  const { data: profile, refetch, isError: profileFailed } = trpc.user.getProfile.useQuery();
   const { data: accountStats } = trpc.user.getAccountStats.useQuery();
   const updateProfile = trpc.user.updateProfile.useMutation({
     onSuccess: () => { toast.success(t("settings.profile.updated")); refetch(); setEditing(false); },
@@ -277,7 +277,20 @@ function ProfileTab() {
     }
   }, [profile]);
 
-  if (!profile) return <div className="py-10 text-center text-sm text-muted-foreground">{t("common.loading")}</div>;
+  /**
+   * A failure is not a loading.
+   *
+   * The profile tab used to show "loading" for ever when the query
+   * failed: no error, no retry, just a spinner that never stopped.
+   */
+  if (profileFailed) {
+    return (
+      <div className="py-10 text-center text-sm text-destructive" role="alert">
+        {t("common.error")}
+      </div>
+    );
+  }
+  if (!profile) return <div className="py-10 text-center text-sm text-muted-foreground" role="status">{t("common.loading")}</div>;
 
   const memberDays = Math.max(1, Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86400000));
 
