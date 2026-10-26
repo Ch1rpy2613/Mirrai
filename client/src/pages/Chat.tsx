@@ -206,6 +206,8 @@ export default function Chat() {
   const {
     data: persona,
     isError: personaFailed,
+    error: personaError,
+    refetch: refetchPersona,
   } = trpc.persona.get.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && hasPersonaId }
@@ -1169,7 +1171,27 @@ export default function Chat() {
    * explanation at all: the user could not tell whether their history
    * was gone or the app was broken.
    */
-  if (personaFailed) return <NotFound />;
+  /**
+   * A persona that is not there, and a persona that could not be read.
+   *
+   * Every failure was rendered as a 404 — so a dropped connection or a
+   * server having a bad minute showed "this page is not here" for a
+   * persona that exists. The user was told their person was gone.
+   */
+  if (personaFailed) {
+    const status = (personaError as { data?: { code?: string } })?.data?.code;
+    if (status === "NOT_FOUND") return <NotFound />;
+    return (
+      <div className="min-h-dvh w-full flex items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center space-y-4">
+          <p className="text-sm text-foreground/85 leading-relaxed">{t("common.error")}</p>
+          <Button variant="outline" className="rounded-md" onClick={() => refetchPersona()}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-dvh bg-background flex flex-col relative">
