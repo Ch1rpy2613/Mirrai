@@ -250,6 +250,11 @@ export default function Upload() {
   /* The preset is remembered on the persona, so a re-run of the
      distillation keeps the same choice. */
   const saveModeMutation = trpc.persona.update.useMutation({
+    onSuccess: () => {
+      // The persona carries the preset, so the copy of it the page
+      // holds is stale until the persona is read again.
+      refetchPersona();
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -607,9 +612,19 @@ export default function Upload() {
                 value={mode}
                 onChange={next => {
                   setMode(next);
+                  /**
+                   * One change at a time.
+                   *
+                   * Two quick clicks sent two writes to the same
+                   * column, and the order the database took them in —
+                   * not the order they were clicked — decided which
+                   * preset won. So the run used one preset and the
+                   * stored preference held the other, and the next
+                   * re-run used that one.
+                   */
                   saveModeMutation.mutate({ id: personaId, distillationMode: next });
                 }}
-                disabled={triggerMutation.isPending}
+                disabled={triggerMutation.isPending || saveModeMutation.isPending}
               />
             </div>
             <Button className="w-full h-12 rounded-md text-base font-semibold animate-fade-in-up"
