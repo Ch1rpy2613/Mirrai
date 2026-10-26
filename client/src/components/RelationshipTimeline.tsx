@@ -76,8 +76,14 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                 </div>
                 <button
                   type="button"
-                  onClick={() => removeEvent.mutate({ id: event.id })}
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1"
+                  onClick={() => {
+                    // The events are the user's own record of what
+                    // happened. They are not thrown away by one click
+                    // with nothing said.
+                    if (!window.confirm(t("relationship.removeConfirm"))) return;
+                    removeEvent.mutate({ id: event.id });
+                  }}
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1"
                   aria-label={t("relationship.remove")}
                 >
                   <Trash2 className="w-3.5 h-3.5" />

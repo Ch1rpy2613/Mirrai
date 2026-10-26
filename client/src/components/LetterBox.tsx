@@ -102,9 +102,14 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               )}
               <button
                 type="button"
-                onClick={() => remove.mutate({ id: letter.id })}
+                onClick={() => {
+                  // A letter is the user's own writing. It is not
+                  // thrown away by one click with nothing said.
+                  if (!window.confirm(t("letters.removeConfirm"))) return;
+                  remove.mutate({ id: letter.id });
+                }}
                 aria-label={t("letters.remove")}
-                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1"
+                className="absolute top-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

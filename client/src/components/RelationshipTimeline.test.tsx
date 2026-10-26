@@ -160,10 +160,26 @@ describe("the relationship timeline", () => {
   it("removes an entry the user asks to remove", async () => {
     const user = userEvent.setup();
     query.data = { events: [makeEvent({ id: 9 })] };
+    // The record is the user's own; it is not thrown away by one click
+    // with nothing said.
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<RelationshipTimeline personaId={7} />);
 
     await user.click(screen.getByLabelText(translate("zh", "relationship.remove")));
 
     expect(removeEvent).toHaveBeenCalledWith({ id: 9 });
+    confirm.mockRestore();
+  });
+
+  it("keeps an entry when the user says no", async () => {
+    const user = userEvent.setup();
+    query.data = { events: [makeEvent({ id: 9 })] };
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<RelationshipTimeline personaId={7} />);
+
+    await user.click(screen.getByLabelText(translate("zh", "relationship.remove")));
+
+    expect(removeEvent).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });
