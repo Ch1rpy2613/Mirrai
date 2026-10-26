@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
-import { formatMonthKey } from "@/lib/dates";
+import { formatMonthKey, formatDayKey } from "@/lib/dates";
 import { ArrowLeft, Pencil, Heart, Quote, Calendar, Sparkles } from "lucide-react";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
@@ -289,7 +289,18 @@ export default function PersonaProfile() {
             <ul className="mt-3 space-y-2">
               {milestones.map((memory: any) => (
                 <li key={memory.id} className="text-sm text-muted-foreground">
-                  {memory.date && <span className="text-xs text-muted-subtle mr-2">{memory.date}</span>}
+                  {memory.date && (
+                    /**
+                     * The date, in the reader's language.
+                     *
+                     * It was the stored value — "2024-03-14" — next to
+                     * dates that were formatted. Two dates about the
+                     * same thing, in two formats, on the same screen.
+                     */
+                    <span className="text-xs text-muted-subtle mr-2">
+                      {formatDayKey(memory.date, locale)}
+                    </span>
+                  )}
                   {memory.title}
                 </li>
               ))}
