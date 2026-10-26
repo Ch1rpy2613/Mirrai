@@ -234,8 +234,15 @@ function ProfileTab() {
   const { t, locale } = useLocale();
   const { data: profile, refetch, isError: profileFailed } = trpc.user.getProfile.useQuery();
   const { data: accountStats } = trpc.user.getAccountStats.useQuery();
+  /**
+   * The name and the email.
+   *
+   * The "who the user is" form below uses the same mutation, and its
+   * success closed *this* editor — so saving the address style threw
+   * away the name and the email the user had typed but not yet saved.
+   */
   const updateProfile = trpc.user.updateProfile.useMutation({
-    onSuccess: () => { toast.success(t("settings.profile.updated")); refetch(); setEditing(false); },
+    onSuccess: () => { toast.success(t("settings.profile.updated")); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
   const changePassword = trpc.user.changePassword.useMutation({
@@ -325,13 +332,21 @@ function ProfileTab() {
                 </div>
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" className="rounded-md px-5"
-                    onClick={() => updateProfile.mutate({
-                      name: editName.trim() || undefined,
-                      // `undefined` means "leave it alone", so an empty
-                      // field could never clear the address. `null`
-                      // means "take it away".
-                      email: editEmail.trim() || null,
-                    })}
+                    onClick={() => updateProfile.mutate(
+                      {
+                        name: editName.trim() || undefined,
+                        // `undefined` means "leave it alone", so an empty
+                        // field could never clear the address. `null`
+                        // means "take it away".
+                        email: editEmail.trim() || null,
+                      },
+                      // This editor closes when *this* form is saved —
+                      // and only then. The other form uses the same
+                      // mutation, and its success used to close this
+                      // editor too, throwing away the name and the
+                      // email the user had typed but not yet saved.
+                      { onSuccess: () => setEditing(false) },
+                    )}
                     disabled={updateProfile.isPending}>
                     {updateProfile.isPending ? t("common.saving") : t("common.save")}
                   </Button>
