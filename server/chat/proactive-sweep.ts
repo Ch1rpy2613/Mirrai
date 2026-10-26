@@ -81,13 +81,6 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         continue;
       }
 
-      const text = await composeProactiveMessage({
-        persona,
-        userId: row.userId,
-        now,
-      });
-      if (!text) continue;
-
       // Where it goes.
       //
       // A message the user only finds by opening the app is a message
@@ -105,11 +98,25 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
        * own time the app decided it was not quiet and pushed a message,
        * and at half past eight in the morning — when their quiet hours
        * ended — it decided it was quiet and delivered nothing all day.
+       *
+       * The check is made *before* the message is composed. It used to
+       * come after: so every tick during the quiet hours wrote a
+       * message, paid for the model call, and threw it away — and since
+       * it was never stored, the persona stayed "due" and the next tick
+       * did it again. That is about five hundred wasted model calls per
+       * due persona per night.
        */
       const timezone = await db.getUserTimezone(row.userId);
       if (isQuietHour(now, ENV.reminderQuietHours, timezone)) {
         continue;
       }
+
+      const text = await composeProactiveMessage({
+        persona,
+        userId: row.userId,
+        now,
+      });
+      if (!text) continue;
 
       /**
        * The message is stored before it is sent.
