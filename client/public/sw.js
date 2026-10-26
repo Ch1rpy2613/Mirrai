@@ -19,7 +19,7 @@
  * from the very first install, for ever. A user who updated the app kept
  * the old icon and the old manifest.
  */
-const CACHE_VERSION = "mirrai-v2";
+const CACHE_VERSION = "mirrai-BUILD";
 
 const APP_SHELL = [
   "/",

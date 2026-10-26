@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import vm from "node:vm";
+import {
+  SERVICE_WORKER_CACHED_FILES,
+  serviceWorkerCacheVersion,
+} from "./sw-cache-version";
 
 /**
  * The service worker makes a promise about the user's privacy: nothing under
@@ -167,7 +172,39 @@ describe("the service worker", () => {
     const source = readFileSync(SW_PATH, "utf-8");
     const match = /const CACHE_VERSION = "([^"]+)"/.exec(source);
     expect(match?.[1]).toBeTruthy();
-    expect(match?.[1]).not.toBe("mirrai-v1");
+  });
+
+  it("is given a name that changes when the files it caches change", () => {
+    // The name used to be a constant a human had to remember to change,
+    // and the test only checked that it was not the previous one — so
+    // it passed for any value at all.
+    //
+    // The build now writes the hash of the files into it, so this
+    // checks that the hash is the hash: a file that changes without the
+    // name changing fails the build.
+    const source = readFileSync(SW_PATH, "utf-8");
+    // The placeholder the build replaces.
+    expect(source).toContain('const CACHE_VERSION = "mirrai-BUILD"');
+
+    const publicDir = path.dirname(SW_PATH);
+    const version = serviceWorkerCacheVersion(publicDir);
+    expect(version).toMatch(/^mirrai-[0-9a-f]{12}$/);
+
+    // A file that changes changes the name — that is the whole point.
+    const copy = path.join(mkdtempSync(path.join(tmpdir(), "sw-cache-")), "public");
+    mkdirSync(copy, { recursive: true });
+    for (const file of SERVICE_WORKER_CACHED_FILES) {
+      const from = path.join(publicDir, file);
+      const to = path.join(copy, file);
+      mkdirSync(path.dirname(to), { recursive: true });
+      if (existsSync(from)) writeFileSync(to, readFileSync(from));
+    }
+    expect(serviceWorkerCacheVersion(copy)).toBe(version);
+
+    // One byte different in one file is a different name.
+    const icon = path.join(copy, "icons", "icon-192.png");
+    writeFileSync(icon, Buffer.concat([readFileSync(icon), Buffer.from([0])]));
+    expect(serviceWorkerCacheVersion(copy)).not.toBe(version);
   });
 
   it("answers a navigation with something when the shell is not cached", async () => {
