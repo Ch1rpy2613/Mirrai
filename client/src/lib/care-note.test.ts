@@ -45,6 +45,23 @@ describe("the care banner", () => {
     expect(enBanner).not.toBe(zhBanner);
   });
 
+  it("is the line that matches the note", () => {
+    // The dependency warning is the product's own named safety risk.
+    // It used to reach the user dressed as a rest suggestion.
+    const dependency = careBannerText(
+      { kind: "dependency", text: "…", textKey: "safety.care.dependency", showBanner: true },
+      translator("zh"),
+    );
+    expect(dependency).toBe(zh.safety.banner.dependency);
+    expect(dependency).not.toBe(zh.safety.usageBanner);
+
+    const daily = careBannerText(
+      { kind: "daily_frequency", text: "…", textKey: "safety.care.dailyLimit", showBanner: true },
+      translator("zh"),
+    );
+    expect(daily).toBe(zh.safety.banner.dailyLimit);
+  });
+
   it("is not the note's own text", () => {
     // The note goes into the reply. The banner is a different sentence.
     const note = { kind: "dependency", text: "the note itself", showBanner: true };

@@ -1614,6 +1614,11 @@ export const en = {
       dependency: "……I have noticed you have been coming to me more often. I am glad for it, but I would rather you were getting by than leaning on me to hold you up. Shall we talk about what you have actually been facing?",
     },
     usageBanner: "You have talked a lot today. Take a rest. I am still here.",
+    banner: {
+      longSession: "You have been talking for a long time. Take a rest — I am still here.",
+      dailyLimit: "You have talked a lot today. Take a rest — I am still here.",
+      dependency: "I have noticed you have been coming to me more often. I am glad for it, but I would rather you were getting by than leaning on me to hold you up.",
+    },
     crisisTitle: "Let me stop for a moment",
     crisisBody: "I'm not the voice that should be joking with you right now. I'm only a piece of code — I can't really fix this for you — but I don't want to pretend that what you just said was ordinary talk. What you are carrying right now is much heavier than this conversation.",
     resourcesTitle: "People you can reach",

@@ -36,7 +36,42 @@ export function careBannerText(
   t: Translate,
 ): string {
   if (!note?.showBanner) return "";
-  const translated = t("safety.usageBanner");
-  if (translated && translated !== "safety.usageBanner") return translated;
+
+  /**
+   * The banner that matches the note.
+   *
+   * The note's own key was ignored — so every banner was the same
+   * sentence, "you have talked a lot today". The dependency warning is
+   * the product's own named safety risk, and it reached the user
+   * dressed as a rest suggestion: the one warning that most needed to
+   * be different was the one that was not.
+   */
+  const key = bannerKeyFor(note.textKey);
+  const translated = t(key);
+  if (translated && translated !== key) return translated;
+
+  // A client whose dictionary is behind the server falls back to the
+  // one line it does know.
+  const fallback = t("safety.usageBanner");
+  if (fallback && fallback !== "safety.usageBanner") return fallback;
   return "";
+}
+
+/**
+ * The banner key for a care note's key.
+ *
+ * The server sends the key of the *note*; the banner is a different
+ * sentence for the same thing.
+ */
+function bannerKeyFor(textKey: string | undefined): string {
+  switch (textKey) {
+    case "safety.care.dependency":
+      return "safety.banner.dependency";
+    case "safety.care.longSession":
+      return "safety.banner.longSession";
+    case "safety.care.dailyLimit":
+      return "safety.banner.dailyLimit";
+    default:
+      return "safety.usageBanner";
+  }
 }
