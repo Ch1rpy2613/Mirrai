@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isRealStartKey } from "@shared/timezone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -354,6 +355,21 @@ export default function PersonaEdit() {
     if (!name.trim()) {
       toast.error(t("personaEdit.nameRequired"));
       return;
+    }
+    /**
+     * The start dates.
+     *
+     * They were any text — so "去年" was stored, and the card then
+     * said "together for 1 day" and "today is the anniversary!", both
+     * of them false. A month ("2021-05") or a day ("2021-05-20") is
+     * what the app asks for.
+     */
+    for (const value of [togetherFrom.trim(), togetherTo.trim()]) {
+      if (!value) continue;
+      if (!isRealStartKey(value)) {
+        toast.error(t("personaEdit.badStartDate"));
+        return;
+      }
     }
     updateMutation.mutate({
     id: personaId, name, relationshipDesc,

@@ -1142,6 +1142,7 @@ export const zh = {
     realism: "真人感",
     realismHint: "越高越像真人打字：省略主语、句子不完整、偶尔转移话题",
     nameRequired: "请给这个分身起个名字",
+    badStartDate: "这个日期看不懂：请用 2021-05 或者 2021-05-20 这样的写法。",
     systemPrompt: "系统提示词",
     correctionTitle: "修正人设",
     correctionNote: "哪里不对，用你自己的话说。改完会记下来。",

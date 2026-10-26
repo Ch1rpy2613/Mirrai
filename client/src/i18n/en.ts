@@ -1141,6 +1141,7 @@ export const en = {
     realism: "Human feel",
     realismHint: "Higher reads more like real typing: dropped subjects, unfinished sentences, occasional topic changes",
     nameRequired: "Give this persona a name",
+    badStartDate: "That date cannot be read — use something like 2021-05 or 2021-05-20.",
     systemPrompt: "System prompt",
     correctionTitle: "Correct the persona",
     correctionNote: "Say what is wrong in your own words. Every change is recorded.",
