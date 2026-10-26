@@ -37,6 +37,11 @@ const COPY = {
     memoryCount: "记忆",
     exportedOn: "导出于",
     noMessages: "暂无消息",
+    /** What kind of letter a row is. */
+    letterNote: "（等 TA 回来再说）",
+    letterKept: "（只写下来了，没有寄出）",
+    letterWaiting: "（已寄出，等回信）",
+    letterAnswered: "（已收到回信）",
     /**
      * The note under the diaries.
      *
@@ -62,6 +67,10 @@ const COPY = {
     exportedOn: "Exported on",
     noMessages: "No messages",
     diaryMore: "(the {shown} most recent of {total})",
+    letterNote: "(a note for later)",
+    letterKept: "(kept — never sent)",
+    letterWaiting: "(sent — waiting for a reply)",
+    letterAnswered: "(answered)",
   },
 } as const;
 
@@ -231,6 +240,19 @@ export function generateChatExportHTML(
     <h2>${copy.letters}</h2>
     ${(params.letters ?? []).map((l) => `<div class="diary-entry">
       <span class="diary-date">${formatDate(l.createdAt, locale)}</span>
+      ${
+      /**
+       * What kind of letter it was.
+       *
+       * Every row was rendered the same way — so a note for later looked
+       * like a letter, and a letter that was kept (and never sent)
+       * looked like one that had been answered. The Markdown export
+       * marks the notes; this one did not.
+       */
+      l.kind === "todo" ? `<span class="diary-date">${copy.letterNote}</span>` : ""}
+      ${l.kind !== "todo" && l.status === "private" ? `<span class="diary-date">${copy.letterKept}</span>` : ""}
+      ${l.kind !== "todo" && l.status === "waiting" ? `<span class="diary-date">${copy.letterWaiting}</span>` : ""}
+      ${l.kind !== "todo" && l.status === "answered" ? `<span class="diary-date">${copy.letterAnswered}</span>` : ""}
       <p>${escapeHtml(l.body)}</p>
       ${l.replyText ? `<p class="reflection">${escapeHtml(l.replyText)}</p>` : ""}
     </div>`).join("\n")}
