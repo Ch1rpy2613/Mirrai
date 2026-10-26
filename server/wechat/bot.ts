@@ -48,6 +48,17 @@ const SESSION_PAUSE_DURATION_MS = 60 * 60 * 1000;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const BACKOFF_DELAY_MS = 30_000;
 const RETRY_DELAY_MS = 2_000;
+/**
+ * The shortest gap between two polls.
+ *
+ * Both the login poll and the message poll are long polls: the request
+ * is held open and the answer comes when there is something to say. A
+ * backend that answers at once — because it is down, or because it has
+ * decided there is nothing to report — would otherwise be asked again
+ * and again with no gap, which is a hot loop against somebody else's
+ * server and a good way to get the account throttled.
+ */
+const MIN_POLL_INTERVAL_MS = 1_500;
 
 export type WechatBotStatus = "stopped" | "scanning" | "scaned" | "need_verifycode" | "logged_in" | "error";
 
@@ -176,11 +187,21 @@ function getRemainingPauseMs(account: AccountState): number {
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    // The listener is removed when the timer fires.
+    //
+    // The monitor's signal lives for the whole session and `sleep` is
+    // called on every pause, so the listeners on it grew without bound
+    // — thousands of retained closures on a long-lived object, and a
+    // warning in the log that hid real problems.
+    const onAbort = () => {
       clearTimeout(t);
       reject(new Error("aborted"));
-    }, { once: true });
+    };
+    const t = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -289,15 +310,25 @@ async function pollLoginStatus(userId: number): Promise<void> {
         break;
       }
 
+      const pollStartedAt = Date.now();
       const result = await pollQrLogin({
         qrcode: session.qrcode,
         baseUrl: session.baseUrl,
         verifyCode: session.verifyCode,
         apiOptions: buildApiOptions({}),
       });
+      const pollDuration = Date.now() - pollStartedAt;
 
       if (result.status === "wait") {
         // Nothing changed yet — poll again.
+        //
+        // A poll that comes back at once did not wait for anything: the
+        // request failed. Every failure was reported as "wait", so a
+        // backend that was down was asked again immediately, for as long
+        // as the QR screen was open.
+        if (pollDuration < MIN_POLL_INTERVAL_MS) {
+          await sleep(MIN_POLL_INTERVAL_MS - pollDuration);
+        }
         continue;
       }
 
@@ -528,12 +559,14 @@ async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
     }
 
     try {
+      const pollStartedAt = Date.now();
       const resp = await getUpdates({
         ...apiOptions,
         get_updates_buf: syncBuf,
         timeoutMs: DEFAULT_LONG_POLL_TIMEOUT_MS,
         abortSignal: signal,
       });
+      const pollDuration = Date.now() - pollStartedAt;
 
       const isApiError =
         (resp.ret !== undefined && resp.ret !== 0) ||
@@ -567,6 +600,19 @@ async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
       }
 
       consecutiveFailures = 0;
+
+      // The poll is a long poll: the answer comes when there is
+      // something to say. An answer that comes at once means the server
+      // had nothing and asked for the next one straight away — so the
+      // loop was issuing back-to-back requests for the whole life of the
+      // connection.
+      if (pollDuration < MIN_POLL_INTERVAL_MS) {
+        try {
+          await sleep(MIN_POLL_INTERVAL_MS - pollDuration, signal);
+        } catch {
+          return;
+        }
+      }
 
       if (resp.get_updates_buf) {
         syncBuf = resp.get_updates_buf;

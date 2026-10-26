@@ -160,10 +160,17 @@ function combineAbortSignals(params: { internal?: AbortController; external?: Ab
     internal?.abort();
     return { signal: internal?.signal, cleanup: () => {} };
   }
-  const onExternalAbort = () => internal?.abort();
+  // There has to be a controller to abort.
+  //
+  // When the caller set no timeout there was none, and the signal that
+  // was returned was the internal one — which was nothing. The external
+  // abort was then dropped on the floor and the request could not be
+  // cancelled at all: `stopWeChatBot()` hung waiting for it.
+  const controller = internal ?? new AbortController();
+  const onExternalAbort = () => controller.abort();
   external.addEventListener("abort", onExternalAbort, { once: true });
   return {
-    signal: internal?.signal,
+    signal: controller.signal,
     cleanup: () => external.removeEventListener("abort", onExternalAbort),
   };
 }
