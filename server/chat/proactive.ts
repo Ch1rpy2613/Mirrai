@@ -30,7 +30,12 @@ import { sampleProactiveDelayMs, type BehaviorProfile } from "@shared/behavior-p
 import { seededRandom } from "../_core/behavior-profile";
 import { copy } from "@shared/copy";
 
-/** The longest a proactive message may be. A first word is not a letter. */
+/**
+ * The longest a proactive message may be. A first word is not a letter.
+ *
+ * It is a message the persona opens with, not a paragraph: it has to
+ * read like the first thing somebody says.
+ */
 const MAX_PROACTIVE_LENGTH = 120;
 
 export interface ProactiveContext {
@@ -196,7 +201,10 @@ export async function composeProactiveMessage(params: {
 
   const trimmed = text?.trim();
   if (!trimmed) return null;
-  return trimmed.slice(0, MAX_PROACTIVE_LENGTH * 4);
+  // It used to be cut at four times the length, so a proactive message
+  // could be four times longer than the limit it was given — and the
+  // prompt asks for twenty to eighty characters.
+  return trimmed.slice(0, MAX_PROACTIVE_LENGTH);
 }
 
 /**

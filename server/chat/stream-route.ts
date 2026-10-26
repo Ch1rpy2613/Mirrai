@@ -126,6 +126,11 @@ export function registerChatStreamRoute(app: Express): void {
             graduationSuggested: event.graduationSuggested,
             careNote: event.careNote,
             crisis: event.crisis,
+            // Which memories went into this turn. The client reads them,
+            // and the stream was the only place they were live — so the
+            // chip that says what the persona recalled never appeared
+            // until the history was polled again.
+            recalled: event.recalled,
           });
         } else if (event.type === "error") {
           writeEvent(res, "error", { message: event.message, partial: event.partial });
