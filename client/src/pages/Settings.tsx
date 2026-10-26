@@ -556,14 +556,25 @@ function AISettingsTab() {
   const { t } = useLocale();
   const providers = trpc.llmConfig.listProviders.useQuery();
   const defaultConfig = trpc.llmConfig.getDefault.useQuery();
+  /**
+   * The three saves say what happened.
+   *
+   * They had no `onError`, so a rejected save — a bad key, a network
+   * error, a validation — produced no message at all: the button simply
+   * appeared inert, and the user could not tell whether their key was
+   * stored.
+   */
   const upsertConfig = trpc.llmConfig.upsert.useMutation({
     onSuccess: () => { toast.success(t("settings.ai.configSaved")); providers.refetch(); },
+    onError: (e: any) => toast.error(e.message),
   });
   const setDefault = trpc.llmConfig.setDefault.useMutation({
     onSuccess: () => { toast.success(t("settings.ai.defaultUpdated")); defaultConfig.refetch(); },
+    onError: (e: any) => toast.error(e.message),
   });
   const updateExtra = trpc.llmConfig.updateExtraConfig.useMutation({
     onSuccess: () => { toast.success(t("settings.ai.paramsSaved")); defaultConfig.refetch(); },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const [temperature, setTemperature] = useState(0.7);
