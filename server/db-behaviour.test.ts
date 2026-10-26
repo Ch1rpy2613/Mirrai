@@ -360,19 +360,20 @@ describe("a single message", () => {
     registry.select.messages = [{ id: 4, createdAt: new Date("2026-01-02T00:00:00Z") }];
     registry.returning.messages = [{ id: 4 }, { id: 5 }, { id: 6 }];
 
-    const deleted = await db.deleteMessagesFrom(4, 3);
+    const deleted = await db.deleteMessagesFrom(4, 2, 3);
 
     expect(deleted).toBe(3);
-    // The deletion is by time, not by id: the messages after it are the
-    // ones that came later.
-    expect(whereOf(queries.length - 1).flatMap((c) => c.params)).toContain(
-      "2026-01-02T00:00:00.000Z",
-    );
+    // The cut is inside one persona: the ids of the persona and the owner
+    // are part of the condition, so another conversation's history is
+    // never touched.
+    const conditions = whereOf(queries.length - 1);
+    expect(conditions.flatMap((c) => c.params)).toContain(2);
+    expect(conditions.flatMap((c) => c.params)).toContain(3);
   });
 
   it("deletes nothing when the message to delete is not there", async () => {
     registry.select.messages = [];
-    expect(await db.deleteMessagesFrom(4, 3)).toBe(0);
+    expect(await db.deleteMessagesFrom(4, 2, 3)).toBe(0);
   });
 });
 

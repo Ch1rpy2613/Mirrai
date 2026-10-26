@@ -1175,7 +1175,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotFound") });
         }
 
-        const removed = await deleteMessagesFrom(previous.id, ctx.user.id);
+        const removed = await deleteMessagesFrom(previous.id, input.personaId, ctx.user.id);
         if (removed === 0) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotFound") });
 
         let reply = "";

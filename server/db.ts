@@ -1770,23 +1770,37 @@ export async function deleteMessage(messageId: number, userId: number): Promise<
  *
  * This is what "regenerate" needs: the old reply and everything after it
  * belonged to a turn that is being replaced.
+ *
+ * The cut is made inside one persona. It used to be made by time across
+ * the whole account, so pressing "regenerate" in one conversation deleted
+ * the messages of every other conversation the user had — the history of
+ * another persona, destroyed by a button in this one.
  */
 export async function deleteMessagesFrom(
   messageId: number,
+  personaId: number,
   userId: number,
 ): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
-  const target = await db.select({ id: messages.id, createdAt: messages.createdAt })
+  const target = await db.select({ id: messages.id })
     .from(messages)
-    .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
+    .where(and(
+      eq(messages.id, messageId),
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+    ))
     .limit(1);
   if (target.length === 0) return 0;
 
+  // The ids are a sequence, so "this message and everything after it" is
+  // `id >= this one`. Cutting by time instead would take the messages
+  // that share the millisecond with it as well.
   const deleted = await db.delete(messages)
     .where(and(
+      eq(messages.personaId, personaId),
       eq(messages.userId, userId),
-      gte(messages.createdAt, target[0].createdAt),
+      gte(messages.id, target[0].id),
     ))
     .returning({ id: messages.id });
   return deleted.length;
