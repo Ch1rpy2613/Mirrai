@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown, Trash2, Loader2, Play, Pause, Volume2,
-  Copy, Pencil, RefreshCw, CornerUpLeft, Mail, Sparkles,
+  Copy, Pencil, RefreshCw, CornerUpLeft, Mail, Sparkles, X,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
@@ -234,10 +234,29 @@ export function MessageBubble({
             className="max-w-[200px] max-h-[200px] rounded-md cursor-pointer hover:opacity-90 transition-opacity" />
           {msg.content !== t("chat.imageMessage") && <p className="mt-1.5 text-sm">{msg.content}</p>}
           {/* Portal：祖先的 animate-fade-in-up 以 forwards 保留 transform，会把 fixed 定位锚定到气泡上 */}
+          {/**
+           * The enlarged picture is a dialog.
+           *
+           * It used to be a `div` over the page: it was not announced
+           * as a dialog, it did not trap the focus, and Escape did not
+           * close it — a keyboard user was left inside it with no way
+           * out but the picture itself.
+           */}
           {imgExpanded && createPortal(
             <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 animate-fade-in"
-              onClick={() => setImgExpanded(false)}>
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("chat.imageAlt")}
+              onClick={() => setImgExpanded(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setImgExpanded(false);
+              }}>
               <img src={msg.mediaUrl!} alt={t("chat.imageAlt")} className="max-w-full max-h-full object-contain rounded-md" />
+              <button type="button" onClick={() => setImgExpanded(false)}
+                aria-label={t("common.close")}
+                className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors">
+                <X className="w-6 h-6" />
+              </button>
             </div>,
             document.body
           )}

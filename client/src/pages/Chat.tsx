@@ -151,6 +151,27 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+  /**
+   * The microphone is released when the page goes away.
+   *
+   * The recording was only stopped by the button, so a user who
+   * navigated off mid-recording left the microphone open: the browser
+   * kept the "recording" dot on, and the stream was never released.
+   */
+  useEffect(() => {
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder) return;
+      try {
+        if (recorder.state !== "inactive") recorder.stop();
+      } catch {
+        // Already stopped.
+      }
+      recorder.stream.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current = null;
+    };
+  }, []);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   /**
    * How many seconds the recording has run.
@@ -780,12 +801,21 @@ export default function Chat() {
     abortRef.current = voiceController;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      /**
+       * The recorder.
+       *
+       * The type is asked for rather than demanded: Safari does not
+       * record `audio/webm`, and asking for a format it cannot make
+       * throws — so the microphone button was simply broken there.
+       */
+      const recorder = MediaRecorder.isTypeSupported("audio/webm")
+        ? new MediaRecorder(stream, { mimeType: "audio/webm" })
+        : new MediaRecorder(stream);
       const chunks: Blob[] = [];
       recorder.ondataavailable = (e) => chunks.push(e.data);
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunks, { type: "audio/webm" });
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
         const reader = new FileReader();
         reader.onload = async () => {
           const base64 = (reader.result as string).split(",")[1];
