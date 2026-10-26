@@ -1932,7 +1932,8 @@ const CATEGORY_LABELS: Record<string, { labelKey: "chat.memory.categories.memory
 
 function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: () => void }) {
   const { t } = useLocale();
-  const { data: memories, refetch } = trpc.memory.list.useQuery({ personaId });
+  const { data: memories, refetch, isError: memoriesFailed, isLoading: memoriesLoading } =
+    trpc.memory.list.useQuery({ personaId });
   const memoryItems = memories?.items ?? [];
   /**
    * The three writes say what happened.
@@ -1990,7 +1991,27 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {(!memoryItems || memoryItems.length === 0) && !showAdd && (
+          {/**
+           * A failure is not an empty list.
+           *
+           * The request failed, so the list was empty, and the panel
+           * said "you have no memories" — which is a claim about the
+           * user's own data, and it was false. The user then added the
+           * memories they already had.
+           */}
+          {memoriesFailed && (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              <p>{t("common.error")}</p>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="mt-2 text-xs underline underline-offset-2 hover:text-foreground"
+              >
+                {t("common.retry")}
+              </button>
+            </div>
+          )}
+          {!memoriesFailed && !memoriesLoading && memoryItems.length === 0 && !showAdd && (
             <div className="text-center py-12 text-muted-foreground text-sm">
               <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
               <p>{t("chat.memory.empty")}</p>
@@ -2100,7 +2121,8 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
 function EmotionReport({ personaId, personaName, onClose }: { personaId: number; personaName: string; onClose: () => void }) {
   const { t } = useLocale();
   const [days, setDays] = useState(30);
-  const { data: report } = trpc.emotion.getReport.useQuery({ personaId, days });
+  const { data: report, isError: reportFailed, isLoading: reportLoading } =
+    trpc.emotion.getReport.useQuery({ personaId, days });
 
   // The bar's height is the number of messages that day — a quantity —
   // and its colour is the mood. The height used to be the mood's
@@ -2226,10 +2248,29 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
               </div>
             </>
           ) : (
+            /**
+             * A failure is not an empty report.
+             *
+             * The request failed, so the report was empty, and the
+             * panel said "no mood data yet — chat a few more days" —
+             * which sent the user off to talk to their persona for a
+             * chart that was never going to arrive.
+             */
             <div className="text-center py-8 text-muted-foreground text-sm">
-              <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p>{t("chat.report.empty")}</p>
-              <p className="text-xs mt-1">{t("chat.report.emptyHint")}</p>
+              {reportFailed ? (
+                <>
+                  <p>{t("common.error")}</p>
+                  <p className="text-xs mt-1">{t("common.retry")}</p>
+                </>
+              ) : reportLoading ? (
+                <p>{t("common.loading")}</p>
+              ) : (
+                <>
+                  <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p>{t("chat.report.empty")}</p>
+                  <p className="text-xs mt-1">{t("chat.report.emptyHint")}</p>
+                </>
+              )}
             </div>
           )}
         </div>
