@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
 import { csrfGuard } from "./csrf";
+import { securityHeaders } from "./security-headers";
 import { initRateLimiter } from "./rate-limit";
 import { uploadsAuthGuard } from "./uploads";
 import { registerChatStreamRoute } from "../chat/stream-route";
@@ -36,6 +37,14 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  /**
+   * The headers every response carries.
+   *
+   * They are set before anything else, so they are on the responses of
+   * the uploads and of the static files as well as on the API's.
+   */
+  app.use(securityHeaders);
 
   /**
    * Which proxies to believe.
