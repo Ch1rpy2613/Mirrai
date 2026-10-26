@@ -28,7 +28,14 @@ export function formatDayKey(dayKey: string, locale: string): string {
  * is the month the key names — whatever the zone.
  */
 export function formatMonthKey(monthKey: string, locale: string): string {
-  const match = /^(\d{4})-(\d{2})$/.exec(String(monthKey ?? ""));
+  /**
+   * Both shapes are accepted.
+   *
+   * The editor asks for "2021-05" — but the date picker in the lobby
+   * hands over "2021-05-01", and the questionnaire takes whatever the
+   * user typed. So the month is read out of either.
+   */
+  const match = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(String(monthKey ?? ""));
   if (!match) return String(monthKey ?? "");
   const date = new Date(Number(match[1]), Number(match[2]) - 1, 1);
   if (Number.isNaN(date.getTime())) return String(monthKey);
