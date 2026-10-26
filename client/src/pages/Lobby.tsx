@@ -32,7 +32,7 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
-import { localDateKey } from "@shared/timezone";
+import { localDateKey, zonedDateKey } from "@shared/timezone";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeIntimacyLevel } from "@shared/intimacy";
 
@@ -582,7 +582,17 @@ function EmotionalWeather({ personas }: { personas: any[] }) {
 
 function ActivityHeatmap() {
   const { t } = useLocale();
+  const { user } = useAuth();
   const { data: dailyActivity } = trpc.persona.dailyActivity.useQuery();
+  /**
+   * The user's own calendar.
+   *
+   * The server files the days in the user's *stored* zone, and this
+   * counted them in the *browser's* zone — so for a user whose stored
+   * zone and browser zone disagreed, the heatmap showed activity on
+   * the wrong days, and the last day of the grid was empty.
+   */
+  const timezone = (user as any)?.timezone ?? null;
 
   const { cells, maxCount } = useMemo(() => {
     const map = new Map<string, number>();
@@ -596,11 +606,9 @@ function ActivityHeatmap() {
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      // The user's own day, not the UTC one: `toISOString()` is the day
-      // in Greenwich, which is the wrong day for everybody east of it
-      // until lunchtime — and the server counts the days in the user's
-      // calendar, so the two have to agree.
-      const key = localDateKey(d);
+      // The user's own day, in the user's own calendar — the calendar
+      // the server files the days in. The two have to agree.
+      const key = zonedDateKey(d, timezone);
       const count = map.get(key) || 0;
       if (count > maxCount) maxCount = count;
       cells.push({
@@ -610,7 +618,7 @@ function ActivityHeatmap() {
       });
     }
     return { cells, maxCount };
-  }, [dailyActivity, t]);
+  }, [dailyActivity, t, timezone]);
 
   const totalMessages = cells.reduce((s, c) => s + c.count, 0);
   if (totalMessages === 0) return null;
@@ -696,24 +704,43 @@ function AchievementBadges({ stats }: { stats: any }) {
 
 function ChatStreak() {
   const { t } = useLocale();
+  const { user } = useAuth();
   const { data: dailyActivity } = trpc.persona.dailyActivity.useQuery();
+  /**
+   * The user's own calendar.
+   *
+   * The server files the days in the user's *stored* zone, and this
+   * counted them in the *browser's* zone — so the two calendars
+   * disagreed and the streak was wrong.
+   */
+  const timezone = (user as any)?.timezone ?? null;
 
   const streak = useMemo(() => {
     if (!dailyActivity || dailyActivity.length === 0) return 0;
-    const dateSet = new Set(dailyActivity.map(r => String(r.date)));
+    /**
+     * The days the *user* spoke.
+     *
+     * The set used to hold every day with a message — including the
+     * ones where the persona spoke first, on its own, at night. So the
+     * lobby's streak counted days the user was not there, and it was
+     * not the same number as the analytics' longest streak.
+     */
+    const dateSet = new Set(
+      dailyActivity.filter((r: any) => Number(r.userCount ?? r.count) > 0).map(r => String(r.date)),
+    );
     let count = 0;
     const d = new Date();
-    const todayKey = localDateKey(d);
+    const todayKey = zonedDateKey(d, timezone);
     if (!dateSet.has(todayKey)) {
       d.setDate(d.getDate() - 1);
-      if (!dateSet.has(localDateKey(d))) return 0;
+      if (!dateSet.has(zonedDateKey(d, timezone))) return 0;
     }
-    while (dateSet.has(localDateKey(d))) {
+    while (dateSet.has(zonedDateKey(d, timezone))) {
       count++;
       d.setDate(d.getDate() - 1);
     }
     return count;
-  }, [dailyActivity]);
+  }, [dailyActivity, timezone]);
 
   if (streak < 2) return null;
 
@@ -851,12 +878,24 @@ function PersonaConstellation({ personas, onChat }: { personas: any[]; onChat: (
 
 function MiniCalendar() {
   const { t, locale } = useLocale();
+  const { user } = useAuth();
   const { data: dailyActivity } = trpc.persona.dailyActivity.useQuery();
+  /**
+   * The user's own calendar.
+   *
+   * The month on the calendar was the *browser's* month, and the
+   * activity was the server's — filed in the user's stored zone. For a
+   * user whose stored zone and browser zone disagreed, the calendar
+   * showed the wrong month and the marked days were in another month
+   * altogether.
+   */
+  const timezone = (user as any)?.timezone ?? null;
 
   const { days, monthLabel } = useMemo(() => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    const todayKey = zonedDateKey(now, timezone);
+    const year = Number(todayKey.slice(0, 4));
+    const month = Number(todayKey.slice(5, 7)) - 1;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDay = new Date(year, month, 1).getDay();
     const dateSet = new Set<string>();
@@ -867,10 +906,10 @@ function MiniCalendar() {
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let d = 1; d <= daysInMonth; d++) {
       const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      days.push({ day: d, active: dateSet.has(key), today: d === now.getDate() });
+      days.push({ day: d, active: dateSet.has(key), today: key === todayKey });
     }
     return { days, monthLabel: new Date(year, month, 1).toLocaleDateString(locale, { year: "numeric", month: "long" }) };
-  }, [dailyActivity, locale]);
+  }, [dailyActivity, locale, timezone]);
 
   const activeDays = days.filter(d => d?.active).length;
   if (activeDays === 0 && (!dailyActivity || dailyActivity.length === 0)) return null;

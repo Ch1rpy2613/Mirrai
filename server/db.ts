@@ -1796,6 +1796,16 @@ export async function getDailyChatCounts(userId: number, days = 30, timezone?: s
   const rows = await db.select({
     date: day,
     count: count(),
+    /**
+     * The user's own messages.
+     *
+     * The count included the persona's — including the ones the app
+     * sent by itself, at night, because the user had not spoken for a
+     * while. So a day on which the persona spoke first counted as a
+     * day of conversation — and the lobby's streak and the analytics'
+     * longest streak were two different numbers for the same user.
+     */
+    userCount: sql<number>`count(*) FILTER (WHERE ${messages.role} = 'user')`,
   })
     .from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
