@@ -371,7 +371,14 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
        * anniversary was silently missed for the year.
        */
       try {
-      const anniversaries = await db.getMemoriesByPersonaId(persona.id, persona.userId);
+      /**
+       * The anniversaries, and only the anniversaries.
+       *
+       * The whole memory list used to be read — up to two hundred
+       * rows of every persona — once a minute, for ever, to look at
+       * the handful of them that were anniversaries.
+       */
+      const anniversaries = await db.getAnniversaryMemories(persona.id, persona.userId);
       /**
        * The photos.
        *
@@ -410,9 +417,11 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
             persona.togetherTo,
           ),
         },
-        anniversaries: anniversaries
-          .filter((m) => m.category === "anniversary")
-          .map((m) => ({ id: m.id, title: m.title, date: m.date })),
+        anniversaries: anniversaries.map((m) => ({
+          id: m.id,
+          title: m.title,
+          date: m.date,
+        })),
         photos: files.map((f) => ({
           id: f.id,
           originalName: f.originalName,

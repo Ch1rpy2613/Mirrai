@@ -1739,6 +1739,30 @@ export async function countMemories(personaId: number, userId: number) {
   return result?.c || 0;
 }
 
+/**
+ * The anniversaries of a persona.
+ *
+ * Only the anniversaries: the sweep ran every minute and read up to
+ * two hundred memories of every persona to look at the handful of them
+ * that were anniversaries.
+ */
+export async function getAnniversaryMemories(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: memories.id,
+    title: memories.title,
+    date: memories.date,
+  })
+    .from(memories)
+    .where(and(
+      eq(memories.personaId, personaId),
+      eq(memories.userId, userId),
+      eq(memories.category, "anniversary"),
+    ))
+    .orderBy(asc(memories.date));
+}
+
 export async function getMemoriesByPersonaId(
   personaId: number,
   userId: number,

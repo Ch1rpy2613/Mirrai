@@ -8,6 +8,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const getAllPersonasForReminders = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
+const getAnniversaryMemories = vi.fn();
 const getPhotoReminderCandidates = vi.fn();
 const getChannelBindingsByUserId = vi.fn();
 const hasReminderDelivery = vi.fn();
@@ -22,6 +23,7 @@ vi.mock("../db", () => ({
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getAllPersonasForReminders: (...a: unknown[]) => getAllPersonasForReminders(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
+  getAnniversaryMemories: (...a: unknown[]) => getAnniversaryMemories(...a),
   getPhotoReminderCandidates: (...a: unknown[]) => getPhotoReminderCandidates(...a),
   getChannelBindingsByUserId: (...a: unknown[]) => getChannelBindingsByUserId(...a),
   hasReminderDelivery: (...a: unknown[]) => hasReminderDelivery(...a),
@@ -255,6 +257,7 @@ describe("deliverReminder", () => {
     for (const fn of [
       getAllPersonasForReminders,
       getMemoriesByPersonaId,
+      getAnniversaryMemories,
       getPhotoReminderCandidates,
       getChannelBindingsByUserId,
       hasReminderDelivery,
@@ -342,6 +345,7 @@ describe("runReminderSweep", () => {
     for (const fn of [
       getAllPersonasForReminders,
       getMemoriesByPersonaId,
+      getAnniversaryMemories,
       getPhotoReminderCandidates,
       getChannelBindingsByUserId,
       hasReminderDelivery,
@@ -355,7 +359,7 @@ describe("runReminderSweep", () => {
     recordReminder.mockResolvedValue(true);
     getChannelAdapter.mockReturnValue({ send });
     getUserLocale.mockResolvedValue("zh");
-    getMemoriesByPersonaId.mockResolvedValue([]);
+    getAnniversaryMemories.mockResolvedValue([]);
     getPhotoReminderCandidates.mockResolvedValue([]);
     getAllPersonasForReminders.mockResolvedValue([persona()]);
   });
@@ -363,7 +367,7 @@ describe("runReminderSweep", () => {
   it("does not push a reminder into a conversation bound to another persona", async () => {
     // 小A has an anniversary today, but the only bound conversation is set
     // up for 小B. The reminder must not be pushed there.
-    getMemoriesByPersonaId.mockResolvedValue([
+    getAnniversaryMemories.mockResolvedValue([
       {
         id: 1,
         personaId: 1,
@@ -402,7 +406,7 @@ describe("runReminderSweep", () => {
   });
 
   it("pushes to the conversation bound to the same persona", async () => {
-    getMemoriesByPersonaId.mockResolvedValue([
+    getAnniversaryMemories.mockResolvedValue([
       {
         id: 1,
         personaId: 1,
