@@ -800,6 +800,10 @@ async function* runConversationTurn(
     userId,
     intimacyLevel: intimacy.level,
     chatCount,
+    // The reason is written in the reader's language.
+    locale,
+    // And it is measured on the clock the rest of the turn uses.
+    now,
   });
 
   // The streaming path already emitted the reply text; the check-in and the
@@ -963,10 +967,13 @@ export async function evaluateGraduation(params: {
   userId: number;
   intimacyLevel: string;
   chatCount: number;
+  /** The language the reason is written in. */
+  locale?: "zh" | "en";
   now?: Date;
 }): Promise<boolean> {
   const { persona, userId } = params;
   const now = params.now ?? new Date();
+  const locale = params.locale ?? "zh";
 
   // A persona that has graduated is final; nothing may re-open it.
   // An offer that was made — or declined — puts the persona in a cooldown,
@@ -1004,6 +1011,12 @@ export async function evaluateGraduation(params: {
     chatCount: params.chatCount,
     recentChatFrequency: recentFreq,
     previousChatFrequency: prevFreq,
+    /**
+     * The reason is read by a person, in a chat window, at the moment
+     * they are deciding whether to say goodbye. It has to be in their
+     * language.
+     */
+    locale,
   });
 
   if (eligibility.eligible) {

@@ -1105,6 +1105,9 @@ export const appRouter = router({
           chatCount: persona.chatCount,
           recentChatFrequency: recentFreq,
           previousChatFrequency: prevFreq,
+          // The reason is read by a person. It has to be in their
+          // language.
+          locale: ctx.locale,
         });
         // A query does not write.
         //
