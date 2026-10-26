@@ -117,6 +117,8 @@ export const en = {
     cancel: "Cancel",
     delete: "Delete",
     close: "Close",
+    previousSlide: "Previous slide",
+    nextSlide: "Next slide",
     back: "Back",
     next: "Next",
     previous: "Previous",

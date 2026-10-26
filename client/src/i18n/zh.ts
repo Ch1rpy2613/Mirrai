@@ -109,6 +109,8 @@ export const zh = {
     cancel: "取消",
     delete: "删除",
     close: "关闭",
+    previousSlide: "上一张",
+    nextSlide: "下一张",
     back: "返回",
     next: "下一步",
     previous: "上一步",
