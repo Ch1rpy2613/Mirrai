@@ -684,7 +684,17 @@ async function* runConversationTurn(
   // after a reload — the same conversation, two different emotions.
   const emotion = await inferEmotionalState({
     userMessage: message,
-    assistantReply: finalText,
+    /**
+     * The persona's own words.
+     *
+     * The classifier is asked to judge the persona's tone, so it is
+     * given the persona's words and not the app's: the gentle check-in,
+     * the care note and the trajectory note are the app's, and they
+     * are all written in a caring, deliberate tone — so reading them
+     * as the persona's words could put the persona in a state it was
+     * not in.
+     */
+    assistantReply: baseText,
     currentState: persona.emotionalState,
     provider: options.providerName,
     // The classifier has to run on the same credentials as the reply —
