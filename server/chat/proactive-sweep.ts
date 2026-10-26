@@ -133,9 +133,18 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         continue;
       }
 
+      /**
+       * The language the persona speaks.
+       *
+       * The locale was read for the delivery and then not passed here
+       * — so the message was composed in Chinese, the system prompt
+       * included, and an English user had a Chinese message pushed
+       * into their channel.
+       */
       const text = await composeProactiveMessage({
         persona,
         userId: row.userId,
+        locale: settings.locale,
         now,
       });
       if (!text) continue;
