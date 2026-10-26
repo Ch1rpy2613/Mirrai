@@ -87,6 +87,17 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = locale === "en" ? "en" : "zh-CN";
+      /**
+       * The page's description follows the language too.
+       *
+       * It was Chinese in the markup and never changed: so an English
+       * reader who shared the link, or who found it in a search, was
+       * told what the app was in a language they do not read.
+       */
+      const description = document.querySelector('meta[name="description"]');
+      if (description) {
+        description.setAttribute("content", translate(locale, "common.pageDescription"));
+      }
     }
   }, [locale]);
 

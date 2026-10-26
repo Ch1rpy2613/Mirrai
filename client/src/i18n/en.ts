@@ -108,6 +108,8 @@ export const en = {
   },
 
   common: {
+    /** The page description, in the document head. */
+    pageDescription: "Upload a chat log and the AI rebuilds their digital twin. When they are not around, they are still here.",
     loading: "Loading…",
     error: "Something went wrong.",
     save: "Save",
