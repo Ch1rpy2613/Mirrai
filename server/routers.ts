@@ -79,7 +79,7 @@ import {
 import { mayReachOut } from "@shared/graduation-mode";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { extractJsonArray, extractJsonObject } from "./_core/json";
-import { runConversation } from "./chat/service";
+import { runConversation, clampContextLimit, clampTemperature, clampMaxTokens } from "./chat/service";
 import { writeFarewellLetterWithStatus } from "./chat/farewell";
 import { writeLetter } from "./chat/letters";
 import { encryptSecret } from "./_core/crypto";
@@ -2497,7 +2497,27 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const config = await getDefaultLlmConfig(ctx.user.id);
         if (!config) throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.noDefaultProvider") });
-        const merged = { ...((config.extraConfig as any) || {}), ...input.extraConfig };
+        /**
+         * The settings that are read as numbers are checked here.
+         *
+         * They were stored as they arrived, so a value that was not a
+         * number made the context limit NaN — and `slice(NaN)` is the
+         * whole history. Every turn then sent two hundred messages to
+         * the provider, the provider answered "context length
+         * exceeded", and the bill went up on every turn.
+         */
+        const incoming = { ...input.extraConfig } as Record<string, unknown>;
+        const mergedExtra: Record<string, unknown> = {};
+        const bounded = {
+          contextLimit: clampContextLimit(incoming.contextLimit ?? (config.extraConfig as any)?.contextLimit),
+          temperature: clampTemperature(incoming.temperature ?? (config.extraConfig as any)?.temperature),
+          maxTokens: clampMaxTokens(incoming.maxTokens ?? (config.extraConfig as any)?.maxTokens),
+        };
+        for (const key of Object.keys(incoming)) {
+          if (key in bounded) continue;
+          mergedExtra[key] = incoming[key];
+        }
+        const merged = { ...((config.extraConfig as any) || {}), ...mergedExtra, ...bounded };
         await upsertLlmConfig(ctx.user.id, { providerName: config.providerName, extraConfig: merged });
         invalidateUserProviderCache(ctx.user.id);
         return { success: true };

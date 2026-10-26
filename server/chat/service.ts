@@ -55,6 +55,43 @@ export type ChatEvent =
     }
   | { type: "error"; message: string; partial: boolean };
 
+/**
+ * The number of messages of history a turn carries.
+ *
+ * Bounded on both sides: a number that is not a number is the default,
+ * and the ceiling is the whole history — the most the app ever sent
+ * before the setting was broken.
+ */
+export function clampContextLimit(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 20;
+  return Math.min(200, Math.max(4, Math.round(n)));
+}
+
+/**
+ * How creative the model is allowed to be.
+ *
+ * Between 0 and 2, and a number. The setting was stored as it arrived,
+ * so a value that was not a number reached the provider as `NaN`.
+ */
+export function clampTemperature(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0.8;
+  return Math.min(2, Math.max(0, n));
+}
+
+/**
+ * How long the model's answer may be.
+ *
+ * A number, and not more than the ceiling — a value that was not a
+ * number reached the provider as `NaN`, which it read as "no limit".
+ */
+export function clampMaxTokens(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 2000;
+  return Math.min(128_000, Math.max(16, Math.round(n)));
+}
+
 export interface ConversationOptions {
   persona: Persona;
   userId: number;

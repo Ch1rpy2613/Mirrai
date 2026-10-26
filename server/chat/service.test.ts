@@ -93,7 +93,13 @@ vi.mock("../_core/emotion", () => ({
   inferEmotionalState: (...a: unknown[]) => inferEmotionalState(...a),
 }));
 
-import { runConversation, composeMessages } from "./service";
+import {
+  runConversation,
+  composeMessages,
+  clampContextLimit,
+  clampTemperature,
+  clampMaxTokens,
+} from "./service";
 
 function persona(overrides: Record<string, unknown> = {}) {
   return {
@@ -688,5 +694,44 @@ describe("composeMessages", () => {
     });
 
     expect(messages[messages.length - 1].content).toBe("在吗");
+  });
+});
+
+/**
+ * The settings that are read as numbers.
+ *
+ * They were stored as they arrived, so a value that was not a number
+ * made the context limit NaN — and `slice(NaN)` is the whole history.
+ * Every turn then sent two hundred messages to the provider, the
+ * provider answered "context length exceeded", and the bill went up on
+ * every turn.
+ */
+describe("the settings that are read as numbers", () => {
+  it("falls back to the default when the value is not a number", () => {
+    expect(clampContextLimit(undefined)).toBe(20);
+    expect(clampContextLimit("many")).toBe(20);
+    expect(clampContextLimit({})).toBe(20);
+    expect(clampContextLimit(Number.NaN)).toBe(20);
+    expect(clampContextLimit(Number.POSITIVE_INFINITY)).toBe(20);
+  });
+
+  it("keeps the context limit within its bounds", () => {
+    expect(clampContextLimit(1)).toBe(4);
+    expect(clampContextLimit(50)).toBe(50);
+    expect(clampContextLimit(100000)).toBe(200);
+  });
+
+  it("keeps the temperature within its bounds", () => {
+    expect(clampTemperature("warm")).toBe(0.8);
+    expect(clampTemperature(-1)).toBe(0);
+    expect(clampTemperature(1.2)).toBe(1.2);
+    expect(clampTemperature(9)).toBe(2);
+  });
+
+  it("keeps the answer length within its bounds", () => {
+    expect(clampMaxTokens("long")).toBe(2000);
+    expect(clampMaxTokens(0)).toBe(16);
+    expect(clampMaxTokens(800)).toBe(800);
+    expect(clampMaxTokens(999999)).toBe(128_000);
   });
 });
