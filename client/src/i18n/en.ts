@@ -909,6 +909,7 @@ export const en = {
     apiKeyLabel: "API Key",
     toLobby: "Back to the lobby",
     toUpload: "Upload a chat log",
+    backToProvider: "Back to the model service",
     providerRequired: "Choose an AI provider",
     providerSaved: "AI provider saved",
     saveFailed: "Could not save: {{message}}",

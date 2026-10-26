@@ -253,6 +253,22 @@ export default function Onboarding() {
               </label>
             </div>
 
+            {/**
+             * A way back to the model service.
+             *
+             * Once the wizard had moved past the provider step there
+             * was no way to return to it: a user who skipped it, or who
+             * wants to add their own key alongside the instance's, could
+             * not reach the form again from the wizard.
+             */}
+            <Button
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              onClick={() => setStep("provider")}
+            >
+              {t("onboarding.backToProvider")}
+            </Button>
+
             <Button onClick={handleCreatePersona} disabled={createPersona.isPending || !consentAccepted} className="w-full">
               {createPersona.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
