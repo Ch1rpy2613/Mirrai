@@ -21,7 +21,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { invokeForUser } from "../llm";
+import { invokeForUser, invokeForUserWithReason } from "../llm";
 import { resolveProviderForUser } from "../llm/user-provider";
 import type { LLMMessage, LLMOptions } from "../llm/types";
 import { loadPrompt } from "./prompts";
@@ -93,13 +93,23 @@ async function invokePipeline(params: {
   messages: LLMMessage[];
   options?: LLMOptions;
 }): Promise<string> {
-  const text = await invokeForUser(params);
-  if (text == null) {
+  /**
+   * The reason, not just "no provider".
+   *
+   * It used to say "no LLM provider available" for a provider that was
+   * there and had failed — so the user was told to configure a model
+   * service they had already configured, and the actual error was
+   * nowhere.
+   */
+  const outcome = await invokeForUserWithReason(params);
+  if (outcome.text == null) {
     throw new Error(
-      "No LLM provider available. Configure one in .env, or add a key of your own in the settings.",
+      outcome.reason
+        ? `The model service did not answer: ${outcome.reason}`
+        : "No LLM provider available. Configure one in .env, or add a key of your own in the settings.",
     );
   }
-  return text;
+  return outcome.text;
 }
 
 export type PipelineInput = {

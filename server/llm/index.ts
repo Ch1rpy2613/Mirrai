@@ -468,6 +468,24 @@ export async function invokeForUser(params: {
   messages: LLMMessage[];
   options?: LLMOptions;
 }): Promise<string | null> {
+  const outcome = await invokeForUserWithReason(params);
+  return outcome.text;
+}
+
+/**
+ * The same call, and the reason when it did not answer.
+ *
+ * The failure and the absence were the same thing — `null` — so a
+ * caller that said "no provider configured" said it for a provider that
+ * was there and had failed. The user is told to configure a model
+ * service they have already configured.
+ */
+export async function invokeForUserWithReason(params: {
+  userId: number;
+  providerName?: string;
+  messages: LLMMessage[];
+  options?: LLMOptions;
+}): Promise<{ text: string | null; reason?: string }> {
   try {
     const provider = await resolveProviderForUser({
       userId: params.userId,
@@ -478,24 +496,28 @@ export async function invokeForUser(params: {
         messages: params.messages,
         options: params.options,
       });
-      if (text?.trim()) return text;
+      if (text?.trim()) return { text };
     }
   } catch (e) {
     console.warn("[LLM] The user's provider failed:", (e as Error).message);
+    // The reason is kept: it is what the user needs to see.
+    return { text: null, reason: (e as Error).message };
   }
 
   // Only when the user has nothing of their own.
-  if (await userHasOwnProvider(params.userId)) return null;
+  if (await userHasOwnProvider(params.userId)) {
+    return { text: null, reason: "The user's own provider did not answer." };
+  }
 
   try {
     const text = await llmService.invoke({
       messages: params.messages,
       options: params.options,
     });
-    return text?.trim() ? text : null;
+    return text?.trim() ? { text } : { text: null, reason: "The provider returned nothing." };
   } catch (e) {
     console.warn("[LLM] No provider could answer:", (e as Error).message);
-    return null;
+    return { text: null, reason: (e as Error).message };
   }
 }
 

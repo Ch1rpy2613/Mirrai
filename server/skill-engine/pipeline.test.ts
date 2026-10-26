@@ -9,6 +9,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const invoke = vi.fn();
 const invokeForUser = vi.fn();
+const invokeForUserWithReason = vi.fn();
 const updateSkillJob = vi.fn();
 const updatePersona = vi.fn();
 const createSkillJob = vi.fn();
@@ -24,6 +25,7 @@ vi.mock("../llm", () => ({
     invokeWithProvider: (...a: unknown[]) => invoke(...a),
   },
   invokeForUser: (...a: unknown[]) => invokeForUser(...a),
+  invokeForUserWithReason: (...a: unknown[]) => invokeForUserWithReason(...a),
 }));
 
 vi.mock("../db", () => ({
@@ -76,6 +78,7 @@ describe("the distillation pipeline", () => {
     }
 
     invokeForUser.mockImplementation(async (...a: unknown[]) => invoke(...a));
+  invokeForUserWithReason.mockImplementation(async (...a: unknown[]) => ({ text: await invoke(...a) }));
     createSkillJob.mockResolvedValue(7);
     updateSkillJob.mockResolvedValue(undefined);
     updatePersona.mockResolvedValue(undefined);

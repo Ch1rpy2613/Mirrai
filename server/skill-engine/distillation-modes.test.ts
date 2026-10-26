@@ -12,6 +12,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const invoke = vi.fn();
 const invokeForUser = vi.fn();
+const invokeForUserWithReason = vi.fn();
 const resolveProviderForUser = vi.fn();
 const updateSkillJob = vi.fn();
 const updatePersona = vi.fn();
@@ -25,6 +26,7 @@ vi.mock("../llm", () => ({
     invokeWithProvider: (...a: unknown[]) => invoke(...a),
   },
   invokeForUser: (...a: unknown[]) => invokeForUser(...a),
+  invokeForUserWithReason: (...a: unknown[]) => invokeForUserWithReason(...a),
 }));
 
 vi.mock("../db", () => ({
@@ -132,6 +134,7 @@ beforeEach(() => {
     fn.mockReset();
   }
   invokeForUser.mockImplementation(async (...a: unknown[]) => invoke(...a));
+  invokeForUserWithReason.mockImplementation(async (...a: unknown[]) => ({ text: await invoke(...a) }));
   // A model that can see.
   resolveProviderForUser.mockResolvedValue({
     name: "test",
