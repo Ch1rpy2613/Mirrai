@@ -358,6 +358,15 @@ export default function Chat() {
     const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: text, createdAt: new Date() };
     setMessages(prev => [...prev, userMsg]);
 
+    // The message being replied to has been spent.
+    //
+    // It used to be cleared only on the fallback path — the one taken
+    // against a server that has no streaming route — so on every ordinary
+    // send the "replying to…" strip stayed on screen and the *next*
+    // message was sent as a reply to the message before it. The persona
+    // answered the wrong question.
+    setReplyTo(null);
+
     const streamId = `stream-${Date.now()}`;
     setMessages(prev => [...prev, { id: streamId, role: "assistant", content: "", isStreaming: true, emotionalState: currentState }]);
 
@@ -433,7 +442,6 @@ export default function Chat() {
         setCurrentState(result.emotionalState);
         if (result.graduationSuggested) setShowGraduation(true);
         if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
-        setReplyTo(null);
       }
     } catch (err) {
       // A failed send used to disappear without a word: the bubble was
