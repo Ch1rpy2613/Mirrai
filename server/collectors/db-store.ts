@@ -492,7 +492,23 @@ export async function loadCollectionSource(
         try {
           const parsed: unknown = JSON.parse(plaintext);
           if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            credentials = parsed as CollectorCredentials;
+            /**
+             * The channel's own names.
+             *
+             * The channel calls them `appId` and `appSecret`; the
+             * collector reads them as `app_id` and `app_secret`. So the
+             * channel's copy was handed over unchanged, the collector
+             * found nothing in it, and a user who had only ever set up
+             * the channel could never run the Feishu collector.
+             */
+            const record = parsed as Record<string, unknown>;
+            const appId = record.app_id ?? record.appId;
+            const appSecret = record.app_secret ?? record.appSecret;
+            credentials = {
+              ...record,
+              ...(appId ? { app_id: String(appId) } : {}),
+              ...(appSecret ? { app_secret: String(appSecret) } : {}),
+            } as CollectorCredentials;
           }
         } catch {
           credentials = undefined;

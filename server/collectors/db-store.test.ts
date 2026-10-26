@@ -39,7 +39,10 @@ const client = vi.hoisted(() => ({
   }),
 }));
 
+const getChannelState = vi.fn();
+
 vi.mock("../db", () => ({
+  getChannelState: (...a: unknown[]) => getChannelState(...a),
   createCollectedMessage: (...a: unknown[]) => createCollectedMessage(...a),
   createCollectedMessages: (...a: unknown[]) => createCollectedMessages(...a),
   getCollectedMessages: (...a: unknown[]) => getCollectedMessages(...a),
@@ -242,6 +245,8 @@ describe("collection sources", () => {
     dbState.rows = [];
     dbState.inserted = [];
     dbState.updated = [];
+    getChannelState.mockReset();
+    getChannelState.mockResolvedValue(null);
   });
 
   it("stores the credentials encrypted", async () => {
@@ -285,6 +290,45 @@ describe("collection sources", () => {
     expect(loaded?.source).toBe("feishu");
     expect(loaded?.credentials).toEqual({ app_id: "cli_x", app_secret: "super-secret" });
     expect(loaded?.authState).toEqual({ ok: true });
+  });
+
+  it("reads the channel's own copy of the Feishu credentials", async () => {
+    /**
+     * One secret, two vocabularies.
+     *
+     * The channel calls the credentials `appId` and `appSecret`; the
+     * collector reads them as `app_id` and `app_secret`. So the
+     * channel's copy was handed over unchanged, the collector found
+     * nothing in it, and a user who had only ever set up the channel
+     * could never run the Feishu collector — "no Feishu credentials
+     * found", with the secret sitting right there.
+     */
+    const { encryptSecret } = await import("../_core/crypto");
+    getChannelState.mockResolvedValue({
+      userId: 7,
+      channel: "feishu",
+      credentialsEnc: await encryptSecret(JSON.stringify({
+        appId: "cli_x",
+        appSecret: "super-secret",
+      })),
+    });
+    dbState.rows = [
+      {
+        id: 1,
+        userId: 7,
+        source: "feishu",
+        label: "飞书",
+        authState: null,
+        config: null,
+        status: "stopped",
+        lastSyncedAt: null,
+      },
+    ];
+
+    const loaded = await loadCollectionSource(7, "feishu");
+
+    expect(loaded?.credentials?.app_id).toBe("cli_x");
+    expect(loaded?.credentials?.app_secret).toBe("super-secret");
   });
 
   it("stores the auth state of a connector and its encrypted credentials", async () => {

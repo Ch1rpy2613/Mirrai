@@ -325,15 +325,27 @@ export class FeishuAdapter implements ChannelAdapter {
     });
 
     // The Feishu collector needs the same app id and secret, so the user
-    // only has to enter them once. The very same encrypted blob is written
-    // to the collection source — not a second copy of the secret.
+    // only has to enter them once. The secret is not stored twice: the
+    // *same* encrypted blob is written to the collection source.
+    //
+    // But the blob has to be in the collector's own vocabulary. The
+    // channel calls them `appId` and `appSecret`; the collector calls
+    // them `app_id` and `app_secret` — and it reads them by those
+    // names. So the channel's blob was written as it was, the
+    // collector's own copy was overwritten by it, and every Feishu
+    // collection afterwards failed with "no Feishu credentials found",
+    // seconds after the user had entered them.
     try {
       const { saveCollectionSource } = await import("../collectors/db-store");
+      const collectorBlob = await encryptSecret(JSON.stringify({
+        app_id: merged.appId,
+        app_secret: merged.appSecret,
+      }));
       await saveCollectionSource({
         userId,
         source: "feishu",
         label: copy("zh", "labels.collector.feishu"),
-        encryptedCredentials: encrypted,
+        encryptedCredentials: collectorBlob,
       });
     } catch (e) {
       // The collector side is optional; the channel must work without it.
