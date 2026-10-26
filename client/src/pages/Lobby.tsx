@@ -1561,30 +1561,41 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
           <DialogTitle className="font-display text-lg text-foreground">{t("lobby.createDialog.title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {/**
+           * Every field is named.
+           *
+           * The labels had no `htmlFor` and the inputs had no `id`, so
+           * a screen reader announced all of them as "edit text" — and
+           * the "separated on" date had no label at all. Clicking a
+           * label did nothing.
+           */}
           <div className="space-y-1.5">
-            <Label className="text-sm text-foreground/70">{t("lobby.createDialog.name")}</Label>
-            <Input value={name} onChange={e => setName(e.target.value)}
+            <Label htmlFor="create-persona-name" className="text-sm text-foreground/70">{t("lobby.createDialog.name")}</Label>
+            <Input id="create-persona-name" value={name} onChange={e => setName(e.target.value)}
               placeholder={t("lobby.createDialog.namePlaceholder")} className="h-10 bg-muted/50 border-border rounded-xl" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm text-foreground/70">{t("lobby.createDialog.relationship")}</Label>
-            <Input value={relationshipDesc} onChange={e => setRelationshipDesc(e.target.value)}
+            <Label htmlFor="create-persona-relationship" className="text-sm text-foreground/70">{t("lobby.createDialog.relationship")}</Label>
+            <Input id="create-persona-relationship" value={relationshipDesc} onChange={e => setRelationshipDesc(e.target.value)}
               placeholder={t("lobby.createDialog.relationshipPlaceholder")} className="h-10 bg-muted/50 border-border rounded-xl" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm text-foreground/70">{t("lobby.createDialog.togetherSince")}</Label>
-            <Input type="date" value={togetherSince} onChange={e => setTogetherSince(e.target.value)}
+            <Label htmlFor="create-persona-together" className="text-sm text-foreground/70">{t("lobby.createDialog.togetherSince")}</Label>
+            <Input id="create-persona-together" type="date" value={togetherSince} onChange={e => setTogetherSince(e.target.value)}
               className="h-10 bg-muted/50 border-border rounded-xl" />
           </div>
           <div className="space-y-1.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={showEndDate} onChange={e => setShowEndDate(e.target.checked)}
+            <label htmlFor="create-persona-separated" className="flex items-center gap-2 cursor-pointer select-none">
+              <input id="create-persona-separated" type="checkbox" checked={showEndDate} onChange={e => setShowEndDate(e.target.checked)}
                 className="w-4 h-4 rounded border-border accent-primary" />
               <span className="text-sm text-muted-foreground">{t("lobby.createDialog.separated")}</span>
             </label>
             {showEndDate && (
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                className="h-10 bg-muted/50 border-border rounded-xl mt-1.5" />
+              <>
+                <Label htmlFor="create-persona-end-date" className="text-sm text-foreground/70">{t("lobby.createDialog.separatedOn")}</Label>
+                <Input id="create-persona-end-date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                  className="h-10 bg-muted/50 border-border rounded-xl mt-1.5" />
+              </>
             )}
           </div>
         </div>
@@ -2027,12 +2038,36 @@ export default function Lobby() {
               )}
 
               {personas.length > 2 && (
-                <div className="flex gap-4 mb-5 border-b border-border flex-wrap">
+                /**
+                 * A tab list.
+                 *
+                 * The four filters were four unrelated buttons with no
+                 * indication of which one was on — a screen reader
+                 * announced "button, button, button, button" — and a
+                 * keyboard user had to Tab through all of them instead
+                 * of using the arrow keys.
+                 */
+                <div role="tablist" aria-label={t("lobby.directory.filterLabel")}
+                  className="flex gap-4 mb-5 border-b border-border flex-wrap"
+                  onKeyDown={(event) => {
+                    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                    const shown = FILTER_TABS.filter((tab) => tab.key === "all" || personas.some((p: any) => p.analysisStatus === tab.key));
+                    const index = shown.findIndex((tab) => tab.key === filterTab);
+                    if (index < 0) return;
+                    event.preventDefault();
+                    const step = event.key === "ArrowRight" ? 1 : -1;
+                    const next = shown[(index + step + shown.length) % shown.length];
+                    setFilterTab(next.key);
+                    document.getElementById(`lobby-filter-${next.key}`)?.focus();
+                  }}>
                   {FILTER_TABS.map(tab => {
                     const count = tab.key === "all" ? personas.length : personas.filter((p: any) => p.analysisStatus === tab.key).length;
                     if (tab.key !== "all" && count === 0) return null;
                     return (
-                      <button key={tab.key} onClick={() => setFilterTab(tab.key)}
+                      <button key={tab.key} id={`lobby-filter-${tab.key}`} onClick={() => setFilterTab(tab.key)}
+                        role="tab"
+                        aria-selected={filterTab === tab.key}
+                        tabIndex={filterTab === tab.key ? 0 : -1}
                         className={`pb-2 -mb-px text-xs border-b-2 transition-colors ${
                           filterTab === tab.key
                             ? "border-cinnabar text-foreground font-medium"
