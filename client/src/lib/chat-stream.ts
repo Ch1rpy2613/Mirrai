@@ -163,6 +163,15 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
       if (parsed) handleEvent(parsed, callbacks);
     }
   } finally {
+    /**
+     * The body is cancelled, not just unlocked.
+     *
+     * Releasing the lock hands the reader back but leaves the body
+     * unread, so the connection was not returned to the pool — and when
+     * the user pressed "stop", the request was aborted while the
+     * server was still writing into it.
+     */
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
