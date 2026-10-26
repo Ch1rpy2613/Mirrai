@@ -22,6 +22,7 @@ import path from "path";
 import { sql } from "drizzle-orm";
 import { llmService } from "../llm";
 import { loadPrompt, loadRegistry } from "./prompts";
+import { asMaterial } from "./material";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
 import { ENV } from "../_core/env";
@@ -818,9 +819,19 @@ export async function runCelebrityResearch(
   await report("researching", 10, copy(locale, "skillPrompts.research.collecting"));
   const researchPrompt = loadPrompt("celebrity", STAGE_PROMPTS.researching, input.profile);
   const sourceMaterial = input.sourceMaterial.trim();
-  const materialBlock = sourceMaterial
-    ? sourceMaterial
-    : copy(locale, "skillPrompts.research.noMaterial");
+  /**
+   * The material, fenced.
+   *
+   * It is the user's own chat log and whatever a collector brought in
+   * — text the user did not write, which can say anything at all. It
+   * reached the model with no fence and no statement that it was data,
+   * so a chat log could steer the research — and the injected text ends
+   * up in the persona the user then talks to.
+   */
+  const materialBlock = asMaterial(
+    sourceMaterial ? sourceMaterial : copy(locale, "skillPrompts.research.noMaterial"),
+    locale,
+  );
 
   const notes: string[] = [];
   for (const dimension of researchDimensions(locale)) {

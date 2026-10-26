@@ -167,12 +167,21 @@ describe("the preset list", () => {
 describe("the pipeline and the presets", () => {
   it("reads the amount of material the preset says", async () => {
     await runSkillPipeline({ ...baseInput, mode: "deep" });
-    expect(analyzerMaterial().length).toBe(30_000);
+    // The material is fenced now — it is the user's own chat log, and
+    // it can say anything — so the fence is around the amount the
+    // preset allows.
+    const material = analyzerMaterial();
+    expect(material).toContain("<<<MATERIAL");
+    expect(material).toContain("<<<END MATERIAL>>>");
+    const inside = material.split("MATERIAL>>>\n")[1]?.split("\n<<<END MATERIAL>>>")[0] ?? "";
+    expect(inside.length).toBe(30_000);
   }, 20_000);
 
   it("reads the historical amount when no preset is named", async () => {
     await runSkillPipeline({ ...baseInput });
-    expect(analyzerMaterial().length).toBe(10_000);
+    const material = analyzerMaterial();
+    const inside = material.split("MATERIAL>>>\n")[1]?.split("\n<<<END MATERIAL>>>")[0] ?? "";
+    expect(inside.length).toBe(10_000);
   }, 20_000);
 
   it("runs the extraction stages at the preset's temperature", async () => {

@@ -23,6 +23,7 @@ import os from "os";
 import path from "path";
 import { llmService } from "../llm";
 import { loadPrompt } from "./prompts";
+import { asMaterial } from "./material";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
 import {
@@ -495,7 +496,7 @@ async function runIntakeStage(input: {
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.intakeInstruction") + material,
+            copy(locale, "skillPrompts.pipeline.intakeInstruction") + asMaterial(material, locale),
         },
       ],
       options: { provider: input.provider, temperature: 0.3, maxTokens: 1200 },
@@ -909,7 +910,9 @@ async function runSkillPipelineOnce(
             copy(locale, "skillPrompts.pipeline.analyzerName", { name }) +
             "\n\n" +
             copy(locale, "skillPrompts.pipeline.analyzerMaterial", {
-              material: analysisMaterial,
+              // The material is fenced: it is the user's own chat log,
+              // and it can say anything.
+              material: asMaterial(analysisMaterial, locale),
             }),
         },
       ],
@@ -928,14 +931,17 @@ async function runSkillPipelineOnce(
     await setPersonaProgress(stageProgress.building, copy(locale, "skill.buildingPortrait"));
 
     const builderPrompt = loadPrompt(characterFamily, "persona_builder", effectiveProfile);
-    const builderMaterial = research
-      ? [
-          copy(locale, "skillPrompts.pipeline.builderAnalysis", { result: analysisResult }),
-          copy(locale, "skillPrompts.pipeline.builderResearchNotes", {
-            notes: research.digest.slice(0, MAX_RESEARCH_SAMPLE),
-          }),
-        ].join("\n\n")
-      : copy(locale, "skillPrompts.pipeline.builderAnalysis", { result: analysisResult });
+    const builderMaterial = asMaterial(
+      research
+        ? [
+            copy(locale, "skillPrompts.pipeline.builderAnalysis", { result: analysisResult }),
+            copy(locale, "skillPrompts.pipeline.builderResearchNotes", {
+              notes: research.digest.slice(0, MAX_RESEARCH_SAMPLE),
+            }),
+          ].join("\n\n")
+        : copy(locale, "skillPrompts.pipeline.builderAnalysis", { result: analysisResult }),
+      locale,
+    );
     const builtPersona = await llmService.invoke({
       messages: [
         { role: "system", content: builderPrompt },

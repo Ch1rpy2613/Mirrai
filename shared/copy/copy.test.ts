@@ -63,7 +63,13 @@ describe("the server's copy", () => {
     //
     // A few names are the same in both languages: a product is called
     // Slack in Chinese too.
-    const sameInBoth = new Set(["collectors.slack"]);
+    // The material fence's markers are the same in both languages on
+    // purpose: they are markers, not prose.
+    const sameInBoth = new Set([
+      "collectors.slack",
+      "skillPrompts.materialFenceHeader",
+      "skillPrompts.materialFenceEnd",
+    ]);
     const offenders = Object.entries(COPY)
       .filter(([key, entry]) => !/[一-鿿]/.test(entry.zh) && !sameInBoth.has(key))
       .map(([key]) => key);
