@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const getProactivePersonas = vi.fn();
 const getPersonaById = vi.fn();
 const createMessage = vi.fn();
+const updateMessageChannel = vi.fn();
 const updatePersona = vi.fn();
 const getChannelBindingsByUserId = vi.fn();
 const getLastMessageAt = vi.fn();
@@ -16,6 +17,7 @@ vi.mock("../db", () => ({
   getProactivePersonas: (...a: unknown[]) => getProactivePersonas(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   createMessage: (...a: unknown[]) => createMessage(...a),
+  updateMessageChannel: (...a: unknown[]) => updateMessageChannel(...a),
   updatePersona: (...a: unknown[]) => updatePersona(...a),
   getChannelBindingsByUserId: (...a: unknown[]) => getChannelBindingsByUserId(...a),
   getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
@@ -78,6 +80,8 @@ describe("the sweep that lets the persona speak first", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     invokeWithProvider.mockResolvedValue("今天怎么样？");
+    createMessage.mockResolvedValue(1);
+    updateMessageChannel.mockResolvedValue(undefined);
     getPersonaById.mockResolvedValue(persona);
     getUserById.mockResolvedValue(null);
     getRecentUserMood.mockResolvedValue(null);
@@ -158,9 +162,14 @@ describe("the sweep that lets the persona speak first", () => {
     await runProactiveSweep(new Date("2026-06-01T12:00:00Z"));
 
     expect(send).toHaveBeenCalledWith(1, "chat-42", "今天怎么样？", "zh");
+    // The message is stored before it is sent — so that a failure to
+    // store it cannot leave a message that was sent but never counted.
     expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({
-      channel: "wechat",
+      content: "今天怎么样？",
+      origin: "proactive",
     }));
+    // And the channel it went out on is recorded afterwards.
+    expect(updateMessageChannel).toHaveBeenCalledWith(expect.any(Number), 1, "wechat");
   });
 
   it("stays quiet in the quiet hours", async () => {

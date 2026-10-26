@@ -849,6 +849,26 @@ export async function createMessage(data: InsertMessage) {
   return result.id;
 }
 
+/**
+ * Records which channel a message went out on.
+ *
+ * The message is stored before it is sent, so that a failure to store
+ * it cannot leave the user with a message that was sent but never
+ * counted — and the clock that stops the persona from speaking again
+ * starts with the same write.
+ */
+export async function updateMessageChannel(
+  id: number,
+  userId: number,
+  channel: "web" | "wechat" | "feishu",
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(messages)
+    .set({ channel })
+    .where(and(eq(messages.id, id), eq(messages.userId, userId)));
+}
+
 export async function getMessagesByPersonaId(personaId: number, userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];

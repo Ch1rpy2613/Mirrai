@@ -111,26 +111,40 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         continue;
       }
 
-      const delivered = await deliverProactive({
-        userId: row.userId,
-        personaId: persona.id,
-        text,
-        emotionalState: persona.emotionalState,
-      });
-
-      await db.createMessage({
+      /**
+       * The message is stored before it is sent.
+       *
+       * It used to be sent first and stored afterwards — and if the
+       * store failed, the "the clock starts again" line never ran
+       * either. So the silence never restarted, and the next tick, a
+       * minute later, composed and sent another one: a stream of
+       * near-duplicate messages, each freshly written so with different
+       * wording, pushed to the user's channel.
+       */
+      const messageId = await db.createMessage({
         personaId: persona.id,
         userId: row.userId,
         role: "assistant",
         content: text,
         emotionalState: persona.emotionalState,
-        channel: delivered,
+        channel: "web",
         // It spoke first. The label is what makes the difference
         // between "they messaged me" and "the app told me something".
         origin: "proactive",
       });
       // The clock starts again: the user has been written to.
       await db.updatePersona(persona.id, row.userId, { lastChatAt: now });
+
+      const delivered = await deliverProactive({
+        userId: row.userId,
+        personaId: persona.id,
+        text,
+        emotionalState: persona.emotionalState,
+      });
+      // The channel it went out on is worth recording.
+      if (delivered !== "web" && messageId) {
+        await db.updateMessageChannel(messageId, row.userId, delivered).catch(() => undefined);
+      }
       sent += 1;
     } catch (e) {
       console.warn("[Proactive] Could not write a message:", (e as Error).message);
