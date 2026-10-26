@@ -15,7 +15,13 @@ import { llmService } from "../llm";
 import { resolveProviderForUser } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 
-/** How many messages back the extraction looks. */
+/**
+ * How many messages back the extraction looks when there is no cut-off.
+ *
+ * The window is normally "everything since the last extraction", so this
+ * is only the ceiling for the very first run — and for a run whose
+ * cut-off could not be read.
+ */
 const LOOKBACK = 50;
 
 /** How many memories one run may add. */
@@ -91,8 +97,47 @@ export async function extractMemories(params: {
 }): Promise<ExtractResult> {
   const { persona, userId } = params;
   const locale = params.locale ?? "zh";
-  const history = await db.getMessagesByPersonaId(persona.id, userId, LOOKBACK);
+  /**
+   * The messages since the last extraction.
+   *
+   * The cut-off has to come from the extraction log — the record of
+   * what was looked at. It used to come from the newest *memory* row,
+   * which is a different thing entirely: a memory the user added by
+   * hand moved the cut-off forward, so the messages between the last
+   * extraction and that memory were never extracted; and an extraction
+   * that produced no new memory left the cut-off where it was, so the
+   * same messages were sent to the model again on every later run.
+   */
+  const lastExtracted = await db.getLastExtractionAt(persona.id, userId);
+  /**
+   * The window.
+   *
+   * It was a fixed fifty messages — so when more than fifty messages
+   * arrived between two extractions, the older ones were outside the
+   * window, were never extracted, and the window was still marked as
+   * extracted. Those messages were skipped for ever.
+   */
+  const history = await db.getMessagesSince(
+    persona.id,
+    userId,
+    lastExtracted ?? new Date(0),
+  );
   if (history.length === 0) return { added: [], skipped: 0 };
+
+  /**
+   * The batch: the oldest messages first, and only as many as the model
+   * can read.
+   *
+   * The window used to be a fixed fifty messages, so when more than
+   * fifty messages arrived between two extractions the older ones were
+   * outside the window, were never extracted, and the window was still
+   * marked as extracted: those messages were skipped for ever.
+   *
+   * So the run covers only what it read, and the rest is picked up by
+   * the next one.
+   */
+  const batch = history.slice(0, LOOKBACK);
+  const coveredAt = batch[batch.length - 1]?.createdAt ?? null;
 
   /**
    * Only the messages that have not been looked at yet.
@@ -105,10 +150,7 @@ export async function extractMemories(params: {
    * that produced no new memory left the cut-off where it was, so the
    * same messages were sent to the model again on every later run.
    */
-  const lastExtracted = await db.getLastExtractionAt(persona.id, userId);
-  const fresh = lastExtracted
-    ? history.filter((m) => new Date(m.createdAt).getTime() > lastExtracted.getTime())
-    : history;
+  const fresh = batch;
   if (fresh.length < 3) return { added: [], skipped: 0 };
 
   // The transcript is read by the model, so the name it gives the user is
@@ -243,7 +285,13 @@ export async function extractMemories(params: {
    * marking it means the same messages are not sent again on every
    * later run. An answer that could not be parsed is not.
    */
-  if (understood) await db.markMemoryExtracted(persona.id, userId);
+  if (understood) {
+    await db.markMemoryExtracted(
+      persona.id,
+      userId,
+      coveredAt ? new Date(coveredAt) : new Date(),
+    );
+  }
   return { added, skipped };
 }
 

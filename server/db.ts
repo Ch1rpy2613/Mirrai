@@ -1472,11 +1472,22 @@ export async function getLastMemoryExtractionAt(personaId: number, userId: numbe
  * extraction is a fact about a conversation, and the conversation is
  * where it belongs.
  */
-export async function markMemoryExtracted(personaId: number, userId: number): Promise<void> {
+/**
+ * Records that an extraction ran.
+ *
+ * The moment it records is the moment the run covered — not the wall
+ * clock. A run that only had room for some of the messages must not
+ * claim the rest: they would never be looked at.
+ */
+export async function markMemoryExtracted(
+  personaId: number,
+  userId: number,
+  extractedAt: Date = new Date(),
+): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.insert(memoryExtractions)
-    .values({ personaId, userId, extractedAt: new Date() })
+    .values({ personaId, userId, extractedAt })
     .onConflictDoNothing();
 }
 
@@ -2769,10 +2780,15 @@ export async function touchMemoryRecalled(id: number, userId: number, at: Date) 
 // ─── Message window helpers ────────────────────────────────────────────────
 
 /** Messages for a persona within a time window, oldest first. */
-export async function getMessagesSince(personaId: number, userId: number, since: Date) {
+export async function getMessagesSince(
+  personaId: number,
+  userId: number,
+  since: Date,
+  limit?: number,
+) {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
+  const query = db.select({
     id: messages.id,
     role: messages.role,
     content: messages.content,
@@ -2784,6 +2800,9 @@ export async function getMessagesSince(personaId: number, userId: number, since:
       gte(messages.createdAt, since),
     ))
     .orderBy(asc(messages.createdAt));
+  // The newest messages are the ones that matter when the window is
+  // larger than the ceiling.
+  return limit === undefined ? query : query.limit(limit);
 }
 
 /** The timestamp of the most recent message, used for session-duration checks. */
