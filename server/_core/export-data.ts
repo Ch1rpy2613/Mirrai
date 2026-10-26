@@ -248,12 +248,25 @@ export function exportAsJson(bundle: ExportBundle): string {
  */
 export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.locale ?? "zh"): string {
   const lines: string[] = [];
-  const iso = (value: Date | string | null | undefined) =>
-    value ? new Date(value).toISOString().slice(0, 10) : "";
+  /**
+   * The day, as it was here.
+   *
+   * It used to be the UTC day — so a letter written at two in the
+   * morning in Shanghai was exported with the *previous* day's date,
+   * and the keepsake disagreed with the app. The message times had
+   * already been fixed to the server's own wall clock; the letters and
+   * the events had not.
+   */
+  const iso = (value: Date | string | null | undefined) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
 
   lines.push(`# ${bundle.user.name || bundle.user.username}`);
   lines.push("");
-  lines.push(`> ${copy(locale, "labels.export.exportedOn", { date: new Date().toISOString().slice(0, 10) })}`);
+  lines.push(`> ${copy(locale, "labels.export.exportedOn", { date: iso(new Date()) })}`);
   lines.push("");
 
   if (bundle.moods.length > 0) {

@@ -118,6 +118,28 @@ describe("the export", () => {
     expect(markdown).toContain("感谢你一路的陪伴");
   });
 
+  it("writes the dates as they were here, not in UTC", () => {
+    /**
+     * The dates were the UTC ones.
+     *
+     * A letter written at two in the morning in Shanghai was exported
+     * with the *previous* day's date — so the keepsake disagreed with
+     * the app. The message times had already been fixed; the letters
+     * and the events had not.
+     */
+    const late = bundle();
+    late.personas[0].letters[0].createdAt = new Date("2026-03-01T18:30:00Z");
+    late.personas[0].events[0].happenedAt = new Date("2026-03-01T18:30:00Z");
+    const markdown = exportAsMarkdown(late);
+    // The export follows the server's own wall clock.
+    const d = new Date("2026-03-01T18:30:00Z");
+    const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const utc = "2026-03-01";
+    expect(markdown).toContain(local);
+    // And where the two differ, the UTC date is not what is printed.
+    if (local !== utc) expect(markdown).not.toContain(`### ${utc}`);
+  });
+
   it("writes the relationship events into the Markdown", () => {
     const markdown = exportAsMarkdown(bundle());
     expect(markdown).toContain("## 你们之间发生的事");
