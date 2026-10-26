@@ -592,14 +592,32 @@ function AISettingsTab() {
   // whose persona needed to remember more had no way to say so.
   const [retrievalK, setRetrievalK] = useState(5);
 
+  /**
+   * What the server last said.
+   *
+   * The server's values used to overwrite the sliders on *every* new
+   * result — so a value the user had dragged and not yet saved was
+   * thrown away by a background refetch, and the "save" wrote the old
+   * number.
+   *
+   * The server's value is taken when it *changes* — so a refetch that
+   * brings the same numbers leaves the user's unsaved edit alone.
+   */
+  const lastServerValues = useRef<Record<string, number | undefined>>({});
+
   useEffect(() => {
-    if (defaultConfig.data?.extraConfig) {
-      const e = defaultConfig.data.extraConfig as any;
-      if (e.temperature != null) setTemperature(e.temperature);
-      if (e.maxTokens != null) setMaxTokens(e.maxTokens);
-      if (e.contextLimit != null) setContextLimit(e.contextLimit);
-      if (e.retrievalK != null) setRetrievalK(e.retrievalK);
-    }
+    const e = defaultConfig.data?.extraConfig as any;
+    if (!e) return;
+    const adopt = (key: string, value: unknown, set: (v: number) => void) => {
+      if (value == null || typeof value !== "number") return;
+      if (lastServerValues.current[key] === value) return;
+      lastServerValues.current[key] = value;
+      set(value);
+    };
+    adopt("temperature", e.temperature, setTemperature);
+    adopt("maxTokens", e.maxTokens, setMaxTokens);
+    adopt("contextLimit", e.contextLimit, setContextLimit);
+    adopt("retrievalK", e.retrievalK, setRetrievalK);
   }, [defaultConfig.data]);
 
   return (
