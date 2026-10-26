@@ -48,6 +48,19 @@ const CRISIS_TERMS_ZH = [
   "没有想活下去", "没想活", "不想活下去", "不想活下去了",
   "结束自己的生命", "结束自己的命", "了断自己", "了断这条命",
   "不想再醒来面对", "一睡不醒", "睡过去算了",
+  /**
+   * The plainest ways of saying it.
+   *
+   * Every one of these was missed: the matcher was run against them
+   * and none of them fired. "我不活了" and "我要去死" are how a person
+   * actually writes it, and they are *shorter* than most of the phrases
+   * above — so the list was long and missed the common ones.
+   */
+  "我不活了", "不活了", "我要去死", "我去死", "去死吧", "死了算了",
+  "自我了断", "了断生命", "结束生命", "我要跳海", "想跳海", "去跳海",
+  "我要吃安眠药", "吃安眠药", "我要烧炭", "烧炭", "没力气活着",
+  "我不想再坚持", "不想再坚持", "撑不住了", "支持不住了", "熬不住了",
+  "活着没意思", "活着好没意思", "生无可恋", "生无可乐",
 ];
 
 const CRISIS_TERMS_EN = [
@@ -63,6 +76,20 @@ const CRISIS_TERMS_EN = [
   "can't go on", "cannot go on", "end it for me", "put an end to it",
   "end my own life", "not want to live", "no will to live",
   "want to disappear", "rather not be here", "rather not exist",
+  /**
+   * The plainest ways of saying it.
+   *
+   * Every one of these was missed: the matcher was run against them
+   * and none of them fired. "I don't want to be here" is *shorter*
+   * than "rather not be here", which was covered — so the list was
+   * long and missed the common ones.
+   */
+  "don't want to be here", "dont want to be here", "not want to be here",
+  "don't want to be alive", "dont want to be alive", "not want to be alive",
+  "want to off myself", "wanna off myself", "off myself",
+  "no point in living", "no point living", "give up on life",
+  "giving up on life", "end everything", "end it all for me",
+  "kms", "kys", "not gonna make it", "wont make it",
 ];
 
 /**
@@ -74,6 +101,7 @@ const CRISIS_TERMS_EN = [
 const WEAK_SIGNAL_TERMS_ZH = [
   "好累", "太累了", "撑不住", "没意思", "烦死", "难受", "想哭",
   "睡不着", "压力好大", "不想说话", "好没意思", "活着好累",
+  "撑不下去了", "受不了了", "熬不住了",
 ];
 
 const WEAK_SIGNAL_TERMS_EN = [

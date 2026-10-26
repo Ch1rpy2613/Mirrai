@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { USER_MOODS, type UserMood } from "@shared/user-side";
 import { toast } from "sonner";
+import CrisisCard from "@/components/CrisisCard";
 
 /**
  * The mood check-in.
@@ -35,12 +36,21 @@ export default function MoodCheckIn({ compact = false }: MoodCheckInProps) {
   const { t } = useLocale();
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
+  /**
+   * The support resources.
+   *
+   * The note of the check-in is scanned by the server — so a person
+   * who wrote "我不想活了" into the "how are you today" box is shown
+   * the resources, instead of a warm reply and nothing else.
+   */
+  const [showCrisis, setShowCrisis] = useState(false);
 
   const setMood = trpc.user.setMood.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success(t("moodCheckIn.saved"));
       setNote("");
       setShowNote(false);
+      if (result?.crisis) setShowCrisis(true);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -51,6 +61,7 @@ export default function MoodCheckIn({ compact = false }: MoodCheckInProps) {
 
   return (
     <div className="space-y-3">
+      {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
       {!compact && (
         <p className="text-xs text-muted-foreground leading-relaxed">
           {t("moodCheckIn.hint")}

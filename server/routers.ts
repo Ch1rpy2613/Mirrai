@@ -1,6 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { isUniqueViolation } from "./_core/auth";
+import { detectCrisis } from "./safety/crisis";
 import { withKeyLock } from "./_core/lock";
 import { requestAbortSignal } from "./_core/context";
 import { extractMemories } from "./chat/memory-extract";
@@ -59,6 +60,7 @@ import {
   createOutboundLetter,
   getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
+  createSafetyEvent,
 } from "./db";
 import { nanoid } from "nanoid";
 import path from "path";
@@ -527,7 +529,28 @@ export const appRouter = router({
           mood: input.mood,
           note: input.note ?? null,
         });
-        return { success: true, mood };
+
+        /**
+         * The note is scanned.
+         *
+         * The mood check-in is the one place the app asks the person
+         * how they are — and the note was the only place the user
+         * could write freely that was *not* read by the crisis
+         * detector. So a person who wrote "我不想活了" into the
+         * "how are you today" box got a warm reply and no support
+         * resources at all.
+         */
+        const crisis = input.note ? detectCrisis(input.note) : null;
+        if (crisis?.crisis) {
+          await db.createSafetyEvent({
+            userId: ctx.user.id,
+            personaId: null,
+            type: "crisis",
+            severity: "critical",
+          }).catch((e) => console.warn("[Safety] Failed to record the crisis event:", e));
+          return { success: true, mood, crisis: true };
+        }
+        return { success: true, mood, crisis: false };
       }),
 
     /** The user's own moods, oldest first. */
