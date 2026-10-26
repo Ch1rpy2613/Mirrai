@@ -1435,6 +1435,7 @@ export const en = {
   commandPalette: {
     title: "Search",
     searching: "Searching…",
+    resultCount: "{{count}} results found",
     placeholder: "Find a person, or something you said…",
     personas: "Personas",
     messages: "Things you said",

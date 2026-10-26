@@ -1438,6 +1438,7 @@ export const zh = {
       diary: "日记",
     },
     noResults: "没找到",
+    resultCount: "找到 {{count}} 条结果",
     hint: "⌘K 打开 · Esc 关闭",
   },
   moodCheckIn: {

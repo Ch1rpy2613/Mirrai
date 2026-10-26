@@ -106,7 +106,22 @@ export default function CommandPalette() {
           </button>
         </div>
 
+        {/**
+         * The results are announced.
+         *
+         * The "searching" line was in a live region and the results
+         * were not — so a screen-reader user heard "searching" and then
+         * nothing: not that twelve results had arrived, and not that
+         * the search had found nothing.
+         */}
         <div className="max-h-[60vh] overflow-y-auto p-2">
+          <div role="status" aria-live="polite" className="sr-only">
+            {query.trim() && !results.isFetching
+              ? t("commandPalette.resultCount", {
+                  count: matchingPersonas.length + matchingMessages.length,
+                })
+              : ""}
+          </div>
           {matchingPersonas.length > 0 && (
             <div className="mb-2">
               <p className="text-[0.625rem] uppercase tracking-wide text-muted-subtle px-2 py-1.5">
@@ -181,7 +196,7 @@ export default function CommandPalette() {
           )}
 
           {query.trim() && !results.isFetching && matchingPersonas.length === 0 && matchingMessages.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-6">
+            <p className="text-xs text-muted-foreground text-center py-6" role="status">
               {t("commandPalette.noResults")}
             </p>
           )}
