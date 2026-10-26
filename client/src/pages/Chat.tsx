@@ -1376,17 +1376,27 @@ export default function Chat() {
               </button>
             </div>
           )}
-          {messages.map((msg, i) => {
+          {(() => {
+            // The mood of the last message that had one, as the list is
+            // walked. It is what the chip is compared against.
+            let lastMoodBefore: string | undefined;
+            return messages.map((msg, i) => {
             // The mood chip is a signal, not decoration — showing it on every
             // message turns the conversation into a wall of labels. It only
             // appears when the mood actually shifts.
-            const prevMood = [...messages.slice(0, i)]
-              .reverse()
-              .find(m => m.role === "assistant" && m.emotionalState);
+            //
+            // The last mood before this message is carried along as the
+            // list is walked. It used to be found by copying and
+            // reversing the whole list for every message — so a long
+            // conversation was walked once per message.
+            const prevMood = lastMoodBefore;
+            if (msg.role === "assistant" && msg.emotionalState) {
+              lastMoodBefore = msg.emotionalState;
+            }
             const showMood = Boolean(
               msg.role === "assistant" &&
               msg.emotionalState &&
-              msg.emotionalState !== prevMood?.emotionalState,
+              msg.emotionalState !== prevMood,
             );
             return (
               <div key={msg.id} data-message-id={msg.id}>
@@ -1401,7 +1411,8 @@ export default function Chat() {
               />
               </div>
             );
-          })}
+            });
+          })()}
           <div ref={messagesEndRef} />
         </div>
       </div>
