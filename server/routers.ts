@@ -65,6 +65,7 @@ import { clearAllActivePersonas } from "./wechat/commands";
 import { runSkillPipeline } from "./skill-engine/pipeline";
 import { exportSkillToHost } from "./skill-engine/skill-export";
 import { getEmotionalStateDesc, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
+import { isEmotionalState } from "./_core/emotion";
 import { getEffectiveGraduationMode, getGraduationModeDetails, canOfferGraduation, getEffectivePresence } from "./_core/graduation";
 import type { personas as personasTable } from "../drizzle/schema";
 import type { DistillationMode } from "@shared/distillation-modes";
@@ -860,9 +861,31 @@ export const appRouter = router({
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
         const { buildPromptForPersona } = await import("./chat/prompt");
+        /**
+         * The prompt the model works from.
+         *
+         * The inspection used to build a *different* one: it forced the
+         * language to Chinese, and it left out the scene's own wording
+         * and the message being quoted. So the prompt the user read was
+         * not the prompt the persona was given — and the docstring said
+         * it was.
+         */
+        const scene = persona.activeSceneId
+          ? await getSceneById(persona.activeSceneId, ctx.user.id).catch(() => null)
+          : null;
         const prompt = await buildPromptForPersona({
           persona,
           userId: ctx.user.id,
+          locale: ctx.locale,
+          now: new Date(),
+          // The scene's own wording goes into the prompt, so it has to be
+          // in the language the persona is speaking.
+          sceneOverlay: scene
+            ? (localizeScene(scene as any, ctx.locale) as any).systemPromptOverlay ?? null
+            : null,
+          emotionalState: scene?.emotionalState && isEmotionalState(scene.emotionalState)
+            ? scene.emotionalState
+            : null,
           // This is a read. Marking the memories as recalled would halve
           // the weight of the user's own pinned memories and anchors for
           // a day — every time they opened the prompt.
