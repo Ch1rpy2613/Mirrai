@@ -20,7 +20,7 @@
 import fs from "fs";
 import path from "path";
 import { sql } from "drizzle-orm";
-import { llmService } from "../llm";
+import { invokeForUser } from "../llm";
 import { loadPrompt, loadRegistry } from "./prompts";
 import { asMaterial } from "./material";
 import { runPythonTool } from "./runner";
@@ -508,13 +508,30 @@ export function buildResearchDraftSkill(input: ResearchDraftInput): string {
   return sanitizeForCopyright(lines.join("\n"));
 }
 
-/** Calls the model for one stage. */
+/**
+ * Calls the model for one stage.
+ *
+ * It goes to the user's own provider when they have one — the material
+ * is the user's own chat log, and it must not go to the operator's
+ * account, or the operator's bill, when they chose a key of their own.
+ *
+ * It used to call the registry directly, so a user with their own key
+ * still had their chat log sent to the operator's account for the whole
+ * four-stage research flow.
+ */
 async function invokeStage(
   systemPrompt: string,
   userContent: string,
-  options: { provider?: string; maxTokens: number; temperature?: number },
+  options: {
+    userId: number;
+    provider?: string;
+    maxTokens: number;
+    temperature?: number;
+  },
 ): Promise<string> {
-  const result = await llmService.invoke({
+  const result = await invokeForUser({
+    userId: options.userId,
+    providerName: options.provider,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent },
@@ -850,6 +867,7 @@ export async function runCelebrityResearch(
     ].join("\n");
     try {
       const note = await invokeStage(researchPrompt, userContent, {
+        userId: input.userId,
         provider: input.provider,
         maxTokens: 3500,
         temperature: 0.4,
@@ -914,7 +932,7 @@ export async function runCelebrityResearch(
         "",
         copy(locale, "skillPrompts.auditContract"),
       ].join("\n"),
-      { provider: input.provider, maxTokens: 3000, temperature: 0.3 },
+      { userId: input.userId, provider: input.provider, maxTokens: 3000, temperature: 0.3 },
     );
     audit = sanitizeForCopyright(auditContent);
     writeFile(path.join(reviewsDir, "research_audit.md"), `${audit}\n`);
@@ -969,7 +987,7 @@ export async function runCelebrityResearch(
         "",
         copy(locale, "skillPrompts.synthesisContract"),
       ].join("\n"),
-      { provider: input.provider, maxTokens: 3000, temperature: 0.3 },
+      { userId: input.userId, provider: input.provider, maxTokens: 3000, temperature: 0.3 },
     );
     const parsed = extractJsonObject(synthesisRaw);
     if (!parsed) {
@@ -1058,7 +1076,7 @@ export async function runCelebrityResearch(
         "",
         copy(locale, "skillPrompts.validationContract"),
       ].join("\n"),
-      { provider: input.provider, maxTokens: 2500, temperature: 0.3 },
+      { userId: input.userId, provider: input.provider, maxTokens: 2500, temperature: 0.3 },
     );
     const parsed = extractJsonObject(validationRaw);
     if (!parsed) {
