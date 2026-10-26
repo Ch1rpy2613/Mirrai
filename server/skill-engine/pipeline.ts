@@ -467,6 +467,19 @@ async function writeSkillPackage(input: {
       "--base-dir", input.baseDir,
       "--work", workPath,
       "--persona", personaPath,
+      /**
+       * The skill is not installed into the operator's home.
+       *
+       * The writer installs what it creates into `~/.claude/skills` by
+       * default — so every distillation dropped a folder into the
+       * operator's own Claude directory, outside the application, with
+       * nothing said. The subprocess environment is stripped, so the
+       * variable that turns it off could not be set from `.env` either.
+       *
+       * The skill belongs to the app; the app exports it when the user
+       * asks for it.
+       */
+      "--no-install-claude-skill",
     ];
     if (input.researchProfile) {
       args.push("--research-profile", input.researchProfile);
