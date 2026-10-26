@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowRight, Check, KeyRound, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -42,17 +42,23 @@ export default function Onboarding() {
   const setDefault = trpc.llmConfig.setDefault.useMutation();
   const createPersona = trpc.persona.create.useMutation();
 
+  // A provider that is already configured needs no key from the user.
+  //
+  // It used to be a state change in the render body, which React does not
+  // like: it re-runs on every render while the step is still "provider",
+  // and the update is scheduled during the render that asked for it.
+  const hasProvider =
+    Boolean(setup.data?.hasLlmProvider) || Boolean(setup.data?.hasUserProvider);
+  useEffect(() => {
+    if (hasProvider && step === "provider") setStep("persona");
+  }, [hasProvider, step]);
+
   if (authLoading || setup.isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
       </div>
     );
-  }
-
-  // A provider configured in the environment needs no key from the user.
-  if (setup.data?.hasLlmProvider && step === "provider") {
-    setStep("persona");
   }
 
   const handleSaveProvider = async () => {

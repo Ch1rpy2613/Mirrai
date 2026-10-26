@@ -297,8 +297,15 @@ function assertKnownProvider(providerName: string, locale: "zh" | "en" = "zh"): 
 export const appRouter = router({
   system: systemRouter,
 
-  /** Public probe used by the first-run wizard. */
-  setup: publicProcedure.query(() => getSetupStatus()),
+  /**
+   * A public probe used by the first-run wizard.
+   *
+   * It is public, but the context still knows who is asking when the
+   * request carries a session — so the answer can say "you have a
+   * provider of your own", which is the difference between the wizard
+   * and a usable app.
+   */
+  setup: publicProcedure.query(({ ctx }) => getSetupStatus(ctx.user?.id ?? null)),
 
   auth: router({
     // Never return the raw user row: it carries `passwordHash` and `openId`.

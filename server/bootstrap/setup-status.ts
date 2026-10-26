@@ -13,11 +13,22 @@ export interface SetupStatus {
   needsBootstrap: boolean;
   /** True when at least one LLM provider is usable. */
   hasLlmProvider: boolean;
+  /**
+   * True when *this* user has a provider of their own.
+   *
+   * The environment can have no provider at all while the user has
+   * configured one through the interface — and that user can chat. The
+   * interface asks about "is there a provider" to decide whether to
+   * send somebody to the first-run wizard, and answering "no" for a user
+   * who has one sent them there forever: the wizard has no exit, so
+   * every visit to the front page bounced them back into it.
+   */
+  hasUserProvider: boolean;
   /** True when the database could not be reached. */
   databaseUnavailable: boolean;
 }
 
-export async function getSetupStatus(): Promise<SetupStatus> {
+export async function getSetupStatus(userId?: number | null): Promise<SetupStatus> {
   let hasUsers = false;
   let databaseUnavailable = false;
 
@@ -31,9 +42,21 @@ export async function getSetupStatus(): Promise<SetupStatus> {
 
   const hasLlmProvider = registry.list().some((p) => p.configured);
 
+  // The user's own key, if they have one.
+  let hasUserProvider = false;
+  if (userId != null) {
+    try {
+      const configs = await db.getLlmConfigsByUserId(userId);
+      hasUserProvider = configs.some((config) => Boolean(config.apiKey));
+    } catch (e) {
+      console.warn("[Bootstrap] Could not read the user's providers:", e);
+    }
+  }
+
   return {
     needsBootstrap: !hasUsers && !databaseUnavailable,
     hasLlmProvider,
+    hasUserProvider,
     databaseUnavailable,
   };
 }
