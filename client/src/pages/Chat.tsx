@@ -117,6 +117,14 @@ export default function Chat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /**
+   * How many seconds the recording has run.
+   *
+   * The counter the interface shows lives in state, but the recorder's
+   * `onstop` handler is attached once — when the recording starts — so it
+   * cannot read a value that changes afterwards. It reads this instead.
+   */
+  const recordingSecondsRef = useRef(0);
   /** Aborts an in-flight streaming request when the user stops the reply. */
   const abortRef = useRef<AbortController | null>(null);
 
@@ -687,9 +695,17 @@ export default function Chat() {
         const reader = new FileReader();
         reader.onload = async () => {
           const base64 = (reader.result as string).split(",")[1];
-          const duration = recordingTime;
+          // How long the recording was.
+          //
+          // It used to be read from the `recordingTime` state, which the
+          // `onstop` handler could not see: the handler was attached when
+          // the recording started, so it closed over the value from then —
+          // zero. Every voice message was stored and sent as being no
+          // length at all, and the waveform in the bubble was a lie.
+          const duration = recordingSecondsRef.current;
           setIsRecording(false);
           setRecordingTime(0);
+          recordingSecondsRef.current = 0;
           setIsSending(true);
 
           const localUrl = URL.createObjectURL(blob);
@@ -731,9 +747,13 @@ export default function Chat() {
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordingTime(0);
-      recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+      recordingSecondsRef.current = 0;
+      recordingTimerRef.current = setInterval(() => {
+        recordingSecondsRef.current += 1;
+        setRecordingTime(recordingSecondsRef.current);
+      }, 1000);
     } catch { toast.error(t("chat.micDenied")); }
-  }, [personaId, currentState, recordingTime, t]);
+  }, [personaId, currentState, t]);
 
   const stopRecording = useCallback(() => {
     if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
@@ -750,6 +770,7 @@ export default function Chat() {
     }
     setIsRecording(false);
     setRecordingTime(0);
+    recordingSecondsRef.current = 0;
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
