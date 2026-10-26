@@ -191,13 +191,23 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
      * that failed took the rule the user had just written with it, and
      * there was nothing left to retry.
      */
+    /**
+     * The next request is built from the list on the screen.
+     *
+     * This went straight to the mutation — so while the save was in
+     * flight the screen still held the *server's* list. The server's
+     * save replaces the whole list, so a "confirm" or a "delete" in
+     * that window sent the list *without* the rule that had just been
+     * added — and the new rule was wiped on the server. The user was
+     * told "saved" both times, and the rule they had just written was
+     * gone.
+     */
+    const next = exists
+      ? rules.map((r) => (r.id === edited.id ? edited : r))
+      : [...rules, edited];
+    setLocalRules(next);
     saveMutation.mutate(
-      {
-        personaId,
-        rules: exists
-          ? rules.map((r) => (r.id === edited.id ? edited : r))
-          : [...rules, edited],
-      },
+      { personaId, rules: next },
       {
         onSuccess: () => {
           setDraft(null);

@@ -31,7 +31,7 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
    * so an English reader was shown Chinese imperfection names and
    * Chinese defaults.
    */
-  const { data, refetch } = trpc.imperfection.get.useQuery({
+  const { data, refetch, isError, isLoading } = trpc.imperfection.get.useQuery({
     personaId,
     locale: locale === "en" ? "en" : "zh",
   });
@@ -127,8 +127,29 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
         ) : null}
       </header>
 
+      {/**
+       * A failed query said nothing.
+       *
+       * The six boxes are only drawn once the answer arrives, so the
+       * panel showed a heading, a hint and two disabled buttons — no
+       * error, no retry, and the fields never appeared. The user could
+       * not tell the app from a broken app.
+       */}
+      {isError ? (
+        <div className="space-y-2">
+          <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
+          <Button variant="ghost" size="sm" onClick={() => refetch()}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : null}
+
+      {isLoading && !isError ? (
+        <p className="text-xs text-muted-subtle" role="status">{t("common.loading")}</p>
+      ) : null}
+
       <div className="space-y-3">
-        {ready && EMOTION_KEYS.map((state: EmotionKey) => {
+        {ready && !isError && EMOTION_KEYS.map((state: EmotionKey) => {
           const entry = draft.find((e) => e.state === state);
           const definition = EMOTIONS[state];
           return (
