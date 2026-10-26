@@ -1653,12 +1653,19 @@ export const appRouter = router({
           userId: ctx.user.id,
           providerName,
         });
-        const transcriptionRequest = [{
-          role: "user" as const,
-          content: copy(ctx.locale, "prompts.voiceTranscription", { duration: input.duration }),
-        }];
         /**
          * The transcription.
+         *
+         * The recording is sent to the provider's speech-to-text
+         * service — the audio itself, not a description of it.
+         *
+         * It used to be asked for in words: the chat model was given the
+         * *duration* and told to guess what the recording might have
+         * said. The guess was shown to the user as their own words, it
+         * was stored as their own words, and the persona answered it
+         * warmly. A model told to guess does not answer "I could not
+         * hear that" — so the fabrication was the normal case, not the
+         * exception.
          *
          * When it fails, the persona used to be given a placeholder as
          * if the user had said it — so it answered "（语音消息）" in
@@ -1669,10 +1676,14 @@ export const appRouter = router({
          * So a failure is a failure: it is said so, and no reply is
          * composed.
          */
-        const transcription = (voiceProvider
-          ? await voiceProvider.invoke(transcriptionRequest).catch(() => "")
-          : await llmService.invoke({ messages: transcriptionRequest }).catch(() => "")
-        ).trim();
+        const transcription = voiceProvider
+          ? await llmService
+              .transcribeWithProvider(voiceProvider, buffer, safeName)
+              .catch((e) => {
+                console.warn("[Chat] The recording could not be transcribed:", (e as Error).message);
+                return "";
+              })
+          : "";
         if (!transcription) {
           return {
             reply: "",

@@ -323,6 +323,30 @@ export class LLMService {
    * Per-user providers are built outside the registry, so they are invoked
    * through here to keep the retry policy in one place.
    */
+  /**
+   * Turns a recording into words, through a specific provider.
+   *
+   * The provider has to be able to: the speech-to-text is a separate
+   * service, and only the OpenAI-compatible ones expose it. A provider
+   * that cannot says so — the caller tells the user their voice note
+   * could not be understood, rather than making something up.
+   */
+  async transcribeWithProvider(
+    provider: LLMProvider,
+    audio: Buffer,
+    filename: string,
+  ): Promise<string> {
+    if (!provider.isConfigured()) {
+      throw new Error(`LLM provider "${provider.name}" is not configured. Check your .env file.`);
+    }
+    if (typeof provider.transcribe !== "function") {
+      throw new Error(
+        `The provider "${provider.name}" cannot hear a recording: it has no speech-to-text service.`,
+      );
+    }
+    return provider.transcribe(audio, filename);
+  }
+
   async invokeWithProvider(provider: LLMProvider, params: InvokeParams): Promise<string> {
     if (!provider.isConfigured()) {
       throw new Error(`LLM provider "${provider.name}" is not configured. Check your .env file.`);

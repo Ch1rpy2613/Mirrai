@@ -52,6 +52,40 @@ export class OpenAIProvider implements LLMProvider {
     });
   }
 
+  /**
+   * Turns a recording into words.
+   *
+   * The OpenAI-compatible speech-to-text endpoint: the file goes up,
+   * the text comes back. It is the only honest way to hear a voice
+   * message — the chat model cannot, and asking it to guess produced
+   * words the user never said.
+   */
+  async transcribe(audio: Buffer, filename: string): Promise<string> {
+    const url = `${this.baseUrl.replace(/\/+$/, "")}/audio/transcriptions`;
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(audio)]), filename);
+    form.append("model", process.env.OPENAI_TRANSCRIBE_MODEL || "whisper-1");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      body: form,
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(
+        `The speech-to-text service answered ${response.status}: ${body.slice(0, 300)}`,
+      );
+    }
+    const raw = await response.text();
+    try {
+      const parsed = JSON.parse(raw) as { text?: string };
+      return (parsed.text ?? "").trim();
+    } catch {
+      // Some servers answer with the plain text.
+      return raw.trim();
+    }
+  }
+
   async invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string> {
     const url = `${this.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     const response = await fetch(url, {

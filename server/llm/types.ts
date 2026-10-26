@@ -58,6 +58,19 @@ export interface LLMProvider {
   invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string>;
   /** Optional: yields text incrementally. */
   stream?(messages: LLMMessage[], options?: LLMOptions): AsyncIterable<LLMStreamChunk>;
+  /**
+   * Optional: turns a recording into words.
+   *
+   * It is optional because most providers cannot: the speech-to-text
+   * is a separate service, and only the OpenAI-compatible ones expose
+   * it.
+   *
+   * The app used to *pretend* to transcribe: it asked the chat model
+   * to guess what the recording might have said from how many seconds
+   * it lasted. The guess was shown to the user as their own words, it
+   * was stored as their own words, and the persona answered it warmly.
+   */
+  transcribe?(audio: Buffer, filename: string): Promise<string>;
 }
 
 export function getTextContent(content: string | LLMContentPart[]): string {

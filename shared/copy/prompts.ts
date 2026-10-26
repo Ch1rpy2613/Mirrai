@@ -246,11 +246,6 @@ Return JSON only, with no other text:
   /**
    * The transcription of a voice message.
    */
-  "prompts.voiceTranscription": {
-    zh: "请将以下语音消息转写为文字。如果无法转写，请根据上下文猜测可能的内容。语音时长：{{duration}}秒",
-    en: "Transcribe the voice message below into text. If it cannot be transcribed, guess what it might have said from the context. The recording runs for {{duration}} seconds.",
-  },
-
   /**
    * How well a research source is grounded.
    *
