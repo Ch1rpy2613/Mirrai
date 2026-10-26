@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,24 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
    */
   const [localRules, setLocalRules] = useState<MicroRule[] | null>(null);
   const rules: MicroRule[] = localRules ?? data?.rules ?? [];
+
+  /**
+   * The list the server has wins once it arrives.
+   *
+   * The local copy was only ever let go of when a save *failed*. So
+   * after the first successful save the screen showed the local copy
+   * for the rest of the session: the rules that were mined never
+   * appeared — the toast said "mined 6 rules" and nothing showed up —
+   * and a rule added on another device, or by the distillation, stayed
+   * invisible.
+   *
+   * The local copy is still what the next change is made from — that
+   * is what keeps two changes in quick succession from undoing one
+   * another — but it is let go of as soon as the server's list arrives.
+   */
+  useEffect(() => {
+    if (data) setLocalRules(null);
+  }, [data]);
 
   function save(rulesToSave: MicroRule[]) {
     setLocalRules(rulesToSave);
