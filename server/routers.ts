@@ -67,7 +67,6 @@ import { getEffectiveGraduationMode, getGraduationModeDetails, canOfferGraduatio
 import type { personas as personasTable } from "../drizzle/schema";
 import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
-import { inferEmotionalState } from "./_core/emotion";
 import { getCrisisResources } from "./safety/resources";
 import { isRealDayKey, isValidTimeZone, previousDateKey, zonedDateKey } from "@shared/timezone";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";

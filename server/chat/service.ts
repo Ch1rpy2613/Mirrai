@@ -188,7 +188,14 @@ async function maybeCompactHistory(params: {
       userId: params.userId,
       providerName: params.providerName,
     });
-    const summary = await llmService.invokeWithProvider(provider!, {
+    if (!provider) {
+      // No provider at all. The turn says so in words, rather than
+      // throwing a TypeError from inside the service.
+      throw new Error(
+        `No LLM provider available${params.providerName ? ` (requested: ${params.providerName})` : ""}. Configure at least one provider in .env`,
+      );
+    }
+    const summary = await llmService.invokeWithProvider(provider, {
       messages: [
         {
           role: "system",
