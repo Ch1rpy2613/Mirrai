@@ -176,14 +176,16 @@ describe("the pipeline and the presets", () => {
     const material = analyzerMaterial();
     expect(material).toContain("<<<MATERIAL");
     expect(material).toContain("<<<END MATERIAL>>>");
-    const inside = material.split("MATERIAL>>>\n")[1]?.split("\n<<<END MATERIAL>>>")[0] ?? "";
+    // The markers carry a nonce, so a chat log that happened to
+    // contain the end marker could not close the fence early.
+    const inside = material.split(/MATERIAL>>>:[0-9a-f]{8}\n/)[1]?.split(/\n<<<END MATERIAL>>>:[0-9a-f]{8}$/)[0] ?? "";
     expect(inside.length).toBe(30_000);
   }, 20_000);
 
   it("reads the historical amount when no preset is named", async () => {
     await runSkillPipeline({ ...baseInput });
     const material = analyzerMaterial();
-    const inside = material.split("MATERIAL>>>\n")[1]?.split("\n<<<END MATERIAL>>>")[0] ?? "";
+    const inside = material.split(/MATERIAL>>>:[0-9a-f]{8}\n/)[1]?.split(/\n<<<END MATERIAL>>>:[0-9a-f]{8}$/)[0] ?? "";
     expect(inside.length).toBe(10_000);
   }, 20_000);
 

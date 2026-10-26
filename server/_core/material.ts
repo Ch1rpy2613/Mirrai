@@ -19,14 +19,27 @@
  * The wording is in the model's own language, because the pipeline runs
  * in the user's language.
  */
+import { randomBytes } from "node:crypto";
 import { copy } from "@shared/copy";
 
 export function asMaterial(block: string, locale: "zh" | "en" = "zh"): string {
+  /**
+   * The markers carry a nonce.
+   *
+   * They were fixed strings — so a chat log that happened to contain
+   * "<<<END MATERIAL>>>" ended the fence early, and everything after
+   * it was read as instructions rather than as material. The upload is
+   * the user's own chat history, and the person on the other side of
+   * it can write anything.
+   */
+  const nonce = randomBytes(4).toString("hex");
+  const header = `MATERIAL>>>:${nonce}`;
+  const end = `${copy(locale, "skillPrompts.materialFenceEnd")}:${nonce}`;
   return [
     copy(locale, "skillPrompts.materialFenceHeader"),
     copy(locale, "skillPrompts.materialFenceNotice"),
-    "MATERIAL>>>",
+    header,
     block,
-    copy(locale, "skillPrompts.materialFenceEnd"),
+    end,
   ].join("\n");
 }
