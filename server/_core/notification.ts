@@ -11,6 +11,7 @@
  * user has already connected (WeChat, Feishu), and if no channel is
  * connected it is recorded so the web client can show it in the lobby.
  */
+import { nanoid } from "nanoid";
 import * as db from "../db";
 import { getChannelAdapter, type ChannelId } from "../channels";
 
@@ -73,7 +74,16 @@ export async function notifyOwner(
       channel: "web",
       kind: "notification",
       text,
-      dedupeKey: `notification:${userId}:${Date.now()}`,
+      /**
+       * A key that is unique, so the record is always written.
+       *
+       * It was the clock alone, and the column is unique — so two
+       * notifications in the same millisecond collided and one of them
+       * was silently dropped. The notification was then lost: no
+       * channel had taken it, and the record that would have shown it
+       * in the lobby was never written.
+       */
+      dedupeKey: `notification:${userId}:${nanoid()}`,
       scheduledFor: new Date(),
     })
     .catch(() => false);
