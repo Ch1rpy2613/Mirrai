@@ -350,6 +350,49 @@ export async function getLastLetterReplyAt(personaId: number, userId: number) {
  * answering the same letter. This only fills in the text of a letter
  * that has already been claimed.
  */
+/**
+ * Writes the answer to a letter, and the message that carries it,
+ * together.
+ *
+ * The two are one thing: a reply that lives only in a list is a
+ * notification; one that lands in the thread is a reply. They were
+ * two writes with nothing between them, so a failure in the middle
+ * left the answer in the list and never in the conversation — and the
+ * letter was already answered, so it could never be regenerated.
+ */
+export async function answerLetterWithMessage(
+  id: number,
+  userId: number,
+  replyText: string,
+  repliedAt: Date,
+  message: {
+    personaId: number;
+    content: string;
+    emotionalState: string | null;
+    channel?: "web" | "wechat" | "feishu";
+  },
+): Promise<boolean> {
+  return withTransaction(async (tx) => {
+    const [row] = await tx.update(letters)
+      .set({ status: "answered", replyText, repliedAt, claimedAt: null })
+      .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+      .returning({ id: letters.id });
+    if (!row) return false;
+    await tx.insert(messages).values({
+      personaId: message.personaId,
+      userId,
+      role: "assistant",
+      content: message.content,
+      emotionalState: message.emotionalState,
+      channel: message.channel ?? "web",
+      // It is the answer to a letter. Without the marker it was just
+      // another message, and the connection to the letter was gone.
+      origin: "letter",
+    });
+    return true;
+  });
+}
+
 export async function answerLetter(
   id: number,
   userId: number,

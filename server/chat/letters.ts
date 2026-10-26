@@ -147,33 +147,39 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
       }
 
       /**
-       * The answer is written, and the claim is given back.
+       * The answer and the message that carries it, together.
        *
-       * If anything goes wrong from here the claim is released, so the
-       * letter is answered on the next sweep rather than staying
-       * claimed — and silently lost — for five minutes.
+       * The answer belongs in the conversation. A reply that lives
+       * only in a list is a notification; one that lands in the thread
+       * is a reply.
+       *
+       * They were two writes with nothing between them — so a failure
+       * in the middle left the answer in the list and never in the
+       * conversation, and the letter was already answered, so it could
+       * never be regenerated.
+       *
+       * If anything goes wrong the claim is given back, so the letter
+       * is answered on the next sweep rather than staying claimed —
+       * and silently lost — for five minutes.
        */
       try {
-        await db.answerLetter(letter.id, letter.userId, replyText, now);
+        const answered_ = await db.answerLetterWithMessage(
+          letter.id,
+          letter.userId,
+          replyText,
+          now,
+          {
+            personaId: persona.id,
+            content: replyText,
+            emotionalState: persona.emotionalState,
+            channel: "web",
+          },
+        );
+        if (!answered_) continue;
       } catch (e) {
         await db.releaseLetterClaim(letter.id, letter.userId).catch(() => {});
         throw e;
       }
-
-      // The answer belongs in the conversation. A reply that lives only
-      // in a list is a notification; one that lands in the thread is a
-      // reply.
-      await db.createMessage({
-        personaId: persona.id,
-        userId: letter.userId,
-        role: "assistant",
-        content: replyText,
-        emotionalState: persona.emotionalState,
-        channel: "web",
-        // It is the answer to a letter. Without the marker it was just
-        // another message, and the connection to the letter was gone.
-        origin: "letter",
-      });
 
       answered += 1;
     } catch (e) {

@@ -5,6 +5,7 @@ const createLetterWithMessage = vi.fn();
 const getDueLetters = vi.fn();
 const getLastLetterReplyAt = vi.fn();
 const answerLetter = vi.fn();
+const answerLetterWithMessage = vi.fn();
 const claimLetter = vi.fn();
 const markLetterUnanswered = vi.fn();
 const deferLetter = vi.fn();
@@ -20,6 +21,7 @@ vi.mock("../db", () => ({
   getDueLetters: (...a: unknown[]) => getDueLetters(...a),
   getLastLetterReplyAt: (...a: unknown[]) => getLastLetterReplyAt(...a),
   answerLetter: (...a: unknown[]) => answerLetter(...a),
+  answerLetterWithMessage: (...a: unknown[]) => answerLetterWithMessage(...a),
   claimLetter: (...a: unknown[]) => claimLetter(...a),
   markLetterUnanswered: (...a: unknown[]) => markLetterUnanswered(...a),
   deferLetter: (...a: unknown[]) => deferLetter(...a),
@@ -70,6 +72,7 @@ describe("a letter that is only kept", () => {
     vi.clearAllMocks();
     // The claim succeeds unless a test says otherwise.
     claimLetter.mockResolvedValue(true);
+    answerLetterWithMessage.mockResolvedValue(true);
     createLetter.mockImplementation(async (p: any) => ({ id: 7, ...p }));
   });
 
@@ -198,13 +201,16 @@ describe("answering the letters that are due", () => {
     const answered = await answerDueLetters(new Date("2026-06-02T12:00:00Z"));
 
     expect(answered).toBe(1);
-    expect(answerLetter).toHaveBeenCalledWith(7, 1, "我知道了。", expect.any(Date));
-    // The answer lands in the thread, and it is marked as an answer.
-    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({
-      role: "assistant",
-      content: "我知道了。",
-      origin: "letter",
-    }));
+    // The answer and the message that carries it are written together.
+    expect(answerLetterWithMessage).toHaveBeenCalledWith(
+      7,
+      1,
+      "我知道了。",
+      expect.any(Date),
+      expect.objectContaining({
+        content: "我知道了。",
+      }),
+    );
   });
 
   it("answers a letter in the language the user reads", async () => {
@@ -250,7 +256,7 @@ describe("answering the letters that are due", () => {
     const answered = await answerDueLetters(new Date("2026-03-01T12:00:00Z"));
 
     expect(answered).toBe(0);
-    expect(answerLetter).not.toHaveBeenCalled();
+    expect(answerLetterWithMessage).not.toHaveBeenCalled();
     expect(createMessage).not.toHaveBeenCalled();
   });
 
@@ -276,7 +282,7 @@ describe("answering the letters that are due", () => {
     // The model was never asked.
     expect(invokeWithProvider).not.toHaveBeenCalled();
     // The answer carries the resources instead of the persona's voice.
-    const reply = answerLetter.mock.calls[0][2] as string;
+    const reply = answerLetterWithMessage.mock.calls[0][2] as string;
     expect(reply).toContain("12356");
   });
 
