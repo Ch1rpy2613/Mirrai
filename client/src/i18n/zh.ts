@@ -1342,6 +1342,7 @@ export const zh = {
     milestonesNote: "这些是你们真的经历过的。",
     memories: "一起记得的事",
     diaries: "那些天的日记",
+    diariesCount: "显示 {{count}} 篇，共 {{total}} 篇。",
     afterward: "往后，应用不会再打扰你：不再有纪念日提醒，不再主动来找你说话。分身睡着了。但这一页一直在——你随时可以回来看看。",
     takeItWithYou: "把这些带走",
     backHome: "回到首页",

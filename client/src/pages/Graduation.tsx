@@ -1,6 +1,7 @@
 import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { formatDayKey } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
 import { ArrowLeft, Download, Quote, Calendar, Sprout } from "lucide-react";
@@ -30,14 +31,6 @@ import { Button } from "@/components/ui/button";
  * `new Date("2026-03-01")` is midnight in Greenwich, which is the
  * previous day in every timezone west of Greenwich.
  */
-function formatDayKey(dayKey: string, locale: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey ?? ""));
-  if (!match) return String(dayKey ?? "");
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  if (Number.isNaN(date.getTime())) return String(dayKey);
-  return date.toLocaleDateString(locale);
-}
-
 export default function Graduation() {
   const params = useParams<{ id: string }>();
   /**
@@ -276,7 +269,7 @@ export default function Graduation() {
                       )}
                       {memory.date && (
                         <p className="text-[0.625rem] text-muted-subtle mt-1.5 flex items-center gap-1">
-                          <Calendar className="w-2.5 h-2.5" /> {memory.date}
+                          <Calendar className="w-2.5 h-2.5" /> {formatDayKey(memory.date, locale)}
                         </p>
                       )}
                     </div>
@@ -313,6 +306,13 @@ export default function Graduation() {
             initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
           >
             <h2 className="section-title mb-4">{t("graduationPage.diaries")}</h2>
+            {/* How many there are.
+
+                The page showed five of them and said nothing — so a
+                user with forty diaries read as if there were five. */}
+            <p className="text-xs text-muted-subtle mb-3">
+              {t("graduationPage.diariesCount", { count: Math.min(5, diaries.length), total: diaries.length })}
+            </p>
             <div className="space-y-3">
               {diaries.slice(0, 5).map((diary: any) => (
                 <div key={diary.id} className="rounded-xl border border-border/70 p-4">

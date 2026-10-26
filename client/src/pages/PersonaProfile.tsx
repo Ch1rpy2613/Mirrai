@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
+import { formatMonthKey } from "@/lib/dates";
 import { ArrowLeft, Pencil, Heart, Quote, Calendar, Sparkles } from "lucide-react";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
@@ -165,8 +166,13 @@ export default function PersonaProfile() {
                 {persona.togetherFrom && (
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
-                    {persona.togetherFrom}
-                    {persona.togetherTo ? ` – ${persona.togetherTo}` : ` – ${t("profile.present")}`}
+                    {/* The dates were printed raw — "2021-05" — while
+                        every other date on the page is in the reader's
+                        own language and format. */}
+                    {formatMonthKey(persona.togetherFrom, locale)}
+                    {persona.togetherTo
+                      ? ` – ${formatMonthKey(persona.togetherTo, locale)}`
+                      : ` – ${t("profile.present")}`}
                   </span>
                 )}
                 {phase && (

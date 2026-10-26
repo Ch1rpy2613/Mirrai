@@ -1349,6 +1349,7 @@ export const en = {
     milestonesNote: "These ones really happened.",
     memories: "What you remember together",
     diaries: "The diaries",
+    diariesCount: "Showing {{count}} of {{total}}.",
     afterward: "From here on, the app will not disturb you: no anniversary reminders, no messages it starts. The persona is asleep. But this page stays — you can come back and look whenever you like.",
     takeItWithYou: "Take it with you",
     backHome: "Back home",
