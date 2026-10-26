@@ -786,7 +786,26 @@ function AISettingsTab() {
 
 function WeChatTab() {
   const { t } = useLocale();
-  const wechatStatus = trpc.wechat.getStatus.useQuery(undefined, { refetchInterval: 3000 });
+  /**
+   * The status is polled only while it is moving.
+   *
+   * It was polled every three seconds for ever — so the tab made a
+   * request every three seconds, all day, whether a QR code was waiting
+   * to be scanned or not.
+   */
+  const wechatStatus = trpc.wechat.getStatus.useQuery(undefined, {
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      // A login in progress: the code is waiting to be scanned, or the
+      // code is being typed.
+      if (status === "scanning" || status === "scaned" || status === "need_verifycode") {
+        return 3000;
+      }
+      // Connected: slowly, so an expired token is noticed.
+      if (status === "logged_in") return 60_000;
+      return false;
+    },
+  });
   const startLogin = trpc.wechat.startLogin.useMutation({
     onSuccess: () => { toast.success(t("settings.wechat.scan")); wechatStatus.refetch(); },
     onError: (e: any) => toast.error(e.message),
