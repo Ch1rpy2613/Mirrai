@@ -14,7 +14,6 @@ import {
   buildLetterReplyInstruction,
   resolveReplyAt,
   earliestAnswerAt,
-  REPLY_DELAY_HOURS,
 } from "@shared/letters";
 import { buildUserContextBlock } from "@shared/user-side";
 import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
@@ -359,4 +358,3 @@ export async function composeLetterReply(params: {
   return "";
 }
 
-export { REPLY_DELAY_HOURS };

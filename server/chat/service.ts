@@ -125,6 +125,13 @@ export interface ConversationOptions {
   /** Channel the message arrived on. */
   channel?: "web" | "wechat" | "feishu";
   /** Whether the user message has already been stored. */
+  /**
+   * Whether the user's message is already stored.
+   *
+   * It was never set by any caller — so the message was always stored
+   * here. It stays, because it is the flag that says what the code
+   * means; but nothing claims it is in use.
+   */
   alreadyPersisted?: boolean;
   /** Media attached to the message. */
   media?: { url: string; type: "image" | "voice"; mimeType?: string };
@@ -318,9 +325,6 @@ export async function composeMessages(params: {
     locale,
     now: now.getTime(),
   });
-  const anchors = retrieved.filter((m) => m.category === "anchor");
-  const ordinary = retrieved.filter((m) => m.category !== "anchor");
-
   // The message being replied to. Without it, every reply is a reply to
   // "whatever came last".
   let quotedSection = "";
