@@ -353,7 +353,30 @@ export default function Chat() {
     if (persona?.emotionalState) setCurrentState(persona.emotionalState);
   }, [persona?.emotionalState]);
 
+  /**
+   * Keeps the newest message in view — but only when the newest message
+   * has actually changed.
+   *
+   * Loading older messages *prepends* to the list, and the list is the
+   * only thing this effect watches. It therefore scrolled to the bottom
+   * every time the user asked for more history, which threw away the
+   * place they had scrolled to and made the history impossible to read.
+   *
+   * The length is watched as well as the id, because a reply that is
+   * still arriving grows without becoming a different message — and that
+   * is exactly when the view should follow it down.
+   */
+  const lastMessageRef = useRef<{ id: string | number | null; length: number }>({
+    id: null,
+    length: 0,
+  });
   useEffect(() => {
+    const last = messages.length > 0 ? messages[messages.length - 1] : null;
+    const id = last ? last.id : null;
+    const length = last ? last.content.length : 0;
+    const changed = id !== lastMessageRef.current.id || length !== lastMessageRef.current.length;
+    lastMessageRef.current = { id, length };
+    if (!changed) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
