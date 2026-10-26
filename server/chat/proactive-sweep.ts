@@ -56,6 +56,22 @@ async function deliverProactive(params: {
   return "web";
 }
 
+/**
+ * The personas whose last attempt failed, and when.
+ *
+ * A persona that cannot be written for — a model that is down, a
+ * provider that refuses — was tried again on the next tick, and the
+ * next, and the next. The sweep runs every minute, so a broken
+ * provider cost a model call a minute, for ever, for that persona.
+ *
+ * The backoff is in memory: it is a cushion, not a record, and a
+ * restart clearing it is fine.
+ */
+const failedAttempts = new Map<number, number>();
+
+/** How long a persona waits after a failed attempt. */
+const FAILURE_BACKOFF_MS = 60 * 60 * 1000;
+
 export async function runProactiveSweep(now: Date = new Date()): Promise<number> {
   let sent = 0;
 
@@ -75,6 +91,17 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
   const candidates = await db.getProactivePersonas();
   for (const row of candidates) {
     try {
+      /**
+       * A persona that failed recently is left alone.
+       *
+       * The failure happened before the message was written, so the
+       * persona is still "due" — and without this the sweep tried it
+       * again a minute later, and the minute after that.
+       */
+      const lastFailure = failedAttempts.get(row.id);
+      if (lastFailure !== undefined && now.getTime() - lastFailure < FAILURE_BACKOFF_MS) {
+        continue;
+      }
       const persona = await db.getPersonaById(row.id, row.userId);
       if (!persona) continue;
       if (persona.analysisStatus !== "ready") continue;
@@ -185,8 +212,11 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         await db.updateMessageChannel(messageId, row.userId, delivered).catch(() => undefined);
       }
       sent += 1;
+      failedAttempts.delete(row.id);
     } catch (e) {
       console.warn("[Proactive] Could not write a message:", (e as Error).message);
+      // The persona waits before it is tried again.
+      failedAttempts.set(row.id, now.getTime());
     }
   }
 
