@@ -42,7 +42,6 @@ export async function writeLetter(params: {
   deliver: boolean;
   /** "letter" is written to the persona; "todo" is kept for later. */
   kind?: "letter" | "todo";
-  locale?: "zh" | "en";
   now?: Date;
 }) {
   const now = params.now ?? new Date();

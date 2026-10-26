@@ -3820,7 +3820,6 @@ export const appRouter = router({
           mood: input.mood ?? null,
           deliver: input.kind === "todo" ? false : input.deliver,
           kind: input.kind,
-          locale: input.locale,
         });
         return { success: true, letter, asleep };
       }),
