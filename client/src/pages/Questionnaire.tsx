@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 /**
  * The guided questionnaire.
@@ -96,6 +97,14 @@ function toggle(list: string[], value: string): string[] {
 export default function Questionnaire() {
   const [, navigate] = useLocation();
   const { t, locale } = useLocale();
+  /**
+   * The questionnaire needs a session.
+   *
+   * It used to have no guard at all: an anonymous visitor could answer
+   * every question, press "finish", and be told the persona was made —
+   * and the mutation failed with "not authorised", with the answer lost.
+   */
+  useAuth({ redirectOnUnauthenticated: true });
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>(EMPTY);
 

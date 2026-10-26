@@ -20,7 +20,7 @@ type Step = "provider" | "persona" | "done";
  */
 export default function Onboarding() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
   const [step, setStep] = useState<Step>("provider");

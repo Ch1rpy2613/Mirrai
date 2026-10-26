@@ -129,7 +129,7 @@ export default function Upload() {
   const params = useParams<{ id: string }>();
   const personaId = parseInt(params.id || "0");
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, "uploading" | "done" | "error">>({});

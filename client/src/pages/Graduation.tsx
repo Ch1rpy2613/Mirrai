@@ -26,7 +26,7 @@ export default function Graduation() {
   const params = useParams<{ id: string }>();
   const personaId = parseInt(params.id || "0");
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
 
   const { data: persona, isLoading, isError, error } = trpc.persona.get.useQuery(

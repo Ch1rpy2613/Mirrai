@@ -31,7 +31,7 @@ const TOOLTIP_STYLE = {
 
 export default function Analytics() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
   const [days, setDays] = useState(30);
 

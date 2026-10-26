@@ -95,7 +95,7 @@ export default function PersonaEdit() {
   const params = useParams<{ id: string }>();
   const personaId = parseInt(params.id || "0");
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
   const { data: persona, refetch } = trpc.persona.get.useQuery(

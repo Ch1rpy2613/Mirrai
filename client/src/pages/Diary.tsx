@@ -154,7 +154,7 @@ function DiaryCard({ entry, onDelete }: { entry: any; onDelete: (id: number) => 
 
 export default function Diary() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
   /**
    * The user's own clock.
