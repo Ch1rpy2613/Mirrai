@@ -590,14 +590,16 @@ export default function Upload() {
           <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
             <div className="flex items-baseline justify-between mb-2">
               <h2 className="font-display text-base font-semibold text-foreground">{t("upload.uploadedFiles")}</h2>
-              <span className="kicker">{t("upload.fileCount", { count: files?.length ?? 0 })}</span>
+              {/* The files that are still on their way count too — the
+                  header used to say "2 files" above three rows. */}
+              <span className="kicker">{t("upload.fileCount", { count: (files?.length ?? 0) + pendingUploads.length })}</span>
             </div>
             <div>
               {files?.map((f: any) => (
                 <div key={f.id} className="flex items-center gap-3 py-3 border-t border-border">
                   <span className="text-sm text-foreground/85 flex-1 truncate">{f.originalName}</span>
                   <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
-                    {(f.fileSize / 1024).toFixed(0)} KB
+                    {formatFileSize(f.fileSize)}
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
                     <Check className="w-3 h-3" />{t("upload.uploaded")}
