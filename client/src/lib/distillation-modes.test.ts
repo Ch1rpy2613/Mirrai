@@ -25,7 +25,7 @@ describe("the distillation presets in the interface", () => {
   it("gives every preset a name and an explanation in both languages", () => {
     const missing: string[] = [];
     for (const preset of DISTILLATION_PRESETS) {
-      for (const key of [preset.labelKey, preset.descriptionKey]) {
+      for (const key of [preset.clientLabelKey, preset.clientDescriptionKey]) {
         for (const [name, dictionary] of [["zh", zh], ["en", en]] as const) {
           const value = lookup(dictionary, key);
           if (!value || !value.trim()) missing.push(`${name}:${key}`);
@@ -38,7 +38,7 @@ describe("the distillation presets in the interface", () => {
   it("does not leave the English label in the Chinese dictionary", () => {
     const same: string[] = [];
     for (const preset of DISTILLATION_PRESETS) {
-      for (const key of [preset.labelKey, preset.descriptionKey]) {
+      for (const key of [preset.clientLabelKey, preset.clientDescriptionKey]) {
         if (lookup(zh, key) === lookup(en, key)) same.push(key);
       }
     }

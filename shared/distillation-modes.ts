@@ -10,11 +10,11 @@
  * distillation actually starts.
  *
  * A preset bundles the whole decision into one name the user can pick:
- *   quick        — a fast look; a small sample and few calls
- *   standard     — the default; the middle ground
- *   deep         — reads much more of the material
- *   colleague    — a colleague, with the work dimension
- *   publicFigure — a public figure, with the full research flow
+ *   fast       — a fast look; a small sample and few calls
+ *   standard   — the default; the middle ground
+ *   deep       — reads much more of the material
+ *   colleague  — a colleague, with the work dimension
+ *   celebrity  — a public figure, with the full research flow
  *
  * The list lives here so the server and the client read the same one.
  */
@@ -29,10 +29,16 @@ export type DistillationResearchProfile = "budget-friendly" | "budget-unfriendly
 
 export interface DistillationPreset {
   id: DistillationMode;
-  /** The dictionary key of the preset's name. */
-  labelKey: string;
-  /** The dictionary key of the preset's explanation. */
-  descriptionKey: string;
+  /**
+   * The *interface* dictionary key of the preset's name.
+   *
+   * The client dictionary, not the shared one: the server never renders
+   * the label. It used to read as if it were the shared table, and a
+   * call to `copy()` with it returned the key itself.
+   */
+  clientLabelKey: string;
+  /** The *interface* dictionary key of the preset's explanation. */
+  clientDescriptionKey: string;
   /** The family of prompts the run uses. */
   characterFamily: DistillationFamily;
   /** The research profile; null means the research flow does not run. */
@@ -57,8 +63,8 @@ export interface DistillationPreset {
 export const DISTILLATION_PRESETS: DistillationPreset[] = [
   {
     id: "fast",
-    labelKey: "distillation.presets.fast.label",
-    descriptionKey: "distillation.presets.fast.description",
+    clientLabelKey: "distillation.presets.fast.label",
+    clientDescriptionKey: "distillation.presets.fast.description",
     characterFamily: "relationship",
     researchProfile: null,
     chatSampleLimit: 4000,
@@ -68,8 +74,8 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
   },
   {
     id: "standard",
-    labelKey: "distillation.presets.standard.label",
-    descriptionKey: "distillation.presets.standard.description",
+    clientLabelKey: "distillation.presets.standard.label",
+    clientDescriptionKey: "distillation.presets.standard.description",
     characterFamily: "relationship",
     researchProfile: null,
     chatSampleLimit: 10000,
@@ -79,8 +85,8 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
   },
   {
     id: "deep",
-    labelKey: "distillation.presets.deep.label",
-    descriptionKey: "distillation.presets.deep.description",
+    clientLabelKey: "distillation.presets.deep.label",
+    clientDescriptionKey: "distillation.presets.deep.description",
     characterFamily: "relationship",
     researchProfile: null,
     chatSampleLimit: 30000,
@@ -90,8 +96,8 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
   },
   {
     id: "colleague",
-    labelKey: "distillation.presets.colleague.label",
-    descriptionKey: "distillation.presets.colleague.description",
+    clientLabelKey: "distillation.presets.colleague.label",
+    clientDescriptionKey: "distillation.presets.colleague.description",
     characterFamily: "colleague",
     researchProfile: null,
     chatSampleLimit: 10000,
@@ -101,8 +107,8 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
   },
   {
     id: "celebrity",
-    labelKey: "distillation.presets.celebrity.label",
-    descriptionKey: "distillation.presets.celebrity.description",
+    clientLabelKey: "distillation.presets.celebrity.label",
+    clientDescriptionKey: "distillation.presets.celebrity.description",
     characterFamily: "celebrity",
     researchProfile: "budget-unfriendly",
     chatSampleLimit: 30000,

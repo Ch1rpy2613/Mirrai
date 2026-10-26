@@ -44,7 +44,7 @@ export default function DistillationModePicker({ value, onChange, disabled }: Pr
           >
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
-                {t(preset.labelKey as any)}
+                {t(preset.clientLabelKey as any)}
               </span>
               <span className="text-xs text-muted-foreground flex-shrink-0">
                 {t("distillation.calls", { count: preset.approxCalls })}
@@ -52,7 +52,7 @@ export default function DistillationModePicker({ value, onChange, disabled }: Pr
               {selected && <Check className="w-3.5 h-3.5 text-cinnabar flex-shrink-0" />}
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {t(preset.descriptionKey as any)}
+              {t(preset.clientDescriptionKey as any)}
             </p>
             <p className="text-[11px] text-muted-foreground/80 mt-1">
               {t("distillation.sample", { count: preset.chatSampleLimit })}
