@@ -1,5 +1,10 @@
 # Mirrai — fourth-pass audit: the whole journey
 
+> **Status: every finding below has been fixed.** They were fixed one commit
+> each in Round 1, batch 11 — the changes are listed in `docs/AGENT-MISSION.md`
+> under "第十一批修复". This file is kept as the record of what the audit
+> found, so that a later reader can check the fixes against the findings.
+
 Angle: walk the app the way a person walks it and find the seams where two
 individually-correct pieces do not fit together. Every finding below was read
 out of the code at the stated lines; where something *does* handle the case, the
