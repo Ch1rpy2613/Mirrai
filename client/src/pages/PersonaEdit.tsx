@@ -358,11 +358,27 @@ export default function PersonaEdit() {
    * had no way back and no explanation.
    */
   if (isError) {
+    /**
+     * The screen has a way out.
+     *
+     * It used to be a message and nothing else — so a persona deleted
+     * on another device left the user with no back button and no
+     * retry. The profile page and the graduation page both got one;
+     * this one was missed.
+     */
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-4">
           <p className="text-sm text-foreground/80">{t("errors.notFound")}</p>
           <p className="text-xs text-muted-foreground">{(error as any)?.message ?? ""}</p>
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/")}>
+              {t("common.back")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              {t("common.retry")}
+            </Button>
+          </div>
         </div>
       </div>
     );
