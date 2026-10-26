@@ -1930,9 +1930,30 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
             <span className="font-sans">{personaName}</span> {t("chat.emotionReport")}
           </h3>
           <div className="flex items-center gap-2">
-            <div className="flex bg-muted rounded-md p-0.5">
+            {/**
+             * The range is one control — the reader chooses how far
+             * back to look — so it is a group of radio buttons, and the
+             * arrow keys move between them.
+             *
+             * It used to show the chosen range in colour alone, so a
+             * screen reader was told about two buttons and nothing
+             * about which one was chosen.
+             */}
+            <div className="flex bg-muted rounded-md p-0.5" role="radiogroup"
+              aria-label={t("chat.emotionReport")}
+              onKeyDown={(event) => {
+                const ranges = [7, 30];
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                const index = ranges.indexOf(days);
+                const step = event.key === "ArrowRight" ? 1 : -1;
+                setDays(ranges[(index + step + ranges.length) % ranges.length]);
+              }}>
               {[7, 30].map(d => (
                 <button key={d} onClick={() => setDays(d)}
+                  role="radio"
+                  aria-checked={days === d}
+                  tabIndex={days === d ? 0 : -1}
                   className={`text-xs px-3 py-1 rounded-md transition-colors ${days === d ? "bg-card text-foreground" : "text-muted-foreground"}`}>
                   {t("chat.report.days", { count: d })}
                 </button>
