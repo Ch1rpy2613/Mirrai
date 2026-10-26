@@ -136,6 +136,32 @@ describe("streamChat", () => {
     expect(errors).toEqual([{ message: "upstream exploded", partial: true }]);
   });
 
+  it("reports a stream that ends before the reply is finished", async () => {
+    // The connection drops mid-reply: the body ends, and no `done` ever
+    // arrives. The bubble was then left streaming for ever.
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse(['event: delta\ndata: {"text":"我"}\n\n']),
+    );
+    globalThis.fetch = fetchMock as any;
+
+    const errors: Array<{ message: string; partial: boolean }> = [];
+    const deltas: string[] = [];
+
+    await streamChat({
+      personaId: 1,
+      message: "hi",
+      callbacks: {
+        onDelta: (text) => deltas.push(text),
+        onError: (message, partial) => errors.push({ message, partial }),
+      },
+    });
+
+    // What arrived is kept, and the user is told it was cut short.
+    expect(deltas.join("")).toBe("我");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].partial).toBe(true);
+  });
+
   it("throws with the status when the server refuses", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockSseResponse([], 500));
     globalThis.fetch = fetchMock as any;

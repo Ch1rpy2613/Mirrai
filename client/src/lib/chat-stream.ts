@@ -176,6 +176,15 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  /**
+   * Whether the turn was finished.
+   *
+   * The stream can end without a `done` — the connection drops, the
+   * server is killed by a proxy, the body is truncated. The bubble was
+   * then left streaming for ever: the interface showed a reply that
+   * never stopped arriving, and there was nothing to press.
+   */
+  let settled = false;
 
   try {
     while (true) {
@@ -189,6 +198,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
       for (const frame of frames) {
         const parsed = parseFrame(frame);
         if (!parsed) continue;
+        if (parsed.event === "done" || parsed.event === "error") settled = true;
         handleEvent(parsed, callbacks);
       }
     }
@@ -197,7 +207,24 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
     const tail = buffer.trim();
     if (tail) {
       const parsed = parseFrame(tail);
-      if (parsed) handleEvent(parsed, callbacks);
+      if (parsed) {
+        if (parsed.event === "done" || parsed.event === "error") settled = true;
+        handleEvent(parsed, callbacks);
+      }
+    }
+
+    /**
+     * The turn ended without finishing.
+     *
+     * The bubble is left alone, so it keeps its spinning marker for
+     * the rest of the session. The user is told the connection ended,
+     * and what arrived is kept.
+     */
+    if (!settled) {
+      callbacks.onError?.(
+        translate(locale, "errors.streamEndedEarly"),
+        true,
+      );
     }
   } finally {
     /**

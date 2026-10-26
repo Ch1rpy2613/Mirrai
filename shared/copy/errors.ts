@@ -215,6 +215,11 @@ export const ERRORS = {
     zh: "这条消息太长了——最多两千字。",
     en: "That message is too long — two thousand characters at the most.",
   },
+  /** The stream ended before the reply was finished. */
+  "errors.streamEndedEarly": {
+    zh: "连接中断了，这段回答没有说完。",
+    en: "The connection ended before the reply was finished.",
+  },
   "errors.streamInvalidRequest": {
     zh: "这个请求不完整。",
     en: "That request was not complete.",
