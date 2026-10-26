@@ -142,7 +142,7 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
 
   function add() {
     setDraft({
-      id: `manual-${Date.now()}`,
+      id: manualId(),
       trigger: [],
       meaning: "",
       rendering: "",
@@ -207,7 +207,14 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
               <Wand2 className="mr-1.5 h-3.5 w-3.5" />
               {mineMutation.isPending ? t("microRules.mining") : t("microRules.mine")}
             </Button>
-            <Button variant="outline" size="sm" onClick={add}>
+            {/**
+             * The button is disabled while a draft is open.
+             *
+             * It used to be enabled — and it replaced the draft with a
+             * blank one, so everything the user had typed was thrown
+             * away with no warning.
+             */}
+            <Button variant="outline" size="sm" onClick={add} disabled={draft !== null}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               {t("microRules.add")}
             </Button>
