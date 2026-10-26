@@ -118,14 +118,21 @@ registry.registerFactory(
   },
 );
 
+/** Volcengine's Ark endpoint — Doubao's official home. */
+const DEFAULT_DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+
 registry.registerFactory(
   "Doubao",
   (cfg) =>
     new OpenAIProvider(
       "Doubao",
       cfg.apiKey ?? "",
-      cfg.baseUrl ?? ENV.doubaoBaseUrl,
-      cfg.model ?? ENV.doubaoModel,
+      // The environment's base URL is empty when it was not set, and an
+      // empty string is not "missing" — so the provider called
+      // "/chat/completions", which is not a URL, and every request to it
+      // failed with "Failed to parse URL".
+      cfg.baseUrl || ENV.doubaoBaseUrl || DEFAULT_DOUBAO_BASE_URL,
+      cfg.model || ENV.doubaoModel,
       cfg.systemMessage,
     ),
   {
@@ -142,6 +149,10 @@ registry.registerFactory(
       "302AI",
       cfg.apiKey ?? "",
       cfg.baseUrl ?? "https://api.302.ai/v1",
+      // 302AI is a gateway to many models and has no sensible default,
+      // but an empty model is refused by the API with a 400. The
+      // provider now says it is not configured rather than failing on
+      // every call.
       cfg.model ?? "",
       cfg.systemMessage,
     ),

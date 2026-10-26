@@ -199,8 +199,59 @@ describe("runConversation", () => {
     expect(done).toBeDefined();
   });
 
-  it("never calls the model when the message is a crisis", async () => {
+  it("does not count a turn that failed as a conversation", async () => {
+    // A provider that is having a bad day must not walk the user towards
+    // the graduation ritual: the message count is one of its gates.
+    invokeWithProvider.mockRejectedValue(new Error("the provider is down"));
+
     const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    // The error is reported.
+    expect(events.some((e) => e.type === "error")).toBe(true);
+    // The user's turn is still stored — they did send it.
+    expect(createMessage).toHaveBeenCalledTimes(1);
+    expect(createMessage.mock.calls[0][0].role).toBe("user");
+    // Nothing was counted.
+    expect(updatePersona).not.toHaveBeenCalled();
+    expect(updateIntimacy).not.toHaveBeenCalled();
+    expect(createEmotionSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("keeps the half of a reply that arrived before the failure", async () => {
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "在的" };
+      throw new Error("the connection dropped");
+    });
+
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "stream",
+    })) {
+      events.push(event);
+    }
+
+    // The user saw the half, so the transcript has to have it — or the
+    // next poll would wipe it off the screen.
+    const assistantCall = createMessage.mock.calls.find(
+      (call: any[]) => call[0].role === "assistant",
+    );
+    expect(assistantCall?.[0].content).toContain("在的");
+    // But it is still not a counted conversation.
+    expect(updatePersona).not.toHaveBeenCalled();
+  });
+
+  it("never calls the model when the message is a crisis", async () => {    const events = [];
     for await (const event of runConversation({
       persona: persona(),
       userId: 1,

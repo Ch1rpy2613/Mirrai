@@ -10,6 +10,18 @@ function toClaudeContent(content: string | LLMContentPart[]): any {
   });
 }
 
+/**
+ * Claude's temperature.
+ *
+ * Claude accepts 0 to 1, so a value meant for another provider is
+ * clamped rather than refused: the API answers a temperature of 1.5
+ * with an error, and the user would have been told the model failed.
+ */
+function claudeTemperature(temperature: number | undefined): number {
+  if (typeof temperature !== "number" || Number.isNaN(temperature)) return 0.7;
+  return Math.min(1, Math.max(0, temperature));
+}
+
 export class ClaudeProvider implements LLMProvider {
   name = "Claude";
 
@@ -58,6 +70,10 @@ export class ClaudeProvider implements LLMProvider {
       body: JSON.stringify({
         model: this.model,
         max_tokens: options?.maxTokens ?? 4096,
+        // The temperature the user chose. It was never sent, so every
+        // Claude reply used the provider's own default and the setting
+        // was silently ignored for that provider.
+        temperature: claudeTemperature(options?.temperature),
         system,
         messages: filtered.map(m => ({ role: m.role, content: toClaudeContent(m.content) })),
       }),
@@ -88,6 +104,7 @@ export class ClaudeProvider implements LLMProvider {
       body: JSON.stringify({
         model: this.model,
         max_tokens: options?.maxTokens ?? 4096,
+        temperature: claudeTemperature(options?.temperature),
         system,
         stream: true,
         messages: filtered.map(m => ({ role: m.role, content: toClaudeContent(m.content) })),

@@ -27,7 +27,10 @@ export class OpenAIProvider implements LLMProvider {
   };
 
   isConfigured(): boolean {
-    return !!this.apiKey;
+    // A key on its own is not enough. A provider with no base URL calls
+    // "/chat/completions", which is not a URL, and one with no model is
+    // refused by the API — and both used to report themselves as ready.
+    return !!this.apiKey && !!this.baseUrl && !!this.model;
   }
 
   private buildMessages(messages: LLMMessage[]): LLMMessage[] {
@@ -67,7 +70,12 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content ?? "";
+    const message = data.choices?.[0]?.message;
+    // Some providers answer with the reasoning in `reasoning_content` and
+    // leave `content` empty. Reading only `content` turned such a reply
+    // into an empty one, which the app then stored as "(silence)".
+    const text = message?.content ?? message?.reasoning_content ?? "";
+    return typeof text === "string" ? text : "";
   }
 
   async *stream(messages: LLMMessage[], options?: LLMOptions): AsyncGenerator<{ text: string }> {
@@ -91,7 +99,8 @@ export class OpenAIProvider implements LLMProvider {
       if (payload === "[DONE]") return;
       try {
         const parsed = JSON.parse(payload);
-        const delta = parsed?.choices?.[0]?.delta?.content;
+        const choice = parsed?.choices?.[0]?.delta;
+        const delta = choice?.content ?? choice?.reasoning_content;
         if (typeof delta === "string" && delta) yield { text: delta };
       } catch {
         // Skip frames that are not JSON (keep-alives, for instance).

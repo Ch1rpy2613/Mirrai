@@ -451,6 +451,40 @@ export async function* runConversation(
     }
     console.error("[Chat] LLM call failed:", e);
     yield { type: "error", message: failureMessage, partial: replyText.length > 0 };
+    // A turn that failed is not a turn.
+    //
+    // It used to carry on: the reply was stored as "（沉默）", the
+    // message count went up, the intimacy score went up, and two more
+    // model calls were made to work out the emotional state of a
+    // conversation that never happened. The message count is one of the
+    // gates on the graduation, so a provider that was having a bad day
+    // could walk the user towards the ritual.
+    //
+    // The half that did arrive is a different matter: the user saw it,
+    // so the transcript has to have it too — or the next poll would
+    // wipe it off the screen.
+    if (failed) {
+      if (replyText) {
+        const messageId = await db.createMessage({
+          personaId: persona.id,
+          userId,
+          role: "assistant",
+          content: replyText,
+          emotionalState: persona.emotionalState,
+          channel: options.channel ?? "web",
+        });
+        yield {
+          type: "done",
+          messageId,
+          emotionalState: persona.emotionalState,
+          graduationSuggested: false,
+          careNote: null,
+          crisis: false,
+          recalled,
+        };
+      }
+      return;
+    }
   }
 
   // The care note is decided before the reply is stored, so it can be part
