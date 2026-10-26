@@ -83,7 +83,11 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                     if (!window.confirm(t("relationship.removeConfirm"))) return;
                     removeEvent.mutate({ id: event.id });
                   }}
-                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1"
+                  // The button is disabled while the removal is in
+                  // flight: two clicks meant two removals, and the
+                  // second one failed on a row that was already gone.
+                  disabled={removeEvent.isPending}
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1 disabled:opacity-50"
                   aria-label={t("relationship.remove")}
                 >
                   <Trash2 className="w-3.5 h-3.5" />

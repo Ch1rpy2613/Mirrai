@@ -121,7 +121,11 @@ export default function LetterBox({ personaId }: { personaId: number }) {
                   remove.mutate({ id: letter.id });
                 }}
                 aria-label={t("letters.remove")}
-                className="absolute top-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1"
+                // The button is disabled while the removal is in flight:
+                // two clicks meant two removals, and the second one
+                // failed on a row that was already gone.
+                disabled={remove.isPending}
+                className="absolute top-3 right-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1 disabled:opacity-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
