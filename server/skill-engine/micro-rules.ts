@@ -162,6 +162,39 @@ function toTimestamp(value: Date | string | null | undefined): string | undefine
  * a few of them: one recurring sentence would otherwise fill the whole
  * batch and the miner would never see the rest of the person.
  */
+/**
+ * How many candidates each speaker contributes.
+ *
+ * The search compares every pair of them, so this is the square root of
+ * the work.
+ */
+const MAX_CANDIDATES_PER_ROLE = 400;
+
+/**
+ * Keeps the most recent candidates of each speaker.
+ */
+function capPerRole<T extends { index: number; role: string }>(
+  candidates: T[],
+  cap: number,
+): T[] {
+  const perRole = new Map<string, T[]>();
+  for (const candidate of candidates) {
+    const list = perRole.get(candidate.role) ?? [];
+    list.push(candidate);
+    perRole.set(candidate.role, list);
+  }
+  const kept: T[] = [];
+  for (const list of perRole.values()) {
+    if (list.length <= cap) {
+      kept.push(...list);
+      continue;
+    }
+    // The most recent ones: the last ones in the transcript.
+    kept.push(...list.slice(list.length - cap));
+  }
+  return kept.sort((a, b) => a.index - b.index);
+}
+
 export function findContrastPairs(
   messages: ContrastPairInput[],
   options: FindContrastPairsOptions = {},
@@ -172,7 +205,7 @@ export function findContrastPairs(
   const limit = options.limit ?? 24;
   const maxPairsPerMessage = options.maxPairsPerMessage ?? 2;
 
-  const candidates = messages
+  const all = messages
     .map((message, index) => ({
       index,
       role: (message.role ?? "").trim().toLowerCase(),
@@ -186,6 +219,19 @@ export function findContrastPairs(
     .filter((candidate) =>
       options.role === undefined ? true : candidate.role === options.role.trim().toLowerCase(),
     );
+
+  /**
+   * The candidates, capped per speaker.
+   *
+   * Every pair of candidates is compared, and each comparison costs an
+   * edit distance. A chat log of short messages — "嗯", "好", "在吗" —
+   * gives thousands of them, and the quadratic loop over those is
+   * billions of comparisons: the mining never finished.
+   *
+   * The most recent ones are kept: a rule is read off the conversation
+   * as it is now.
+   */
+  const candidates = capPerRole(all, MAX_CANDIDATES_PER_ROLE);
 
   const scored: Array<{
     pair: ContrastPair;
@@ -203,6 +249,11 @@ export function findContrastPairs(
       // difference between what she said and what he said is not a
       // distinction, it is a conversation.
       if (a.role !== b.role) continue;
+
+      // The difference in length is a lower bound on the distance, so
+      // a pair that is too different in length is skipped without the
+      // edit distance being computed at all.
+      if (Math.abs(a.normalised.length - b.normalised.length) > maxDifference) continue;
 
       const distance = editDistance(a.normalised, b.normalised);
       // Identical messages are not a contrast — there is no difference to
