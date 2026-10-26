@@ -4,6 +4,7 @@ const createLetter = vi.fn();
 const getDueLetters = vi.fn();
 const getLastLetterReplyAt = vi.fn();
 const answerLetter = vi.fn();
+const claimLetter = vi.fn();
 const markLetterUnanswered = vi.fn();
 const deferLetter = vi.fn();
 const createMessage = vi.fn();
@@ -17,6 +18,7 @@ vi.mock("../db", () => ({
   getDueLetters: (...a: unknown[]) => getDueLetters(...a),
   getLastLetterReplyAt: (...a: unknown[]) => getLastLetterReplyAt(...a),
   answerLetter: (...a: unknown[]) => answerLetter(...a),
+  claimLetter: (...a: unknown[]) => claimLetter(...a),
   markLetterUnanswered: (...a: unknown[]) => markLetterUnanswered(...a),
   deferLetter: (...a: unknown[]) => deferLetter(...a),
   createMessage: (...a: unknown[]) => createMessage(...a),
@@ -64,6 +66,8 @@ const persona = {
 describe("a letter that is only kept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The claim succeeds unless a test says otherwise.
+    claimLetter.mockResolvedValue(true);
     createLetter.mockImplementation(async (p: any) => ({ id: 7, ...p }));
   });
 
@@ -163,6 +167,8 @@ describe("the gap between two answers", () => {
 describe("answering the letters that are due", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The claim succeeds unless a test says otherwise.
+    claimLetter.mockResolvedValue(true);
     invokeWithProvider.mockResolvedValue("我知道了。");
     getPersonaById.mockResolvedValue(persona);
     getUserById.mockResolvedValue(null);
@@ -216,6 +222,30 @@ describe("answering the letters that are due", () => {
     const messages = invokeWithProvider.mock.calls[0][0].messages;
     const system = messages.find((m: any) => m.role === "system");
     expect(system.content).not.toMatch(/[一-鿿]/);
+  });
+
+  it("does not answer a letter another sweep has already claimed", async () => {
+    // Two sweeps can overlap — the scheduler runs on more than one
+    // process, and the lock can expire while a sweep is still running.
+    // Without the claim, both would write an answer and the user would
+    // get two replies.
+    getDueLetters.mockResolvedValue([{
+      id: 7,
+      userId: 1,
+      personaId: 1,
+      body: "有件事我一直没说。",
+      kind: "letter",
+      status: "waiting",
+      replyAt: new Date("2026-06-01T00:00:00Z"),
+      createdAt: new Date("2026-05-31T00:00:00Z"),
+    }]);
+    claimLetter.mockResolvedValue(false);
+
+    const answered = await answerDueLetters(new Date("2026-03-01T12:00:00Z"));
+
+    expect(answered).toBe(0);
+    expect(answerLetter).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
   });
 
   it("does not answer a letter that says something it cannot answer", async () => {

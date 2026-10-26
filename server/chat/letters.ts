@@ -112,6 +112,17 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
         continue;
       }
 
+      /**
+       * The letter is claimed before the answer is written.
+       *
+       * The answer takes a model call, so the claim has to happen
+       * first: two overlapping sweeps would otherwise both write an
+       * answer, and the user would get two replies and two messages in
+       * the conversation.
+       */
+      const claimed = await db.claimLetter(letter.id, letter.userId);
+      if (!claimed) continue;
+
       // The answer is written in the language the user reads.
       //
       // It used to be written in Chinese, always: the letter itself may

@@ -286,6 +286,13 @@ export async function getLastLetterReplyAt(personaId: number, userId: number) {
 }
 
 /** Records the answer to a letter. */
+/**
+ * Writes the answer into a letter.
+ *
+ * The claim — `claimLetter` — is what keeps two sweeps from both
+ * answering the same letter. This only fills in the text of a letter
+ * that has already been claimed.
+ */
 export async function answerLetter(
   id: number,
   userId: number,
@@ -299,6 +306,29 @@ export async function answerLetter(
     .where(and(eq(letters.id, id), eq(letters.userId, userId)))
     .returning();
   return row ?? null;
+}
+
+/**
+ * Claims a letter for answering, before the answer is written.
+ *
+ * The answer takes a model call, so the claim has to happen first: two
+ * sweeps that overlap would otherwise both write an answer.
+ */
+export async function claimLetter(
+  id: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db.update(letters)
+    .set({ status: "answered", replyText: "", repliedAt: new Date() })
+    .where(and(
+      eq(letters.id, id),
+      eq(letters.userId, userId),
+      eq(letters.status, "waiting"),
+    ))
+    .returning({ id: letters.id });
+  return Boolean(row);
 }
 
 /** Marks a letter as answered with nothing — the persona stayed quiet. */
