@@ -25,6 +25,15 @@ import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone"
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 
+/**
+ * The largest picture the chat will send.
+ *
+ * The server's own limit — twenty megabytes, decoded. The picture is
+ * checked here before it is read into memory, so a file of any size
+ * cannot take the tab with it.
+ */
+const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 
 // ─── MAIN CHAT ────────────────────────────────────────────────────────────────
 
@@ -796,7 +805,39 @@ export default function Chat() {
 
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || isSending) return;
+    /**
+     * The input is emptied first.
+     *
+     * It used to be emptied at the very end — so when the pick was
+     * refused the input still held the file, and choosing the same one
+     * again did not even fire the change. The file appeared to have
+     * been selected and nothing happened.
+     */
+    e.target.value = "";
+    if (!file) return;
+    if (isSending) {
+      toast.info(t("chat.sendInFlight"));
+      return;
+    }
+    /**
+     * The kind and the size are checked before the file is read.
+     *
+     * The file used to be read into memory first — so a file of any
+     * size could take the tab with it, and a file the server would
+     * refuse came back as a raw English validation message in a
+     * Chinese interface.
+     */
+    if (!file.type.startsWith("image/")) {
+      toast.error(t("chat.imageNotAnImage", { name: file.name }));
+      return;
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      toast.error(t("chat.imageTooLarge", {
+        name: file.name,
+        limit: `${Math.round(MAX_IMAGE_UPLOAD_BYTES / 1024 / 1024)} MB`,
+      }));
+      return;
+    }
     setShowAttach(false);
     setIsSending(true);
     // The stop button used to be a no-op on this path: the controller was
@@ -842,7 +883,6 @@ export default function Chat() {
       }
     };
     reader.readAsDataURL(file);
-    e.target.value = "";
     // `t` is in the list because the handler says things to the reader:
     // without it, a picture sent after a change of language was
     // described in the language that had been in use before.
