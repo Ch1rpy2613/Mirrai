@@ -458,14 +458,14 @@ describe("the memories", () => {
       { id: 1, title: "第一次见面" },
       { id: 2, title: "养的那只猫" },
     ];
-    const titles = await db.getMemoryTitles([1, 2, 1]);
+    const titles = await db.getMemoryTitles([1, 2, 1], 3);
 
     expect(titles.get(1)).toBe("第一次见面");
     expect(titles.get(2)).toBe("养的那只猫");
   });
 
   it("asks for nothing when there are no ids", async () => {
-    const titles = await db.getMemoryTitles([]);
+    const titles = await db.getMemoryTitles([], 3);
     expect(titles.size).toBe(0);
     // No query was run at all.
     expect(queries).toHaveLength(0);

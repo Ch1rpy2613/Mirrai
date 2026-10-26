@@ -1684,7 +1684,14 @@ export async function getLastExtractionAt(personaId: number, userId: number): Pr
  * was the only reading helper in the file that did not check, and a
  * helper that does not check is one call away from one that does not.
  */
-export async function getMemoryTitles(ids: number[], userId?: number) {
+/**
+ * The titles of a set of memories.
+ *
+ * The owner is required: without it, the helper hands back any user's
+ * memory titles for the ids it is given. The only caller passes it, but
+ * a parameter that may be left out is a parameter that will be.
+ */
+export async function getMemoryTitles(ids: number[], userId: number) {
   const db = await getDb();
   if (!db || ids.length === 0) return new Map<number, string>();
   const unique = Array.from(new Set(ids));
@@ -1692,11 +1699,7 @@ export async function getMemoryTitles(ids: number[], userId?: number) {
     id: memories.id,
     title: memories.title,
     subject: memories.subject,
-  }).from(memories).where(
-    userId === undefined
-      ? inArray(memories.id, unique)
-      : and(inArray(memories.id, unique), eq(memories.userId, userId)),
-  );
+  }).from(memories).where(and(inArray(memories.id, unique), eq(memories.userId, userId)));
   return new Map(rows.map((r) => [r.id, r.title]));
 }
 
@@ -3042,15 +3045,20 @@ export async function getRunningCollectionJobs(): Promise<RunningCollectionJob[]
   return rows.map((row) => ({ id: row.id, userId: row.userId }));
 }
 
-export async function getCollectionJobs(userId?: number, limit = 20) {
+/**
+ * A user's collection jobs, newest first.
+ *
+ * The owner is required: without it, the helper hands back every
+ * user's collection jobs — their source, their status and their error
+ * text.
+ */
+export async function getCollectionJobs(userId: number, limit = 20) {
   const db = await getDb();
   if (!db) return [];
-  const query = db.select().from(collectionJobs);
-  const rows = userId !== undefined
-    ? await query.where(eq(collectionJobs.userId, userId))
-        .orderBy(desc(collectionJobs.createdAt)).limit(limit)
-    : await query.orderBy(desc(collectionJobs.createdAt)).limit(limit);
-  return rows;
+  return db.select().from(collectionJobs)
+    .where(eq(collectionJobs.userId, userId))
+    .orderBy(desc(collectionJobs.createdAt))
+    .limit(limit);
 }
 
 // ─── Reminder helpers ──────────────────────────────────────────────────────
