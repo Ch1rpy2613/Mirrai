@@ -228,7 +228,19 @@ function pump(): void {
     const job = store.get(id);
     if (!job || job.status !== "queued") continue;
     active += 1;
-    void runJob(job);
+    /**
+     * The failure is caught here.
+     *
+     * The job was run with `void` — so a rejection was an unhandled
+     * one, and the queue's bookkeeping was skipped with it: the slot
+     * was never given back and the next job was never started. One
+     * failure and the collectors stopped for the life of the process.
+     */
+    void runJob(job).catch((error) => {
+      console.error("[Collectors] The job runner failed:", error);
+      active -= 1;
+      pump();
+    });
   }
 }
 
@@ -350,8 +362,20 @@ async function runJob(job: CollectorJob): Promise<void> {
     // They used to stay in the process for as long as it lived, in
     // plaintext, for every source anybody had ever collected from.
     if (connector.importCredentials && Number.isFinite(userId)) {
-      const { clearRestoredCredentials } = await import("./types");
-      clearRestoredCredentials(job.source, userId);
+      /**
+       * The import cannot reject.
+       *
+       * It is a dynamic import inside a `finally`, so a failure there
+       * rejected the whole job — and the bookkeeping below it, the
+       * slot being given back and the next job being started, was
+       * skipped with it.
+       */
+      try {
+        const { clearRestoredCredentials } = await import("./types");
+        clearRestoredCredentials(job.source, userId);
+      } catch (error) {
+        console.warn("[Collectors] Could not clear the credentials:", error);
+      }
     }
     active -= 1;
     pump();
@@ -450,6 +474,10 @@ export function waitForCollectorJob(
         const current = waiters.get(jobId) ?? [];
         const index = current.indexOf(onSettled);
         if (index >= 0) current.splice(index, 1);
+        // The empty list goes too — it used to be left behind for
+        // every job that timed out.
+        if (current.length === 0) waiters.delete(jobId);
+        else waiters.set(jobId, current);
         reject(new Error(`Timed out waiting for collector job ${jobId} after ${timeoutMs}ms`));
       }, timeoutMs);
     }
@@ -467,6 +495,15 @@ export function cancelCollectorJob(jobId: string): boolean {
   if (job.status === "queued") {
     const index = queue.indexOf(jobId);
     if (index >= 0) queue.splice(index, 1);
+    /**
+     * The input goes with it.
+     *
+     * It used to be cleared only in the job's own `finally` — and a
+     * job cancelled before it started never runs one. So every
+     * cancelled job kept its input — the target, the options, the
+     * credentials — for the life of the process.
+     */
+    inputs.delete(jobId);
     settle(job, "interrupted", "Collector job was cancelled before it started");
     return true;
   }
