@@ -177,6 +177,58 @@ export const ERRORS = {
     zh: "技能导出失败",
     en: "The skill could not be exported",
   },
+  /**
+   * The errors that have no message of their own.
+   *
+   * A procedure that throws `new TRPCError({ code: "NOT_FOUND" })`
+   * without a message gets the *code* as its message — so the
+   * interface showed the token "NOT_FOUND" under a heading that said
+   * "not found". The code is for the machine; this is for the person.
+   */
+  "errors.code.notFound": {
+    zh: "没有找到要找的东西。",
+    en: "That could not be found.",
+  },
+  "errors.code.badRequest": {
+    zh: "这个请求没法处理。",
+    en: "That request could not be handled.",
+  },
+  "errors.code.unauthorized": {
+    zh: "请先登录。",
+    en: "Please sign in first.",
+  },
+  "errors.code.forbidden": {
+    zh: "没有权限做这件事。",
+    en: "You are not allowed to do that.",
+  },
+  "errors.code.conflict": {
+    zh: "已经有一份了。",
+    en: "There is already one of those.",
+  },
+  "errors.code.preconditionFailed": {
+    zh: "还差一步才能做这件事。",
+    en: "Something is missing before that can be done.",
+  },
+  "errors.code.payloadTooLarge": {
+    zh: "东西太大了。",
+    en: "That is too large.",
+  },
+  "errors.code.tooManyRequests": {
+    zh: "请求太频繁了，请稍后再试。",
+    en: "Too many requests — please try again in a moment.",
+  },
+  "errors.code.internal": {
+    zh: "出了点问题。",
+    en: "Something went wrong.",
+  },
+  "errors.code.timeout": {
+    zh: "等得太久了。",
+    en: "That took too long.",
+  },
+  "errors.code.unknown": {
+    zh: "出了点问题。",
+    en: "Something went wrong.",
+  },
   "errors.evalAlreadyRunning": {
     zh: "这次评测还在跑，请等它跑完。",
     en: "This evaluation is still running — wait for it to finish.",

@@ -25,16 +25,57 @@ import { copy } from "@shared/copy";
 export function formatErrorForClient({
   shape,
   error,
+  ctx,
 }: {
   shape: { message: string; code: number; data: Record<string, unknown> };
   error: unknown;
+  ctx?: { locale?: "zh" | "en" };
 }): { message: string; code: number; data: Record<string, unknown> } {
-  if (error instanceof TRPCError) return shape;
+  if (error instanceof TRPCError) {
+    /**
+     * A procedure that throws without a message gets the *code* as its
+     * message.
+     *
+     * tRPC fills it in: `message = opts.message ?? cause?.message ??
+     * opts.code`. So `new TRPCError({ code: "NOT_FOUND" })` reached the
+     * interface as the token "NOT_FOUND" — and every toast that shows
+     * `e.message` showed it too.
+     *
+     * The code is for the machine. This is for the person.
+     */
+    const code = error.code;
+    if (shape.message && shape.message !== code) return shape;
+    const locale = ctx?.locale ?? "zh";
+    return {
+      ...shape,
+      message: copy(locale, `errors.code.${codeKey(code)}`),
+    };
+  }
   return {
     ...shape,
     message: "Something went wrong on the server.",
     data: { ...shape.data, message: undefined },
   };
+}
+
+/**
+ * The copy key for a tRPC error code.
+ *
+ * The code is upper case and joined with underscores; the key is
+ * camel case and joined with a dot.
+ */
+function codeKey(code: string): string {
+  const known = [
+    "NOT_FOUND", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "CONFLICT",
+    "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "TOO_MANY_REQUESTS",
+    "INTERNAL_SERVER_ERROR", "TIMEOUT",
+  ];
+  if (!known.includes(code)) return "unknown";
+  return code
+    .toLowerCase()
+    .split("_")
+    .map((part, index) => (index === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join("");
 }
 
 const t = initTRPC.context<TrpcContext>().create({

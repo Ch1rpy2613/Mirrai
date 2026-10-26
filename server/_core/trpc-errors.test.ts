@@ -36,6 +36,32 @@ describe("the errors the client is told", () => {
     expect(JSON.stringify(formatted.data)).not.toContain("users_username_key");
   });
 
+  it("says something a person can read when the code is the message", () => {
+    // A procedure that throws `new TRPCError({ code: "NOT_FOUND" })`
+    // without a message gets the *code* as its message — so the
+    // interface showed the token "NOT_FOUND" under a heading that said
+    // "not found".
+    const error = new TRPCError({ code: "NOT_FOUND" });
+    expect(error.message).toBe("NOT_FOUND");
+    const formatted = formatErrorForClient({
+      shape: { message: "NOT_FOUND", code: -32004, data: { code: "NOT_FOUND", httpStatus: 404 } },
+      error,
+      ctx: { locale: "zh" },
+    });
+    expect(formatted.message).not.toBe("NOT_FOUND");
+    expect(formatted.message).toBe("没有找到要找的东西。");
+  });
+
+  it("says it in the reader's language", () => {
+    const error = new TRPCError({ code: "FORBIDDEN" });
+    const formatted = formatErrorForClient({
+      shape: { message: "FORBIDDEN", code: -32003, data: { code: "FORBIDDEN", httpStatus: 403 } },
+      error,
+      ctx: { locale: "en" },
+    });
+    expect(formatted.message).toBe("You are not allowed to do that.");
+  });
+
   it("passes the app's own message through", () => {
     const error = new TRPCError({ code: "BAD_REQUEST", message: "A message the app wrote." });
     const formatted = formatErrorForClient({
