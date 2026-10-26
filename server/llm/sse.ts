@@ -31,11 +31,21 @@ export async function* parseSSEData(response: Response): AsyncGenerator<string> 
       buffer = frames.pop() ?? "";
 
       for (const frame of frames) {
+        /**
+         * A frame's data is every `data:` line in it, joined with a
+         * newline.
+         *
+         * Each line used to be yielded on its own, so a payload split
+         * over two `data:` lines was parsed as two frames: both failed
+         * to parse, and the chunk was dropped without a sound.
+         */
+        const data: string[] = [];
         for (const line of frame.split(/\r?\n/)) {
           const trimmed = line.trim();
           if (!trimmed.startsWith("data:")) continue;
-          yield trimmed.slice(5).trim();
+          data.push(trimmed.slice(5).trim());
         }
+        if (data.length > 0) yield data.join("\n");
       }
     }
 
