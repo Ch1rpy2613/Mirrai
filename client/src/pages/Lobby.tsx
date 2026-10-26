@@ -182,10 +182,23 @@ function getMilestone(chatCount: number) {
 
 function getDaysUntilAnniversary(togetherFrom: string): number | null {
   const start = new Date(dayStart(togetherFrom));
-  const now = new Date();
-  const thisYear = new Date(now.getFullYear(), start.getMonth(), start.getDate());
-  if (thisYear < now) thisYear.setFullYear(thisYear.getFullYear() + 1);
-  const diff = Math.ceil((thisYear.getTime() - now.getTime()) / 86400000);
+  if (Number.isNaN(start.getTime())) return null;
+  /**
+   * The difference is counted in days, not in milliseconds.
+   *
+   * The two were compared as instants — so on the anniversary itself,
+   * midnight of that day is *before* now, and the year was rolled
+   * forward. So the banner never appeared on the day it was about,
+   * and the "anniversary today" wording could never be reached.
+   */
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const thisYear = new Date(startOfToday.getFullYear(), start.getMonth(), start.getDate());
+  let diff = Math.round((thisYear.getTime() - startOfToday.getTime()) / 86400000);
+  if (diff < 0) {
+    thisYear.setFullYear(thisYear.getFullYear() + 1);
+    diff = Math.round((thisYear.getTime() - startOfToday.getTime()) / 86400000);
+  }
   return diff <= 30 ? diff : null;
 }
 
