@@ -797,6 +797,8 @@ export const en = {
       selectPersona: "Select a persona",
       noPersona: "No personas yet — create one first.",
       targetLabel: "Target contact (optional)",
+      fileLabel: "The file to import",
+      fileUploadFailed: "The file could not be uploaded",
       targetPlaceholder: "Their name on the platform",
       limitLabel: "Maximum messages (optional)",
       limitPlaceholder: "e.g. 500",

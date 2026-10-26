@@ -818,6 +818,20 @@ export async function getFileSummariesByPersonaId(
     .limit(limit);
 }
 
+/**
+ * One file, by its id.
+ *
+ * Scoped by the owner, so a file id that was guessed reaches nothing.
+ */
+export async function getPersonaFileById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(personaFiles)
+    .where(and(eq(personaFiles.id, id), eq(personaFiles.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
 export async function getFilesByPersonaId(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];

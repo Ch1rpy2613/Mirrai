@@ -15,7 +15,8 @@ import {
   createPersona, getPersonasByUserId, getPersonaById, updatePersona, deletePersona,
   getPersonasWithStats, getUserStats, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId,
-  createMessage, getMessagesByPersonaId, clearMessagesByPersonaId, searchMessages,
+  createMessage,
+  getPersonaFileById, getMessagesByPersonaId, clearMessagesByPersonaId, searchMessages,
   updateUserMessage, deleteMessage, deleteMessagesFrom, getPreviousMessage,
   getMessagesBefore, hasOlderMessages, searchAllMessages,
   createWechatBinding, getWechatBindingsByUserId, deleteWechatBinding, setWechatBindingPersona,
@@ -2125,6 +2126,15 @@ export const appRouter = router({
         requiresBrowser: source.requiresBrowser ?? false,
         // The credential fields the authorisation form has to render.
         credentialKeys: source.credentialKeys ?? [],
+        /**
+         * Whether the source reads a file the user has to supply.
+         *
+         * The e-mail and the WeChat export sources do: an export of
+         * their own mail, or of their own chat history. There was
+         * nowhere to give it, so both sources failed the moment they
+         * were chosen.
+         */
+        needsFile: source.id === "email" || source.id === "wechat_export",
       }))
     ),
 
@@ -2197,6 +2207,16 @@ export const appRouter = router({
         personaId: z.number(),
         target: z.string().max(200).optional(),
         limit: z.number().min(1).max(5000).optional(),
+        /**
+         * The file the source reads, when it reads one.
+         *
+         * The e-mail and the WeChat export sources read a file the user
+         * has: an export of their own mail, or of their own chat
+         * history. There was nowhere to give it — the procedure did not
+         * accept one — so both sources failed the moment they were
+         * chosen, with an error about a missing option.
+         */
+        fileId: z.number().optional(),
       }))
       .use(rateLimit(RATE_LIMITS.collector))
       .mutation(async ({ ctx, input }) => {
@@ -2210,6 +2230,25 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
+        /**
+         * The file the source reads.
+         *
+         * It is an uploaded file of the caller's own, and the path is
+         * resolved inside the uploads directory — so the collector is
+         * pointed at a file the user uploaded and at nothing else.
+         */
+        let options: Record<string, string> | undefined;
+        if (input.fileId !== undefined) {
+          const file = await getPersonaFileById(input.fileId, ctx.user.id);
+          if (!file) throw new TRPCError({ code: "NOT_FOUND" });
+          if (file.personaId !== input.personaId) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.collectorFileMismatch") });
+          }
+          const path = resolveStoredPath(file.fileKey);
+          if (!path) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.collectorFileMissing") });
+          options = { file: path };
+        }
+
         const handle = await enqueueCollectorJob({
           userId: String(ctx.user.id),
           personaId: String(input.personaId),
@@ -2217,6 +2256,7 @@ export const appRouter = router({
           input: {
             target: input.target,
             limit: input.limit,
+            ...(options ? { options } : {}),
           },
         });
         return { jobId: handle.id };

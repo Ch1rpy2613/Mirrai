@@ -1327,6 +1327,16 @@ const COLLECTOR_STATUS_LABELS: Record<string, "settings.sources.jobStatus.queued
   interrupted: "settings.sources.jobStatus.interrupted",
 };
 
+/** A file as base64, without the data-url prefix. */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function DataSourcesTab() {
   const { t, locale } = useLocale();
   const sources = trpc.collector.listSources.useQuery();
@@ -1342,8 +1352,26 @@ function DataSourcesTab() {
     onSuccess: () => { toast.success(t("settings.sources.jobQueued")); jobs.refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
+  /**
+   * The file a source reads, uploaded first.
+   *
+   * The collector is pointed at a file on the server's disk, so the
+   * file has to be there — and it has to be the user's own, which is
+   * why it is uploaded as one of the persona's files.
+   */
+  const uploadSourceFile = trpc.file.upload.useMutation();
 
   const [sourceId, setSourceId] = useState<CollectorSourceId | "">("");
+  /**
+   * The file a source reads.
+   *
+   * The e-mail and the WeChat export sources read a file the user has:
+   * an export of their own mail, or of their own chat history. There
+   * was nowhere to give it, so both sources failed the moment they
+   * were chosen.
+   */
+  const [sourceFileId, setSourceFileId] = useState<number | null>(null);
+  const [sourceFileName, setSourceFileName] = useState("");
   const [personaId, setPersonaId] = useState("");
   const [target, setTarget] = useState("");
   const [limit, setLimit] = useState("");
@@ -1408,6 +1436,7 @@ function DataSourcesTab() {
       personaId: Number(personaId),
       target: target.trim() || undefined,
       limit: parsedLimit && Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      fileId: sourceFileId ?? undefined,
     });
   }
 
@@ -1537,8 +1566,43 @@ function DataSourcesTab() {
             </div>
           </div>
 
+          {selectedSource?.needsFile && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground" htmlFor="source-file">{t("settings.sources.fileLabel")}</Label>
+              <input
+                id="source-file"
+                type="file"
+                accept=".txt,.csv,.json,.eml,.mbox"
+                aria-label={t("settings.sources.fileLabel")}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !personaId) return;
+                  try {
+                    const content = await fileToBase64(file);
+                    const uploaded = await uploadSourceFile.mutateAsync({
+                      personaId: Number(personaId),
+                      fileName: file.name,
+                      fileType: "chat_txt",
+                      fileSize: file.size,
+                      fileContent: content,
+                      mimeType: file.type || "text/plain",
+                    });
+                    setSourceFileId(uploaded.fileId);
+                    setSourceFileName(file.name);
+                  } catch (e: any) {
+                    toast.error(e?.message ?? t("settings.sources.fileUploadFailed"));
+                  }
+                }}
+                className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted/80"
+              />
+              {sourceFileName && (
+                <p className="text-[0.6875rem] text-muted-foreground">{sourceFileName}</p>
+              )}
+            </div>
+          )}
+
           <Button size="sm" className="rounded-md px-5"
-            disabled={!sourceId || !personaId || startJob.isPending}
+            disabled={!sourceId || !personaId || startJob.isPending || (selectedSource?.needsFile && !sourceFileId)}
             onClick={handleStart}>
             {startJob.isPending ? t("settings.sources.submitting") : t("settings.sources.start")}
           </Button>

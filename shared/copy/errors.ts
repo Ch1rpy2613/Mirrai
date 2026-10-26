@@ -29,6 +29,18 @@ export const ERRORS = {
     zh: "该分身未毕业",
     en: "This persona has not graduated",
   },
+  "errors.collectorFileMismatch": {
+    zh: "这个文件不属于所选的分身",
+    en: "That file does not belong to the chosen persona",
+  },
+  "errors.collectorFileMissing": {
+    zh: "找不到这个文件",
+    en: "That file could not be found",
+  },
+  "errors.collectorNeedsFile": {
+    zh: "这个来源需要一个文件：请先上传要导入的聊天记录或邮件",
+    en: "This source needs a file: upload the chat log or the mail export first",
+  },
   "errors.personaAlreadyGraduated": {
     zh: "这个分身已经毕业了",
     en: "This persona has already graduated",
