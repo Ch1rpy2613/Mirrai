@@ -188,8 +188,6 @@ export const en = {
     imageNotAnImage: "That is not a picture: {{name}}.",
     imageTooLarge: "That picture is too large: {{name}}. One picture cannot be over {{limit}}.",
     silence: "(silence)",
-    record: "Record",
-    recording: "Recording {{seconds}}s",
     attachImage: "Send an image",
     tts: "Read aloud",
     ttsVoice: "Change the voice",
@@ -200,7 +198,6 @@ export const en = {
     search: "Search messages",
     emotionReport: "Emotional report",
     memoryTimeline: "Memory timeline",
-    scene: "Scene",
     noScene: "Leave the scene",
     playVoice: "Play voice message",
     pauseVoice: "Pause voice message",
@@ -293,12 +290,10 @@ export const en = {
   },
 
   lobby: {
-    create: "Create a persona",
     createFromTemplate: "Start from a template",
     createFromQuestionnaire: "Use the questionnaire",
     upload: "Upload material",
     templates: "Template library",
-    empty: "No personas yet. Create the first one.",
     intimacy: "Intimacy · {{level}}",
     kicker: "Mirrai · Memory and farewell",
     status: {
@@ -562,7 +557,6 @@ export const en = {
     title: "Settings",
     tabs: {
       profile: "Profile",
-      ai: "AI provider",
       aiSettings: "AI settings",
       channels: "Channels",
       wechat: "WeChat",
@@ -628,8 +622,6 @@ export const en = {
       default: "Default",
       hasKey: "Configured",
       noKey: "Not configured",
-      temperature: "Temperature",
-      maxTokens: "Max output tokens",
       configSaved: "Configuration saved",
       defaultUpdated: "Default provider updated",
       paramsSaved: "Conversation settings saved",
@@ -759,15 +751,10 @@ export const en = {
         connecting: "Connecting…",
         disconnecting: "Disconnecting…",
         connect: "Connect Feishu",
-        disconnect: "Disconnect",
       },
     },
     sources: {
       start: "Start collecting",
-      target: "Their name on the platform",
-      limit: "Maximum messages",
-      persona: "Import into which persona",
-      needsBrowser: "This source needs Playwright and Chromium — run playwright install chromium first",
       jobStatus: {
         unknown: "Unknown",
         queued: "Queued",
@@ -838,7 +825,6 @@ export const en = {
     templates: {
       title: "Template library",
       note: "Built-in templates and your own, all stored on this machine",
-      count: "{{count}} in total",
       countLead: "",
       countTail: "in total",
       create: "Create template",
@@ -877,8 +863,6 @@ export const en = {
       },
     },
     data: {
-      export: "Export my data",
-      install: "Install to desktop / home screen",
       exportSuccess: "Data exported",
       exportFailed: "Export failed: {{message}}",
       accountDeleted: "Account deleted",
@@ -1013,11 +997,8 @@ export const en = {
   },
 
   upload: {
-    formats: ".txt / .csv / images / video",
     unsupportedType: "That kind of file is not accepted: {{name}}. Upload a .txt, a .csv, an image or a video.",
     fileTooLarge: "That file is too large: {{name}}. One file cannot be over 50 MB.",
-    analyzing: "Learning their personality…",
-    failed: "Analysis failed",
     noChatLogs: "No chat logs? Build one with the questionnaire",
     materials: "Upload material",
     kicker: "Keepsakes",
@@ -1057,14 +1038,11 @@ export const en = {
 
   diary: {
     title: "Conversation diary",
-    empty: "No diary for this day yet.",
-    generate: "Write the diary",
     highlights: "Highlights",
     quotes: "Lines worth keeping",
     reflection: "Reflection",
     generateSuccess: "Diary written",
     generateFailed: "Could not write the diary: {{message}}",
-    generateFailedShort: "The diary could not be written.",
     deleted: "Deleted",
     kicker: "Daily review",
     intro: "Fold a day of conversation into a letter, for yourself later.",
@@ -1085,7 +1063,6 @@ export const en = {
 
   analytics: {
     rangeLabel: "The range",
-    hourly: "Time of day",
     totalMessages: "Total messages",
     activeDays: "Active days",
     longestStreak: "Longest streak",
@@ -1126,8 +1103,6 @@ export const en = {
     title: "Edit persona",
     name: "Name",
     relationship: "Relationship",
-    togetherFrom: "From",
-    togetherTo: "To",
     attachmentStyle: "Attachment style",
     loveLanguage: "Love language",
     conflictStyle: "Conflict style",
@@ -1135,7 +1110,6 @@ export const en = {
     realismHint: "Higher reads more like real typing: dropped subjects, unfinished sentences, occasional topic changes",
     nameRequired: "Give this persona a name",
     systemPrompt: "System prompt",
-    save: "Save",
     correctionTitle: "Correct the persona",
     correctionNote: "Say what is wrong in your own words. Every change is recorded.",
     correctionLabel: "What should change",
@@ -1254,7 +1228,6 @@ export const en = {
     collecting: "Looking…",
     collected: "Found {{count}}.",
     collectedNone: "Nothing was said only here.",
-    status: "Status",
     statusDraft: "Still writing",
     statusReady: "Ready to take",
     statusSent: "Already said",
@@ -1308,14 +1281,7 @@ export const en = {
   },
 
   templates: {
-    title: "Persona templates",
     builtin: "Built in",
-    mine: "My templates",
-    use: "Use this template",
-    create: "Save this persona as a template",
-    import: "Import a template",
-    imported: "Template imported",
-    created: "Template saved",
   },
 
 
@@ -1671,10 +1637,8 @@ export const en = {
 
   errors: {
     notFound: "This persona could not be found.",
-    notFoundBody: "There is nothing at this address.",
     backHome: "Back to the lobby",
     boundaryTitle: "Something broke",
-    boundaryBody: "The interface crashed — a refresh should sort it.",
     notFoundHeading: "This page is not here",
     notFoundBodyLine1: "The page you are after may have been moved, or may never have existed.",
     notFoundBodyLine2: "But the light is still on, and so is the way back.",

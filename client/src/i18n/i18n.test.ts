@@ -48,17 +48,39 @@ describe("the dictionary", () => {
 
     const dead: string[] = [];
     for (const key of leaves(zh)) {
-      if (source.includes(key)) continue;
+      /**
+       * The key has to appear as a *whole* word.
+       *
+       * The test used a plain substring search — so a key that is the
+       * prefix of another key counted as "read" even when nothing read
+       * it. Thirty-five keys were dead in that blind spot.
+       */
+      // The key has to appear as a *whole* word.
+      //
+      // The test used a plain substring search — so a key that is the
+      // prefix of another key counted as "read" even when nothing read
+      // it. Thirty-five keys were dead in that blind spot.
+      if (isUsedAsAWholeWord(source, key)) continue;
       if ([...dynamic].some((prefix) => key.startsWith(prefix + "."))) continue;
-      // The leaf name on its own is enough: `t("save")` is not how the
-      // interface works, but a leaf used in a template would be caught by
-      // the namespace rule above.
       dead.push(key);
     }
 
     expect(dead).toEqual([]);
   });
 });
+
+/**
+ * Whether the key appears in the source as a whole word.
+ *
+ * A quoted literal — `t("diary.empty")` — and a template
+ * — `t(`${prefix}.empty`) — do not contain the key as a word, so they
+ * are looked for by hand.
+ */
+function isUsedAsAWholeWord(source: string, key: string): boolean {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // The whole key as a literal: t("diary.empty")
+  return new RegExp(`["\`']${escaped}["\`']`).test(source);
+}
 
 /** Every source file under a directory, as one string. */
 function collectSource(dir: string): string {

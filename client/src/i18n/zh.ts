@@ -186,8 +186,6 @@ export const zh = {
     imageNotAnImage: "那不是一张图片：{{name}}。",
     imageTooLarge: "图片太大：{{name}}。一张图片不能超过 {{limit}}。",
     silence: "（沉默）",
-    record: "录音",
-    recording: "录音中 {{seconds}}s",
     attachImage: "发送图片",
     tts: "朗读",
     ttsVoice: "换个声音",
@@ -198,7 +196,6 @@ export const zh = {
     search: "搜索记录",
     emotionReport: "情感报告",
     memoryTimeline: "记忆时间线",
-    scene: "场景",
     noScene: "退出场景",
     playVoice: "播放语音",
     pauseVoice: "暂停语音",
@@ -291,12 +288,10 @@ export const zh = {
   },
 
   lobby: {
-    create: "创建分身",
     createFromTemplate: "从模板创建",
     createFromQuestionnaire: "用问卷创建",
     upload: "上传素材",
     templates: "模板库",
-    empty: "还没有分身。创建第一个吧。",
     intimacy: "亲密度 · {{level}}",
     kicker: "Mirrai · 记忆与告别",
     status: {
@@ -560,7 +555,6 @@ export const zh = {
     title: "设置",
     tabs: {
       profile: "个人资料",
-      ai: "AI 提供商",
       aiSettings: "AI 设置",
       channels: "渠道",
       wechat: "微信",
@@ -626,8 +620,6 @@ export const zh = {
       default: "默认",
       hasKey: "已配置",
       noKey: "未配置",
-      temperature: "温度",
-      maxTokens: "最大输出",
       configSaved: "配置已保存",
       defaultUpdated: "默认提供商已更新",
       paramsSaved: "对话参数已保存",
@@ -753,15 +745,10 @@ export const zh = {
         connecting: "连接中...",
         disconnecting: "断开中...",
         connect: "连接飞书",
-        disconnect: "断开连接",
       },
     },
     sources: {
       start: "开始采集",
-      target: "对方昵称",
-      limit: "最多采集条数",
-      persona: "导入到哪个分身",
-      needsBrowser: "这个来源需要 Playwright 和 Chromium，请先运行 playwright install chromium",
       jobStatus: {
         unknown: "未知",
         queued: "排队中",
@@ -832,7 +819,6 @@ export const zh = {
     templates: {
       title: "模板库",
       note: "内置模板与你的模板，都保存在本机",
-      count: "共 {{count}} 个",
       countLead: "共",
       countTail: "个",
       create: "创建模板",
@@ -871,8 +857,6 @@ export const zh = {
       },
     },
     data: {
-      export: "导出我的数据",
-      install: "安装到桌面 / 主屏",
       exportSuccess: "数据导出成功",
       exportFailed: "导出失败：{{message}}",
       accountDeleted: "账户已删除",
@@ -1007,11 +991,8 @@ export const zh = {
   },
 
   upload: {
-    formats: "支持 .txt / .csv / 图片 / 视频",
     unsupportedType: "不支持的文件类型：{{name}}。请上传 .txt、.csv、图片或视频。",
     fileTooLarge: "文件太大：{{name}}。单个文件不能超过 50 MB。",
-    analyzing: "正在分析 TA 的性格…",
-    failed: "分析失败",
     noChatLogs: "没有聊天记录？用问卷创建",
     materials: "上传资料",
     kicker: "信物",
@@ -1051,14 +1032,11 @@ export const zh = {
 
   diary: {
     title: "对话日记",
-    empty: "这一天还没有日记。",
-    generate: "生成日记",
     highlights: "亮点",
     quotes: "金句",
     reflection: "回望",
     generateSuccess: "日记生成成功",
     generateFailed: "生成失败：{{message}}",
-    generateFailedShort: "生成失败。",
     deleted: "已删除",
     kicker: "每日回顾",
     intro: "把一天的对话收成一封信，留给以后的自己。",
@@ -1079,7 +1057,6 @@ export const zh = {
 
   analytics: {
     rangeLabel: "统计范围",
-    hourly: "时段分布",
     totalMessages: "总消息数",
     activeDays: "活跃天数",
     longestStreak: "最长连续",
@@ -1120,8 +1097,6 @@ export const zh = {
     title: "编辑人设",
     name: "名字",
     relationship: "关系描述",
-    togetherFrom: "开始时间",
-    togetherTo: "结束时间",
     attachmentStyle: "依恋类型",
     loveLanguage: "爱的语言",
     conflictStyle: "争吵方式",
@@ -1129,7 +1104,6 @@ export const zh = {
     realismHint: "越高越像真人打字：省略主语、句子不完整、偶尔转移话题",
     nameRequired: "请给这个分身起个名字",
     systemPrompt: "系统提示词",
-    save: "保存",
     correctionTitle: "修正人设",
     correctionNote: "哪里不对，用你自己的话说。改完会记下来。",
     correctionLabel: "你想改什么",
@@ -1248,7 +1222,6 @@ export const zh = {
     collecting: "正在找…",
     collected: "找到 {{count}} 句。",
     collectedNone: "没有找到只在这里说过的话。",
-    status: "状态",
     statusDraft: "还在写",
     statusReady: "可以带走了",
     statusSent: "已经说过了",
@@ -1301,14 +1274,7 @@ export const zh = {
   },
 
   templates: {
-    title: "分身模板",
     builtin: "内置",
-    mine: "我的模板",
-    use: "使用这个模板",
-    create: "把分身存为模板",
-    import: "导入模板",
-    imported: "模板已导入",
-    created: "模板已保存",
   },
 
 
@@ -1663,10 +1629,8 @@ export const zh = {
 
   errors: {
     notFound: "这里没有找到这个分身。",
-    notFoundBody: "这个地址没有对应的页面。",
     backHome: "回到大厅",
     boundaryTitle: "出了点问题",
-    boundaryBody: "界面崩了，刷新一下应该就好。",
     notFoundHeading: "这一页，不在这里",
     notFoundBodyLine1: "你要找的页面或许被挪走了，或许从未存在。",
     notFoundBodyLine2: "但灯火还在，回去的路也还在。",

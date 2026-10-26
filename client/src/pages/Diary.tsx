@@ -237,10 +237,17 @@ export default function Diary() {
       await generateMutation.mutateAsync({ personaId: selectedPersonaId, date });
       setSelectedDate(date);
     } catch {
-      // The failure used to be thrown past the handler and nowhere
-      // else: the button stopped spinning, the day was not written, and
-      // nothing said why.
-      toast.error(t("diary.generateFailedShort"));
+      /**
+       * The failure is not announced here.
+       *
+       * The mutation's own `onError` has already said what went wrong
+       * — and React Query awaits it before the promise rejects, so a
+       * toast here as well meant two stacked notifications for one
+       * failed tap, one of them with no content at all.
+       *
+       * The catch is still there: it is what stops the rejection from
+       * going past the handler.
+       */
     } finally { setGenerating(false); }
   };
 
