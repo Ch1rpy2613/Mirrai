@@ -39,6 +39,7 @@ import {
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
   getScenes, getSceneById, createScene, deleteScene, activateScene,
   getExportData, getRecentEmotionTrend, getMessageCountInRange, setGraduationStatus,
+  countCollectedMessagesForPersona,
   getSafetyEvents, resolveSafetyEvent, getLatestGraduationAssessment, getLatestGraduationAssessments,
   getChannelBindingsByUserId, getChannelBinding, setChannelBindingPersona,
   getChannelDefaultPersona, setChannelDefaultPersona,
@@ -2481,9 +2482,15 @@ export const appRouter = router({
           source: input.source ?? null,
           limit: input.limit,
         });
+        // How many there are, not how many are shown.
+        const total = await countCollectedMessagesForPersona(
+          input.personaId,
+          ctx.user.id,
+          input.source ?? null,
+        );
 
         return {
-          total: messages.length,
+          total,
           sources,
           messages: messages
             .slice(-input.limit)

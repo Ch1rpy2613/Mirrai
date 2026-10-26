@@ -3319,6 +3319,28 @@ export async function getCollectedMessagesForPersona(
     .limit(options.limit ?? MAX_COLLECTED_MESSAGES);
 }
 
+/**
+ * How many messages have been collected for a persona.
+ *
+ * The preview asks for the last few and says how many there are — and
+ * the count used to be the length of the *preview*, so "30 messages"
+ * was said about a history of three hundred.
+ */
+export async function countCollectedMessagesForPersona(
+  personaId: number,
+  userId: number,
+  source?: string | null,
+) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ c: count() }).from(collectedMessages).where(and(
+    eq(collectedMessages.personaId, personaId),
+    eq(collectedMessages.userId, userId),
+    ...(source ? [eq(collectedMessages.source, source)] : []),
+  ));
+  return result?.c || 0;
+}
+
 // ─── Collection source helpers ────────────────────────────────────────────
 
 
