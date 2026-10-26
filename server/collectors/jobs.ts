@@ -221,7 +221,7 @@ async function runJob(job: CollectorJob): Promise<void> {
     try {
       const { loadCollectionSource } = await import("./db-store");
       const stored = await loadCollectionSource(userId, job.source);
-      if (stored?.credentials) connector.importCredentials(stored.credentials);
+      if (stored?.credentials) connector.importCredentials(stored.credentials, userId);
     } catch (e) {
       console.warn("[Collectors] Could not restore the stored credentials:", e);
     }
@@ -234,6 +234,11 @@ async function runJob(job: CollectorJob): Promise<void> {
     const base = inputs.get(job.id) ?? {};
     const input: CollectInput = {
       ...base,
+      // Whose collection this is. The credentials are the user's own
+      // and they are held under the user's id: they used to be held
+      // under the source alone, so one user's credentials were used for
+      // another user's collection.
+      userId: Number.isFinite(Number(job.userId)) ? Number(job.userId) : null,
       onProgress: (pct: number) => {
         const next = Math.max(0, Math.min(100, Math.round(pct)));
         if (next <= job.progress) return;
@@ -276,6 +281,14 @@ async function runJob(job: CollectorJob): Promise<void> {
   } finally {
     controllers.delete(job.id);
     inputs.delete(job.id);
+    // The credentials are let go of when the job ends.
+    //
+    // They used to stay in the process for as long as it lived, in
+    // plaintext, for every source anybody had ever collected from.
+    if (connector.importCredentials && Number.isFinite(userId)) {
+      const { clearRestoredCredentials } = await import("./types");
+      clearRestoredCredentials(job.source, userId);
+    }
     active -= 1;
     pump();
   }

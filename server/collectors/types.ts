@@ -67,6 +67,15 @@ export interface CollectInput {
   options?: Record<string, string>;
   /** Credentials / config for the source. */
   config?: Record<string, unknown>;
+  /**
+   * Whose collection this is.
+   *
+   * The credentials restored from the database are the user's own, and
+   * they are held under the user's id: they used to be held under the
+   * source alone, so one user's credentials were used for another
+   * user's collection.
+   */
+  userId?: number | null;
   /** Progress sink (0..100) injected by the job runner. */
   onProgress?: (pct: number) => void;
   /** Cancellation signal injected by the job runner. */
@@ -109,7 +118,7 @@ export interface SourceConnector {
    * Configures the connector from a credential blob that has already been
    * decrypted, so a stored source can be collected from again.
    */
-  importCredentials?(credentials: CollectorCredentials): void;
+  importCredentials?(credentials: CollectorCredentials, userId?: number | null): void;
 }
 
 /**
@@ -142,20 +151,35 @@ function readCollectorConfig(fileName: string): Record<string, unknown> | undefi
  * once a source has been stored, the database copy is authoritative, so it
  * takes precedence over the local file but not over an explicitly supplied
  * credential.
+ *
+ * They are keyed by the user as well as the source. They used to be keyed
+ * by the source alone, and the map was never emptied: so a user who ran
+ * a collection without a stored source of their own was handed *another
+ * user's* credentials — and that other user's chat history was imported
+ * into their persona.
  */
-const restoredCredentials = new Map<CollectorSourceId, CollectorCredentials>();
+const restoredCredentials = new Map<string, CollectorCredentials>();
+
+/** The key a source's restored credentials are held under. */
+function restoredKey(source: CollectorSourceId, userId?: number | null): string {
+  return `${userId ?? "global"}:${source}`;
+}
 
 /** Replaces the credentials a connector uses (plaintext in, plaintext kept). */
 export function setRestoredCredentials(
   source: CollectorSourceId,
   credentials: CollectorCredentials,
+  userId?: number | null,
 ): void {
-  restoredCredentials.set(source, { ...credentials });
+  restoredCredentials.set(restoredKey(source, userId), { ...credentials });
 }
 
 /** Forgets the credentials restored for a source. */
-export function clearRestoredCredentials(source: CollectorSourceId): void {
-  restoredCredentials.delete(source);
+export function clearRestoredCredentials(
+  source: CollectorSourceId,
+  userId?: number | null,
+): void {
+  restoredCredentials.delete(restoredKey(source, userId));
 }
 
 /**
@@ -169,9 +193,14 @@ function collectCredentials(
   input: CollectInput,
   keys: string[],
   configFile?: string,
+  userId?: number | null,
 ): CollectorCredentials {
   const inline = input.config;
-  const restored = restoredCredentials.get(source);
+  const restored =
+    restoredCredentials.get(restoredKey(source, userId)) ??
+    // A source that was set up before the user was known — the
+    // interactive flow, where the operator types the credentials in.
+    restoredCredentials.get(restoredKey(source, null));
   const saved = configFile ? readCollectorConfig(configFile) : undefined;
 
   const values: CollectorCredentials = {};
@@ -307,6 +336,7 @@ const feishuConnector: SourceConnector = {
       input,
       FEISHU_CREDENTIAL_KEYS,
       "feishu_config.json",
+      input.userId,
     );
     if (credentials.open_id) argv.push("--open-id", credentials.open_id);
     if (credentials.user_access_token) argv.push("--user-token", credentials.user_access_token);
@@ -319,6 +349,7 @@ const feishuConnector: SourceConnector = {
       input,
       FEISHU_CREDENTIAL_KEYS,
       "feishu_config.json",
+      input.userId,
     );
     if (credentials.app_id && credentials.app_secret) {
       return { ok: true };
@@ -331,11 +362,11 @@ const feishuConnector: SourceConnector = {
   },
   async exportCredentials(input: CollectInput): Promise<string | null> {
     return await encryptCredentials(
-      collectCredentials("feishu", input, FEISHU_CREDENTIAL_KEYS, "feishu_config.json"),
+      collectCredentials("feishu", input, FEISHU_CREDENTIAL_KEYS, "feishu_config.json", input.userId),
     );
   },
-  importCredentials(credentials: CollectorCredentials): void {
-    setRestoredCredentials("feishu", credentials);
+  importCredentials(credentials: CollectorCredentials, userId?: number | null): void {
+    setRestoredCredentials("feishu", credentials, userId);
   },
   async collect(input: CollectInput): Promise<CollectResult> {
     return collectViaOutputDir(feishuConnector, input);
@@ -373,6 +404,7 @@ const dingtalkConnector: SourceConnector = {
       input,
       DINGTALK_CREDENTIAL_KEYS,
       "dingtalk_config.json",
+      input.userId,
     );
     if (!credentials.app_key || !credentials.app_secret) {
       return {
@@ -388,11 +420,11 @@ const dingtalkConnector: SourceConnector = {
   },
   async exportCredentials(input: CollectInput): Promise<string | null> {
     return await encryptCredentials(
-      collectCredentials("dingtalk", input, DINGTALK_CREDENTIAL_KEYS, "dingtalk_config.json"),
+      collectCredentials("dingtalk", input, DINGTALK_CREDENTIAL_KEYS, "dingtalk_config.json", input.userId),
     );
   },
-  importCredentials(credentials: CollectorCredentials): void {
-    setRestoredCredentials("dingtalk", credentials);
+  importCredentials(credentials: CollectorCredentials, userId?: number | null): void {
+    setRestoredCredentials("dingtalk", credentials, userId);
   },
   async collect(input: CollectInput): Promise<CollectResult> {
     return collectViaOutputDir(dingtalkConnector, input);
@@ -423,6 +455,7 @@ const slackConnector: SourceConnector = {
       input,
       SLACK_CREDENTIAL_KEYS,
       "slack_config.json",
+      input.userId,
     );
     if (!credentials.bot_token) {
       return {
@@ -435,11 +468,11 @@ const slackConnector: SourceConnector = {
   },
   async exportCredentials(input: CollectInput): Promise<string | null> {
     return await encryptCredentials(
-      collectCredentials("slack", input, SLACK_CREDENTIAL_KEYS, "slack_config.json"),
+      collectCredentials("slack", input, SLACK_CREDENTIAL_KEYS, "slack_config.json", input.userId),
     );
   },
-  importCredentials(credentials: CollectorCredentials): void {
-    setRestoredCredentials("slack", credentials);
+  importCredentials(credentials: CollectorCredentials, userId?: number | null): void {
+    setRestoredCredentials("slack", credentials, userId);
   },
   async collect(input: CollectInput): Promise<CollectResult> {
     return collectViaOutputDir(slackConnector, input);
