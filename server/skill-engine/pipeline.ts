@@ -25,7 +25,11 @@ import { llmService } from "../llm";
 import { loadPrompt } from "./prompts";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
-import { normalizePersonaData, type PersonaData } from "../_core/persona-schema";
+import {
+  normalizePersonaData,
+  PERSONA_DOCUMENT_FIELDS,
+  type PersonaData,
+} from "../_core/persona-schema";
 import { normalizeMicroRules, type MicroRule } from "@shared/micro-rules";
 import { normalizeImperfectionProfile } from "@shared/imperfection";
 import { ENV } from "../_core/env";
@@ -237,42 +241,38 @@ async function describeImages(
  * check.
  */
 function renderPersonaDocument(name: string, personaData: PersonaData, locale: Locale): string {
-  const catchphrases = personaData.catchphrases.map((phrase) => `- ${phrase}`).join("\n");
-  return sanitizeForCopyright(
-    [
-      copy(locale, "skillPrompts.document.personaTitle", { name }),
-      "",
-      copy(locale, "skillPrompts.document.personality"),
-      personaData.personality,
-      "",
-      copy(locale, "skillPrompts.document.speakingStyle"),
-      personaData.speakingStyle,
-      "",
-      copy(locale, "skillPrompts.document.catchphrases"),
-      catchphrases,
-      "",
-      copy(locale, "skillPrompts.document.nickname"),
-      personaData.nickname,
-      "",
-      copy(locale, "skillPrompts.document.attachmentStyle"),
-      personaData.attachmentStyle,
-      "",
-      copy(locale, "skillPrompts.document.loveLanguage"),
-      personaData.loveLanguage,
-      "",
-      copy(locale, "skillPrompts.document.conflictStyle"),
-      personaData.conflictStyle,
-      "",
-      copy(locale, "skillPrompts.document.touchingMoments"),
-      personaData.touchingMoments,
-      "",
-      copy(locale, "skillPrompts.document.memories"),
-      personaData.memories,
-      "",
-      copy(locale, "skillPrompts.document.summary"),
-      personaData.summary,
-    ].join("\n"),
-  );
+  /**
+   * The heading each field gets in the document.
+   *
+   * The list of fields itself lives in the schema — the one place that
+   * owns it — so a field cannot be added to the persona and forgotten
+   * in the document.
+   */
+  const HEADINGS: Partial<Record<keyof PersonaData, string>> = {
+    personality: "skillPrompts.document.personality",
+    speakingStyle: "skillPrompts.document.speakingStyle",
+    catchphrases: "skillPrompts.document.catchphrases",
+    nickname: "skillPrompts.document.nickname",
+    attachmentStyle: "skillPrompts.document.attachmentStyle",
+    loveLanguage: "skillPrompts.document.loveLanguage",
+    conflictStyle: "skillPrompts.document.conflictStyle",
+    touchingMoments: "skillPrompts.document.touchingMoments",
+    memories: "skillPrompts.document.memories",
+    summary: "skillPrompts.document.summary",
+  };
+
+  const parts: string[] = [copy(locale, "skillPrompts.document.personaTitle", { name }), ""];
+  for (const field of PERSONA_DOCUMENT_FIELDS) {
+    const headingKey = HEADINGS[field];
+    if (!headingKey) continue;
+    const value = personaData[field];
+    const text = Array.isArray(value)
+      ? value.map((entry) => `- ${entry}`).join("\n")
+      : String(value ?? "");
+    parts.push(copy(locale, headingKey), text, "");
+  }
+
+  return sanitizeForCopyright(parts.join("\n"));
 }
 
 /**

@@ -92,6 +92,43 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "imperfectionProfile",
 ];
 
+/**
+ * The fields that go into the generated document, in the order they go in.
+ *
+ * The order is the one the document reads in, which is not the order of
+ * `PERSONA_DATA_FIELDS`: the memories come near the end, where the
+ * summary they belong to is.
+ *
+ * The fields of `PERSONA_DATA_FIELDS` that are *not* here are the ones
+ * the document does not carry — and the test says which they are, so
+ * a new field cannot be added to one list and forgotten in the other.
+ */
+export const PERSONA_DOCUMENT_FIELDS: Array<keyof PersonaData> = [
+  "personality",
+  "speakingStyle",
+  "catchphrases",
+  "nickname",
+  "attachmentStyle",
+  "loveLanguage",
+  "conflictStyle",
+  "touchingMoments",
+  "memories",
+  "summary",
+];
+
+/**
+ * The fields the generated document deliberately leaves out.
+ *
+ * The realism level and the relationship stage are settings rather than
+ * prose; the rules and the imperfection have their own sections.
+ */
+export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
+  "realismLevel",
+  "relationshipPhase",
+  "microRules",
+  "imperfectionProfile",
+];
+
 /** The default realism level: noticeably imperfect, but not a mess. */
 export const DEFAULT_REALISM_LEVEL = 70;
 
