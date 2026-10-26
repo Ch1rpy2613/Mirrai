@@ -76,7 +76,21 @@ export function registerChatStreamRoute(app: Express): void {
 
     const parsed = inputSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: copy(askedLocale, "errors.streamInvalidRequest") });
+      /**
+       * The message was too long.
+       *
+       * The generic "that request was not complete" says nothing about
+       * what to do — and the text the user had written was lost with
+       * it, because the composer is emptied before the request.
+       */
+      const tooLong = typeof (req.body as { message?: unknown })?.message === "string"
+        && String((req.body as { message?: unknown }).message).length > 2000;
+      res.status(400).json({
+        error: copy(
+          askedLocale,
+          tooLong ? "errors.streamMessageTooLong" : "errors.streamInvalidRequest",
+        ),
+      });
       return;
     }
 

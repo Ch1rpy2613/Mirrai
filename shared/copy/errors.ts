@@ -210,6 +210,11 @@ export const ERRORS = {
     zh: "你说得太快了——等一下再试。",
     en: "You are sending too fast — wait a moment and try again.",
   },
+  /** The message was longer than the app accepts. */
+  "errors.streamMessageTooLong": {
+    zh: "这条消息太长了——最多两千字。",
+    en: "That message is too long — two thousand characters at the most.",
+  },
   "errors.streamInvalidRequest": {
     zh: "这个请求不完整。",
     en: "That request was not complete.",

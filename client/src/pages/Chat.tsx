@@ -1747,6 +1747,15 @@ export default function Chat() {
               <Label className="sr-only" htmlFor="chat-composer">{t("chat.placeholder", { name: persona?.name || t("common.them") })}</Label>
               <Textarea id="chat-composer" ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown} placeholder={t("chat.placeholder", { name: persona?.name || t("common.them") })}
+                /**
+                 * The length the server accepts.
+                 *
+                 * There was no limit here — so a message of two thousand
+                 * and one characters was refused with "that request was
+                 * not complete", which says nothing about the length,
+                 * and the text was lost with it.
+                 */
+                maxLength={2000}
                 rows={1} className="flex-1 min-w-0 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-foreground/50 rounded-md min-h-[44px] max-h-32 px-4 py-3" />
               {isSending ? (
                 <Button onClick={handleStopStreaming} aria-label={t("chat.stop")}
