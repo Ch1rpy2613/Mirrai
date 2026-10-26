@@ -214,7 +214,14 @@ def load_config() -> dict:
 def save_config(config: dict) -> None:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    # The file holds a bot token and an app secret — so it is readable
+    # by its owner only. The default mode is 0644, which is every local
+    # user on the machine.
     path.write_text(json.dumps(config, indent=2, ensure_ascii=False))
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def setup_config() -> None:
@@ -416,7 +423,15 @@ def find_user(name: str, client: RateLimitedClient) -> Optional[dict]:
         title = profile.get("title", "")
         print(f"    [{i+1}] {real_name}（@{display_name or username}）  {title}")
 
-    choice = input("\n  选择编号（默认 1）：").strip() or "1"
+    # The server closes the stdin, so there is nobody to ask.
+    #
+    # The first candidate is taken instead of dying with a traceback:
+    # Chinese names make a multi-candidate match the normal case, not
+    # the exception.
+    try:
+        choice = input("\n  选择编号（默认 1）：").strip() or "1"
+    except EOFError:
+        choice = "1"
     try:
         idx = int(choice) - 1
         _, user = candidates[idx]
@@ -630,7 +645,14 @@ def collect_messages(
         )
 
     all_messages: list = []
-    per_channel_limit = max(100, msg_limit // len(channels))
+    # The limit is the limit.
+    #
+    # The share per channel had a floor of a hundred — so asking for a
+    # thousand messages across fifty channels fetched five thousand, and
+    # every one of them was paid for in API calls and rate-limit
+    # retries. The server trimmed the list afterwards; the fetching was
+    # already done.
+    per_channel_limit = max(1, msg_limit // max(1, len(channels)))
 
     report_progress(0.1)
 

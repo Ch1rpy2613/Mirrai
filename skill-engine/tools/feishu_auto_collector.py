@@ -188,7 +188,14 @@ def load_config() -> dict:
 def save_config(config: dict) -> None:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    # The file holds a bot token and an app secret — so it is readable
+    # by its owner only. The default mode is 0644, which is every local
+    # user on the machine.
     path.write_text(json.dumps(config, indent=2, ensure_ascii=False))
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def setup_config() -> None:
@@ -442,7 +449,15 @@ def _select_user(users: list, name: str) -> Optional[dict]:
         label = f"{u.get('name', '')} ({en})" if en else u.get("name", "")
         print(f"    [{i+1}] {label}  dept={dept_str}  uid={u.get('user_id', '')}")
 
-    choice = input("\n  选择编号（默认 1）：").strip() or "1"
+    # The server closes the stdin, so there is nobody to ask.
+    #
+    # The first candidate is taken instead of dying with a traceback:
+    # Chinese names make a multi-candidate match the normal case, not
+    # the exception.
+    try:
+        choice = input("\n  选择编号（默认 1）：").strip() or "1"
+    except EOFError:
+        choice = "1"
     try:
         idx = int(choice) - 1
         return users[idx]
@@ -732,7 +747,14 @@ def collect_message_records(
     if remaining > 0:
         chats = get_chats_with_user(user_open_id, config)
         if chats:
-            per_chat_limit = max(100, remaining // len(chats))
+            # The limit is the limit.
+            #
+            # The share per chat had a floor of a hundred — so asking
+            # for a thousand messages across fifty chats fetched five
+            # thousand, and every one of them was paid for. The server
+            # trimmed the list afterwards; the fetching was already
+            # done.
+            per_chat_limit = max(1, remaining // len(chats))
             for index, chat in enumerate(chats):
                 chat_id = chat.get("chat_id")
                 chat_name = chat.get("name", chat_id)

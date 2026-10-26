@@ -166,13 +166,25 @@ def load_config() -> dict:
     if not path.exists():
         print("未找到配置，请先运行：python3 dingtalk_auto_collector.py --setup", file=sys.stderr)
         sys.exit(1)
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        # A corrupt file is a message, not a traceback.
+        print(f"配置文件损坏，请重新运行 --setup：{path}", file=sys.stderr)
+        sys.exit(1)
 
 
 def save_config(config: dict) -> None:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    # The file holds a bot token and an app secret — so it is readable
+    # by its owner only. The default mode is 0644, which is every local
+    # user on the machine.
     path.write_text(json.dumps(config, indent=2, ensure_ascii=False))
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def setup_config() -> None:
@@ -287,7 +299,11 @@ def find_user(name: str, config: dict) -> Optional[dict]:
         dept_str = dept[0] if isinstance(dept, list) and dept else ""
         print(f"    [{i+1}] {u.get('name')}  {dept_str}  {u.get('unionId', '')}")
 
-    choice = input("\n  选择编号（默认 1）：").strip() or "1"
+    # The server closes the stdin, so there is nobody to ask.
+    try:
+        choice = input("\n  选择编号（默认 1）：").strip() or "1"
+    except EOFError:
+        choice = "1"
     try:
         return users[int(choice) - 1]
     except (ValueError, IndexError):
