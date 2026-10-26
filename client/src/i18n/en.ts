@@ -1051,7 +1051,7 @@ export const en = {
       "WeChat chat logs: in WeChat → Chat details → Export chat history → save as txt",
       "The more chat logs you upload, the more accurate the analysis (100 messages or more is a good start)",
       "You can upload several kinds of file at once — the AI analyses them together",
-      "Your files are only used to build the persona and are never shared with a third party",
+      "The files stay on this machine; the text used to read the person out is handed to the model service you configured (or to this instance's own, if you have not configured one)",
     ],
   },
 
@@ -1484,7 +1484,7 @@ export const en = {
   },
   localFirst: {
     title: "Local first",
-    note: "Your data stays on this machine. Below is the only place anything is handed to a model.",
+    note: "Your data stays on this machine. Below is the only place anything is handed to a model; the read-aloud hands the reply to Microsoft's online speech service.",
     trajectoryTitle: "Emotional trajectory assessment",
     trajectoryAuto: "Follow the graduation mode (suggest)",
     trajectoryOn: "Always assess",
@@ -1494,7 +1494,7 @@ export const en = {
     ttsNote: "The read-aloud uses Microsoft's online speech service: the text of the reply is sent to them and the audio comes back. It is the only place content leaves this machine — set TTS_ENABLED=false in .env to switch it off entirely, and the button is gone from the interface.",
   },
   consent: {
-    notice: "Mirrai is a private tool for you. The chat history you upload stays on this machine and is not sent to anyone; the model is only used to write the replies.",
+    notice: "Mirrai is a private tool for you. The chat history you upload stays on this machine; it is never published, and never used to contact or impersonate anybody. The text used to read the person out is handed to the model service you configured — or to this instance's own, if you have not configured one.",
     accept: "I understand this is private use — not published, not shared, and not used to contact or impersonate anyone.",
     mustAccept: "Please confirm you understand this first",
     settingTitle: "About the other person",
