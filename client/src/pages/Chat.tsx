@@ -92,6 +92,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [currentState, setCurrentState] = useState("warm");
+
   const [showStatePanel, setShowStatePanel] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showMenu, setShowMenu] = useState(false);
@@ -486,10 +487,38 @@ export default function Chat() {
    * still arriving grows without becoming a different message — and that
    * is exactly when the view should follow it down.
    */
+  /**
+   * A new persona starts from nothing.
+   *
+   * `/chat/:id` is one route, so React reuses the component when the
+   * user moves from one persona to another — and every piece of state
+   * survived the move. So:
+   *
+   * - the draft typed for the first persona was sent to the second;
+   * - the first persona's crisis card was still on screen;
+   * - the first persona's transcript was briefly shown under the
+   *   second one's header;
+   * - and, worst of all, `historyExhausted` stayed true — so the
+   *   "load older messages" button never appeared for the second
+   *   persona, and its history was unreachable.
+   */
   const lastMessageRef = useRef<{ id: string | number | null; length: number }>({
     id: null,
     length: 0,
   });
+  useEffect(() => {
+    setMessages([]);
+    setInput("");
+    setReplyTo(null);
+    setShowCrisis(false);
+    setShowGraduation(false);
+    setShowManualGraduation(false);
+    setHasOlder(false);
+    setDismissedNotes(false);
+    historyExhausted.current = false;
+    lastMessageRef.current = { id: null, length: 0 };
+  }, [personaId]);
+
   useEffect(() => {
     const last = messages.length > 0 ? messages[messages.length - 1] : null;
     const id = last ? last.id : null;
