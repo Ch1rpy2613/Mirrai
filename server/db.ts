@@ -2743,6 +2743,26 @@ export async function createGraduationAssessment(data: InsertGraduationAssessmen
   return result.id;
 }
 
+/**
+ * The latest assessment of each of a user's personas.
+ *
+ * One query, rather than one per persona: the trajectory page asked
+ * for the newest assessment of every persona the user had, one round
+ * trip at a time.
+ */
+export async function getLatestGraduationAssessments(
+  userId: number,
+): Promise<Array<typeof graduationAssessments.$inferSelect>> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .selectDistinctOn([graduationAssessments.personaId])
+    .from(graduationAssessments)
+    .where(eq(graduationAssessments.userId, userId))
+    .orderBy(graduationAssessments.personaId, desc(graduationAssessments.createdAt));
+  return rows;
+}
+
 export async function getLatestGraduationAssessment(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;

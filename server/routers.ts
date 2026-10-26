@@ -39,7 +39,7 @@ import {
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
   getScenes, getSceneById, createScene, deleteScene, activateScene,
   getExportData, getRecentEmotionTrend, getMessageCountInRange, setGraduationStatus,
-  getSafetyEvents, resolveSafetyEvent, getLatestGraduationAssessment,
+  getSafetyEvents, resolveSafetyEvent, getLatestGraduationAssessment, getLatestGraduationAssessments,
   getChannelBindingsByUserId, getChannelBinding, setChannelBindingPersona,
   deleteChannelBinding, getChannelState, upsertChannelState,
   getUserTemplates, createUserTemplate, updateUserTemplate, deleteUserTemplate,
@@ -3097,18 +3097,26 @@ export const appRouter = router({
      */
     assessments: protectedProcedure.query(async ({ ctx }) => {
       const personas = await getPersonasByUserId(ctx.user.id);
+      /**
+       * The newest assessment of each persona, in one query.
+       *
+       * It used to be one query per persona — so the trajectory page
+       * made a round trip for every persona the user had.
+       */
+      const latest = await getLatestGraduationAssessments(ctx.user.id);
+      const byPersona = new Map(latest.map((row) => [row.personaId, row]));
       const result = [];
       for (const persona of personas) {
-        const latest = await getLatestGraduationAssessment(persona.id, ctx.user.id);
-        if (!latest) continue;
+        const assessment = byPersona.get(persona.id);
+        if (!assessment) continue;
         result.push({
           personaId: persona.id,
           personaName: persona.name,
-          trajectory: latest.trajectory,
-          regretRatio: latest.regretRatio,
-          gratitudeRatio: latest.gratitudeRatio,
-          note: (latest.assessment as any)?.note ?? null,
-          createdAt: latest.createdAt,
+          trajectory: assessment.trajectory,
+          regretRatio: assessment.regretRatio,
+          gratitudeRatio: assessment.gratitudeRatio,
+          note: (assessment.assessment as any)?.note ?? null,
+          createdAt: assessment.createdAt,
         });
       }
       return { assessments: result };
