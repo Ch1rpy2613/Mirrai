@@ -151,6 +151,22 @@ function getMimeType(file: File, fileType: string): string {
   return file.type || "application/octet-stream";
 }
 
+/**
+ * The size of a file, in a unit a person reads.
+ *
+ * The size was printed in kilobytes whatever it was — so a forty
+ * megabyte video was "40960 KB".
+ */
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(0)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(1)} GB`;
+}
+
 export default function Upload() {
   const params = useParams<{ id: string }>();
   /**
