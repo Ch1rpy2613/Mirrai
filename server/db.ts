@@ -565,6 +565,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(evalRuns).where(eq(evalRuns.userId, id));
     await tx.delete(graduationAssessments).where(eq(graduationAssessments.userId, id));
     await tx.delete(llmConfigs).where(eq(llmConfigs.userId, id));
+    await tx.delete(letters).where(eq(letters.userId, id));
     await tx.delete(memories).where(eq(memories.userId, id));
     await tx.delete(memoryExtractions).where(eq(memoryExtractions.userId, id));
     await tx.delete(messages).where(eq(messages.userId, id));
@@ -572,11 +573,13 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
+    await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
     await tx.delete(researchProfiles).where(eq(researchProfiles.userId, id));
     await tx.delete(safetyEvents).where(eq(safetyEvents.userId, id));
     await tx.delete(scenes).where(eq(scenes.userId, id));
     await tx.delete(skillJobs).where(eq(skillJobs.userId, id));
+    await tx.delete(userMoods).where(eq(userMoods.userId, id));
     await tx.delete(wechatBindings).where(eq(wechatBindings.userId, id));
     await tx.delete(wechatBotState).where(eq(wechatBotState.userId, id));
     await tx.delete(personas).where(eq(personas.userId, id));
@@ -735,10 +738,12 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(outboundLetters).where(and(eq(outboundLetters.personaId, id), eq(outboundLetters.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
+    await tx.delete(relationshipEvents).where(and(eq(relationshipEvents.personaId, id), eq(relationshipEvents.userId, userId)));
     await tx.delete(reminderDeliveries).where(and(eq(reminderDeliveries.personaId, id), eq(reminderDeliveries.userId, userId)));
     await tx.delete(researchProfiles).where(and(eq(researchProfiles.personaId, id), eq(researchProfiles.userId, userId)));
     await tx.delete(safetyEvents).where(and(eq(safetyEvents.personaId, id), eq(safetyEvents.userId, userId)));
     await tx.delete(skillJobs).where(and(eq(skillJobs.personaId, id), eq(skillJobs.userId, userId)));
+    await tx.delete(letters).where(and(eq(letters.personaId, id), eq(letters.userId, userId)));
     await tx.delete(wechatBindings).where(and(eq(wechatBindings.personaId, id), eq(wechatBindings.userId, userId)));
     await tx.delete(personas).where(and(eq(personas.id, id), eq(personas.userId, userId)));
   });

@@ -40,7 +40,13 @@ function declaredTables(src: string): TableInfo[] {
     out.push({
       varName: match[1],
       tableName: match[2],
-      columns: new Set(Array.from(body.matchAll(/^\s{2}(\w+):\s/gm)).map((m) => m[1])),
+      // The indentation is not always two spaces: the tables declared in
+      // the callback form are written four spaces deep, and a regex that
+      // insists on two found no columns at all in them. Every one of
+      // those tables was therefore invisible to this test — which is how
+      // three tables with hard foreign keys stayed out of the delete
+      // functions while the test reported that nothing was missing.
+      columns: new Set(Array.from(body.matchAll(/^\s{2,}(\w+):\s/gm)).map((m) => m[1])),
     });
   }
   return out;
