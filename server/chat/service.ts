@@ -533,6 +533,22 @@ async function* runConversationTurn(
    */
   const contextLimit = clampContextLimit(extraConfig.contextLimit);
 
+  /**
+   * The message this turn is answering.
+   *
+   * The client says which one, and the id is stored as it arrived — so
+   * it could point at a message of another persona, or at one that is
+   * not there at all. The *quote* in the prompt was looked up properly;
+   * the column was not.
+   */
+  let replyToId = options.replyToId ?? null;
+  if (replyToId) {
+    const quoted = await db
+      .getMessageById(replyToId, userId, persona.id)
+      .catch(() => null);
+    if (!quoted) replyToId = null;
+  }
+
   // The user's turn is stored first so the history and any summarisation see it.
   let storedUserMessageId: number | null = null;
   if (!options.alreadyPersisted) {
@@ -545,7 +561,7 @@ async function* runConversationTurn(
       channel: options.channel ?? "web",
       messageType: options.media?.type ?? "text",
       mediaUrl: options.media?.url ?? null,
-      replyToId: options.replyToId ?? null,
+      replyToId,
     });
   }
 

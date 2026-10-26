@@ -39,6 +39,20 @@ export interface RetrievalOptions {
 }
 
 const DEFAULT_TOP_K = 5;
+
+/**
+ * How many memories a turn may bring back.
+ *
+ * The setting is a number the user typed, and the settings accept any
+ * shape.
+ */
+export const MAX_TOP_K = 50;
+
+function clampTopK(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_TOP_K;
+  return Math.min(MAX_TOP_K, Math.max(1, Math.round(n)));
+}
 const DEFAULT_MIN_KEYWORD_SCORE = 0.05;
 
 /**
@@ -178,7 +192,17 @@ export function selectMemories(
   userMessage: string,
   options: RetrievalOptions = {},
 ): RetrievalResult {
-  const topK = options.topK ?? DEFAULT_TOP_K;
+  /**
+   * How many memories come back.
+   *
+   * It came straight from the user's settings — so a value that is not
+   * a number gave `Math.max(0, NaN)`, and `slice(0, NaN)` is an empty
+   * slice: the ordinary memories were silently never retrieved. And an
+   * enormous value removed the limit altogether.
+   *
+   * The other settings are clamped on the way in; this one was not.
+   */
+  const topK = clampTopK(options.topK);
   const minKeywordScore = options.minKeywordScore ?? DEFAULT_MIN_KEYWORD_SCORE;
   const now = options.now ?? Date.now();
   const messageTokens = tokenize(userMessage);
