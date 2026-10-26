@@ -53,14 +53,51 @@ function offlineResponse() {
   );
 }
 
+/**
+ * The assets the built shell refers to.
+ *
+ * The shell is the HTML, and the HTML names the hashed script and style
+ * files it loads. Those were not in the cache: the worker only cached
+ * an asset when it was already controlling the page, and the worker is
+ * registered on `load` — so the first load's assets were fetched
+ * without it and never cached, and they were only cached from the
+ * *second* load onwards.
+ *
+ * The consequence: a user who installed the app and then opened it
+ * with no network got the cached HTML and a 404 for every script — a
+ * blank white page. It only worked after the app had been opened online
+ * twice.
+ *
+ * So the shell is read, and the assets it names are put in the same
+ * cache.
+ */
+async function cacheShell() {
+  const cache = await caches.open(CACHE_VERSION);
+  // A single missing entry must not fail the whole install.
+  await Promise.allSettled(APP_SHELL.map((url) => cache.add(url)));
+
+  try {
+    const response = await fetch("/", { cache: "no-store" });
+    if (!response || !response.ok) return;
+    const html = await response.clone().text();
+    await cache.put("/", response.clone());
+
+    const assets = [];
+    const pattern = /(?:src|href)="(\/assets\/[^"]+)"/g;
+    let match = pattern.exec(html);
+    while (match !== null) {
+      assets.push(match[1]);
+      match = pattern.exec(html);
+    }
+    await Promise.allSettled(assets.map((url) => cache.add(url)));
+  } catch {
+    // No network at install time: the shell that is already cached is
+    // what there is.
+  }
+}
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE_VERSION)
-      // A single missing entry must not fail the whole install.
-      .then((cache) => Promise.allSettled(APP_SHELL.map((url) => cache.add(url))))
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil(cacheShell().then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
