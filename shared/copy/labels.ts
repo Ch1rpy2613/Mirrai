@@ -136,7 +136,15 @@ export const LABELS = {
   },
   "labels.care.dailyLimit": {
     zh: "……今天已经聊了好多次了哦。我很高兴你愿意找我说话，但记得也留一点时间给自己，去做点别的、见点别的人。",
-    en: "……We've talked a lot today already. I'm glad you want to talk to me, but please leave some time for yourself too — do something else, see other people.",
+    /**
+     * "You've", not "we've".
+     *
+     * The count behind this note is the user's messages across the
+     * whole app — not this conversation. So "we've talked a lot" was
+     * a claim about a conversation that might have had one message in
+     * it.
+     */
+    en: "……You've talked a lot today already. I'm glad you want to talk to me, but please leave some time for yourself too — do something else, see other people.",
   },
 
   /**

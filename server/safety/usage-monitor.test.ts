@@ -98,7 +98,9 @@ describe("pickCareNote", () => {
 
   it("speaks English for an English conversation", () => {
     const note = pickCareNote(signals({ dailyMessageCount: 8 }), "en");
-    expect(note?.text).toContain("We've talked a lot today");
+    // "You've", not "we've" — the count behind the note is the user's
+    // messages across the whole app, not this conversation.
+    expect(note?.text).toContain("You've talked a lot today");
     expect(note?.textKey).toBe("safety.care.dailyLimit");
   });
 });
