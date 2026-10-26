@@ -152,17 +152,27 @@ function readCollectorConfig(fileName: string): Record<string, unknown> | undefi
  * takes precedence over the local file but not over an explicitly supplied
  * credential.
  *
- * They are keyed by the user as well as the source. They used to be keyed
- * by the source alone, and the map was never emptied: so a user who ran
- * a collection without a stored source of their own was handed *another
- * user's* credentials — and that other user's chat history was imported
- * into their persona.
+ * They are keyed by the user as well as the source, and there is no
+ * shared slot any more.
+ *
+ * They used to be keyed by the source alone, and the map was never
+ * emptied: so a user who ran a collection without a stored source of
+ * their own was handed *another user's* credentials — and that other
+ * user's chat history was imported into their persona.
+ *
+ * The keying was fixed and the shared slot was left behind — and the
+ * shared slot was where every credential ended up, because the procedure
+ * that saves them did not pass the user id. So the leak was still there,
+ * in a different shape.
  */
 const restoredCredentials = new Map<string, CollectorCredentials>();
 
 /** The key a source's restored credentials are held under. */
 function restoredKey(source: CollectorSourceId, userId?: number | null): string {
-  return `${userId ?? "global"}:${source}`;
+  // There is no shared slot. A credential without a user does not belong
+  // to anybody, so it is not kept.
+  if (userId === undefined || userId === null) return "";
+  return `${userId}:${source}`;
 }
 
 /** Replaces the credentials a connector uses (plaintext in, plaintext kept). */
@@ -171,7 +181,10 @@ export function setRestoredCredentials(
   credentials: CollectorCredentials,
   userId?: number | null,
 ): void {
-  restoredCredentials.set(restoredKey(source, userId), { ...credentials });
+  const key = restoredKey(source, userId);
+  // Without a user there is no owner, so there is nowhere to keep it.
+  if (!key) return;
+  restoredCredentials.set(key, { ...credentials });
 }
 
 /** Forgets the credentials restored for a source. */
@@ -179,7 +192,9 @@ export function clearRestoredCredentials(
   source: CollectorSourceId,
   userId?: number | null,
 ): void {
-  restoredCredentials.delete(restoredKey(source, userId));
+  const key = restoredKey(source, userId);
+  if (!key) return;
+  restoredCredentials.delete(key);
 }
 
 /**
@@ -196,11 +211,17 @@ function collectCredentials(
   userId?: number | null,
 ): CollectorCredentials {
   const inline = input.config;
-  const restored =
-    restoredCredentials.get(restoredKey(source, userId)) ??
-    // A source that was set up before the user was known — the
-    // interactive flow, where the operator types the credentials in.
-    restoredCredentials.get(restoredKey(source, null));
+  /**
+   * The credentials restored for *this* user.
+   *
+   * There is no shared slot to fall back to. There was one, and it was
+   * where every user's credentials ended up — so a user who had no
+   * stored source of their own was handed another user's token, and
+   * that other user's chat history was imported into their persona.
+   */
+  const restored = userId === undefined || userId === null
+    ? undefined
+    : restoredCredentials.get(restoredKey(source, userId));
   const saved = configFile ? readCollectorConfig(configFile) : undefined;
 
   const values: CollectorCredentials = {};

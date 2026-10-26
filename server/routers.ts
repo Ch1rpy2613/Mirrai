@@ -2217,7 +2217,10 @@ export const appRouter = router({
         const collectInput = { target: input.target } as any;
 
         if (input.credentials && connector.importCredentials) {
-          connector.importCredentials(input.credentials as any);
+          // The user id matters: the credentials are held against the
+          // user who supplied them, and without it they went into a
+          // shared slot that every user could reach.
+          connector.importCredentials(input.credentials as any, ctx.user.id);
         }
 
         let authState: any = null;
