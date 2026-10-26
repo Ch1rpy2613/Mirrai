@@ -1,5 +1,5 @@
 import { useState, useEffect, useId, useRef, type ReactNode, type ChangeEvent } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -2197,9 +2197,20 @@ function InstallAppSection() {
 
 export default function SettingsPage() {
   const [, navigate] = useLocation();
+  /**
+   * The tab the address asks for.
+   *
+   * A button that promises a download and lands on the settings page's
+   * first tab is a dead end: the user has to find the export
+   * themselves. So the tab can be named in the address.
+   */
+  const search = useSearch();
+  const requestedTab = new URLSearchParams(search).get("tab");
   const { user } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
-  const [activeTab, setActiveTab] = useState<TabKey>("profile");
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    TABS.some((tab) => tab.key === requestedTab) ? (requestedTab as TabKey) : "profile",
+  );
 
   if (!user) return <PageLoader />;
 

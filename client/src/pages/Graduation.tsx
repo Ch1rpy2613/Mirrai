@@ -344,7 +344,10 @@ export default function Graduation() {
             {t("graduationPage.afterward")}
           </p>
           <div className="flex flex-wrap gap-2 justify-center">
-            <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent" onClick={() => navigate("/settings")}>
+            {/* The button promises a download, so it lands on the tab
+                that has the download — not on the settings page's
+                first one. */}
+            <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent" onClick={() => navigate("/settings?tab=data")}>
               <Download className="w-3.5 h-3.5" /> {t("graduationPage.takeItWithYou")}
             </Button>
             <Button size="sm" variant="ghost" className="rounded-md" onClick={() => navigate("/")}>
