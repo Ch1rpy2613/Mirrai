@@ -162,7 +162,16 @@ function TTSButton({ text }: { text: string }) {
   const handlePlay = async () => {
     if (audioUrl && audioRef.current) {
       if (playing) { audioRef.current.pause(); setPlaying(false); }
-      else { audioRef.current.play(); setPlaying(true); }
+      else {
+        // The play can be refused — the browser blocks it without a
+        // gesture, or the file is gone — and the refusal was an
+        // unhandled rejection: the button then said "pause" while
+        // nothing played.
+        audioRef.current.play().then(
+          () => setPlaying(true),
+          () => setPlaying(false),
+        );
+      }
       return;
     }
     setLoading(true);
@@ -175,7 +184,8 @@ function TTSButton({ text }: { text: string }) {
       const audio = new Audio(result.audioUrl);
       audioRef.current = audio;
       audio.onended = () => setPlaying(false);
-      audio.play();
+      // And here too: the refusal must not be an unhandled rejection.
+      await audio.play();
       setPlaying(true);
     } catch { toast.error(t("chat.ttsFailed")); }
     finally { setLoading(false); }
