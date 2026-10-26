@@ -1687,7 +1687,15 @@ export const appRouter = router({
     /** Disconnects the channel. */
     stop: protectedProcedure.mutation(async ({ ctx }) => {
       await stopWeChatBot(ctx.user.id);
-      clearAllActivePersonas();
+      /**
+       * Only this user's overrides.
+       *
+       * The whole map was cleared — so one user disconnecting their
+       * WeChat channel reset the persona that every other user had
+       * chosen with "/使用", and their next WeChat message was answered
+       * by the default persona.
+       */
+      clearAllActivePersonas(ctx.user.id);
       return { success: true };
     }),
 

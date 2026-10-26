@@ -47,7 +47,13 @@ export async function handleWeixinMessage(
   }
 
   // Normal conversation with the active persona.
-  const personaId = getActivePersonaId(parsed.fromUserId, defaultPersonaId);
+  //
+  // The user id matters: the overrides are keyed by the user as well as
+  // the conversation, and without it the lookup falls back to "the first
+  // key that ends with this conversation" — across every user. The
+  // wrong persona id is then looked up with the caller's id, finds
+  // nothing, and the message is never answered.
+  const personaId = getActivePersonaId(parsed.fromUserId, defaultPersonaId, userId);
   const reply = await handlePersonaChat({
     userId,
     wechatUserId: parsed.fromUserId,
