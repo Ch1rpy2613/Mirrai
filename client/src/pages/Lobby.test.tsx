@@ -22,6 +22,7 @@ let personas: any[];
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    setup: { useQuery: () => ({ data: { hasLlmProvider: true, hasUserProvider: false } }) },
     persona: {
       list: { useQuery: () => ({ data: personas, refetch: listRefetch }) },
       stats: { useQuery: () => ({ data: { totalPersonas: 2, totalChats: 10, todayChats: 1 } }) },

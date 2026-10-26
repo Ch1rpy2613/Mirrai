@@ -303,6 +303,8 @@ export const zh = {
   },
 
   lobby: {
+    noProvider: "还没有配置模型服务，对话暂时无法进行。",
+    noProviderAction: "去设置里配置",
     createFromTemplate: "从模板创建",
     createFromQuestionnaire: "用问卷创建",
     upload: "上传素材",

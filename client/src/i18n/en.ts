@@ -304,6 +304,8 @@ export const en = {
   },
 
   lobby: {
+    noProvider: "No model service is configured yet, so the chat cannot work.",
+    noProviderAction: "Set one up in the settings",
     createFromTemplate: "Start from a template",
     createFromQuestionnaire: "Use the questionnaire",
     upload: "Upload material",

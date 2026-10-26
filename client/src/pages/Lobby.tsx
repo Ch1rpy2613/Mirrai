@@ -1741,6 +1741,16 @@ export default function Lobby() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
 
+  /**
+   * Whether there is a model service to talk to.
+   *
+   * The instance's environment can have none while this user has one of
+   * their own — the key they typed into the settings.
+   */
+  const setup = trpc.setup.useQuery(undefined, { enabled: isAuthenticated });
+  const hasProvider =
+    Boolean(setup.data?.hasLlmProvider) || Boolean(setup.data?.hasUserProvider);
+
   const {
     data: personas,
     refetch,
@@ -1893,6 +1903,27 @@ export default function Lobby() {
       </header>
 
       <main className="container page-main flex-1">
+        {/**
+         * No model service.
+         *
+         * The user can say "later" on the wizard's model step and land
+         * here — in an app where the chat cannot work, and where
+         * nothing says so. The wizard is not offered again (that was
+         * the loop), so the banner is the only place that says it.
+         */}
+        {!hasProvider && (
+          <div className="mb-6 surface px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+            <p className="text-sm text-foreground/80">{t("lobby.noProvider")}</p>
+            <button
+              type="button"
+              onClick={() => navigate("/settings")}
+              className="text-xs underline underline-offset-2 hover:text-foreground"
+            >
+              {t("lobby.noProviderAction")}
+            </button>
+          </div>
+        )}
+
         <HeroBanner username={user?.username} stats={stats} />
 
         {/* The user's own state, asked for in the first seconds of the
