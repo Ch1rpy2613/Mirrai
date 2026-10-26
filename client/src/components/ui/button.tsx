@@ -52,6 +52,14 @@ function Button({
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      /**
+       * A button inside a form submits it by default.
+       *
+       * Every button in the app was a submit button — so the first form
+       * that held one would have submitted on every click. The type is
+       * "button" unless the caller says otherwise.
+       */
+      type={asChild ? undefined : (props.type ?? "button")}
       {...props}
     />
   );
