@@ -1464,7 +1464,6 @@ export const en = {
     eventsFailed: "This part could not be read — it is not that nothing was noticed, it is that nothing was read.",
     handled: "Handled",
     showMore: "Show {{count}} more",
-    showMore: "Show {{count}} more",
     markHandled: "Got it",
     regret: "Regret",
     gratitude: "Gratitude",
@@ -1687,7 +1686,9 @@ export const en = {
     notFoundBodyLine2: "But the light is still on, and so is the way back.",
     boundaryBodyLong: "The page hit an unexpected error — a refresh usually fixes it.",
     reload: "Reload",
-    unknown: "Unknown error",    streamNoBody: "The server sent nothing back.",
+    unknown: "Unknown error",
+    streamNoBody: "The server sent nothing back.",
+    streamEndedEarly: "The connection ended before the reply was finished.",
     streamFailed: "The request failed ({{status}}).",
 
   },

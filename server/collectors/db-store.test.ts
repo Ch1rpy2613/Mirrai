@@ -313,7 +313,16 @@ describe("toTranscript", () => {
       { role: "user", content: "在吗" },
       { role: "assistant", content: "在的" },
     ]);
-    expect(text).toBe("我：在吗\nTA：在的");
+    // The label is one the rule miner knows — in both languages. It used
+    // to be "TA：" in Chinese and "Them: " in English, and the miner
+    // knew only the first — so an English user's transcript had its
+    // persona's side unreadable and the miner read the user's own
+    // habits as the persona's rules.
+    expect(text).toBe("我：在吗\n分身：在的");
+    expect(toTranscript([
+      { role: "user", content: "在吗" },
+      { role: "assistant", content: "在的" },
+    ], "en")).toBe("Me: 在吗\nPersona: 在的");
   });
 
   it("handles an empty list", () => {

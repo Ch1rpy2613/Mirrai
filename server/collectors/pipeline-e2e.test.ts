@@ -124,10 +124,11 @@ describe("collecting a chat history into a persona", () => {
         result.messages.map((m) => ({ role: m.role, content: m.content })),
       );
       // The mail export only holds the counterpart's side, so every message
-      // is TA's — but the format is the one the pipeline expects. A message
-      // body may span several lines, so the count is of the "TA：" prefixes.
+      // is the persona's — but the format is the one the pipeline expects.
+      // A message body may span several lines, so the count is of the
+      // "分身：" prefixes.
       const lines = transcript.split("\n").filter(Boolean);
-      expect(lines.filter(line => line.startsWith("TA："))).toHaveLength(2);
+      expect(lines.filter(line => line.startsWith("分身："))).toHaveLength(2);
       expect(transcript).toContain("午饭");
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -1261,7 +1261,9 @@ async function runSkillPipelineOnce(
         .slice(0, MEMORY_EXTRACTION_MESSAGE_LIMIT)
         .map((m, index) => ({
           id: index + 1,
-          role: m.role,
+          // The role is optional in the parser's shape — a line with no
+          // speaker has none — and the extraction wants a string.
+          role: m.role ?? "",
           content: m.content,
           createdAt: new Date(0),
         }));

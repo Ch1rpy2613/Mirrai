@@ -1153,13 +1153,21 @@ async function maybeExtractMemories(
    * The window is the one the extraction itself reads: everything since
    * the last run, and everything there is for the first one.
    */
+  /**
+   * The window.
+   *
+   * It is the last *successful* extraction — the one whose window was
+   * read. The attempt is a different thing: it is when the extraction
+   * last tried, and it is what the interval is measured from.
+   */
+  const lastExtracted = await db.getLastExtractionAt(persona.id, userId);
   const newMessages = await db.getUserMessageCountForPersonaSince(
     persona.id,
     userId,
-    last ?? new Date(0),
+    lastExtracted ?? new Date(0),
   );
   if (!isExtractionDue({
-    lastExtractedAt: last,
+    lastExtractedAt: lastExtracted,
     newMessageCount: newMessages,
     now,
   })) {

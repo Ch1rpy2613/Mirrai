@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Check } from "lucide-react";
@@ -18,7 +19,15 @@ export default function SafetyTransparency() {
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
-  const { data: eventsData, isLoading, isError } = trpc.safety.events.useQuery({ limit: 20 });
+  /**
+   * How much of the record is on screen.
+   *
+   * The panel showed the newest twenty and no way to see the rest —
+   * so a user with a year of history saw twenty rows and no sign that
+   * there were more.
+   */
+  const [limit, setLimit] = useState(20);
+  const { data: eventsData, isLoading, isError } = trpc.safety.events.useQuery({ limit });
   const { data: assessmentsData, isError: assessmentsError } = trpc.safety.assessments.useQuery();
 
   const resolve = trpc.safety.resolveEvent.useMutation({

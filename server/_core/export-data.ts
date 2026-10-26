@@ -13,7 +13,12 @@ import * as db from "../db";
 import { computeIntimacy } from "./persona-utils";
 import { copy, type Locale } from "@shared/copy";
 import { intimacyLevelLabel } from "@shared/intimacy";
-import { USER_MOOD_LABELS, EVENT_LABELS } from "@shared/user-side";
+import {
+  USER_MOOD_LABELS,
+  EVENT_LABELS,
+  type UserMood,
+  type RelationshipEventKind,
+} from "@shared/user-side";
 
 /**
  * How many messages one persona's export carries.
@@ -81,7 +86,7 @@ export interface ExportBundle {
     diaries: Array<{ date: string; summary: string; reflection: string | null }>;
     snapshots: Array<{ emotionalState: string; messageCount: number; date: string }>;
     events: Array<{
-      kind: string;
+      kind: RelationshipEventKind;
       title: string;
       detail: string | null;
       happenedAt: Date;
@@ -104,7 +109,7 @@ export interface ExportBundle {
     }>;
   }>;
   /** The user's own moods, across every persona's time. */
-  moods: Array<{ date: string; mood: string; note: string | null }>;
+  moods: Array<{ date: string; mood: UserMood; note: string | null }>;
 }
 
 /**
@@ -183,7 +188,7 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
         date: s.date,
       })),
       events: eventList.map((e) => ({
-        kind: e.kind,
+        kind: e.kind as RelationshipEventKind,
         title: e.title,
         detail: e.detail,
         happenedAt: e.happenedAt,
@@ -212,7 +217,7 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
       createdAt: user.createdAt,
     },
     personas,
-    moods: moods.map((m) => ({ date: m.date, mood: m.mood, note: m.note })),
+    moods: moods.map((m) => ({ date: m.date, mood: m.mood as UserMood, note: m.note })),
   };
 }
 

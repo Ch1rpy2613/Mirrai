@@ -12,7 +12,7 @@
  * once a complete frame (terminated by a blank line) is available.
  */
 
-import { translate } from "@/i18n";
+import { translate, type Locale } from "@/i18n";
 
 export interface StreamDoneInfo {
   messageId: number;
@@ -139,7 +139,15 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 export async function streamChat(options: StreamChatOptions): Promise<void> {
-  const { personaId, message, locale, replyToId, signal, callbacks } = options;
+  const { personaId, message, replyToId, signal, callbacks } = options;
+  /**
+   * The interface's language.
+   *
+   * The client always sends one, but the option is optional — so the
+   * error path passed `undefined` to `translate`, which threw inside
+   * the error handler.
+   */
+  const locale: Locale = options.locale === "en" ? "en" : "zh";
 
   const response = await fetch("/api/chat/stream", {
     method: "POST",

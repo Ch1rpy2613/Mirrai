@@ -351,6 +351,19 @@ const PERSONA_LABELS = new Set([
   "对方",
   "她",
   "他",
+  /**
+   * "them" — the English label the collector writes.
+   *
+   * It was missing — so an English user's collected transcript had its
+   * persona's side labelled "Them", the role was not recognised, and
+   * the miner stopped filtering by role: it contrasted *both* sides of
+   * the conversation, and the user's own habits became the persona's
+   * rules. The Chinese label ("TA") was in the list, so only the
+   * English half of the app was affected.
+   */
+  "them",
+  "they",
+  "them:",
 ]);
 
 /** A speaker label in front of a message. */

@@ -290,7 +290,17 @@ export async function importCollectedMessages(params: {
  */
 export function collectedSpeaker(role: string, locale: "zh" | "en" = "zh"): string {
   if (role === "user") return copy(locale, "prompt.speakerSelf");
-  return locale === "en" ? "Them: " : "TA：";
+  /**
+   * The same words the parser knows.
+   *
+   * It used to write "Them: " and "TA：" — and the rule miner knows
+   * "ta" but not "them" — so an English user's collected transcript had
+   * its persona's side unreadable, the miner stopped filtering by
+   * role, and the *user's* habits became the persona's rules.
+   *
+   * One vocabulary now: the label the miner knows, in both languages.
+   */
+  return copy(locale, "prompt.speakerPersona");
 }
 
 /**

@@ -1681,6 +1681,7 @@ export const zh = {
     reload: "重新加载",
     unknown: "未知错误",
     streamNoBody: "服务器没有返回内容。",
+    streamEndedEarly: "连接中断了，这段回答没有说完。",
     streamFailed: "请求失败了（{{status}}）。",
   },
 } as const;

@@ -37,6 +37,14 @@ const COPY = {
     memoryCount: "记忆",
     exportedOn: "导出于",
     noMessages: "暂无消息",
+    /**
+     * The note under the diaries.
+     *
+     * It was missing from the Chinese table — so the export of a
+     * persona with more than ten diaries threw, and the user got an
+     * error and no file at all. The English table had it.
+     */
+    diaryMore: "（只显示最近 {shown} 篇，共 {total} 篇）",
   },
   en: {
     milestones: "Milestones",

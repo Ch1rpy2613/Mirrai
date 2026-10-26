@@ -60,7 +60,7 @@ import {
   createOutboundLetter,
   getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
-  createSafetyEvent,
+  createSafetyEvent, countSafetyEvents,
 } from "./db";
 import { nanoid } from "nanoid";
 import path from "path";
@@ -556,12 +556,12 @@ export const appRouter = router({
          */
         const crisis = input.note ? detectCrisis(input.note) : null;
         if (crisis?.crisis) {
-          await db.createSafetyEvent({
+          await createSafetyEvent({
             userId: ctx.user.id,
             personaId: null,
             type: "crisis",
             severity: "critical",
-          }).catch((e) => console.warn("[Safety] Failed to record the crisis event:", e));
+          }).catch((e: unknown) => console.warn("[Safety] Failed to record the crisis event:", e));
           return { success: true, mood, crisis: true };
         }
         return { success: true, mood, crisis: false };
