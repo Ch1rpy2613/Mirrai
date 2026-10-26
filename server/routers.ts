@@ -2122,6 +2122,16 @@ export const appRouter = router({
         limit: z.number().min(1).max(5000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // The persona has to be the caller's own.
+        //
+        // Every other procedure that takes a `personaId` checks this
+        // first. This one did not, so a collection run could be pointed
+        // at somebody else's persona: the job wrote the material it
+        // gathered into that persona's namespace, and the rows outlived
+        // the persona because they are not the caller's to delete.
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+
         const handle = await enqueueCollectorJob({
           userId: String(ctx.user.id),
           personaId: String(input.personaId),

@@ -541,6 +541,12 @@ export default function Chat() {
         controller.signal,
       );
       // Drop the old turn from the screen and show the new answer.
+      //
+      // The turn that is being replaced is the user's question *and* the
+      // answer that followed it. The old code replaced the question
+      // itself with the answer, so the user's own words disappeared and
+      // the answer appeared in the user's bubble — until the next poll
+      // rewrote the list and the transcript was right again.
       setMessages(prev => {
         const index = prev.findIndex((m) => m.id === msg.id);
         if (index < 0) return prev;
@@ -548,9 +554,18 @@ export default function Chat() {
           (m) => m.role === "user",
         ) ?? -1;
         const cut = userIndex >= 0 ? userIndex : index;
+        const question = prev[cut];
         return [
           ...prev.slice(0, cut),
-          { ...prev[cut], content: result.reply, emotionalState: result.emotionalState, isStreaming: false },
+          question,
+          {
+            id: `ai-${Date.now()}`,
+            role: "assistant",
+            content: result.reply,
+            emotionalState: result.emotionalState,
+            createdAt: new Date(),
+            isStreaming: false,
+          },
         ];
       });
       setCurrentState(result.emotionalState);
