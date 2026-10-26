@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useLocation } from "wouter";
 import { declinesOnCancel } from "@/lib/graduation-action";
+import { usePersistFn } from "@/hooks/usePersistFn";
 
 interface Props {
   personaId: number;
@@ -36,13 +37,50 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
 
   const declineMutation = trpc.persona.declineGraduation.useMutation({
     onSuccess: () => { toast.success(t("graduation.keepCompanionship")); onClose(); },
+    onError: (e: any) => toast.error(e.message),
   });
+
+  /**
+   * Every way out of the offer is a refusal.
+   *
+   * The ✕ and the backdrop used to close the window without telling
+   * anybody. The rule the app follows is in `graduation-action.ts`: in
+   * the "suggest" flow the app offered the farewell and the user is
+   * declining it, and that has to be recorded — or the app offers it
+   * again on the next turn. So the two natural "no, thank you" gestures
+   * were the two that did not count.
+   */
+  const dismiss = usePersistFn(() => {
+    if (!declinesOnCancel(variant)) { onClose(); return; }
+    if (declineMutation.isPending) return;
+    declineMutation.mutate({ id: personaId }, { onSettled: onClose });
+  });
+
+  // The window is always mounted — the chat page passes `open` rather
+  // than unmounting it — so the phase of the last time it was opened
+  // was still there when it was opened again. After a graduation, the
+  // second opening showed the letter of the first one.
+  useEffect(() => {
+    if (!open) return;
+    setPhase("suggest");
+    setLetter("");
+  }, [open]);
+
+  // Escape closes the window, and it counts as a refusal too.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") dismiss();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, dismiss]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40" onClick={dismiss} />
       <div
         role="dialog"
         aria-modal="true"
@@ -53,7 +91,7 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
           <h3 className="card-title">
             {variant === "manual" ? t("graduation.manualMoment") : t("graduation.moment")}
           </h3>
-          <button onClick={onClose} className="app-nav-icon" aria-label={t("common.close")}>
+          <button onClick={dismiss} className="app-nav-icon" aria-label={t("common.close")}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -70,7 +108,7 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {variant === "manual"
                     ? t("graduation.manualBody", { name: personaName })
-                    : t("graduation.farewellIntro") + t("graduation.farewellBody", { name: personaName })}
+                    : t("graduation.farewellIntro") + " " + t("graduation.farewellBody", { name: personaName })}
                 </p>
               </div>
               <hr className="rule" />
@@ -81,10 +119,7 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
                     here would close the door the manual mode is meant to
                     keep open. */}
                 <Button variant="outline" className="flex-1 rounded-md bg-transparent"
-                  onClick={() => {
-                    if (!declinesOnCancel(variant)) { onClose(); return; }
-                    declineMutation.mutate({ id: personaId });
-                  }}
+                  onClick={dismiss}
                   disabled={declineMutation.isPending}>
                   {variant === "manual" ? t("graduation.manualCancel") : t("graduation.keepCompanionship")}
                 </Button>
