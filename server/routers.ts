@@ -2520,6 +2520,8 @@ export const appRouter = router({
         const messages = await getCollectedMessagesForPersona(input.personaId, ctx.user.id, {
           source: input.source ?? null,
           limit: input.limit,
+          // The last few, not the first few ever collected.
+          newest: true,
         });
         // How many there are, not how many are shown.
         const total = await countCollectedMessagesForPersona(
@@ -2532,8 +2534,6 @@ export const appRouter = router({
           total,
           sources,
           messages: messages
-            .slice(-input.limit)
-            .reverse()
             .map((m) => ({
               id: m.id,
               role: m.role,

@@ -3315,7 +3315,7 @@ export const MAX_COLLECTED_MESSAGES = 20_000;
 export async function getCollectedMessagesForPersona(
   personaId: number,
   userId: number,
-  options: { limit?: number; source?: string | null } = {},
+  options: { limit?: number; source?: string | null; newest?: boolean } = {},
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -3328,6 +3328,21 @@ export async function getCollectedMessagesForPersona(
     eq(collectedMessages.userId, userId),
     ...(options.source ? [eq(collectedMessages.source, options.source)] : []),
   ));
+  /**
+   * Which end of the history.
+   *
+   * The limit is applied *after* the order, so an ascending order with
+   * a limit gives the *oldest* N. The preview asks for "the last few"
+   * and got the first few ever collected — so the user saw "300
+   * messages" above messages from three months ago.
+   */
+  if (options.newest) {
+    const newest = await query
+      .orderBy(desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
+      .limit(options.limit ?? MAX_COLLECTED_MESSAGES);
+    // And back into the order they were said in.
+    return newest.reverse();
+  }
   return query
     .orderBy(asc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
     .limit(options.limit ?? MAX_COLLECTED_MESSAGES);
