@@ -226,14 +226,18 @@ export function MessageBubble({
     if (msg.messageType === "image" && msg.mediaUrl) {
       return (
         <>
-          <img src={msg.mediaUrl} alt="" onClick={() => setImgExpanded(true)}
+          {/* The picture is named.
+              An empty alt says "decorative", which is right for an
+              ornament and wrong for the only thing in the message — a
+              reader was told there was nothing there. */}
+          <img src={msg.mediaUrl} alt={t("chat.imageAlt")} onClick={() => setImgExpanded(true)}
             className="max-w-[200px] max-h-[200px] rounded-md cursor-pointer hover:opacity-90 transition-opacity" />
           {msg.content !== t("chat.imageMessage") && <p className="mt-1.5 text-sm">{msg.content}</p>}
           {/* Portal：祖先的 animate-fade-in-up 以 forwards 保留 transform，会把 fixed 定位锚定到气泡上 */}
           {imgExpanded && createPortal(
             <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 animate-fade-in"
               onClick={() => setImgExpanded(false)}>
-              <img src={msg.mediaUrl!} alt="" className="max-w-full max-h-full object-contain rounded-md" />
+              <img src={msg.mediaUrl!} alt={t("chat.imageAlt")} className="max-w-full max-h-full object-contain rounded-md" />
             </div>,
             document.body
           )}

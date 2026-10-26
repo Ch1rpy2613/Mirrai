@@ -178,6 +178,7 @@ export const zh = {
     interrupted: "生成中断：{{message}}",
     voiceMessage: "（语音消息）",
     imageMessage: "[图片]",
+    imageAlt: "一张图片",
     silence: "（沉默）",
     record: "录音",
     recording: "录音中 {{seconds}}s",

@@ -180,6 +180,7 @@ export const en = {
     interrupted: "Generation stopped: {{message}}",
     voiceMessage: "(voice message)",
     imageMessage: "[image]",
+    imageAlt: "A picture",
     silence: "(silence)",
     record: "Record",
     recording: "Recording {{seconds}}s",
