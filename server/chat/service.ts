@@ -584,23 +584,38 @@ export async function* runConversation(
    * disagreed about which day a message belonged to.
    */
   const todayStr = localDateKey(now);
-  const existing = await db.getTodaySnapshot(persona.id, userId);
+  // The lookup has to be under the same day the snapshot is written
+  // under, or the "one a day" guard fires against the wrong row.
+  const existing = await db.getTodaySnapshot(persona.id, userId, todayStr);
+  /**
+   * The count is the number of messages that actually happened today.
+   *
+   * It used to be written as 1, which meant the "message count" in the
+   * emotion report was really "the number of days with a snapshot" —
+   * and every day had exactly one. And it was written once, when the
+   * first message of the day arrived, and never touched again — so a
+   * user who sent one message in the morning and nine more at night
+   * showed a count of one.
+   */
+  const messageCount = await db.getUserMessageCountForPersonaSince(
+    persona.id,
+    userId,
+    new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+  );
   if (!existing) {
-    // The count is the number of messages that actually happened today.
-    // It used to be written as 1, which meant the "message count" in the
-    // emotion report was really "the number of days with a snapshot" —
-    // and every day had exactly one.
-    const messageCount = await db.getUserMessageCountForPersonaSince(
-      persona.id,
-      userId,
-      new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-    );
     await db.createEmotionSnapshot({
       personaId: persona.id,
       userId,
       emotionalState: newEmotionalState,
       messageCount,
       date: todayStr,
+    });
+  } else {
+    // The day's snapshot is brought up to date, so the count is the
+    // count of the day and not the count of its first minute.
+    await db.updateEmotionSnapshot(existing.id, userId, {
+      emotionalState: newEmotionalState,
+      messageCount,
     });
   }
 

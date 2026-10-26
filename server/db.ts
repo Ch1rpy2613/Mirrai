@@ -1490,6 +1490,29 @@ export async function createEmotionSnapshot(data: InsertEmotionSnapshot) {
   return result.id;
 }
 
+/**
+ * Brings a day's snapshot up to date.
+ *
+ * The snapshot was written once, when the first message of the day
+ * arrived, and never touched again — so the "message count" in the
+ * emotion report was really "the number of messages at that moment".
+ * A user who sent one message at nine in the morning and nine more at
+ * nine at night showed a count of one for the day.
+ */
+export async function updateEmotionSnapshot(
+  id: number,
+  userId: number,
+  data: { emotionalState?: string; messageCount?: number },
+) {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.update(emotionSnapshots)
+    .set(data)
+    .where(and(eq(emotionSnapshots.id, id), eq(emotionSnapshots.userId, userId)))
+    .returning();
+  return row ?? null;
+}
+
 export async function getEmotionSnapshots(personaId: number, userId: number, days = 30) {
   const db = await getDb();
   if (!db) return [];
@@ -1530,10 +1553,23 @@ export async function getEmotionReport(personaId: number, userId: number, days =
   return { snapshots, distribution, totalDays: snapshots.length, totalMessages };
 }
 
-export async function getTodaySnapshot(personaId: number, userId: number) {
+export async function getTodaySnapshot(
+  personaId: number,
+  userId: number,
+  /**
+   * The day the snapshot is looked up under.
+   *
+   * It has to be the same day the snapshot was *written* under — the
+   * server's own calendar. It used to be the UTC day, so the two
+   * disagreed for sixteen hours out of every twenty-four: the "one
+   * snapshot a day" guard fired against yesterday's row, and a user who
+   * only talked between midnight and eight in the morning got no
+   * snapshot at all for that day.
+   */
+  today: string = localDateKey(new Date()),
+) {
   const db = await getDb();
   if (!db) return undefined;
-  const today = new Date().toISOString().slice(0, 10);
   const rows = await db.select().from(emotionSnapshots)
     .where(and(eq(emotionSnapshots.personaId, personaId), eq(emotionSnapshots.userId, userId), eq(emotionSnapshots.date, today)))
     .limit(1);
