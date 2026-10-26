@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { usePersistFn } from "./usePersistFn";
 
 export interface UseCompositionReturn<
@@ -32,6 +32,22 @@ export function useComposition<
   const c = useRef(false);
   const timer = useRef<TimerResponse | null>(null);
   const timer2 = useRef<TimerResponse | null>(null);
+
+  /**
+   * The timers are cleared when the component goes away.
+   *
+   * The two-layer timeout exists for Safari, where `compositionend`
+   * fires before the keydown. Without a cleanup, the timer fired after
+   * the unmount and set a ref — harmless, but the timer itself kept
+   * the closure (and everything it captured) alive for as long as it
+   * had left to run.
+   */
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      if (timer2.current) clearTimeout(timer2.current);
+    };
+  }, []);
 
   const onCompositionStart = usePersistFn((e: React.CompositionEvent<T>) => {
     if (timer.current) {
