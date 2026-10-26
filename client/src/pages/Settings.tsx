@@ -1701,8 +1701,16 @@ function DataSourcesTab() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  /** Keeps the persona's remembered preset in step with the picker. */
+  /**
+   * Keeps the persona's remembered preset in step with the picker.
+   *
+   * The save had no `onSuccess`, so the persona list was never
+   * refetched — and the preset the user had just chosen was not shown
+   * anywhere else. The picker's own state said one thing and the rest
+   * of the interface said another.
+   */
   const saveModeMutation = trpc.persona.update.useMutation({
+    onSuccess: () => { personas.refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -2020,6 +2028,7 @@ function DataSourcesTab() {
               <p className="text-xs text-muted-foreground">{t("distillation.title")}</p>
               <DistillationModePicker
                 value={mode}
+                disabled={saveModeMutation.isPending}
                 onChange={next => {
                   setMode(next);
                   // The preset is remembered on the persona, so a re-run
@@ -2034,7 +2043,7 @@ function DataSourcesTab() {
             <Button
               size="sm"
               className="rounded-md px-5"
-              disabled={startPipeline.isPending}
+              disabled={startPipeline.isPending || saveModeMutation.isPending}
               onClick={() =>
                 startPipeline.mutate({
                   personaId: Number(personaId),
