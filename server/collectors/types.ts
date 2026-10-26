@@ -13,7 +13,16 @@
  *   runner.ts  — process execution + output normalisation
  *   jobs.ts    — the in-process job queue that drives the connectors
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  readSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import os from "os";
 import path from "path";
 import { encryptSecret } from "../_core/crypto";
@@ -295,11 +304,33 @@ function readCollectorTranscript(outputDir: string): string | undefined {
   const messagesPath = path.join(outputDir, "messages.txt");
   if (!existsSync(messagesPath)) return undefined;
   try {
-    return readFileSync(messagesPath, "utf-8");
+    /**
+     * The file is read in pieces, and only the first ones.
+     *
+     * It used to be read whole — and the cap on the collector's
+     * output did not cover it. So a collector that wrote a huge
+     * transcript took the server's heap with it, by a path the cap
+     * was supposed to have closed.
+     */
+    const handle = openSync(messagesPath, "r");
+    try {
+      const buffer = Buffer.alloc(MAX_COLLECTOR_TRANSCRIPT_BYTES);
+      const read = readSync(handle, buffer, 0, buffer.length, 0);
+      return buffer.subarray(0, read).toString("utf-8");
+    } finally {
+      closeSync(handle);
+    }
   } catch {
     return undefined;
   }
 }
+
+/**
+ * The largest transcript the server reads back.
+ *
+ * The same limit as the collector's output.
+ */
+const MAX_COLLECTOR_TRANSCRIPT_BYTES = 1024 * 1024;
 
 /**
  * Runs a collector that writes its transcript into `--output-dir`.

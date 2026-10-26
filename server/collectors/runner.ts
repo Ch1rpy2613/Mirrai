@@ -78,6 +78,31 @@ function collectorEnvironment(): NodeJS.ProcessEnv {
 const MAX_COLLECTOR_OUTPUT_CHARS = 1024 * 1024;
 
 /**
+ * The largest partial line the collector's buffer keeps.
+ *
+ * The output was capped, but the *buffer* — the tail of a line that
+ * has not ended yet — was not. A collector that writes one enormous
+ * line (a `json.dumps` of a big structure does exactly that) made the
+ * buffer grow without limit, and the split that followed copied it
+ * again. The heap is the process: the whole server goes down, not
+ * just the job.
+ */
+const MAX_COLLECTOR_LINE_CHARS = 1024 * 1024;
+
+/**
+ * Adds a chunk to a partial-line buffer, and keeps the buffer bounded.
+ *
+ * When the line is longer than the limit the *beginning* is dropped:
+ * a progress line is at the end of the buffer, and the beginning of a
+ * line that long is of no use to anybody.
+ */
+function appendLineCapped(buffer: string, chunk: string): string {
+  const next = buffer + chunk;
+  if (next.length <= MAX_COLLECTOR_LINE_CHARS) return next;
+  return next.slice(next.length - MAX_COLLECTOR_LINE_CHARS);
+}
+
+/**
  * Keeps the first part of what a collector said.
  *
  * The beginning is what matters: it is where the progress lines and the
@@ -152,7 +177,7 @@ export async function runCollector(
       const capped = appendCapped(stdout, chunk);
       stdout = capped.text;
       stdoutTruncated = stdoutTruncated || capped.truncated;
-      stdoutBuffer += chunk;
+      stdoutBuffer = appendLineCapped(stdoutBuffer, chunk);
       const lines = stdoutBuffer.split("\n");
       stdoutBuffer = lines.pop() ?? "";
       lines.forEach(reportProgress);
@@ -165,7 +190,7 @@ export async function runCollector(
       const capped = appendCapped(stderr, chunk);
       stderr = capped.text;
       stderrTruncated = stderrTruncated || capped.truncated;
-      stderrBuffer += chunk;
+      stderrBuffer = appendLineCapped(stderrBuffer, chunk);
       const lines = stderrBuffer.split("\n");
       stderrBuffer = lines.pop() ?? "";
       lines.forEach(reportProgress);
