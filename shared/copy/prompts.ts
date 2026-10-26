@@ -244,6 +244,14 @@ Return JSON only, with no other text:
   },
 
   /**
+   * The note that says the middle of a long day was left out.
+   */
+  "prompts.diaryOmitted": {
+    zh: "（中间的一部分对话没有放进来）",
+    en: "(some of the conversation in the middle was left out)",
+  },
+
+  /**
    * The transcription of a voice message.
    */
   /**

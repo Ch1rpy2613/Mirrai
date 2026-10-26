@@ -3343,6 +3343,25 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.emptyMessagesThatDay") });
         }
         /**
+         * The whole day, not the morning.
+         *
+         * The transcript was cut at six thousand characters — from the
+         * start. So a busy day was written from its morning alone, and
+         * the diary's "emotional arc" ended at lunchtime. The cut could
+         * also land in the middle of a sentence, and the reader was
+         * told nothing.
+         *
+         * So the head and the tail of the day are both kept, and the
+         * prompt says when the middle was left out.
+         */
+        const DIARY_MAX_CHARS = 6000;
+        const head = chatText.slice(0, Math.floor(DIARY_MAX_CHARS * 0.7));
+        const tail = chatText.slice(-Math.floor(DIARY_MAX_CHARS * 0.3));
+        const truncated = chatText.length > DIARY_MAX_CHARS;
+        const diaryText = truncated
+          ? `${head}\n\n${copy(ctx.locale, "prompts.diaryOmitted")}\n\n${tail}`
+          : chatText;
+        /**
          * The user's own provider.
          *
          * The diary is written from the user's own conversation of that
@@ -3357,7 +3376,7 @@ export const appRouter = router({
         });
         const messages = [
           { role: "system" as const, content: copy(ctx.locale, "prompts.diaryWriting") },
-          { role: "user" as const, content: chatText.slice(0, 6000) },
+          { role: "user" as const, content: diaryText },
         ];
         let response = "";
         if (provider) {
