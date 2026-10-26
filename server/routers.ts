@@ -1751,7 +1751,18 @@ export const appRouter = router({
       .input(z.object({ locale: z.enum(["zh", "en"]).default("zh") }))
       .query(async ({ input }) => {
         const { voicesForLocale } = await import("./_core/tts");
-        return { voices: voicesForLocale(input.locale) };
+        const { ENV } = await import("./_core/env");
+        return {
+          voices: voicesForLocale(input.locale),
+          /**
+           * Whether the read-aloud may be used.
+           *
+           * The voice is an online service — the text of the reply goes
+           * to Microsoft. So the button is hidden when the operator has
+           * switched it off, rather than offering a button that fails.
+           */
+          enabled: ENV.ttsEnabled,
+        };
       }),
 
     export: protectedProcedure

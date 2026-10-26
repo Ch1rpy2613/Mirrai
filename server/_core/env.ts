@@ -288,4 +288,18 @@ export const ENV = {
 
   /** Quiet hours for proactive reminders, as "HH:MM-HH:MM". */
   reminderQuietHours: process.env.REMINDER_QUIET_HOURS ?? "23:00-08:00",
+
+  /**
+   * Whether the read-aloud button may be used.
+   *
+   * The voice is Microsoft's *online* Edge read-aloud service: the text
+   * of the reply is streamed to Microsoft and the audio comes back.
+   *
+   * That is the one thing the app does that leaves the machine — and
+   * the app's own promise is that the data does not. So it can be
+   * switched off, and the interface says so when it is.
+   *
+   * An operator who wants the promise kept exactly sets this to false.
+   */
+  ttsEnabled: (process.env.TTS_ENABLED ?? "true").toLowerCase() !== "false",
 };

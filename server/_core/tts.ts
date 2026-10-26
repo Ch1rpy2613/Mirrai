@@ -184,6 +184,19 @@ export async function generateTTS(
   voice: string = DEFAULT_VOICE,
   userId?: number,
 ): Promise<string> {
+  /**
+   * The voice is an online service.
+   *
+   * The text of the reply is streamed to Microsoft and the audio comes
+   * back. That is the one thing the app does that leaves the machine —
+   * and the app's own promise is that the data does not — so the
+   * operator can switch it off, and the interface says when it is off.
+   */
+  if (!ENV.ttsEnabled) {
+    throw new Error(
+      "The read-aloud is switched off: it sends the text of the reply to Microsoft's online speech service. Set TTS_ENABLED=true to use it.",
+    );
+  }
   const trimmed = text.slice(0, MAX_TEXT_LENGTH);
   const hash = getCacheKey(trimmed, voice);
   const scope = userId != null ? String(userId) : "shared";

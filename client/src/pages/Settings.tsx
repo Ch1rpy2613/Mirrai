@@ -528,6 +528,22 @@ function ProfileTab() {
               {t("localFirst.trajectoryNote")}
             </p>
           </div>
+          {/**
+           * The read-aloud, said plainly.
+           *
+           * The voice is Microsoft's online speech service — the text of
+           * the reply goes to them. The section above says the model is
+           * the only place content is handed to; that was not true, and
+           * the person reading it had no way to know.
+           */}
+          <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+            <p className="text-xs font-medium text-foreground/80 mb-1.5">
+              {t("localFirst.ttsTitle")}
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("localFirst.ttsNote")}
+            </p>
+          </div>
         </div>
       </section>
 

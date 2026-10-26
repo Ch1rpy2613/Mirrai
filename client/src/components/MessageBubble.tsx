@@ -119,9 +119,17 @@ function TTSButton({ text }: { text: string }) {
       return null;
     }
   });
+  /**
+   * The voices, and whether the read-aloud may be used at all.
+   *
+   * The voice is an online service — the text of the reply goes to
+   * Microsoft. So the operator can switch it off, and the button is
+   * hidden then: offering a button that only fails is worse than not
+   * offering it.
+   */
   const { data: voiceData } = trpc.chat.voices.useQuery(
     { locale: locale === "en" ? "en" : "zh" },
-    { enabled: showVoices },
+    { staleTime: 60_000 },
   );
 
   // The clip stops when the bubble goes away.
@@ -190,6 +198,16 @@ function TTSButton({ text }: { text: string }) {
     } catch { toast.error(t("chat.ttsFailed")); }
     finally { setLoading(false); }
   };
+
+  /**
+   * The button is not offered when the read-aloud is switched off.
+   *
+   * The voice is Microsoft's online speech service: the text of the
+   * reply is streamed to them. The app's promise is that the data does
+   * not leave the machine — so an operator can switch this off, and
+   * then the button is gone rather than failing.
+   */
+  if (voiceData && voiceData.enabled === false) return null;
 
   return (
     <span className="relative inline-flex items-center" ref={menuRef}>
