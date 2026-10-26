@@ -130,30 +130,14 @@ export const CONTENT = {
     zh: "习惯先道歉，哪怕不是自己的错",
     en: "Apologises first, even when it was not their fault",
   },
-  "questionnaire.love.words": {
-    zh: "肯定的言辞",
-    en: "Words of affirmation",
-  },
-  "questionnaire.love.time": {
-    zh: "陪伴的时间",
-    en: "Time together",
-  },
-  "questionnaire.love.gifts": {
-    zh: "具体的礼物",
-    en: "Gifts",
-  },
-  "questionnaire.love.acts": {
-    zh: "为对方做的实际的事",
-    en: "Acts of service",
-  },
-  "questionnaire.love.touch": {
-    zh: "身体接触和亲密",
-    en: "Physical touch and closeness",
-  },
-  "questionnaire.love.service": {
-    zh: "日常的服务与照顾",
-    en: "Everyday care and service",
-  },
+  /**
+   * The love-language questions.
+   *
+   * They were here with these names, and the interface asks for them
+   * under `questionnaire.loveLanguages.*` — so these six were a second
+   * copy of six sentences that nothing read. The interface's names are
+   * the ones that are read.
+   */
   "questionnaire.togetherFrom": {
     zh: "从 {{date}} 开始",
     en: "since {{date}}",

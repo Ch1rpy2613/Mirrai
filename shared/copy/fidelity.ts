@@ -202,43 +202,9 @@ export const FIDELITY = {
   },
 
   // ── The behaviour, in the interface ──────────────────────────────────────
-
-  "labels.behavior.title": {
-    zh: "TA 的时间习惯",
-    en: "Their timing",
-  },
-  "labels.behavior.hint": {
-    zh: "从真实记录里量出来的：多久回、一次发几条、什么时候最活跃。主动开口的等待时间按这个分布来。",
-    en: "Measured from the real records: how long they take, how many they send at once, when they are most active. The wait before speaking first is drawn from this.",
-  },
-  "labels.behavior.notMeasured": {
-    zh: "还没有量过。多导入一些聊天记录就能量。",
-    en: "Not measured yet. Import more of the conversation and it can be.",
-  },
-  "labels.behavior.measure": {
-    zh: "重新量一次",
-    en: "Measure again",
-  },
-  "labels.behavior.measuring": {
-    zh: "正在量…",
-    en: "Measuring…",
-  },
-  "labels.behavior.samples": {
-    zh: "样本",
-    en: "Samples",
-  },
-  "labels.behavior.median": {
-    zh: "平均回信间隔",
-    en: "Typical reply gap",
-  },
-  "labels.behavior.proactive": {
-    zh: "主动开口的比例",
-    en: "How often they speak first",
-  },
-  "labels.behavior.activeHours": {
-    zh: "最活跃的时段",
-    en: "Most active hours",
-  },
+  //
+  // The behaviour panel has its own copy in the interface dictionary.
+  // These nine were a second copy of nine sentences that nothing read.
 
   // ── The ruler ───────────────────────────────────────────────────────────
 

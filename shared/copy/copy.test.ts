@@ -101,13 +101,30 @@ describe("the server's copy", () => {
     // An entry nobody reads is a sentence the app maintains and no person
     // ever sees. It is not a crash and it is not a wrong answer — which is
     // exactly why it needs a test to notice it.
-    const source = collectSource("server") + collectSource("client") + collectSource("shared");
+    /**
+     * The source, without the catalogue itself.
+     *
+     * The shared directory holds the catalogue — and the catalogue
+     * writes every key out in full. So the search found every key in
+     * its own definition, and the list of dead entries was always
+     * empty: the test could not fail.
+     */
+    const source =
+      collectSource("server") +
+      collectSource("client") +
+      collectSource("shared", (relativePath) => relativePath === "copy" || relativePath.startsWith("copy/")) +
+      collectSource("scripts");
 
     // The namespaces whose keys are reached through a variable rather than
     // written out — `copy(locale, STYLE_KEYS[kind])` — cannot be found by
     // a plain search, so they are exempt.
     const dynamic = new Set<string>();
     for (const match of source.matchAll(/"([A-Za-z0-9_.]+)\.[A-Za-z0-9_]+"/g)) {
+      dynamic.add(match[1]);
+    }
+    // A namespace reached through a template literal:
+    // `labels.imperfection.${state}`.
+    for (const match of source.matchAll(/`([A-Za-z0-9_.]+)\./g)) {
       dynamic.add(match[1]);
     }
 
@@ -126,15 +143,18 @@ describe("the server's copy", () => {
 });
 
 /** Every source file under a directory, as one string. */
-function collectSource(dir: string): string {
+function collectSource(dir: string, skip?: (relativePath: string) => boolean): string {
   const { readdirSync, statSync, readFileSync } = require("fs") as typeof import("fs");
-  const { join } = require("path") as typeof import("path");
+  const { join, relative } = require("path") as typeof import("path");
   const root = join(__dirname, "..", "..", dir);
   let out = "";
   const walk = (path: string) => {
     for (const name of readdirSync(path)) {
       if (name === "node_modules" || name === "dist") continue;
       const full = join(path, name);
+      // The path is relative to the directory being read, so a rule can
+      // name a subdirectory.
+      if (skip?.(relative(root, full).split(/[\\/]/).join("/"))) continue;
       if (statSync(full).isDirectory()) {
         walk(full);
       } else if (/\.(ts|tsx)$/.test(name)) {
