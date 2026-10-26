@@ -175,22 +175,32 @@ export function collectReminders(params: {
 
     const from = params.persona.togetherFrom?.trim();
     if (from) {
-      const start = new Date(from);
-      if (!Number.isNaN(start.getTime())) {
+      /**
+       * The date they met, read as a calendar day.
+       *
+       * It used to be read as an instant — `new Date("2021-05-20")` is
+       * midnight in Greenwich — and then the year, the month and the
+       * day were taken from the *server's* calendar. So on any server
+       * west of Greenwich the anniversary came a day early, and the
+       * year came from a different calendar than the month and the
+       * day.
+       *
+       * The parts are read as they are written. A date with only a
+       * month is the first of it, as it always was.
+       */
+      const parts = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(from);
+      if (parts) {
         /**
          * The years, in the user's own calendar.
          *
-         * They were counted in the *server's* calendar — the server's
-         * year, the server's midnight — so for a user one zone east the
-         * year rolled over eight hours late and the anniversary was
-         * missed on the day itself, and for a user one zone west it
-         * came a day early.
+         * The year comes from the user's day, so the anniversary is
+         * counted on the day they are living on.
          */
         const userYear = Number(dayKey.slice(0, 4));
-        const startYear = start.getFullYear();
+        const startYear = Number(parts[1]);
         const years = userYear - startYear;
-        // The month and the day of the start, in the user's calendar.
-        const startMonthDay = `${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+        // The month and the day of the start, as they were written.
+        const startMonthDay = `${parts[2]}-${parts[3] ?? "01"}`;
         // Only the day itself, not a week of "it's nearly your anniversary".
         if (monthDay === startMonthDay && years > 0) {
           reminders.push({
