@@ -28,7 +28,7 @@ import { daysWaiting, isStale } from "@shared/outbound";
  */
 export default function OutboundLetters({ personaId }: { personaId: number }) {
   const { t } = useLocale();
-  const { data, refetch, isLoading } = trpc.outbound.list.useQuery({ personaId });
+  const { data, refetch, isLoading, isError } = trpc.outbound.list.useQuery({ personaId });
   const collectMutation = trpc.outbound.collect.useMutation({
     onSuccess: (result) => {
       if (result.saved) {
@@ -127,7 +127,10 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
 
       {letters.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border/70 px-4 py-8 text-center text-xs text-muted-foreground">
-          {isLoading ? t("common.loading") : t("outbound.empty")}
+          {/* A failed request leaves the list empty, so the panel said
+              "nothing here" — a claim about the user's own letters that
+              was simply false. */}
+          {isLoading ? t("common.loading") : isError ? t("common.error") : t("outbound.empty")}
         </p>
       ) : null}
 

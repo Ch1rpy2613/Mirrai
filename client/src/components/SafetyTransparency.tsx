@@ -18,7 +18,7 @@ export default function SafetyTransparency() {
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
-  const { data: eventsData, isLoading } = trpc.safety.events.useQuery({ limit: 20 });
+  const { data: eventsData, isLoading, isError } = trpc.safety.events.useQuery({ limit: 20 });
   const { data: assessmentsData } = trpc.safety.assessments.useQuery();
 
   const resolve = trpc.safety.resolveEvent.useMutation({
@@ -37,8 +37,13 @@ export default function SafetyTransparency() {
       <p className="text-xs text-muted-foreground leading-relaxed">
         {/* Not "nothing to report" while the record is still being
             fetched — that is a claim about the user's own history, and
-            it was made a moment before the truth appeared. */}
-        {isLoading ? t("common.loading") : t("safetyPanel.empty")}
+            it was made a moment before the truth appeared.
+
+            And not after a failure either: a failed request leaves the
+            list empty, so the panel said "nothing recorded yet" — a
+            claim about the user's own emotional history that was simply
+            false. */}
+        {isLoading ? t("common.loading") : isError ? t("common.error") : t("safetyPanel.empty")}
       </p>
     );
   }

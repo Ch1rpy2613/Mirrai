@@ -177,7 +177,7 @@ export default function Upload() {
   const { data: persona, refetch: refetchPersona } = trpc.persona.get.useQuery(
     { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
-  const { data: files, refetch: refetchFiles } = trpc.file.list.useQuery(
+  const { data: files, refetch: refetchFiles, isLoading: filesLoadingQuery, isError: filesError } = trpc.file.list.useQuery(
     { personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   // Material pulled in by a collector is just as usable as an uploaded file.
@@ -280,10 +280,30 @@ export default function Upload() {
   const hasFiles = (files?.length || 0) > 0;
   const hasCollected = (collected?.total || 0) > 0;
   const hasMaterial = hasFiles || hasCollected;
-  const filesLoading = isAuthenticated && hasPersonaId && files === undefined;
+  /**
+   * Whether the file list is still on its way.
+   *
+   * It used to be "the data has not arrived", which is also true after
+   * a failure — so the two skeleton rows shimmered for ever and the
+   * persona's name stayed "...".
+   */
+  const filesLoading = isAuthenticated && hasPersonaId && filesLoadingQuery;
   const pendingUploads = Object.entries(uploadingFiles).filter(([, s]) => s !== "done");
 
   if (!hasPersonaId) return <NotFound />;
+
+  /**
+   * A failed request is not a list that has not arrived yet.
+   */
+  if (filesError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-foreground/80">{t("common.error")}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

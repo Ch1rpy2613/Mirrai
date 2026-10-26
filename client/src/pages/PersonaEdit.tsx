@@ -121,7 +121,7 @@ export default function PersonaEdit() {
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
-  const { data: persona, refetch } = trpc.persona.get.useQuery(
+  const { data: persona, refetch, isError, error } = trpc.persona.get.useQuery(
     { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   const { data: promptData } = trpc.persona.getSystemPrompt.useQuery(
@@ -337,6 +337,23 @@ export default function PersonaEdit() {
   });
 
   if (!hasPersonaId) return <NotFound />;
+  /**
+   * A failed query is not a persona that has not arrived yet.
+   *
+   * It used to leave the page on the loader for ever: a persona deleted
+   * on another device, or a device that had gone offline, and the user
+   * had no way back and no explanation.
+   */
+  if (isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-foreground/80">{t("errors.notFound")}</p>
+          <p className="text-xs text-muted-foreground">{(error as any)?.message ?? ""}</p>
+        </div>
+      </div>
+    );
+  }
   if (!persona) return <PageLoader />;
 
   return (
