@@ -59,6 +59,7 @@ import {
   markOutboundLetterStaleNotified,
   createOutboundLetter,
   getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
+  getEvalRuns,
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
   createSafetyEvent, countSafetyEvents,
 } from "./db";
@@ -3936,6 +3937,24 @@ export const appRouter = router({
           variant: input.variant,
         }, persona.personaData);
         return { metrics };
+      }),
+
+    /**
+     * The last runs.
+     *
+     * Only the newest was exposed — so the comparison the panel exists
+     * for could not be made.
+     */
+    list: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        limit: z.number().int().min(1).max(50).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const runs = await getEvalRuns(input.personaId, ctx.user.id, input.limit ?? 20);
+        return { runs };
       }),
 
     /** The last run, and whether this one is worse than it. */

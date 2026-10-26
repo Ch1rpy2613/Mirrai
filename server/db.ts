@@ -4247,6 +4247,23 @@ export async function saveEvalRun(
 }
 
 /** The most recent run of the evaluation for a persona. */
+/**
+ * The last runs, newest first.
+ *
+ * Only the newest was exposed — so the comparison the panel exists for
+ * ("with the rules" against "without them") could not be made: the
+ * toggle changed what the *next* run measured, and the four numbers on
+ * screen were whichever run happened to be last.
+ */
+export async function getEvalRuns(personaId: number, userId: number, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(evalRuns).where(and(
+    eq(evalRuns.personaId, personaId),
+    eq(evalRuns.userId, userId),
+  )).orderBy(desc(evalRuns.createdAt)).limit(limit);
+}
+
 export async function getLatestEvalRun(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return null;

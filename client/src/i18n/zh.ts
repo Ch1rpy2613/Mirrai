@@ -1280,6 +1280,15 @@ export const zh = {
     running: "正在跑…",
     done: "跑完了",
     noRun: "还没有跑过。导入聊天记录之后就可以跑。",
+    /**
+     * Which run the numbers on screen are.
+     *
+     * The variant and the date were dropped on the way in, so the four
+     * numbers had no indication of what they were measuring or when.
+     */
+    lastRunWithRules: "上面是「有规则」那一次的测量",
+    lastRunWithoutRules: "上面是「无规则」那一次的测量",
+    history: "历次测量",
     withRules: "带规则",
     withoutRules: "不带规则",
     overlap: "三字重合率",

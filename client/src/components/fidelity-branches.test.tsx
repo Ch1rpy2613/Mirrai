@@ -76,6 +76,8 @@ vi.mock("@/lib/trpc", () => ({
     },
     eval: {
       latest: { useQuery: () => ({ data: { run: lastRun } }) },
+      // The last runs, so the two variants can be compared.
+      list: { useQuery: () => ({ data: { runs: lastRun ? [lastRun] : [] } }) },
       run: {
         useMutation: (opts: any) => ({
           mutate: (args: any) => run(args, opts),

@@ -26,6 +26,14 @@ function normaliseMetrics(raw: unknown): {
   likelihoodGap: number;
   lengthDistance: number;
   emotionAccuracy: number;
+  /**
+   * Which run this was.
+   *
+   * It was dropped — so the four numbers on screen had no indication
+   * of what they were measuring, and a six-month-old run looked like
+   * this morning's.
+   */
+  variant: "default" | "withoutRules";
 } | null {
   if (!raw || typeof raw !== "object") return null;
   const record = raw as Record<string, unknown>;
@@ -36,7 +44,20 @@ function normaliseMetrics(raw: unknown): {
     likelihoodGap: number(record.likelihoodGap),
     lengthDistance: number(record.lengthDistance),
     emotionAccuracy: number(record.emotionAccuracy),
+    variant: record.variant === "withoutRules" ? "withoutRules" : "default",
   };
+}
+
+/** The date of a run, in the reader's own calendar. */
+function formatRunDate(value: unknown, locale: string): string {
+  if (!value) return "";
+  const date = new Date(value as string);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(locale === "en" ? "en" : "zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
 export default function FidelityPanel({ personaId }: { personaId: number }) {
@@ -72,6 +93,15 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
 
   const utils = trpc.useUtils();
   const { data: latest } = trpc.eval.latest.useQuery({ personaId });
+  /**
+   * The last runs.
+   *
+   * Only the newest was fetched — so the comparison the panel exists
+   * for could not be made: the toggle changed what the *next* run
+   * measured, and the four numbers on screen were whichever run
+   * happened to be last.
+   */
+  const { data: history } = trpc.eval.list.useQuery({ personaId });
   const runMutation = trpc.eval.run.useMutation({
     onSuccess: () => {
       toast.success(t("fidelity.done"));
@@ -203,6 +233,24 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
         </p>
 
         {metrics ? (
+          <>
+          {/**
+           * What the numbers are.
+           *
+           * The variant and the date were dropped on the way in — so
+           * the four numbers had no indication of what they were
+           * measuring or when they were measured.
+           */}
+          <p className="text-xs text-muted-foreground mb-2">
+            {t(
+              metrics.variant === "withoutRules"
+                ? "fidelity.lastRunWithoutRules"
+                : "fidelity.lastRunWithRules",
+            )}
+            {formatRunDate((latest?.run as any)?.createdAt, locale) && (
+              <> · {formatRunDate((latest?.run as any)?.createdAt, locale)}</>
+            )}
+          </p>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-md border border-border/70 p-3">
               <dt className="text-[11px] text-muted-foreground">
@@ -247,8 +295,47 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
               </dd>
             </div>
           </dl>
+          </>
         ) : (
           <p className="text-xs text-muted-foreground">{t("fidelity.noRun")}</p>
+        )}
+
+        {/**
+         * The runs.
+         *
+         * The two variants side by side — which is the whole point of
+         * the panel: a rule that does not move the numbers does not
+         * belong in the prompt.
+         */}
+        {history?.runs && history.runs.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] text-muted-subtle">{t("fidelity.history")}</p>
+            <ul className="space-y-1">
+              {history.runs.map((run: any) => {
+                const runMetrics = normaliseMetrics(run.metricsJson);
+                if (!runMetrics) return null;
+                return (
+                  <li
+                    key={run.id}
+                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
+                  >
+                    <span className="text-foreground/80">
+                      {t(
+                        runMetrics.variant === "withoutRules"
+                          ? "fidelity.lastRunWithoutRules"
+                          : "fidelity.lastRunWithRules",
+                      )}
+                    </span>
+                    <span>{formatRunDate(run.createdAt, locale)}</span>
+                    <span>
+                      {t("fidelity.overlap")} {runMetrics.overlap.toFixed(3)} ·{" "}
+                      {t("fidelity.emotion")} {Math.round(runMetrics.emotionAccuracy * 100)}%
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </div>
     </section>
