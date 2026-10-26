@@ -247,6 +247,7 @@ export const en = {
     edit: "Edit",
     regenerate: "Say it again",
     delete: "Delete",
+    deleteConfirm: "Delete this message?",
     loadOlder: "Load earlier messages",
     loadingOlder: "Loading…",
     messageNotLoaded: "That message is not loaded yet — scroll up to reach it",
@@ -268,6 +269,7 @@ export const en = {
       extracting: "Extracting…",
       extracted: "Extracted {{count}} memories",
       delete: "Delete memory",
+      deleteConfirm: "Delete this memory?",
       pin: "Pin it (every prompt)",
       unpin: "Unpin",
       categories: {

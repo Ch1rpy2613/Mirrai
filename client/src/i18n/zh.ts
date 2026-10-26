@@ -245,6 +245,7 @@ export const zh = {
     edit: "修改",
     regenerate: "重新生成",
     delete: "删掉这条",
+    deleteConfirm: "删掉这条消息？",
     loadOlder: "看更早的对话",
     loadingOlder: "正在加载…",
     messageNotLoaded: "这条消息还没加载出来，往上翻一翻就能看到",
@@ -266,6 +267,7 @@ export const zh = {
       extracting: "提取中...",
       extracted: "提取了 {{count}} 条记忆",
       delete: "删除记忆",
+      deleteConfirm: "删掉这条记忆？",
       pin: "钉住（每次都会带上）",
       unpin: "取消钉住",
       categories: {

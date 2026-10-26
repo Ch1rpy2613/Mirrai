@@ -227,6 +227,7 @@ export function MessageBubble({
   onRegenerate,
   onEdit,
   onDelete,
+  deleting,
   onQuote,
 }: {
   msg: Message;
@@ -242,7 +243,17 @@ export function MessageBubble({
    * only trace was the error toast.
    */
   onEdit?: (msg: Message, content: string) => Promise<void> | void;
+  /**
+   * Deletes a message.
+   *
+   * The bubble is told whether the delete is in flight, so the button
+   * can be put out of reach while it is — a double click used to send
+   * two deletes, and the second failed after the first had already
+   * reported success.
+   */
   onDelete?: (msg: Message) => void;
+  /** Whether a delete is in flight. */
+  deleting?: boolean;
   onQuote?: (msg: Message) => void;
 }) {
   const { t, locale } = useLocale();
@@ -534,9 +545,10 @@ export function MessageBubble({
                   <button
                     type="button"
                     onClick={() => onDelete(msg)}
+                    disabled={deleting}
                     title={t("chat.delete")}
                     aria-label={t("chat.delete")}
-                    className="text-muted-subtle hover:text-destructive transition-colors p-0.5"
+                    className="text-muted-subtle hover:text-destructive transition-colors p-0.5 disabled:opacity-50"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>

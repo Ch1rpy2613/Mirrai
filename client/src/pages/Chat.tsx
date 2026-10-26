@@ -724,6 +724,14 @@ export default function Chat() {
   /** Removes a single message. */
   const handleDeleteMessage = useCallback(async (msg: Message) => {
     if (typeof msg.id !== "number") return;
+    /**
+     * It asks first.
+     *
+     * Every other destructive action in the app asks — a letter, a
+     * relationship record, a memory, a diary entry. A message went
+     * with one click and nothing said.
+     */
+    if (!window.confirm(t("chat.deleteConfirm"))) return;
     try {
       await deleteMessageMutation.mutateAsync({
         personaId,
@@ -1458,6 +1466,7 @@ export default function Chat() {
                 onRegenerate={handleRegenerate}
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}
+                deleting={deleteMessageMutation.isPending}
                 onQuote={handleQuote}
               />
               </div>
@@ -1770,14 +1779,33 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         onClick={() => updateMutation.mutate({ id: m.id, isPinned: !m.isPinned })}
-                        aria-label={t("chat.memory.pin")}
+                        /**
+                         * The name says what the button will do.
+                         *
+                         * It was always "pin" — so a screen reader
+                         * announced "pin" on a button that would unpin.
+                         */
+                        aria-label={m.isPinned ? t("chat.memory.unpin") : t("chat.memory.pin")}
                         title={m.isPinned ? t("chat.memory.unpin") : t("chat.memory.pin")}
                         className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-all ${m.isPinned ? "text-cinnabar opacity-100" : "text-muted-foreground hover:text-foreground"}`}
                       >
                         <Pin className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => deleteMutation.mutate({ id: m.id })} aria-label={t("chat.memory.delete")}
-                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0">
+                      {/**
+                       * The delete asks first.
+                       *
+                       * It used to fire with one click and nothing
+                       * said — and a memory that is pinned is in every
+                       * single prompt the persona is given.
+                       */}
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(t("chat.memory.deleteConfirm"))) return;
+                          deleteMutation.mutate({ id: m.id });
+                        }}
+                        disabled={deleteMutation.isPending}
+                        aria-label={t("chat.memory.delete")}
+                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0 disabled:opacity-50">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
