@@ -117,7 +117,21 @@ export class ProviderRegistry {
   build(name: string, override: ProviderConfig): LLMProvider | undefined {
     const entry = this.entries.get(name.toLowerCase());
     if (!entry) return undefined;
+    /**
+     * The base configuration, minus the key.
+     *
+     * The key is the operator's, and it belongs to the operator's
+     * address. A caller that builds a provider with its own overrides —
+     * a per-user provider, pointed at that user's own address — must
+     * never end up sending the operator's key there. So the key is not
+     * inherited: it comes from the override, or it is not there at all.
+     *
+     * The environment's whole provider is still available through
+     * `get()`, which is the right way to ask for "the operator's
+     * configuration, as it is".
+     */
     const merged: ProviderConfig = { ...entry.baseConfig };
+    delete (merged as Record<string, unknown>).apiKey;
     for (const [key, value] of Object.entries(override)) {
       if (value === undefined || value === null || value === "") continue;
       (merged as Record<string, unknown>)[key] = value;

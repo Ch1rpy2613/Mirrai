@@ -133,9 +133,27 @@ async function buildUserProvider(
 ): Promise<LLMProvider | undefined> {
   const apiKey = await decryptIfEncrypted(config.apiKey);
 
-  const hasOverride = !!(apiKey || config.baseUrl || config.model);
-  if (!hasOverride) {
-    // The row exists but carries nothing usable; use the environment config.
+  if (!apiKey) {
+    /**
+     * The row has no key of its own.
+     *
+     * The environment's key must not be sent to the user's own address.
+     * The registry merges the environment's configuration under the
+     * user's overrides, so a row with an address and no key produced a
+     * provider that sent `Authorization: Bearer <the operator's key>`
+     * to whatever was listening at that address — and used the
+     * operator's bill at the same time. Storing a row with an address
+     * was enough to do it.
+     *
+     * So a row without a key of its own gets the environment's provider
+     * whole: its key and its address. The user's own address is not
+     * used, because there is no key that may safely go with it.
+     */
+    if (config.baseUrl) {
+      console.warn(
+        `[LLM] The "${config.providerName}" row has an address but no key of its own — the address is ignored, and the environment's provider is used.`,
+      );
+    }
     return registry.get(config.providerName);
   }
 
@@ -143,8 +161,16 @@ async function buildUserProvider(
   const cached = readCache(key);
   if (cached) return cached;
 
+  /**
+   * The user's own key, their own address if they gave one, and the
+   * environment's model if they did not.
+   *
+   * The key is the user's, so it goes to the user's address — and the
+   * environment's key is never mixed in: the override replaces it
+   * rather than sitting beside it.
+   */
   const provider = registry.build(config.providerName, {
-    apiKey: apiKey ?? undefined,
+    apiKey,
     baseUrl: config.baseUrl ?? undefined,
     model: config.model ?? undefined,
   });

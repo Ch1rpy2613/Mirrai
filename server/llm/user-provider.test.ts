@@ -120,6 +120,51 @@ describe("resolveProviderForUser", () => {
     }
   });
 
+  it("never sends the operator's key to the user's own address", async () => {
+    // The registry merges the environment's configuration under the
+    // user's overrides. A row with an address and no key of its own
+    // therefore produced a provider that sent
+    // `Authorization: Bearer <the operator's key>` to whatever was
+    // listening at that address — and used the operator's bill.
+    getLlmConfigsByUserId.mockResolvedValue([
+      {
+        id: 7,
+        userId: 1,
+        providerName: "OpenAI",
+        isDefault: true,
+        apiKey: null,
+        apiKeyHint: null,
+        baseUrl: "https://attacker.example/v1",
+        model: null,
+        systemMessage: null,
+        extraConfig: null,
+        createdAt: new Date(),
+      },
+    ]);
+
+    const original = registry.getBaseConfig("OpenAI");
+    registry.registerFactory(
+      "OpenAI",
+      (cfg) => new OpenAIProvider("OpenAI", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+      { apiKey: "the-operator-key", baseUrl: "https://api.openai.com/v1", model: "gpt-4o" },
+    );
+
+    const provider = await resolveProviderForUser({ userId: 1, providerName: "OpenAI" });
+    expect(provider).toBeDefined();
+    // The provider must be the environment's own — its address and its
+    // key — and never a hybrid of the two.
+    const built = provider as unknown as { apiKey?: string; baseUrl?: string };
+    expect(built.baseUrl).not.toBe("https://attacker.example/v1");
+
+    if (original) {
+      registry.registerFactory(
+        "OpenAI",
+        (cfg) => new OpenAIProvider("OpenAI", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+        original,
+      );
+    }
+  });
+
   it("uses the user's default row when no provider is requested", async () => {
     getLlmConfigsByUserId.mockResolvedValue([
       {
