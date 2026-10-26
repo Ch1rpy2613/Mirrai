@@ -22,7 +22,7 @@ import {
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
-import { localDateKey, dayShiftHours, previousDateKey, zonedDateKey } from "@shared/timezone";
+import { localDateKey, dayShiftMinutes, previousDateKey, zonedDateKey } from "@shared/timezone";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -1191,8 +1191,12 @@ export async function getDailyChatCounts(userId: number, days = 30, timezone?: s
   const since = new Date();
   since.setDate(since.getDate() - days);
   // The day a message belongs to is the user's day, not the server's.
-  const shift = dayShiftHours(timezone);
-  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
+  // The shift is in minutes: an interval in hours cannot carry the half
+  // hour that India, Adelaide, Kathmandu and Chatham are on, and a
+  // rounded shift put the user's day boundary out by up to forty-five
+  // minutes.
+  const shift = dayShiftMinutes(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;
   const rows = await db.select({
     date: day,
     count: count(),
@@ -1295,8 +1299,12 @@ export async function getIntimacyData(personaId: number, userId: number) {
   // intimacy score is one of the gates on the graduation — so a streak
   // that was always zero meant the whole ritual was unreachable.
   const timezone = await getUserTimezone(userId);
-  const shift = dayShiftHours(timezone);
-  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
+  // The shift is in minutes: an interval in hours cannot carry the half
+  // hour that India, Adelaide, Kathmandu and Chatham are on, and a
+  // rounded shift put the user's day boundary out by up to forty-five
+  // minutes.
+  const shift = dayShiftMinutes(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;
   const recentDays = await db.select({ d: day }).from(messages)
     .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .groupBy(day).orderBy(desc(day)).limit(30);
@@ -1535,8 +1543,12 @@ export async function getMessageVolume(userId: number, days: number, timezone?: 
   const db = await getDb();
   if (!db) return [];
   const since = new Date(); since.setDate(since.getDate() - days);
-  const shift = dayShiftHours(timezone);
-  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
+  // The shift is in minutes: an interval in hours cannot carry the half
+  // hour that India, Adelaide, Kathmandu and Chatham are on, and a
+  // rounded shift put the user's day boundary out by up to forty-five
+  // minutes.
+  const shift = dayShiftMinutes(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;
   return db.select({ date: day, count: count() })
     .from(messages).where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
     .groupBy(day).orderBy(day);
@@ -1666,8 +1678,12 @@ export async function getMessagesByDate(
 ) {
   const db = await getDb();
   if (!db) return [];
-  const shift = dayShiftHours(timezone);
-  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
+  // The shift is in minutes: an interval in hours cannot carry the half
+  // hour that India, Adelaide, Kathmandu and Chatham are on, and a
+  // rounded shift put the user's day boundary out by up to forty-five
+  // minutes.
+  const shift = dayShiftMinutes(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;
   return db.select().from(messages)
     .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId), sql`${day} = ${date}`))
     .orderBy(asc(messages.createdAt));
@@ -2706,8 +2722,12 @@ export async function getDailyUserChatCounts(userId: number, days = 30, timezone
   if (!db) return [];
   const since = new Date();
   since.setDate(since.getDate() - days);
-  const shift = dayShiftHours(timezone);
-  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 hour'), 'YYYY-MM-DD')`;
+  // The shift is in minutes: an interval in hours cannot carry the half
+  // hour that India, Adelaide, Kathmandu and Chatham are on, and a
+  // rounded shift put the user's day boundary out by up to forty-five
+  // minutes.
+  const shift = dayShiftMinutes(timezone);
+  const day = sql<string>`TO_CHAR(${messages.createdAt} + (${shift} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;
   const rows = await db.select({
     date: day,
     count: count(),

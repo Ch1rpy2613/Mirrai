@@ -51,9 +51,21 @@ export function zonedMinute(date: Date, timeZone?: string | null): number {
   }
 }
 
-/** The hour of the day (0-23) in a given time zone, as a UTC offset in hours. */
-export function zonedOffsetHours(date: Date, timeZone?: string | null): number {
-  if (!timeZone) return -date.getTimezoneOffset() / 60;
+/**
+ * The offset of a time zone from UTC, in minutes.
+ *
+ * Minutes, not hours: half-hour zones exist. India is at +5:30,
+ * Adelaide at +9:30, Kathmandu at +5:45, Chatham at +12:45 — and
+ * rounding them to whole hours put the user's day boundary fifteen to
+ * forty-five minutes out, so the first half hour of an Indian user's
+ * day was attributed to the day before.
+ *
+ * This is the number the SQL uses to move a stored timestamp into the
+ * user's calendar, and it has to agree exactly with `zonedDateKey` in
+ * this same file — which is why it is kept in minutes.
+ */
+export function zonedOffsetMinutes(date: Date, timeZone?: string | null): number {
+  if (!timeZone) return -date.getTimezoneOffset();
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone,
@@ -75,10 +87,20 @@ export function zonedOffsetHours(date: Date, timeZone?: string | null): number {
       read("minute"),
       read("second"),
     );
-    return Math.round((asUtc - date.getTime()) / 3_600_000);
+    return Math.round((asUtc - date.getTime()) / 60_000);
   } catch {
-    return -date.getTimezoneOffset() / 60;
+    return -date.getTimezoneOffset();
   }
+}
+
+/**
+ * The hour of the day (0-23) in a given time zone, as a UTC offset in hours.
+ *
+ * A whole number, so it is not exact for the half-hour zones — use
+ * `zonedOffsetMinutes` when the difference has to be precise.
+ */
+export function zonedOffsetHours(date: Date, timeZone?: string | null): number {
+  return zonedOffsetMinutes(date, timeZone) / 60;
 }
 
 /** A readable local time in a given time zone, e.g. "凌晨 3:20". */
@@ -159,6 +181,18 @@ export function zonedDateKey(date: Date, timeZone?: string | null): string {
 export function dayShiftHours(timeZone?: string | null, now: Date = new Date()): number {
   if (!timeZone) return 0;
   return zonedOffsetHours(now, timeZone) - zonedOffsetHours(now, null);
+}
+
+/**
+ * The same shift, in minutes.
+ *
+ * This is the one the SQL uses: the shift is applied as an interval,
+ * and an interval in hours cannot carry the half hour that India,
+ * Adelaide, Kathmandu and Chatham are on.
+ */
+export function dayShiftMinutes(timeZone?: string | null, now: Date = new Date()): number {
+  if (!timeZone) return 0;
+  return zonedOffsetMinutes(now, timeZone) - zonedOffsetMinutes(now, null);
 }
 
 /**

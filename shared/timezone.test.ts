@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   dayShiftHours,
+  dayShiftMinutes,
   localDateKey,
   previousDateKey,
   zonedDateKey,
   zonedHour,
   zonedOffsetHours,
+  zonedOffsetMinutes,
 } from "./timezone";
 
 describe("the day in the machine's own calendar", () => {
@@ -64,6 +66,44 @@ describe("how far the user's clock is from the server's", () => {
     expect(dayShiftHours(zone, now)).toBe(
       zonedOffsetHours(now, zone) - zonedOffsetHours(now, null),
     );
+  });
+
+  it("keeps the half hour of a half-hour zone", () => {
+    // Half-hour zones exist: India is at +5:30, Adelaide at +9:30,
+    // Kathmandu at +5:45, Chatham at +12:45. Rounded to whole hours,
+    // the user's day boundary was fifteen to forty-five minutes out —
+    // so the first half hour of an Indian user's day was attributed to
+    // the day before, and the consecutive-days streak broke at every
+    // midnight.
+    const now = new Date("2026-01-02T12:00:00Z");
+    expect(zonedOffsetMinutes(now, "Asia/Kolkata")).toBe(330);
+    expect(zonedOffsetMinutes(now, "Asia/Kathmandu")).toBe(345);
+    // The shift is the difference between the two offsets, in minutes.
+    expect(dayShiftMinutes("Asia/Kolkata", now)).toBe(
+      zonedOffsetMinutes(now, "Asia/Kolkata") - zonedOffsetMinutes(now, null),
+    );
+  });
+
+  it("agrees with the day it computes for the same zone", () => {
+    // The shift is applied to the stored timestamps in SQL, and the day
+    // key is computed in JavaScript. The two have to agree exactly, or
+    // the streak and the chart disagree about which day a message
+    // belongs to.
+    //
+    // The timestamps are stored *without* a time zone: a row's wall
+    // clock is the clock of the machine that wrote it. So the SQL moves
+    // the server's wall clock forward by the shift, and the result is
+    // the user's wall clock.
+    const now = new Date("2026-01-02T18:30:00Z");
+    const serverWallClock = new Date(
+      now.getTime() + zonedOffsetMinutes(now, null) * 60_000,
+    );
+    for (const zone of ["Asia/Kolkata", "Asia/Kathmandu", "Australia/Adelaide", "Pacific/Chatham"]) {
+      const shifted = new Date(
+        serverWallClock.getTime() + dayShiftMinutes(zone, now) * 60_000,
+      );
+      expect(shifted.toISOString().slice(0, 10), zone).toBe(zonedDateKey(now, zone));
+    }
   });
 
   it("is the whole offset when the server is on UTC", () => {
