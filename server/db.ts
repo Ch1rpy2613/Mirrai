@@ -3401,6 +3401,41 @@ export async function createCollectionJob(data: InsertCollectionJob) {
   return result.id;
 }
 
+/**
+ * Writes a job's state, whatever is already there.
+ *
+ * The row is written by key, so a write that arrives before the row
+ * exists — and a write that arrives twice — both land on the same
+ * row. The insert used to lose the unique index on the key, and the
+ * error was swallowed: the snapshot was lost, and the job the user saw
+ * after a restart was an earlier stage of it.
+ */
+export async function upsertCollectionJob(
+  jobKey: string,
+  userId: number,
+  data: Omit<InsertCollectionJob, "jobKey" | "userId">,
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .insert(collectionJobs)
+    .values({ jobKey, userId, ...data })
+    .onConflictDoUpdate({
+      target: collectionJobs.jobKey,
+      set: {
+        status: data.status,
+        progress: data.progress,
+        messageCount: data.messageCount,
+        error: data.error,
+        personaId: data.personaId,
+        startedAt: data.startedAt,
+        finishedAt: data.finishedAt,
+      },
+      // And only the owner's row is written.
+      setWhere: sql`${collectionJobs.userId} = ${userId}`,
+    });
+}
+
 export async function updateCollectionJob(
   id: number,
   userId: number,

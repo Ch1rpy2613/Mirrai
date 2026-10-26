@@ -21,34 +21,64 @@ import type { CollectorJob, CollectorJobStatus } from "./jobs";
 import { copy } from "@shared/copy";
 
 /**
+ * The write chain, per job.
+ *
+ * Every state change — including every progress tick — fired a write
+ * that was not awaited and not serialised. So two of them raced: a
+ * slow "running, 10%" write could land after a fast "completed, 100%"
+ * write, and the row then said *running* while the live job said
+ * *completed*.
+ *
+ * The writes are chained per job now, so they land in the order they
+ * were made.
+ */
+const writeChains = new Map<string, Promise<void>>();
+
+/**
  * Mirrors a job into the database.
  *
  * The write is fire-and-forget: a collector must not fail because the
- * database was briefly unavailable.
+ * database was briefly unavailable. But the writes of one job are in
+ * order.
  */
-export async function persistCollectorJob(job: CollectorJob): Promise<void> {
-  try {
-    const existing = await db.getCollectionJobByKey(job.id, Number(job.userId));
-    const data = {
-      userId: Number(job.userId),
-      personaId: job.personaId ? Number(job.personaId) : null,
-      source: job.source,
-      status: job.status,
-      progress: job.progress,
-      messageCount: job.messageCount,
-      error: job.error ?? null,
-      startedAt: job.startedAt ? new Date(job.startedAt) : null,
-      finishedAt: job.finishedAt ? new Date(job.finishedAt) : null,
-    };
+export function persistCollectorJob(job: CollectorJob): Promise<void> {
+  const previous = writeChains.get(job.id) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => writeJobSnapshot(job))
+    .catch((e) => {
+      console.warn("[Collectors] Could not persist the job:", e);
+    });
+  writeChains.set(job.id, next);
+  // The chain is forgotten once it is done, so it does not grow for
+  // ever.
+  void next.finally(() => {
+    if (writeChains.get(job.id) === next) writeChains.delete(job.id);
+  });
+  return next;
+}
 
-    if (existing !== undefined) {
-      await db.updateCollectionJob(existing.id, Number(job.userId), data);
-      return;
-    }
-    await db.createCollectionJob({ jobKey: job.id, ...data });
-  } catch (e) {
-    console.warn("[Collectors] Could not persist the job:", e);
-  }
+/** Writes one snapshot of a job. */
+async function writeJobSnapshot(job: CollectorJob): Promise<void> {
+  const data = {
+    personaId: job.personaId ? Number(job.personaId) : null,
+    source: job.source,
+    status: job.status,
+    progress: job.progress,
+    messageCount: job.messageCount,
+    error: job.error ?? null,
+    startedAt: job.startedAt ? new Date(job.startedAt) : null,
+    finishedAt: job.finishedAt ? new Date(job.finishedAt) : null,
+  };
+  /**
+   * The write is an upsert.
+   *
+   * The row was written with a read and then an insert — and the
+   * insert could lose the unique index on the key, and the error was
+   * swallowed. So the snapshot was lost, and after a restart the user
+   * saw a job stuck at an earlier stage.
+   */
+  await db.upsertCollectionJob(job.id, Number(job.userId), data);
 }
 
 /**
