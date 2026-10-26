@@ -1743,7 +1743,7 @@ export async function getTodaySnapshot(
    * The day the snapshot is looked up under.
    *
    * It has to be the same day the snapshot was *written* under — the
-   * server's own calendar. It used to be the UTC day, so the two
+   * user's own calendar. It used to be the UTC day, so the two
    * disagreed for sixteen hours out of every twenty-four: the "one
    * snapshot a day" guard fired against yesterday's row, and a user who
    * only talked between midnight and eight in the morning got no
