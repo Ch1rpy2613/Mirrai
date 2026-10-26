@@ -404,7 +404,19 @@ export default function Chat() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    /**
+     * What has arrived so far.
+     *
+     * The catch block used to look the partial answer up in the message
+     * list — but the list it saw was the one from the render in which the
+     * send started, so it never contained the reply that had been
+     * streaming in. "Half an answer is still worth keeping" was therefore
+     * true only in the comment: every interrupted reply was thrown away.
+     */
+    let received = "";
+
     const appendDelta = (chunk: string) => {
+      received += chunk;
       setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: m.content + chunk } : m));
     };
 
@@ -478,8 +490,7 @@ export default function Chat() {
       // A failed send used to disappear without a word: the bubble was
       // removed and the user was left wondering whether their message had
       // gone. Half an answer is still worth keeping.
-      const partial = messages.find((m) => m.id === streamId);
-      if (partial?.content) {
+      if (received) {
         setMessages(prev => prev.map((m) => (m.id === streamId ? { ...m, isStreaming: false } : m)));
         toast.error(t("chat.interrupted", { message: (err as Error)?.message ?? "" }));
       } else {
