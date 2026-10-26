@@ -26,7 +26,7 @@ import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } 
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { buildPromptForPersona } from "./prompt";
-import { localDateKey } from "@shared/timezone";
+import { localDateKey, zonedDateKey } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 
 export type ChatMode = "stream" | "once";
@@ -726,7 +726,18 @@ async function* runConversationTurn(
    * *user's* day — so the emotion timeline and the message-volume chart
    * disagreed about which day a message belonged to.
    */
-  const todayStr = localDateKey(now);
+  /**
+   * The day the snapshot belongs to.
+   *
+   * It was the server's own calendar. The snapshot is the persona's
+   * emotional state "on a day", and the chart of that day is drawn
+   * beside the chart of the messages — which is in the user's calendar.
+   * So one page showed the same conversation on two different days.
+   *
+   * The user's day is used, and the snapshot is written under it.
+   */
+  const timezone = await db.getUserTimezone(userId);
+  const todayStr = zonedDateKey(now, timezone) || localDateKey(now);
   // The lookup has to be under the same day the snapshot is written
   // under, or the "one a day" guard fires against the wrong row.
   const existing = await db.getTodaySnapshot(persona.id, userId, todayStr);
