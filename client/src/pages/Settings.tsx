@@ -998,6 +998,14 @@ function WeChatBindingsSection({
   const { t } = useLocale();
   const bindings = trpc.wechat.listBindings.useQuery();
   const personas = trpc.persona.list.useQuery();
+  /**
+   * A failed list of personas.
+   *
+   * It left the list empty — so the panel said "no analysed personas
+   * yet", which is a claim about the user's own personas, and it was
+   * simply false.
+   */
+  const personasFailed = personas.isError;
 
   const setDefault = trpc.wechat.setDefaultPersona.useMutation({
     onSuccess: () => {
@@ -1161,11 +1169,15 @@ function WeChatBindingsSection({
               </div>
             </div>
           ))}
-          {readyPersonas.length === 0 && (
+          {personasFailed ? (
+            <p className="text-[0.6875rem] text-destructive leading-relaxed" role="alert">
+              {t("common.error")}
+            </p>
+          ) : readyPersonas.length === 0 ? (
             <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
               {t("settings.wechat.noAnalyzed")}
             </p>
-          )}
+          ) : null}
         </div>
       ) : connected && loggedInUser ? (
         /**
@@ -1200,11 +1212,15 @@ function WeChatBindingsSection({
                 {setDefault.isPending ? t("common.saving") : t("common.save")}
               </Button>
             </div>
-            {readyPersonas.length === 0 && (
+            {personasFailed ? (
+              <p className="text-[0.6875rem] text-destructive leading-relaxed" role="alert">
+                {t("common.error")}
+              </p>
+            ) : readyPersonas.length === 0 ? (
               <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
                 {t("settings.wechat.noAnalyzed")}
               </p>
-            )}
+            ) : null}
           </div>
         </div>
       ) : (
@@ -1566,6 +1582,13 @@ function FeishuSection() {
    */
   const personas = trpc.persona.list.useQuery();
   const readyPersonas = (personas.data ?? []).filter(p => p.analysisStatus === "ready");
+  /**
+   * A failed list of personas.
+   *
+   * It left the list empty — so the picker said there was nothing to
+   * choose, which is a claim about the user's own personas.
+   */
+  const personasFailed = personas.isError;
   const channelDefault = trpc.channel.getChannelDefault.useQuery({ channel: "feishu" });
   const [feishuPersonaId, setFeishuPersonaId] = useState("");
   const setChannelDefault = trpc.channel.setChannelDefault.useMutation({
@@ -1706,6 +1729,11 @@ function FeishuSection() {
               {readyPersonas.map(p => (
                 <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
               ))}
+              {personasFailed && (
+                <SelectItem value="__error" disabled>
+                  {t("common.error")}
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
           <Button size="sm" className="rounded-md px-4 flex-shrink-0"
