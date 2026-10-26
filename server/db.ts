@@ -1752,10 +1752,37 @@ export async function deleteWechatBinding(id: number, userId: number): Promise<b
 
 // ─── Skill Job helpers ──────────────────────────────────────────────────────
 
+/**
+ * How many runs are kept per persona.
+ *
+ * The rows were never pruned — unlike the collector's jobs, which are.
+ * So a persona that had been distilled a dozen times carried a dozen
+ * rows for ever, each with its intake notes and its snapshot of the
+ * persona.
+ */
+const MAX_SKILL_JOBS_PER_PERSONA = 20;
+
 export async function createSkillJob(data: InsertSkillJob) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [result] = await db.insert(skillJobs).values(data).returning({ id: skillJobs.id });
+  /**
+   * The old runs go.
+   *
+   * They are pruned after the new one is written, so the run that was
+   * just made is never the one that is removed.
+   */
+  const old = await db
+    .select({ id: skillJobs.id })
+    .from(skillJobs)
+    .where(and(eq(skillJobs.personaId, data.personaId), eq(skillJobs.userId, data.userId)))
+    .orderBy(desc(skillJobs.id))
+    .offset(MAX_SKILL_JOBS_PER_PERSONA);
+  if (old.length > 0) {
+    await db.delete(skillJobs).where(
+      inArray(skillJobs.id, old.map((row) => row.id)),
+    );
+  }
   return result.id;
 }
 
