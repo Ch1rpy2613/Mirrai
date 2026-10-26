@@ -264,6 +264,36 @@ export default function Chat() {
     { enabled: isAuthenticated && hasPersonaId }
   );
 
+  /**
+   * A farewell the app has already offered.
+   *
+   * The window used to open on the live flag of the turn that produced
+   * the offer — so an offer that came from a channel (WeChat, Feishu)
+   * never reached the web. The decision is recorded, and the seven-day
+   * cooldown hid it for a week.
+   *
+   * There is a query for exactly this state, and nothing called it.
+   */
+  const { data: graduationCheck } = trpc.persona.checkGraduation.useQuery(
+    { id: personaId },
+    {
+      enabled: isAuthenticated && hasPersonaId,
+      // The offer can be raised from a channel while the web is open.
+      refetchInterval: 60_000,
+    }
+  );
+  useEffect(() => {
+    /**
+     * Only an offer that has been *recorded*.
+     *
+     * The query also answers "would the thresholds be met right now" —
+     * and the app does not raise a farewell on its own schedule: the
+     * conversation pipeline decides, and the decision is written down.
+     * So the window opens for a recorded offer, not for a threshold.
+     */
+    if (graduationCheck?.status === "suggested") setShowGraduation(true);
+  }, [graduationCheck?.status]);
+
   /* The time on their side of the world. */
   const theirClock = useMemo(() => {
     const zone = (persona as any)?.timezone;
