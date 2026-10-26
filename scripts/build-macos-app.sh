@@ -237,6 +237,11 @@ mkdir -p "$APP_DEST"
 
 cp -R "$PROJECT_DIR/dist" "$APP_DEST/"
 cp -R "$PROJECT_DIR/drizzle" "$APP_DEST/"
+# The templates that ship with the app. Without them the template
+# library is empty and "try it out with a sandbox character" is
+# impossible.
+mkdir -p "$APP_DEST/server/templates"
+cp -R "$PROJECT_DIR/server/templates/builtin" "$APP_DEST/server/templates/"
 cp "$PROJECT_DIR/package.json" "$APP_DEST/"
 cp "$PROJECT_DIR/drizzle.config.ts" "$APP_DEST/"
 

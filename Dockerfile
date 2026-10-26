@@ -24,6 +24,10 @@ RUN apk add --no-cache redis
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/drizzle ./drizzle
+# The templates that ship with the app. Without them the template
+# library is empty and "try it out with a sandbox character" is
+# impossible.
+COPY --from=build /app/server/templates/builtin ./server/templates/builtin
 COPY drizzle.config.ts package.json ./
 COPY scripts/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
