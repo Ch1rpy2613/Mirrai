@@ -15,7 +15,7 @@ import {
   resolveReplyAt,
   earliestAnswerAt,
 } from "@shared/letters";
-import { buildUserContextBlock } from "@shared/user-side";
+import { buildUserContextBlock, isUserMood } from "@shared/user-side";
 import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
 import { getEffectivePresence } from "../_core/graduation";
 
@@ -181,6 +181,8 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
         persona,
         letterBody: letter.body,
         locale,
+        // The mood the user recorded when they wrote it.
+        mood: letter.mood,
       });
       if (!replyText) {
         await db.markLetterUnanswered(letter.id, letter.userId);
@@ -249,6 +251,14 @@ export async function composeLetterReply(params: {
   letterBody: string;
   locale?: "zh" | "en";
   now?: Date;
+  /**
+   * How the user was feeling when they wrote it.
+   *
+   * It was captured, stored, and shown in the letter box — and never
+   * reached the persona. So a letter written on a bad day was answered
+   * in the same register as any other.
+   */
+  mood?: string | null;
 }): Promise<string> {
   const { persona } = params;
   const locale = params.locale ?? "zh";
@@ -293,7 +303,11 @@ export async function composeLetterReply(params: {
       addressStyle: user?.addressStyle,
       boundaries: user?.boundaries,
     },
-    { locale },
+    {
+      locale,
+      // The mood the user recorded when they wrote the letter.
+      mood: isUserMood(params.mood) ? params.mood : null,
+    },
   );
 
   const systemPrompt = buildSystemPrompt(persona, {
