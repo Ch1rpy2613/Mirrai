@@ -208,6 +208,30 @@ export function dayShiftMinutes(timeZone?: string | null, now: Date = new Date()
 }
 
 /**
+ * The day key, `days` days ago, in a given time zone.
+ *
+ * It is the key of the day that opens the window — the oldest day a
+ * "last N days" chart may show.
+ *
+ * The rows of a chart carry the user's own day in their `date` column,
+ * so the window has to be a day key in the same calendar. Comparing
+ * them against the server's clock is how a chart ends up showing one
+ * day more than it says.
+ */
+export function zonedDayKeySince(
+  days: number,
+  timeZone?: string | null,
+  now: Date = new Date(),
+): string {
+  const key = zonedDateKey(now, timeZone);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return key;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  date.setUTCDate(date.getUTCDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * The day before a "YYYY-MM-DD" key.
  *
  * Pure arithmetic on the key, with no time zone in it: the key is a

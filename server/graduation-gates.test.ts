@@ -26,6 +26,7 @@ vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getUserById: (...a: unknown[]) => getUserById(...a),
   getRecentEmotionTrend: (...a: unknown[]) => getRecentEmotionTrend(...a),
+  getUserTimezone: vi.fn().mockResolvedValue(null),
   getMessageCountInRange: (...a: unknown[]) => getMessageCountInRange(...a),
   getLatestGraduationAssessment: (...a: unknown[]) => getLatestGraduationAssessment(...a),
   getMessagesByPersonaId: vi.fn().mockResolvedValue([]),

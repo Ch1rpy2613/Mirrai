@@ -472,7 +472,7 @@ export const appRouter = router({
     moods: protectedProcedure
       .input(z.object({ days: z.number().int().min(1).max(365).optional() }))
       .query(async ({ ctx, input }) => {
-        return getUserMoods(ctx.user.id, input.days ?? 30);
+        return getUserMoods(ctx.user.id, input.days ?? 30, ctx.user.timezone);
       }),
 
     /**
@@ -1095,7 +1095,7 @@ export const appRouter = router({
             farewellLetter: null,
           };
         }
-        const recentEmotions = await getRecentEmotionTrend(input.id, ctx.user.id, 14);
+        const recentEmotions = await getRecentEmotionTrend(input.id, ctx.user.id, 14, ctx.user.timezone);
         const recentFreq = await getMessageCountInRange(input.id, ctx.user.id, 7, 0);
         const prevFreq = await getMessageCountInRange(input.id, ctx.user.id, 14, 7);
         const result = checkGraduationEligibility({
@@ -2796,7 +2796,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return getEmotionReport(input.personaId, ctx.user.id, input.days);
+        return getEmotionReport(input.personaId, ctx.user.id, input.days, ctx.user.timezone);
       }),
 
     getDailySnapshots: protectedProcedure
@@ -2804,7 +2804,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return getEmotionSnapshots(input.personaId, ctx.user.id, input.days);
+        return getEmotionSnapshots(input.personaId, ctx.user.id, input.days, ctx.user.timezone);
       }),
   }),
 
@@ -3687,7 +3687,7 @@ export const appRouter = router({
           getHourlyDistribution(ctx.user.id, input.days, ctx.user.timezone),
           // The user's own states. The emotion timeline above is the
           // *persona's* mood, and the two are not the same thing.
-          getUserMoods(ctx.user.id, input.days),
+          getUserMoods(ctx.user.id, input.days, ctx.user.timezone),
         ]);
         return { stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution, moods };
       }),

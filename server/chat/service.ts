@@ -979,7 +979,8 @@ export async function evaluateGraduation(params: {
   });
   if (mode !== "suggest") return false;
 
-  const recentEmotions = await db.getRecentEmotionTrend(persona.id, userId, 14);
+  const timezone = await db.getUserTimezone(userId);
+  const recentEmotions = await db.getRecentEmotionTrend(persona.id, userId, 14, timezone);
   const recentFreq = await db.getMessageCountInRange(persona.id, userId, 7, 0);
   const prevFreq = await db.getMessageCountInRange(persona.id, userId, 14, 7);
 

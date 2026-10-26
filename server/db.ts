@@ -22,7 +22,7 @@ import {
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
-import { localDateKey, previousDateKey, zonedDateKey } from "@shared/timezone";
+import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeySince } from "@shared/timezone";
 import { userDayColumn, userHourColumn } from "./_core/user-day";
 import { dayShiftMinutes } from "@shared/timezone";
 
@@ -471,7 +471,11 @@ export async function getUserMessageCountForPersonaSince(
 }
 
 /** The user's own moods, oldest first. */
-export async function getUserMoods(userId: number, days = 30) {
+export async function getUserMoods(
+  userId: number,
+  days = 30,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return [];
   /**
@@ -482,8 +486,11 @@ export async function getUserMoods(userId: number, days = 30) {
    * thirty days" chart although its day was outside it, and a mood
    * recorded yesterday for today was outside a "last seven days" chart
    * although its day was inside it. The chart plots the day.
+   *
+   * The window is in the user's own calendar too, so the days it names
+   * are the days the moods are filed under.
    */
-  const since = localDateKey(new Date(Date.now() - days * 86_400_000));
+  const since = zonedDayKeySince(days, timezone);
   return db.select().from(userMoods)
     .where(and(eq(userMoods.userId, userId), gte(userMoods.date, since)))
     .orderBy(asc(userMoods.date));
@@ -1750,30 +1757,48 @@ export async function updateEmotionSnapshot(
   return row ?? null;
 }
 
-export async function getEmotionSnapshots(personaId: number, userId: number, days = 30) {
+export async function getEmotionSnapshots(
+  personaId: number,
+  userId: number,
+  days = 30,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return [];
-  const since = new Date();
-  since.setDate(since.getDate() - days);
+  /**
+   * The window, in the user's own calendar.
+   *
+   * The rows carry the user's day in their `date` column, so the
+   * window has to be a day key in the same calendar. It was the
+   * server's clock — so a "last thirty days" chart showed thirty-one
+   * days, and the left-most label fell outside the window it claimed.
+   */
+  const since = zonedDayKeySince(days, timezone);
   return db.select().from(emotionSnapshots)
     .where(and(
       eq(emotionSnapshots.personaId, personaId),
       eq(emotionSnapshots.userId, userId),
-      gte(emotionSnapshots.createdAt, since),
+      gte(emotionSnapshots.date, since),
     ))
     .orderBy(emotionSnapshots.date);
 }
 
-export async function getEmotionReport(personaId: number, userId: number, days = 30) {
+export async function getEmotionReport(
+  personaId: number,
+  userId: number,
+  days = 30,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return { snapshots: [], distribution: [], totalDays: 0, totalMessages: 0 };
-  const since = new Date();
-  since.setDate(since.getDate() - days);
+  // The window is the user's own calendar — the same one the rows are
+  // filed under.
+  const since = zonedDayKeySince(days, timezone);
   const snapshots = await db.select().from(emotionSnapshots)
     .where(and(
       eq(emotionSnapshots.personaId, personaId),
       eq(emotionSnapshots.userId, userId),
-      gte(emotionSnapshots.createdAt, since),
+      gte(emotionSnapshots.date, since),
     ))
     .orderBy(emotionSnapshots.date);
   const distribution = await db.select({
@@ -1783,7 +1808,7 @@ export async function getEmotionReport(personaId: number, userId: number, days =
     .where(and(
       eq(emotionSnapshots.personaId, personaId),
       eq(emotionSnapshots.userId, userId),
-      gte(emotionSnapshots.createdAt, since),
+      gte(emotionSnapshots.date, since),
     ))
     .groupBy(emotionSnapshots.emotionalState);
   const totalMessages = snapshots.reduce((sum, s) => sum + s.messageCount, 0);
@@ -2273,17 +2298,22 @@ export async function getPreviousMessage(
 
 // ─── Graduation helpers ─────────────────────────────────────────────────────
 
-export async function getRecentEmotionTrend(personaId: number, userId: number, days: number = 14) {
+export async function getRecentEmotionTrend(
+  personaId: number,
+  userId: number,
+  days: number = 14,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return [];
-  const since = new Date();
-  since.setDate(since.getDate() - days);
+  // The user's own calendar, like the rows themselves.
+  const since = zonedDayKeySince(days, timezone);
   return db.select({ emotionalState: emotionSnapshots.emotionalState })
     .from(emotionSnapshots)
     .where(and(
       eq(emotionSnapshots.personaId, personaId),
       eq(emotionSnapshots.userId, userId),
-      gte(emotionSnapshots.createdAt, since),
+      gte(emotionSnapshots.date, since),
     ));
 }
 
