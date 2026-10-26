@@ -115,8 +115,18 @@ describe("the imperfection, per state", () => {
 
   it("puts the defaults back", async () => {
     render(<ImperfectionEditor personaId={1} />);
-    await userEvent.click(screen.getByText(translate("zh", "imperfection.restoreDefaults")));
-    // The defaults are already on screen, so the button leaves them there.
+    // The user has something of their own in one of the states.
     expect(screen.getByDisplayValue("极短句")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText(translate("zh", "imperfection.restoreDefaults")));
+
+    // Their own words are gone, and the generic default is back.
+    //
+    // The button used to put back what the user had saved — "what you
+    // saved, plus the defaults for the gaps" — so it only threw away
+    // the unsaved edits and the user's own deviations survived. It
+    // looked completely inert.
+    expect(screen.queryByDisplayValue("极短句")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue(/极短句|短句/)).toBeInTheDocument();
   });
 });

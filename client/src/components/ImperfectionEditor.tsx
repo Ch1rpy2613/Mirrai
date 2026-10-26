@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Save, RotateCcw } from "lucide-react";
 import { EMOTIONS, EMOTION_KEYS, type EmotionKey } from "@/lib/emotions";
-import type { ImperfectionEntry } from "@shared/imperfection";
+import { defaultImperfectionProfile, type ImperfectionEntry } from "@shared/imperfection";
 
 /**
  * Imperfection, per state.
@@ -23,7 +23,7 @@ import type { ImperfectionEntry } from "@shared/imperfection";
  * personality rather than a mood board.
  */
 export default function ImperfectionEditor({ personaId }: { personaId: number }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { data, refetch } = trpc.imperfection.get.useQuery({ personaId });
   const saveMutation = trpc.imperfection.save.useMutation({
     onSuccess: () => {
@@ -71,7 +71,12 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
   }
 
   function restoreDefaults() {
-    setDraft(data?.merged ?? []);
+    // The defaults, and not what the user has saved.
+    //
+    // `merged` is "what you saved, plus the defaults for the gaps" — so
+    // the button only threw away the unsaved edits and the user's own
+    // deviations survived untouched. It looked completely inert.
+    setDraft(defaultImperfectionProfile(locale === "en" ? "en" : "zh"));
   }
 
   /**
@@ -113,7 +118,11 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
               </div>
               <Label className="text-xs">{t("imperfection.deviations")}</Label>
               <Textarea
-                value={(entry?.deviations ?? []).join("；")}
+                // The separator follows the interface's language: the
+                // full-width semicolon is Chinese typography, and an
+                // English reader had Chinese punctuation inserted into
+                // their own text.
+                value={(entry?.deviations ?? []).join(locale === "en" ? "; " : "；")}
                 placeholder={t("imperfection.deviationsHint")}
                 onChange={(e) => update(state, e.target.value)}
               />
