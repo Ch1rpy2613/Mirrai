@@ -999,9 +999,17 @@ export const appRouter = router({
           recentChatFrequency: recentFreq,
           previousChatFrequency: prevFreq,
         });
-        if (result.eligible && !persona.graduationStatus) {
-          await setGraduationStatus(input.id, ctx.user.id, "suggested");
-        }
+        // A query does not write.
+        //
+        // It used to: when the thresholds were met it marked the persona
+        // as "suggested". That is a `GET`, so it is not covered by the
+        // origin check, it is cacheable by anything in between, and a
+        // link prefetch or a crawler could trigger it — and the mark
+        // starts a seven-day cooldown, so one stray prefetch could
+        // suppress the very offer the user was about to see.
+        //
+        // The conversation pipeline marks it instead, which is where the
+        // decision is actually made.
         return { eligible: result.eligible, status: (persona.graduationStatus || null) as string | null, reason: result.reason, farewellLetter: null };
       }),
 

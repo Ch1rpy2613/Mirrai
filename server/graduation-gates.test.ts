@@ -228,6 +228,10 @@ describe("the graduation check query", () => {
     const result = await caller.persona.checkGraduation({ id: 1 });
 
     expect(result.eligible).toBe(true);
+    // A query does not write. It used to mark the persona as
+    // "suggested" — which is a `GET`, so a link prefetch or a crawler
+    // could trigger it, and the mark starts a seven-day cooldown.
+    expect(setGraduationStatus).not.toHaveBeenCalled();
   });
 
   it("explains that the mode is manual", async () => {
