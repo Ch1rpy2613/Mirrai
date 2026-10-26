@@ -43,11 +43,20 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
    * the user's while they are editing it; the server only fills it once.
    */
   const initialised = useRef(false);
+  /**
+   * Whether the draft has been filled from the server yet.
+   *
+   * The boxes are not drawn until it has. They used to be drawn
+   * straight away, empty — and then the query answered and the draft
+   * was replaced, so a fast typist lost what they had written.
+   */
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!data || initialised.current) return;
     initialised.current = true;
     setDraft(data.merged);
+    setReady(true);
   }, [data]);
 
   function update(state: EmotionKey, text: string) {
@@ -109,7 +118,7 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
       </header>
 
       <div className="space-y-3">
-        {EMOTION_KEYS.map((state: EmotionKey) => {
+        {ready && EMOTION_KEYS.map((state: EmotionKey) => {
           const entry = draft.find((e) => e.state === state);
           const definition = EMOTIONS[state];
           return (
@@ -137,11 +146,11 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={restoreDefaults}>
+        <Button variant="ghost" size="sm" onClick={restoreDefaults} disabled={!ready}>
           <RotateCcw className="mr-1 h-3.5 w-3.5" />
           {t("imperfection.restoreDefaults")}
         </Button>
-        <Button size="sm" onClick={save} disabled={saveMutation.isPending}>
+        <Button size="sm" onClick={save} disabled={saveMutation.isPending || !ready}>
           <Save className="mr-1 h-3.5 w-3.5" />
           {t("imperfection.save")}
         </Button>
