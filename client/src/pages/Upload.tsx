@@ -394,6 +394,15 @@ export default function Upload() {
             ) : (
               <div className="shimmer h-3.5 w-2/3 rounded-full" />
             )}
+            {/* A run that had to be repeated says so.
+                The count used to be written to a row nothing read, so
+                "this failed three times" and "this failed once" looked
+                the same. */}
+            {jobStatus && jobStatus.retryCount > 0 && (
+              <p className="text-xs text-muted-foreground mt-3">
+                {t("upload.retrying", { count: jobStatus.retryCount })}
+              </p>
+            )}
           </div>
         )}
 

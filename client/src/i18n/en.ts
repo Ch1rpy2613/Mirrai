@@ -1005,6 +1005,7 @@ export const en = {
     ready: "The digital persona is ready",
     startChat: "Start chatting",
     analyzingNow: "The AI is analysing…",
+    retrying: "This is attempt {{count}}",
     analyzingKicker: "Analysing",
     failedRetry: "Analysis failed, please try again",
     dropLabel: "Upload files: drop them here, or press enter to choose files",

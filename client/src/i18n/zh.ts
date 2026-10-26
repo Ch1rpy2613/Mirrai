@@ -999,6 +999,7 @@ export const zh = {
     ready: "数字分身已准备好",
     startChat: "开始对话",
     analyzingNow: "AI 正在解析中...",
+    retrying: "这是第 {{count}} 次尝试",
     analyzingKicker: "解析中",
     failedRetry: "解析失败，请重试",
     dropLabel: "上传文件：拖拽文件到这里，或按回车选择文件",

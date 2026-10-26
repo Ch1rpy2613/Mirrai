@@ -697,15 +697,39 @@ export const pipelineRetryPolicy: {
 export async function runSkillPipeline(input: PipelineInput): Promise<void> {
   const maxAttempts = pipelineRetryPolicy.maxAttempts;
 
+  /**
+   * The job row is created once, before the first attempt.
+   *
+   * It used to be created inside the attempt, so a run that was retried
+   * left one row per attempt behind: the earlier rows stayed in the
+   * non-terminal stage "intake" with a "retrying" message on them, for
+   * ever. And the retry count was written to the last row, which nothing
+   * read.
+   */
+  const jobId = await createPipelineJob(input);
+  if (jobId) {
+    // The persona points at the job straight away, so the interface
+    // polls the run that is happening — not the one before it.
+    await db
+      .updatePersona(input.personaId, input.userId, { skillJobId: jobId })
+      .catch((e) => console.warn("[SkillEngine] Could not link the job:", e));
+  }
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await runSkillPipelineOnce(input, attempt, maxAttempts);
+      await runSkillPipelineOnce(input, attempt, maxAttempts, jobId);
       return;
     } catch (error) {
       console.error(
         `[SkillEngine] Pipeline attempt ${attempt}/${maxAttempts} failed:`,
         error,
       );
+      if (jobId) {
+        // The retry count is on the one row, so it can be counted.
+        await db
+          .updateSkillJob(jobId, input.userId, { retryCount: attempt - 1 })
+          .catch((e) => console.warn("[SkillEngine] Job update failed:", e));
+      }
       if (attempt >= maxAttempts) return;
 
       // A short pause before the next attempt — an immediate retry would
@@ -718,11 +742,51 @@ export async function runSkillPipeline(input: PipelineInput): Promise<void> {
   }
 }
 
+/**
+ * The job row for a run.
+ *
+ * It is created once, whatever happens to the run.
+ */
+async function createPipelineJob(input: PipelineInput): Promise<number> {
+  const preset = getDistillationPreset(input.mode);
+  const characterFamily: CharacterFamily = input.mode
+    ? preset.characterFamily
+    : input.characterFamily;
+  const requestedProfile = input.mode ? preset.researchProfile : input.researchProfile;
+  const resolution = resolveCelebrityProfile(characterFamily, requestedProfile);
+  const effectiveProfile = resolution.profile;
+
+  // What the job row records about the run: the research profile and the
+  // preset, if there were any. Nothing at all stays NULL, as it was.
+  const jobMeta: Record<string, unknown> = {
+    ...(input.intakeMeta ?? {}),
+    ...(effectiveProfile ? { researchProfile: effectiveProfile } : {}),
+    ...(input.mode ? { distillationMode: preset.id } : {}),
+  };
+
+  return db.createSkillJob({
+    personaId: input.personaId,
+    userId: input.userId,
+    characterFamily,
+    // The profile is stored on the job row so it can be read back without
+    // digging through `inputMeta`, and so the UI can show which research
+    // profile a run used.
+    researchProfile: effectiveProfile ?? null,
+    pipelineStage: "intake",
+    inputMeta: Object.keys(jobMeta).length > 0 ? jobMeta : null,
+  }).catch((e) => {
+    console.error("[SkillEngine] Failed to create skill job:", e);
+    return 0;
+  });
+}
+
 /** Runs the pipeline once. Throws when it fails, so the caller can retry. */
 async function runSkillPipelineOnce(
   input: PipelineInput,
   attempt: number,
   maxAttempts: number,
+  /** The job row, created once for the whole run. */
+  jobId: number,
 ): Promise<void> {
   const { personaId, userId, name, chatContent } = input;
   // Chinese is the default: it is what the app has always said, and a
@@ -752,21 +816,6 @@ async function runSkillPipelineOnce(
     ...(effectiveProfile ? { researchProfile: effectiveProfile } : {}),
     ...(input.mode ? { distillationMode: preset.id } : {}),
   };
-
-  const jobId = await db.createSkillJob({
-    personaId,
-    userId,
-    characterFamily,
-    // The profile is stored on the job row so it can be read back without
-    // digging through `inputMeta`, and so the UI can show which research
-    // profile a run used.
-    researchProfile: effectiveProfile ?? null,
-    pipelineStage: "intake",
-    inputMeta: Object.keys(jobMeta).length > 0 ? jobMeta : null,
-  }).catch((e) => {
-    console.error("[SkillEngine] Failed to create skill job:", e);
-    return 0;
-  });
 
   const setPersonaProgress = (analysisProgress: number, analysisMessage: string) =>
     db
