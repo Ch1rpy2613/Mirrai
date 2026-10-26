@@ -1014,7 +1014,9 @@ export default function Chat() {
 
   const stopRecording = useCallback(() => {
     if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
-    mediaRecorderRef.current?.stop();
+    const recorder = mediaRecorderRef.current;
+    // Stopping a recorder that is not recording throws.
+    if (recorder && recorder.state === "recording") recorder.stop();
   }, []);
 
   const cancelRecording = useCallback(() => {
@@ -1022,7 +1024,17 @@ export default function Chat() {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.ondataavailable = null;
       mediaRecorderRef.current.onstop = null;
-      mediaRecorderRef.current.stop();
+      /**
+       * Only a recorder that is still recording is stopped.
+       *
+       * The cancel button used to call `stop()` on a recorder that had
+       * already been stopped — the one the send button stops — and
+       * that throws. So pressing "stop" and then "cancel" threw an
+       * uncaught error.
+       */
+      if (mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
       mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
     }
     setIsRecording(false);
