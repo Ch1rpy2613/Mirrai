@@ -443,6 +443,18 @@ export const memoryExtractions = pgTable("memory_extractions", {
    * are a schema and its SQL that disagree.
    */
   personaIdx: index("memory_extractions_persona_idx").on(table.personaId, table.userId),
+  /**
+   * One row per persona and user.
+   *
+   * The row records when the last extraction ran, so there is only
+   * ever one of them — and the write says "do nothing on a conflict",
+   * which without this constraint could never fire, so a row was
+   * added every time and the log grew for ever.
+   */
+  personaUserUnique: uniqueIndex("memory_extractions_persona_user_unique").on(
+    table.personaId,
+    table.userId,
+  ),
 }));
 
 export type Memory = typeof memories.$inferSelect;

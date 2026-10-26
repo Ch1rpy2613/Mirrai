@@ -1883,9 +1883,22 @@ export async function markMemoryExtracted(
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
+  /**
+   * The row is brought up to date, not added to.
+   *
+   * The write said "do nothing on a conflict", but the table had no
+   * constraint for a conflict to happen on — so a row was added every
+   * time, and the log grew for ever. And with the constraint there, a
+   * plain "do nothing" would have kept the *first* extraction's time
+   * for ever, so the window of every later extraction would have been
+   * the whole history.
+   */
   await db.insert(memoryExtractions)
     .values({ personaId, userId, extractedAt })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: [memoryExtractions.personaId, memoryExtractions.userId],
+      set: { extractedAt },
+    });
 }
 
 /**
