@@ -8,7 +8,7 @@
  */
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
-import { runConversation } from "../chat/service";
+import { runConversation, PersonaAsleepError } from "../chat/service";
 import { copy } from "@shared/copy";
 
 export type ChannelId = "wechat" | "feishu";
@@ -48,20 +48,39 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
   let reply: string | null = null;
   let graduationSuggested = false;
 
-  for await (const event of runConversation({
-    persona: persona as Persona,
-    userId,
-    message: messageText,
-    providerName: (persona as any).llmProvider || undefined,
-    channel: params.channel,
-    mode: "once",
-    locale: params.locale ?? "zh",
-  })) {
-    if (event.type === "delta") {
-      reply = (reply ?? "") + event.text;
-    } else if (event.type === "done") {
-      graduationSuggested = event.graduationSuggested;
+  try {
+    for await (const event of runConversation({
+      persona: persona as Persona,
+      userId,
+      message: messageText,
+      providerName: (persona as any).llmProvider || undefined,
+      channel: params.channel,
+      mode: "once",
+      locale: params.locale ?? "zh",
+    })) {
+      if (event.type === "delta") {
+        reply = (reply ?? "") + event.text;
+      } else if (event.type === "done") {
+        graduationSuggested = event.graduationSuggested;
+      }
     }
+  } catch (e) {
+    /**
+     * A persona that has said goodbye.
+     *
+     * `runConversation` throws when the persona is asleep, and the
+     * message is the notice the app means to show: "{name} has
+     * graduated. If you still want to talk, wake this persona up
+     * first."
+     *
+     * On the web the throw became a response, so the user saw it. On a
+     * channel both entry points only logged it — so a person who kept
+     * talking to a persona that had said goodbye watched their message
+     * sit there unanswered for ever, with no indication that the
+     * persona was asleep.
+     */
+    if (e instanceof PersonaAsleepError) return e.message;
+    throw e;
   }
 
   // The app may have decided that a farewell is due. On the web that opens

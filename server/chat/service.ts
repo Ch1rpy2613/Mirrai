@@ -56,6 +56,22 @@ export type ChatEvent =
   | { type: "error"; message: string; partial: boolean };
 
 /**
+ * The persona has said goodbye and is asleep.
+ *
+ * It is a notice and not a failure: the message it carries is what the
+ * user is meant to read. It used to be a plain `Error`, so the channel
+ * entry points — which only logged what they were given — could not
+ * tell it apart from a provider that had fallen over, and the user's
+ * message on WeChat or Feishu sat there unanswered for ever.
+ */
+export class PersonaAsleepError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PersonaAsleepError";
+  }
+}
+
+/**
  * The number of messages of history a turn carries.
  *
  * Bounded on both sides: a number that is not a number is the default,
@@ -365,7 +381,9 @@ export async function* runConversation(
     graduationStatus: persona.graduationStatus,
   });
   if (presence === "asleep") {
-    throw new Error(copy(locale, "prompt.graduatedNotice", { name: persona.name }));
+    throw new PersonaAsleepError(
+      copy(locale, "prompt.graduatedNotice", { name: persona.name }),
+    );
   }
 
   const defaultConfig = await db.getDefaultLlmConfig(userId);
