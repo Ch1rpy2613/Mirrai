@@ -2143,6 +2143,7 @@ export const appRouter = router({
         target: z.string().max(200).optional(),
         limit: z.number().min(1).max(5000).optional(),
       }))
+      .use(rateLimit(RATE_LIMITS.collector))
       .mutation(async ({ ctx, input }) => {
         // The persona has to be the caller's own.
         //

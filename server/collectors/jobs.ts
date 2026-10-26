@@ -139,6 +139,16 @@ function emit(job: CollectorJob): void {
   });
 }
 
+/**
+ * How many jobs may be waiting.
+ *
+ * The queue had no cap: an authenticated user could enqueue thousands of
+ * collection runs, and each one spawns a Python process — the DingTalk
+ * source drives a browser with it. The whole server runs out of memory
+ * and CPU, not just the jobs.
+ */
+const MAX_QUEUE_LENGTH = 20;
+
 const queue: string[] = [];
 const inputs = new Map<string, CollectInput>();
 const controllers = new Map<string, AbortController>();
@@ -304,6 +314,19 @@ async function runJob(job: CollectorJob): Promise<void> {
 export async function enqueueCollectorJob(
   spec: CollectorJobSpec,
 ): Promise<CollectorJobHandle> {
+  /**
+   * The queue is not allowed to grow without bound.
+   *
+   * Each job spawns a Python process — the DingTalk source drives a
+   * browser with it — so an authenticated user could enqueue thousands
+   * of them and take the whole server's memory and CPU with them.
+   */
+  if (queue.length >= MAX_QUEUE_LENGTH) {
+    throw new Error(
+      `Too many collection runs are already waiting (${MAX_QUEUE_LENGTH}). Try again when they have finished.`,
+    );
+  }
+
   const job: CollectorJob = {
     id: randomUUID(),
     userId: spec.userId,

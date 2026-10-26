@@ -281,6 +281,14 @@ export const RATE_LIMITS = {
    * used up the allowance for three whole conversations.
    */
   tts: { name: "tts", limit: 30, windowMs: 60_000, scope: "user" } as RateLimitRule,
+  /**
+   * Starting a collection run — keyed by user id.
+   *
+   * Its own bucket, because a collection run is not a model call: it
+   * spawns a Python process, and the DingTalk source drives a browser.
+   * One click could therefore be worth a browser and half an hour.
+   */
+  collector: { name: "collector", limit: 5, windowMs: 60_000, scope: "user" } as RateLimitRule,
 };
 
 /**
