@@ -3,9 +3,11 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import PageLoader from "@/components/PageLoader";
+import { onboardingDismissed } from "@/lib/onboarding";
 
 const Lobby = lazy(() => import("./Lobby"));
 const Landing = lazy(() => import("./Landing"));
+
 
 export default function HomePage() {
   const { isAuthenticated, loading } = useAuth();
@@ -27,10 +29,17 @@ export default function HomePage() {
   useEffect(() => {
     // Without a provider the chat cannot work, so send the user to the
     // first-run wizard instead of an empty dashboard.
+    //
+    // Unless they have already been sent there and left it — the
+    // wizard's "skip" used to lead straight back here, and here back to
+    // the wizard, for ever: a user who has not configured a provider
+    // yet, or who wants to use their own key later, was trapped in the
+    // loop with no explanation.
     if (loading) return;
     if (!isAuthenticated) return;
     if (!setup.data) return;
     if (hasProvider) return;
+    if (onboardingDismissed()) return;
     navigate("/onboarding", { replace: true });
   }, [loading, isAuthenticated, setup.data, hasProvider, navigate]);
 
@@ -39,7 +48,7 @@ export default function HomePage() {
   }
 
   // The wizard is on its way; nothing to show yet.
-  if (isAuthenticated && setup.data && !hasProvider) {
+  if (isAuthenticated && setup.data && !hasProvider && !onboardingDismissed()) {
     return <PageLoader />;
   }
 

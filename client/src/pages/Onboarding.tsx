@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocale } from "@/contexts/LocaleContext";
+import { dismissOnboarding } from "@/lib/onboarding";
 
 type Step = "provider" | "persona" | "done";
 
@@ -176,7 +177,10 @@ export default function Onboarding() {
             <Button
               variant="ghost"
               className="w-full text-muted-foreground"
-              onClick={() => setStep("persona")}
+              onClick={() => {
+                dismissOnboarding();
+                setStep("persona");
+              }}
             >
               {t("onboarding.skip")}
             </Button>
@@ -257,7 +261,12 @@ export default function Onboarding() {
             <Button
               variant="ghost"
               className="w-full text-muted-foreground"
-              onClick={() => navigate("/")}
+              onClick={() => {
+                // Leaving the wizard for good. Without this the front
+                // page sends the user straight back here.
+                dismissOnboarding();
+                navigate("/");
+              }}
             >
               {t("onboarding.skipLater")}
             </Button>
