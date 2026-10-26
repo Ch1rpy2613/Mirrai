@@ -157,6 +157,26 @@ async function resolveAvatarImage(avatarUrl: string | null): Promise<Buffer> {
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 /**
+ * The largest picture and the largest voice note a chat message may carry.
+ *
+ * These are much smaller than the generic upload limit: a phone photo is
+ * a few megabytes and a voice note is smaller still, so fifty megabytes
+ * is room for a file nobody sends. The limit exists because the payload
+ * is base64 in a JSON body — it is read into memory, decoded, and written
+ * to the uploads directory, and nothing ever cleaned that directory up.
+ */
+const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
+const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+/** How many base64 characters carry a given number of bytes. */
+function base64CharsFor(bytes: number): number {
+  return Math.ceil(bytes / 3) * 4;
+}
+
+const MAX_BASE64_IMAGE_CHARS = base64CharsFor(MAX_IMAGE_UPLOAD_BYTES);
+const MAX_BASE64_AUDIO_CHARS = base64CharsFor(MAX_AUDIO_UPLOAD_BYTES);
+
+/**
  * Collects the uploaded material for a persona and kicks off the distillation
  * pipeline. Both `persona.triggerAnalysis` and `skillEngine.startPipeline`
  * route through here so there is a single persona-building path.
@@ -1232,12 +1252,12 @@ export const appRouter = router({
         return { reply, emotionalState, graduationSuggested, careNote, crisis };
       }),
 
-    sendImage: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
+    sendImage: protectedProcedure.use(rateLimit(RATE_LIMITS.upload))
       .input(z.object({
         personaId: z.number(),
-        imageContent: z.string(),
-        fileName: z.string(),
-        mimeType: z.string(),
+        imageContent: z.string().max(MAX_BASE64_IMAGE_CHARS),
+        fileName: z.string().min(1).max(255),
+        mimeType: z.string().max(128),
         locale: z.enum(["zh", "en"]).default("zh"),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1261,7 +1281,20 @@ export const appRouter = router({
         }
 
         const buffer = Buffer.from(input.imageContent, "base64");
+        // The declared size is a hint; the decoded bytes are the truth.
+        if (buffer.length > MAX_UPLOAD_BYTES) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.fileTooLarge") });
+        }
         const safeName = sanitizeFileName(input.fileName);
+        // The uploads directory is served from the app's own origin, so a
+        // file the browser would run as a page is a page on that origin.
+        // This route used to skip the allow-list every other upload goes
+        // through, so an `.html` file could be planted and was served
+        // back as one.
+        const extensionProblem = checkFileExtension(safeName, "image", ctx.locale);
+        if (extensionProblem) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: extensionProblem });
+        }
         const fileKey = `chat/${ctx.user.id}/${input.personaId}/${nanoid()}-${safeName}`;
         const { url } = await storagePut(fileKey, buffer, input.mimeType);
 
@@ -1293,12 +1326,12 @@ export const appRouter = router({
         return { reply, emotionalState, imageUrl: url, graduationSuggested, careNote, crisis };
       }),
 
-    sendVoice: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
+    sendVoice: protectedProcedure.use(rateLimit(RATE_LIMITS.chatMedia))
       .input(z.object({
         personaId: z.number(),
-        audioContent: z.string(),
-        duration: z.number(),
-        fileName: z.string(),
+        audioContent: z.string().max(MAX_BASE64_AUDIO_CHARS),
+        duration: z.number().min(0).max(600),
+        fileName: z.string().min(1).max(255),
         locale: z.enum(["zh", "en"]).default("zh"),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1307,7 +1340,18 @@ export const appRouter = router({
         if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotReadyShort") });
 
         const buffer = Buffer.from(input.audioContent, "base64");
+        // The declared size is a hint; the decoded bytes are the truth.
+        if (buffer.length > MAX_AUDIO_UPLOAD_BYTES) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.fileTooLarge") });
+        }
         const safeName = sanitizeFileName(input.fileName);
+        // Same allow-list as every other upload: the uploads directory is
+        // served from the app's own origin, so a file the browser would
+        // run as a page is a page on that origin.
+        const extensionProblem = checkFileExtension(safeName, "audio", ctx.locale);
+        if (extensionProblem) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: extensionProblem });
+        }
         const fileKey = `chat/${ctx.user.id}/${input.personaId}/${nanoid()}-${safeName}`;
         const { url } = await storagePut(fileKey, buffer, "audio/webm");
 

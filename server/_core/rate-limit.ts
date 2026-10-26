@@ -232,6 +232,15 @@ export const RATE_LIMITS = {
   /** File uploads — keyed by user id. */
   upload: { name: "upload", limit: 20, windowMs: 3_600_000, scope: "user" } as RateLimitRule,
   /**
+   * Pictures and voice notes sent into a conversation.
+   *
+   * Their own bucket, because they are both a model call and a write to
+   * the uploads directory. The "llm" bucket allowed thirty of them a
+   * minute, which is a hundred megabytes a minute written to disk with
+   * nothing ever cleaning it up.
+   */
+  chatMedia: { name: "chat-media", limit: 20, windowMs: 60_000, scope: "user" } as RateLimitRule,
+  /**
    * Text-to-speech — keyed by user id.
    *
    * Its own bucket, because listening to a reply is not a model call and

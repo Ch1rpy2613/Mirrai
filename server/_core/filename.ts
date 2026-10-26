@@ -33,6 +33,7 @@ export const ALLOWED_EXTENSIONS: Record<string, string[]> = {
   chat_csv: [".csv"],
   image: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif"],
   video: [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"],
+  audio: [".webm", ".mp3", ".wav", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".mp4", ".amr"],
   // Collected material keeps whatever the source produced.
   collected: [],
 };
