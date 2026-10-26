@@ -72,30 +72,6 @@ export function invalidateUserProviderCache(userId?: number) {
 }
 
 /**
- * Finds the configuration row a request should use.
- *
- * An explicitly requested provider wins; otherwise the user's default
- * configuration is used.
- */
-async function findUserConfig(
-  userId: number,
-  providerName?: string,
-): Promise<{ providerName: string; config: Awaited<ReturnType<typeof db.getLlmConfigsByUserId>>[number] } | null> {
-  const configs = await db.getLlmConfigsByUserId(userId);
-  if (configs.length === 0) return null;
-
-  if (providerName) {
-    const match = configs.find(
-      (c) => c.providerName.toLowerCase() === providerName.toLowerCase(),
-    );
-    return match ? { providerName: match.providerName, config: match } : null;
-  }
-
-  const preferred = configs.find((c) => c.isDefault) ?? configs[0];
-  return preferred ? { providerName: preferred.providerName, config: preferred } : null;
-}
-
-/**
  * Resolves the provider to use for a given user and optional requested name.
  *
  * Returns undefined when no provider is available at all.
@@ -105,7 +81,34 @@ export async function resolveProviderForUser(params: {
   providerName?: string;
 }): Promise<LLMProvider | undefined> {
   const { userId, providerName } = params;
+  const configs = await db.getLlmConfigsByUserId(userId);
 
+  /**
+   * The user has configured a provider of their own.
+   *
+   * Then their conversations go through their own key. Falling back to
+   * the environment-configured provider would send the user's private
+   * conversation to the operator's account, on the operator's key and
+   * the operator's bill — and the user chose a provider of their own
+   * for a reason. That fallback is what this used to do, whenever the
+   * provider the persona asked for was one the user had no row for.
+   */
+  if (configs.length > 0) {
+    const wanted = providerName
+      ? configs.find((c) => c.providerName.toLowerCase() === providerName.toLowerCase())
+      : undefined;
+    if (providerName && !wanted) {
+      console.warn(
+        `[LLM] The persona asks for the provider "${providerName}", which this user has not configured — using their own default instead.`,
+      );
+    }
+    const chosen = wanted ?? configs.find((c) => c.isDefault) ?? configs[0];
+    return buildUserProvider(userId, chosen);
+  }
+
+  // The user has configured nothing, so the environment-configured
+  // instance is used — that is what running your own instance means.
+  //
   // A name that is not registered cannot be built. Falling back to the
   // default keeps the user able to chat instead of failing every request
   // with "No LLM provider available" — the mistake is in the configuration,
@@ -118,34 +121,34 @@ export async function resolveProviderForUser(params: {
       `[LLM] Unknown provider "${providerName}" — falling back to the default provider.`,
     );
   }
+  return registry.get(requested);
+}
 
-  const found = await findUserConfig(userId, requested);
-
-  if (!found) {
-    // No user-level configuration for this provider — fall back to the
-    // environment-configured instance.
-    return registry.get(requested);
-  }
-
-  const { config } = found;
+/**
+ * Builds the provider for one of the user's own configuration rows.
+ */
+async function buildUserProvider(
+  userId: number,
+  config: Awaited<ReturnType<typeof db.getLlmConfigsByUserId>>[number],
+): Promise<LLMProvider | undefined> {
   const apiKey = await decryptIfEncrypted(config.apiKey);
 
   const hasOverride = !!(apiKey || config.baseUrl || config.model);
   if (!hasOverride) {
     // The row exists but carries nothing usable; use the environment config.
-    return registry.get(found.providerName);
+    return registry.get(config.providerName);
   }
 
-  const key = cacheKey(userId, found.providerName, config);
+  const key = cacheKey(userId, config.providerName, config);
   const cached = readCache(key);
   if (cached) return cached;
 
-  const provider = registry.build(found.providerName, {
+  const provider = registry.build(config.providerName, {
     apiKey: apiKey ?? undefined,
     baseUrl: config.baseUrl ?? undefined,
     model: config.model ?? undefined,
   });
-  if (!provider) return registry.get(found.providerName);
+  if (!provider) return registry.get(config.providerName);
 
   writeCache(key, provider);
   return provider;

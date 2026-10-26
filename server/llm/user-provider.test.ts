@@ -76,6 +76,50 @@ describe("resolveProviderForUser", () => {
     }
   });
 
+  it("does not fall back to the environment's provider when the user has their own", async () => {
+    // The product's promise is that the data stays on the user's machine.
+    // A user who has configured a provider of their own is saying where
+    // their conversations should go — and falling back to the
+    // environment's provider sent the user's private conversation to the
+    // operator's account, on the operator's key and the operator's bill.
+    getLlmConfigsByUserId.mockResolvedValue([
+      {
+        id: 7,
+        userId: 1,
+        providerName: "OpenAI",
+        isDefault: true,
+        apiKey: ENCRYPTED,
+        apiKeyHint: "abcd",
+        baseUrl: "https://user.example",
+        model: "user-model",
+        systemMessage: null,
+        extraConfig: null,
+        createdAt: new Date(),
+      },
+    ]);
+
+    const original = registry.getBaseConfig("OpenAI");
+    registry.registerFactory(
+      "OpenAI",
+      (cfg) => new OpenAIProvider("OpenAI", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+      { apiKey: "env-key", baseUrl: "https://env.example", model: "env-model" },
+    );
+
+    // The persona asks for a provider this user has no row for.
+    const provider = await resolveProviderForUser({ userId: 1, providerName: "DeepSeek" });
+    expect(provider).toBeDefined();
+    // The user's own provider, not the environment's.
+    expect(provider?.name).toBe("OpenAI");
+
+    if (original) {
+      registry.registerFactory(
+        "OpenAI",
+        (cfg) => new OpenAIProvider("OpenAI", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+        original,
+      );
+    }
+  });
+
   it("uses the user's default row when no provider is requested", async () => {
     getLlmConfigsByUserId.mockResolvedValue([
       {
