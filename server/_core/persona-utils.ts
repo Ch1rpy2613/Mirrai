@@ -461,7 +461,19 @@ export function buildSystemPrompt(
       options.realismLevel ?? (p.realismLevel as number | undefined) ?? 70,
       locale,
     ),
-    buildRelationshipPhase(p.relationshipPhase, locale),
+    /**
+     * The stage of the relationship.
+     *
+     * It used to come from the persona's own record — a field nothing
+     * writes. So every prompt ended with "you are still feeling each
+     * other out — answer as though you are at this stage", for every
+     * persona, including one whose own event log says they broke up a
+     * few lines above.
+     *
+     * The phase the events resolve to is the real one; the stored one
+     * is only a fallback.
+     */
+    buildRelationshipPhase(options.relationshipPhase ?? p.relationshipPhase, locale),
     copy(locale, "prompt.conversationPrinciples", { name }),
     p.customInstructions
       ? asMaterial(copy(locale, "prompt.customInstructionsHeading"), p.customInstructions)
