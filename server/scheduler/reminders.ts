@@ -9,6 +9,7 @@
 import { ENV } from "../_core/env";
 import * as db from "../db";
 import { getChannelAdapter } from "../channels";
+import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
 import { resolvePresence, mayReachOut } from "@shared/graduation-mode";
 import { resolveRelationshipPhase } from "@shared/user-side";
 import { copy, type Locale } from "@shared/copy";
@@ -25,14 +26,24 @@ export interface Reminder {
   text: string;
 }
 
-function todayKey(now: Date): string {
-  return now.toISOString().slice(0, 10);
+/**
+ * The day, in the user's own calendar.
+ *
+ * The scheduler is the only part of the app that used to count days in
+ * the server's — or rather, in *UTC's* — calendar: `toISOString()` is
+ * the day in Greenwich, whatever the server's own clock says. An
+ * anniversary was therefore matched against the wrong day for anybody
+ * whose day does not start at the same moment, and the quiet hours were
+ * measured against the server's wall clock rather than the reader's.
+ */
+function todayKey(now: Date, timezone?: string | null): string {
+  return zonedDateKey(now, timezone);
 }
 
 /**
  * Parses the quiet-hours setting, e.g. "23:00-08:00".
  */
-export function isQuietHour(now: Date, spec: string): boolean {
+export function isQuietHour(now: Date, spec: string, timezone?: string | null): boolean {
   const match = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/.exec(spec.trim());
   if (!match) return false;
 
@@ -40,7 +51,8 @@ export function isQuietHour(now: Date, spec: string): boolean {
   const startMinute = Number(match[2]);
   const endHour = Number(match[3]);
   const endMinute = Number(match[4]);
-  const minutes = now.getHours() * 60 + now.getMinutes();
+  // The hour the *reader* is in, not the hour the server is in.
+  const minutes = zonedHour(now, timezone) * 60 + zonedMinute(now, timezone);
 
   const start = startHour * 60 + startMinute;
   const end = endHour * 60 + endMinute;
@@ -92,10 +104,18 @@ export function collectReminders(params: {
    * in their language.
    */
   locale?: Locale;
+  /**
+   * The time zone the reminders are counted in.
+   *
+   * The day an anniversary falls on is the user's day, not the server's
+   * and not Greenwich's.
+   */
+  timezone?: string | null;
   now?: Date;
 }): Reminder[] {
   const now = params.now ?? new Date();
   const locale = params.locale ?? "zh";
+  const timezone = params.timezone ?? null;
   const reminders: Reminder[] = [];
 
   if (!params.persona.remindersEnabled) return reminders;
@@ -122,8 +142,9 @@ export function collectReminders(params: {
   // to the person.
   const unreachable = params.persona.reachability === "unreachable";
 
-  const dayKey = todayKey(now);
-  const monthDay = now.toISOString().slice(5, 10); // MM-DD
+  const dayKey = todayKey(now, timezone);
+  // The month and the day, in the user's calendar.
+  const monthDay = dayKey.slice(5, 10); // MM-DD
 
   if (!relationshipEnded && !unreachable) {
     for (const anniversary of params.anniversaries) {
@@ -229,6 +250,8 @@ export async function deliverReminder(params: {
   targetId?: string | null;
   channel?: string | null;
   locale?: Locale;
+  /** The time zone the quiet hours are measured in. */
+  timezone?: string | null;
   now?: Date;
 }): Promise<boolean> {
   const { userId, reminder } = params;
@@ -237,7 +260,7 @@ export async function deliverReminder(params: {
   // to be in the language of the person it is delivering to.
   const locale = params.locale ?? (await db.getUserLocale(userId));
 
-  if (isQuietHour(now, ENV.reminderQuietHours)) {
+  if (isQuietHour(now, ENV.reminderQuietHours, params.timezone ?? null)) {
     return false;
   }
 
@@ -250,24 +273,44 @@ export async function deliverReminder(params: {
   }
 
   // Prefer a bound conversation channel.
-  if (params.channel && params.targetId) {
-    const adapter = getChannelAdapter(params.channel as any);
-    if (adapter) {
-      try {
-        await adapter.send(userId, params.targetId, reminder.text, locale);
-        const recorded = await db.recordReminder({
-          userId,
-          personaId: reminder.personaId,
-          channel: params.channel,
-          kind: reminder.kind,
-          text: reminder.text,
-          dedupeKey: reminder.dedupeKey,
-          scheduledFor: now,
-        });
-        return recorded;
-      } catch (e) {
-        console.warn(`[Reminders] Could not deliver on ${params.channel}:`, e);
-      }
+  const adapter =
+    params.channel && params.targetId
+      ? getChannelAdapter(params.channel as any)
+      : undefined;
+
+  /**
+   * The slot is claimed before the reminder is sent.
+   *
+   * The dedupe row has a unique index on `(userId, dedupeKey)`, so
+   * exactly one sweep can win it. Writing it after the send left a
+   * window in which two sweeps both saw "not delivered yet" and both
+   * sent — the user got the same anniversary twice, and the second one
+   * arrived after they had already answered.
+   *
+   * If the send then fails, the claim is taken back and the next tick
+   * tries again: a reminder that cannot be delivered is worth another
+   * attempt, and a reminder that is delivered twice is not.
+   */
+  const claimed = await db.recordReminder({
+    userId,
+    personaId: reminder.personaId,
+    channel: adapter ? params.channel! : "web",
+    kind: reminder.kind,
+    text: reminder.text,
+    dedupeKey: reminder.dedupeKey,
+    scheduledFor: now,
+  });
+  if (!claimed) return false;
+
+  if (adapter) {
+    try {
+      await adapter.send(userId, params.targetId!, reminder.text, locale);
+      return true;
+    } catch (e) {
+      console.warn(`[Reminders] Could not deliver on ${params.channel}:`, e);
+      // The claim was for the channel; take it back and let the reminder
+      // surface in the web client instead.
+      await db.forgetReminder(userId, reminder.dedupeKey).catch(() => undefined);
     }
   }
 
@@ -298,6 +341,8 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
       const locale = await db.getUserLocale(persona.userId);
       const reminders = collectReminders({
         locale,
+        // The user's own calendar.
+        timezone: (persona as any).timezone ?? null,
         persona: {
           id: persona.id,
           name: persona.name,
@@ -342,6 +387,7 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
           channel: binding?.channel ?? null,
           targetId: binding?.targetId ?? null,
           locale,
+          timezone: (persona as any).timezone ?? null,
           now,
         });
         if (sent) delivered++;

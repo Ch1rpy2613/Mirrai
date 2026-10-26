@@ -29,6 +29,22 @@ const LOCK_TTL_MS = 120_000;
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Whether a sweep is running.
+ *
+ * The interval does not wait for the previous tick, and a sweep makes
+ * model calls — for the reminders, for the letters, for the personas
+ * that speak first — so it can easily take longer than the interval. Two
+ * overlapping sweeps deliver the same reminder twice and the same
+ * proactive message twice, and the second one arrives after the user
+ * has already answered.
+ *
+ * The shared lock stops a *second copy* of the app from doing the same
+ * work. It does nothing about this process overlapping itself, which is
+ * what this is for.
+ */
+let sweeping = false;
+
 /** Runs everything the scheduler is responsible for. */
 async function tick(): Promise<void> {
   await runReminderSweep();
@@ -51,12 +67,21 @@ async function tick(): Promise<void> {
  * stop, so the tick simply runs.
  */
 async function runTick(): Promise<void> {
-  const shared = await connectRedis().catch(() => null);
-  if (!shared) {
-    await tick();
+  if (sweeping) {
+    console.warn("[Scheduler] The previous sweep is still running — this tick is skipped.");
     return;
   }
-  await withRedisLock("scheduler", LOCK_TTL_MS, tick);
+  sweeping = true;
+  try {
+    const shared = await connectRedis().catch(() => null);
+    if (!shared) {
+      await tick();
+      return;
+    }
+    await withRedisLock("scheduler", LOCK_TTL_MS, tick);
+  } finally {
+    sweeping = false;
+  }
 }
 
 /**

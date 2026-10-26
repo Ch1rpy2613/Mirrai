@@ -2404,6 +2404,10 @@ export async function getAllPersonasForReminders() {
     presence: personas.presence,
     graduationStatus: personas.graduationStatus,
     reachability: personas.reachability,
+    // The time zone the reminders are timed in. Without it the scheduler
+    // counted the days in the server's calendar, which is not the day the
+    // anniversary is.
+    timezone: personas.timezone,
   }).from(personas).where(eq(personas.remindersEnabled, true));
 }
 
@@ -2428,6 +2432,22 @@ export async function recordReminder(data: {
     .values({ ...data, deliveredAt: new Date() })
     .onConflictDoNothing();
   return (inserted.rowCount ?? 0) > 0;
+}
+
+/**
+ * Gives a reminder's slot back.
+ *
+ * Used when the delivery failed: the slot was claimed before the send,
+ * so that two sweeps could not both send, and it has to be released so
+ * that the next tick can try again.
+ */
+export async function forgetReminder(userId: number, dedupeKey: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(reminderDeliveries).where(and(
+    eq(reminderDeliveries.userId, userId),
+    eq(reminderDeliveries.dedupeKey, dedupeKey),
+  ));
 }
 
 /** Whether a reminder with this dedupe key has already been delivered. */

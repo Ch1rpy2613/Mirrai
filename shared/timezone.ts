@@ -30,6 +30,27 @@ export function zonedHour(date: Date, timeZone?: string | null): number {
   }
 }
 
+/**
+ * The minute of the hour (0-59) in a given time zone.
+ *
+ * The quiet-hours window is measured in minutes, and the hour alone
+ * would put a reminder an hour early or an hour late.
+ */
+export function zonedMinute(date: Date, timeZone?: string | null): number {
+  if (!timeZone) return date.getMinutes();
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(date);
+    const minute = parts.find((part) => part.type === "minute")?.value;
+    return minute === undefined ? date.getMinutes() : Number.parseInt(minute, 10);
+  } catch {
+    return date.getMinutes();
+  }
+}
+
 /** The hour of the day (0-23) in a given time zone, as a UTC offset in hours. */
 export function zonedOffsetHours(date: Date, timeZone?: string | null): number {
   if (!timeZone) return -date.getTimezoneOffset() / 60;
