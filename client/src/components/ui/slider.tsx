@@ -11,6 +11,14 @@ function Slider({
   max = 100,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
+  // The name and the value text belong to the *thumb* — that is the
+  // element with `role="slider"`, and it is the one that is focused.
+  // The root is a plain span: everything given to it was announced by
+  // nobody, and the thumb said "Value 1".
+  const { "aria-label": ariaLabel, "aria-valuetext": ariaValueText, id, ...rest } = props as React.ComponentProps<typeof SliderPrimitive.Root> & {
+    "aria-label"?: string;
+    "aria-valuetext"?: string;
+  };
   const _values = React.useMemo(
     () =>
       Array.isArray(value)
@@ -32,7 +40,8 @@ function Slider({
         "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
         className
       )}
-      {...props}
+      id={id}
+      {...rest}
     >
       <SliderPrimitive.Track
         data-slot="slider-track"
@@ -51,6 +60,8 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
+          aria-label={ariaLabel}
+          aria-valuetext={ariaValueText}
           className="border-primary ring-ring/50 block size-4 shrink-0 rounded-full border bg-card shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

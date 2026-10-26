@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode, type ChangeEvent } from "react";
+import { useState, useEffect, useId, useRef, type ReactNode, type ChangeEvent } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -101,8 +101,16 @@ function SliderField({ label, value, onChange, min, max, step, unit }: {
   label: string; value: number; onChange: (v: number) => void;
   min: number; max: number; step: number; unit?: string;
 }) {
-  // The id that ties the label to the slider.
-  const id = `slider-${label.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}`;
+  /**
+   * The id that ties the label to the slider.
+   *
+   * It was made from the label's text — and in Chinese every label
+   * reduces to nothing, so all four sliders were called `slider--` and
+   * the document held four elements with the same id. Each label
+   * pointed at the first one.
+   */
+  const generated = useId();
+  const id = `slider-${generated.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between">
