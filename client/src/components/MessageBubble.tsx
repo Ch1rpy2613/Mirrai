@@ -232,7 +232,15 @@ export function MessageBubble({
   personaName: string;
   showMood: boolean;
   onRegenerate?: (msg: Message) => void;
-  onEdit?: (msg: Message, content: string) => void;
+  /**
+   * Saves an edit.
+   *
+   * It returns a promise, and the editor stays open until it settles:
+   * the bubble used to close at once, so a failed save threw the
+   * user's rewritten words away with no way of getting them back — the
+   * only trace was the error toast.
+   */
+  onEdit?: (msg: Message, content: string) => Promise<void> | void;
   onDelete?: (msg: Message) => void;
   onQuote?: (msg: Message) => void;
 }) {
@@ -420,7 +428,21 @@ export function MessageBubble({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { onEdit?.(msg, draft.trim()); setEditing(false); }}
+                  onClick={async () => {
+                    const text = draft.trim();
+                    if (!text) return;
+                    /**
+                     * The editor stays open until the server has taken
+                     * the text.
+                     *
+                     * It used to close at once, so a failed save threw
+                     * the user's rewritten words away with no way of
+                     * getting them back — the only trace was the error
+                     * toast.
+                     */
+                    await onEdit?.(msg, text);
+                    setEditing(false);
+                  }}
                   disabled={!draft.trim()}
                   className="text-xs px-2.5 py-1 rounded-md bg-primary text-primary-foreground disabled:opacity-50"
                 >

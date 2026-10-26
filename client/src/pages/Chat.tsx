@@ -692,6 +692,13 @@ export default function Chat() {
   /** Saves an edited message. */
   const handleEditMessage = useCallback(async (msg: Message, content: string) => {
     if (typeof msg.id !== "number") return;
+    /**
+     * The failure is reported, and the editor stays open.
+     *
+     * The bubble closes the editor once this settles — so the error
+     * has to be thrown rather than swallowed, or the editor would
+     * close over a save that never happened.
+     */
     try {
       await updateMessageMutation.mutateAsync({
         personaId,
@@ -701,6 +708,7 @@ export default function Chat() {
       setMessages(prev => prev.map((m) => (m.id === msg.id ? { ...m, content } : m)));
     } catch (e) {
       toast.error((e as Error)?.message || t("errors.unknown"));
+      throw e;
     }
   }, [personaId, updateMessageMutation, t]);
 
