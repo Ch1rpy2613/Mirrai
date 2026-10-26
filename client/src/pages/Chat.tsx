@@ -279,24 +279,38 @@ export default function Chat() {
     if (graduationCheck?.status === "suggested") setShowGraduation(true);
   }, [graduationCheck?.status]);
 
+  /**
+   * The clock that moves.
+   *
+   * The time on their side of the world was worked out once — when the
+   * page loaded — and never again. So a conversation left open in the
+   * evening still said it was afternoon there at two in the morning,
+   * and the notice that they are asleep never appeared.
+   */
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   /* The time on their side of the world. */
   const theirClock = useMemo(() => {
     const zone = (persona as any)?.timezone;
     if (!zone) return null;
     try {
-      return formatZonedClock(new Date(), zone, locale === "en" ? "en" : "zh");
+      return formatZonedClock(new Date(nowTick), zone, locale === "en" ? "en" : "zh");
     } catch {
       return null;
     }
-  }, [(persona as any)?.timezone, locale]);
+  }, [(persona as any)?.timezone, locale, nowTick]);
 
   /* Whether it is the middle of the night where they are. */
   const theyAreAsleep = useMemo(() => {
     const zone = (persona as any)?.timezone;
     if (!zone) return false;
-    const hour = zonedHour(new Date(), zone);
+    const hour = zonedHour(new Date(nowTick), zone);
     return hour >= 0 && hour < 7;
-  }, [(persona as any)?.timezone]);
+  }, [(persona as any)?.timezone, nowTick]);
 
   /* How long since you last spoke. A number, because that is what the
      question is: "how long has it been". */
