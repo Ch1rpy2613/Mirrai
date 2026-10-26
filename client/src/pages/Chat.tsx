@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import NotFound from "@/pages/NotFound";
 import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
@@ -137,6 +137,17 @@ export default function Chat() {
   );
   const waitingNotes = waitingNotesData?.todos ?? [];
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  /** The list that scrolls. */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * How far the scroll has to move after older messages are added.
+   *
+   * The older pages are put at the top of the list — so the content
+   * under the reader's eyes moves down by the height of the new
+   * messages, and the conversation jumps. The user pressed "load
+   * older" and was suddenly looking at a different part of it.
+   */
+  const pendingScrollAdjustment = useRef<{ height: number; top: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
@@ -508,6 +519,21 @@ export default function Chat() {
   }, [persona?.emotionalState]);
 
   /**
+   * The scroll is put back after older messages are added.
+   *
+   * The layout effect runs after the list has been laid out, which is
+   * the only moment the new height is known.
+   */
+  useLayoutEffect(() => {
+    const saved = pendingScrollAdjustment.current;
+    if (!saved) return;
+    pendingScrollAdjustment.current = null;
+    const after = scrollRef.current;
+    if (!after) return;
+    after.scrollTop = saved.top + (after.scrollHeight - saved.height);
+  }, [messages]);
+
+  /**
    * Keeps the newest message in view — but only when the newest message
    * has actually changed.
    *
@@ -877,6 +903,10 @@ export default function Chat() {
     const oldest = messages.find((m) => typeof m.id === "number");
     if (!oldest) return;
     setLoadingOlder(true);
+    // Where the reader is now, and how tall the list is.
+    const container = scrollRef.current;
+    const heightBefore = container?.scrollHeight ?? 0;
+    const topBefore = container?.scrollTop ?? 0;
     try {
       const older = await utils.chat.getHistory.fetch({
         personaId,
@@ -884,6 +914,15 @@ export default function Chat() {
         limit: 50,
       });
       if (older.length > 0) {
+        /**
+         * The scroll is put back.
+         *
+         * The older pages go at the top of the list, so everything
+         * under the reader's eyes moves down — and the conversation
+         * jumped. The user pressed "load older" and was suddenly
+         * looking at a different part of it.
+         */
+        pendingScrollAdjustment.current = { height: heightBefore, top: topBefore };
         setMessages(prev => {
           const known = new Set(prev.map((m) => m.id));
           const fresh = (older as any[])
@@ -1581,6 +1620,7 @@ export default function Chat() {
        * person had answered.
        */}
       <div
+        ref={scrollRef}
         className="flex-1 min-h-0 overflow-y-auto"
         role="log"
         aria-live="polite"
