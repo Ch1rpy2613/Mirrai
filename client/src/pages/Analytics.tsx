@@ -29,10 +29,30 @@ const TOOLTIP_STYLE = {
   boxShadow: "var(--shadow-pop)",
 };
 
+/**
+ * A day key, as a person reads it.
+ *
+ * The axis printed the raw key — "2026-10-27" — which is a database
+ * value, not a date in any language.
+ */
+function dayLabel(dayKey: string, locale: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey);
+  if (!match) return dayKey;
+  try {
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return date.toLocaleDateString(locale === "en" ? "en-US" : "zh-CN", {
+      month: "numeric",
+      day: "numeric",
+    });
+  } catch {
+    return dayKey;
+  }
+}
+
 export default function Analytics() {
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [days, setDays] = useState(30);
 
   const { data, isLoading, isError } = trpc.analytics.overview.useQuery({ days }, { enabled: isAuthenticated });
@@ -44,15 +64,24 @@ export default function Analytics() {
     if (!emotionByDate[r.date]) emotionByDate[r.date] = { date: r.date };
     emotionByDate[r.date][r.emotionalState] = Number(r.count);
   });
-  const emotionChartData = Object.values(emotionByDate);
+  const emotionChartData = Object.values(emotionByDate).map((row: any) => ({
+    ...row,
+    label: dayLabel(row.date, locale),
+  }));
 
   // The user's own states. The emotion timeline below is the *persona's*
   // mood — the two are not the same thing, and the app used to show only
   // the one that was not about the user at all.
   const userMoodChartData = (data?.moods || []).map((m: any) => ({
     date: m.date,
+    label: dayLabel(m.date, locale),
     mood: m.mood,
     note: m.note,
+  }));
+
+  const messageVolumeData = (data?.messageVolume || []).map((row: any) => ({
+    ...row,
+    label: dayLabel(row.date, locale),
   }));
 
   const hourlyData = Array.from({ length: 24 }, (_, h) => {
@@ -145,9 +174,9 @@ export default function Analytics() {
         <ChartCard title={t("analytics.dailyMessages")}>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data?.messageVolume || []}>
+              <AreaChart data={messageVolumeData}>
                 <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Area type="monotone" dataKey="count" stroke="var(--color-chart-1)" fill="var(--color-chart-1)" fillOpacity={0.1} strokeWidth={2} />
@@ -166,7 +195,7 @@ export default function Analytics() {
                     title={m.note || m.date}
                     className="inline-flex items-center gap-1 text-[0.625rem] px-2 py-0.5 rounded-md border border-border bg-muted/40 text-muted-foreground"
                   >
-                    <span className="text-foreground/70">{m.date.slice(5)}</span>
+                    <span className="text-foreground/70">{m.label}</span>
                     {t(`moodCheckIn.moods.${m.mood}` as any)}
                   </span>
                 ))}
@@ -188,7 +217,7 @@ export default function Analytics() {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={emotionChartData}>
                   <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10 }} stroke="var(--color-muted-foreground)" axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
                   {EMOTION_KEYS.map(key => (
