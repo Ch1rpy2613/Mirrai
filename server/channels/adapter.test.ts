@@ -137,7 +137,7 @@ beforeEach(() => {
     fn.mockReset();
   }
 
-  clearAllActivePersonas();
+  clearAllActivePersonas(1);
 
   invoke.mockResolvedValue(LETTER);
   // The real `sendWeixinText` reports success as a boolean.
@@ -377,7 +377,7 @@ describe("shared commands", () => {
 
     expect(result.handled).toBe(true);
     expect(result.reply).toContain("小B");
-    expect(getActivePersonaId(WECHAT_KEY, 1)).toBe(2);
+    expect(getActivePersonaId(WECHAT_KEY, 1, 1)).toBe(2);
   });
 
   it("switches the active persona on a Feishu conversation", async () => {
@@ -390,7 +390,7 @@ describe("shared commands", () => {
 
     expect(result.handled).toBe(true);
     expect(result.reply).toContain("小B");
-    expect(getActivePersonaId(FEISHU_KEY, 1)).toBe(2);
+    expect(getActivePersonaId(FEISHU_KEY, 1, 1)).toBe(2);
   });
 
   it("keys the session override by the conversation id", async () => {
@@ -401,9 +401,9 @@ describe("shared commands", () => {
       defaultPersonaId: 1,
     });
 
-    expect(getActivePersonaId(WECHAT_KEY, 1)).toBe(2);
+    expect(getActivePersonaId(WECHAT_KEY, 1, 1)).toBe(2);
     // The other channel's conversation is untouched.
-    expect(getActivePersonaId(FEISHU_KEY, 1)).toBe(1);
+    expect(getActivePersonaId(FEISHU_KEY, 1, 1)).toBe(1);
   });
 
   it("lists the same personas on both channels", async () => {
@@ -550,11 +550,11 @@ describe("shared commands", () => {
       text: "/使用 小B",
       defaultPersonaId: 1,
     });
-    expect(getActivePersonaId(WECHAT_KEY, 1)).toBe(2);
+    expect(getActivePersonaId(WECHAT_KEY, 1, 1)).toBe(2);
 
     await wechatAdapter.stop(1);
 
-    expect(getActivePersonaId(WECHAT_KEY, 1)).toBe(1);
+    expect(getActivePersonaId(WECHAT_KEY, 1, 1)).toBe(1);
   });
 
   it("refuses to graduate when the graduation mode is off", async () => {

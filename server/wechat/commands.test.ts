@@ -58,7 +58,7 @@ beforeEach(() => {
   getMessageCountInRange.mockReset();
   setGraduationStatus.mockReset();
   invoke.mockReset();
-  clearAllActivePersonas();
+  clearAllActivePersonas(1);
   getPersonasByUserId.mockResolvedValue(personas);
   getRecentEmotionTrend.mockResolvedValue([]);
   getUserTimezone.mockResolvedValue("Asia/Shanghai");
@@ -127,17 +127,17 @@ describe("handleCommand", () => {
     });
     expect(result.handled).toBe(true);
     expect(result.reply).toContain("小B");
-    expect(getActivePersonaId("u1", 1)).toBe(2);
+    expect(getActivePersonaId("u1", 1, 1)).toBe(2);
   });
 
   it("keeps the switch scoped to the conversation", async () => {
     await handleCommand({ userId: 1, wechatUserId: "u1", text: "/使用 小B", defaultPersonaId: 1 });
-    expect(getActivePersonaId("u1", 1)).toBe(2);
-    expect(getActivePersonaId("u2", 1)).toBe(1);
+    expect(getActivePersonaId("u1", 1, 1)).toBe(2);
+    expect(getActivePersonaId("u2", 1, 1)).toBe(1);
   });
 
   it("falls back to the default persona when nothing is switched", () => {
-    expect(getActivePersonaId("u1", 1)).toBe(1);
+    expect(getActivePersonaId("u1", 1, 1)).toBe(1);
   });
 
   it("lists the available personas", async () => {

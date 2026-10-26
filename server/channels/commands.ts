@@ -43,39 +43,32 @@ function overrideKey(userId: number, conversationKey: string): string {
   return `${userId}:${conversationKey}`;
 }
 
-/** Returns the persona id currently in effect for a conversation. */
+/**
+ * Returns the persona id currently in effect for a conversation.
+ *
+ * The user is required.
+ *
+ * It used to be optional — and without it the search was for *any*
+ * conversation with that id, whoever it belonged to. So a caller that
+ * did not know whose conversation it was was handed another user's
+ * persona. Every caller knows; the fallback was only a way to be
+ * wrong.
+ */
 export function getActivePersonaId(
   conversationKey: string,
   defaultPersonaId: number,
-  userId?: number,
+  userId: number,
 ): number {
-  if (userId === undefined) {
-    // A caller that does not know whose conversation it is.
-    for (const [key, value] of activePersonaOverrides) {
-      if (key.endsWith(`:${conversationKey}`)) return value;
-    }
-    return defaultPersonaId;
-  }
   return activePersonaOverrides.get(overrideKey(userId, conversationKey)) ?? defaultPersonaId;
 }
 
 /** Clears any session-scoped override for a conversation. */
-export function clearActivePersona(conversationKey: string, userId?: number): void {
-  if (userId === undefined) {
-    for (const key of Array.from(activePersonaOverrides.keys())) {
-      if (key.endsWith(`:${conversationKey}`)) activePersonaOverrides.delete(key);
-    }
-    return;
-  }
+export function clearActivePersona(conversationKey: string, userId: number): void {
   activePersonaOverrides.delete(overrideKey(userId, conversationKey));
 }
 
 /** Clears every session-scoped override (used on account disconnect). */
-export function clearAllActivePersonas(userId?: number): void {
-  if (userId === undefined) {
-    activePersonaOverrides.clear();
-    return;
-  }
+export function clearAllActivePersonas(userId: number): void {
   for (const key of Array.from(activePersonaOverrides.keys())) {
     if (key.startsWith(`${userId}:`)) activePersonaOverrides.delete(key);
   }
