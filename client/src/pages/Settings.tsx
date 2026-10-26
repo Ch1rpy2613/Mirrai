@@ -1212,7 +1212,14 @@ function ChannelStatusChip({ connected, status }: { connected: boolean; status: 
     : status === "stopped" ? "muted"
     : "info";
   const labelKey = CHANNEL_STATUS_LABELS[status];
-  return <StatusChip tone={tone}>{labelKey ? t(labelKey) : status}</StatusChip>;
+  /**
+   * The label.
+   *
+   * It used to fall back to the raw token — so a status the interface
+   * did not know was shown to the reader as "scaned" or "colleague",
+   * in English, in the middle of a Chinese sentence.
+   */
+  return <StatusChip tone={tone}>{labelKey ? t(labelKey) : t("settings.channels.status.unknown")}</StatusChip>;
 }
 
 function ChannelsTab({ onOpenTab }: { onOpenTab: (key: TabKey) => void }) {
@@ -1720,7 +1727,7 @@ function DataSourcesTab() {
                       : job.status === "interrupted" ? "muted"
                       : "info"
                     }>
-                      {COLLECTOR_STATUS_LABELS[job.status] ? t(COLLECTOR_STATUS_LABELS[job.status]) : job.status}
+                      {COLLECTOR_STATUS_LABELS[job.status] ? t(COLLECTOR_STATUS_LABELS[job.status]) : t("settings.sources.jobStatus.unknown")}
                     </StatusChip>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">{t("settings.sources.messageCount", { count: job.messageCount })}</span>
                   </div>
@@ -1736,11 +1743,17 @@ function DataSourcesTab() {
 
                 <button type="button"
                   onClick={() => setSelectedJobId(job.id === selectedJobId ? null : job.id)}
+                  aria-expanded={job.id === selectedJobId}
+                  aria-controls={`collector-job-${job.id}`}
                   className="text-xs text-primary hover:text-primary/80 px-0">
                   {job.id === selectedJobId ? t("settings.sources.collapse") : t("settings.sources.expand")}
                 </button>
 
-                {job.id === selectedJobId && <CollectorJobDetail jobId={job.id} />}
+                {job.id === selectedJobId && (
+                  <div id={`collector-job-${job.id}`}>
+                    <CollectorJobDetail jobId={job.id} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -2020,7 +2033,7 @@ function TemplateLibraryTab() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm text-foreground font-medium truncate">{template.name}</span>
                             <StatusChip tone="muted">
-                              {familyKey ? t(familyKey) : template.family}
+                              {familyKey ? t(familyKey) : t("settings.templates.family.unknown")}
                             </StatusChip>
                             {template.builtin && <StatusChip tone="primary">{t("templates.builtin")}</StatusChip>}
                           </div>

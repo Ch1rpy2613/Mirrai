@@ -708,6 +708,7 @@ export const en = {
       scanAuth: "Authorise by QR code, no credentials",
       goToSettings: "Set it up",
       status: {
+        unknown: "Unknown",
         connected: "Connected",
         configured: "Configured",
         stopped: "Not connected",
@@ -757,6 +758,7 @@ export const en = {
       persona: "Import into which persona",
       needsBrowser: "This source needs Playwright and Chromium — run playwright install chromium first",
       jobStatus: {
+        unknown: "Unknown",
         queued: "Queued",
         running: "Collecting",
         completed: "Done",
@@ -857,6 +859,7 @@ export const en = {
       importChoose: "Choose a file",
       importing: "Importing…",
       family: {
+        unknown: "Other",
         colleague: "Colleague",
         relationship: "Romantic",
         celebrity: "Celebrity",

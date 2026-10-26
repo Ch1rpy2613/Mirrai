@@ -706,6 +706,7 @@ export const zh = {
       scanAuth: "扫码授权，无需凭据",
       goToSettings: "去设置",
       status: {
+        unknown: "未知",
         connected: "已连接",
         configured: "已配置",
         stopped: "未连接",
@@ -751,6 +752,7 @@ export const zh = {
       persona: "导入到哪个分身",
       needsBrowser: "这个来源需要 Playwright 和 Chromium，请先运行 playwright install chromium",
       jobStatus: {
+        unknown: "未知",
         queued: "排队中",
         running: "采集中",
         completed: "已完成",
@@ -851,6 +853,7 @@ export const zh = {
       importChoose: "选择文件",
       importing: "导入中...",
       family: {
+        unknown: "其他",
         colleague: "同事",
         relationship: "亲密关系",
         celebrity: "公众人物",
