@@ -273,10 +273,23 @@ export default function Upload() {
           personaId, fileName: file.name, fileType,
           fileSize: file.size, fileContent: content, mimeType: getMimeType(file, fileType),
         });
-        setUploadingFiles(prev => ({ ...prev, [key]: "done" }));
+        /**
+         * The upload is finished, so it is forgotten.
+         *
+         * The map was only ever added to — so every file the user
+         * ever uploaded stayed in it for the life of the page, and the
+         * page held the name and the state of each of them for ever.
+         */
+        setUploadingFiles(prev => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
         toast.success(t("upload.uploadSuccess", { name: file.name }));
         refetchFiles();
       } catch {
+        // The failure is kept, so the row says what happened. It goes
+        // when the page is left.
         setUploadingFiles(prev => ({ ...prev, [key]: "error" }));
       }
     }
