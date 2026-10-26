@@ -56,13 +56,34 @@ function VoicePlayer({ url, duration }: { url: string; duration?: number | null 
   // 波形高度固定一次，避免父组件重渲染（如录音计时每秒一次）时跳动
   const barHeights = useMemo(() => Array.from({ length: 12 }, () => 4 + Math.random() * 12), []);
 
+  // The clip stops when the bubble goes away.
+  //
+  // The audio element was never paused and never released, so the
+  // recording carried on over whatever page the user had navigated to,
+  // and its `onended` then set state on a component that was no longer
+  // there.
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
   const toggle = () => {
     if (!audioRef.current) {
       audioRef.current = new Audio(url);
       audioRef.current.onended = () => setPlaying(false);
     }
     if (playing) { audioRef.current.pause(); setPlaying(false); }
-    else { audioRef.current.play(); setPlaying(true); }
+    else {
+      // The play can be refused — the browser blocks it without a
+      // gesture, or the blob is gone — and the refusal was an unhandled
+      // rejection: the button then said "pause" while nothing played.
+      audioRef.current.play().then(
+        () => setPlaying(true),
+        () => setPlaying(false),
+      );
+    }
   };
 
   return (
@@ -219,6 +240,22 @@ export function MessageBubble({
   const isUser = msg.role === "user";
   const mood = emotionOf(msg.emotionalState);
   const [imgExpanded, setImgExpanded] = useState(false);
+  /**
+   * The lightbox.
+   *
+   * It is a dialog, so the focus goes into it when it opens and comes
+   * back to the picture when it closes. The focus stayed on the
+   * conversation behind it, so a keyboard user was tabbing through the
+   * page *behind* a visually modal panel.
+   */
+  const lightboxRef = useRef<HTMLDivElement | null>(null);
+  const pictureRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!imgExpanded) return;
+    lightboxRef.current?.focus();
+    return () => pictureRef.current?.focus();
+  }, [imgExpanded]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.content);
 
@@ -230,8 +267,20 @@ export function MessageBubble({
               An empty alt says "decorative", which is right for an
               ornament and wrong for the only thing in the message — a
               reader was told there was nothing there. */}
-          <img src={msg.mediaUrl} alt={t("chat.imageAlt")} onClick={() => setImgExpanded(true)}
-            className="max-w-[200px] max-h-[200px] rounded-md cursor-pointer hover:opacity-90 transition-opacity" />
+          {/**
+           * The picture is a button.
+           *
+           * It was a picture with a click handler, so a keyboard user
+           * could not open it at all.
+           */}
+          <button type="button"
+            ref={pictureRef}
+            onClick={() => setImgExpanded(true)}
+            aria-label={t("chat.imageAlt")}
+            className="block rounded-md cursor-pointer hover:opacity-90 transition-opacity">
+            <img src={msg.mediaUrl} alt={t("chat.imageAlt")}
+              className="max-w-[200px] max-h-[200px] rounded-md" />
+          </button>
           {msg.content !== t("chat.imageMessage") && <p className="mt-1.5 text-sm">{msg.content}</p>}
           {/* Portal：祖先的 animate-fade-in-up 以 forwards 保留 transform，会把 fixed 定位锚定到气泡上 */}
           {/**
@@ -247,9 +296,13 @@ export function MessageBubble({
               role="dialog"
               aria-modal="true"
               aria-label={t("chat.imageAlt")}
+              ref={lightboxRef}
               onClick={() => setImgExpanded(false)}
               onKeyDown={(e) => {
-                if (e.key === "Escape") setImgExpanded(false);
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setImgExpanded(false);
+                }
               }}>
               <img src={msg.mediaUrl!} alt={t("chat.imageAlt")} className="max-w-full max-h-full object-contain rounded-md" />
               <button type="button" onClick={() => setImgExpanded(false)}
