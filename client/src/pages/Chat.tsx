@@ -216,7 +216,10 @@ export default function Chat() {
     };
   }, [t]);
 
-  const { data: persona } = trpc.persona.get.useQuery(
+  const {
+    data: persona,
+    isError: personaFailed,
+  } = trpc.persona.get.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && hasPersonaId }
   );
@@ -937,6 +940,16 @@ export default function Chat() {
 
   if (!hasPersonaId) return <NotFound />;
 
+  /**
+   * The persona could not be read.
+   *
+   * A deleted persona, or a link with an id that was edited by hand,
+   * used to render an empty conversation with "..." as the name and no
+   * explanation at all: the user could not tell whether their history
+   * was gone or the app was broken.
+   */
+  if (personaFailed) return <NotFound />;
+
   return (
     <div className="h-dvh bg-background flex flex-col relative">
       {/* Header */}
@@ -1521,7 +1534,15 @@ function SearchPanel({
               <p className="text-xs text-muted-foreground text-center py-4">{t("chat.noResults")}</p>
             ) : (
               results.map((m: any) => (
-                <div key={m.id} className="flex items-start gap-2 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+                /**
+                 * A button, not a div with a click handler.
+                 *
+                 * The search exists so somebody can find what they said
+                 * six months ago — and it could not be opened with the
+                 * keyboard at all.
+                 */
+                <button key={m.id} type="button"
+                  className="w-full text-left flex items-start gap-2 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
                   onClick={() => { onJumpTo?.(m.id); onClose(); }}>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-sm flex-shrink-0 mt-0.5 ${m.role === "user" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                     {m.role === "user" ? t("common.me") : t("common.them")}
@@ -1532,7 +1553,7 @@ function SearchPanel({
                       {new Date(m.createdAt).toLocaleDateString(locale)} {new Date(m.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
