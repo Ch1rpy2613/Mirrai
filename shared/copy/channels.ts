@@ -100,6 +100,20 @@ export const CHANNELS = {
     zh: "现在还不是告别的时候：{{reason}}。\n再陪 TA 走一段吧。",
     en: "It is not time to say goodbye yet: {{reason}}.\nStay a while longer.",
   },
+  /**
+   * The letter has been delivered.
+   *
+   * The letter itself was sent — so the reply is a confirmation, not
+   * the letter again. It used to be both: the command sent the letter
+   * and returned it as the reply, and the caller sent the reply as
+   * well. So `/毕业` put the farewell into the chat twice, back to
+   * back, with two model calls, and the second letter overwrote the
+   * first in the persona.
+   */
+  "channels.letterDelivered": {
+    zh: "信已经寄出去了。",
+    en: "The letter has been sent.",
+  },
   "channels.letterSavedElsewhere": {
     zh: "{{letter}}\n\n（这封信已经保存了，如果{{channel}}没有显示，请在网页端查看。）",
     en: "{{letter}}\n\n(This letter has been saved — if it did not appear in {{channel}}, read it on the web.)",

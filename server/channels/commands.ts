@@ -397,7 +397,16 @@ async function handleGraduationCommand(
   }
 
   if (delivered) {
-    return { handled: true, reply: farewellLetter };
+    /**
+     * The letter was sent — so the reply is a confirmation.
+     *
+     * It used to be the letter itself, and the caller sends the reply
+     * as well. So `/毕业` put the farewell into the chat twice, back
+     * to back, with two model calls, and the second letter overwrote
+     * the first in the persona — so the web record and the channel
+     * could disagree about the words.
+     */
+    return { handled: true, reply: copy(locale, "channels.letterDelivered") };
   }
 
   // The wording names the channel. The WeChat copy has to stay exactly as it

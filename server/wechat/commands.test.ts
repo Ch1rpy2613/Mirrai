@@ -205,7 +205,10 @@ describe("graduation command", () => {
     });
 
     expect(result.handled).toBe(true);
-    expect(result.reply).toContain("告别信");
+    // The letter was sent — so the reply is a confirmation and not the
+    // letter again. It used to be both, and the caller sends the reply
+    // as well: so the farewell landed in the chat twice.
+    expect(result.reply).not.toContain("告别信");
     expect(sent).toEqual(["亲爱的，这是一封告别信。"]);
     // The letter is recorded with whether it is the simplified one — so
     // a reader can tell which of the two they are looking at.
