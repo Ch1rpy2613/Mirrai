@@ -226,6 +226,45 @@ function isVersionError(err: unknown): boolean {
   return /version|deprecated|unsupported.*model|model.*not found|invalid.*api/.test(msg);
 }
 
+/**
+ * How long a provider may take to answer.
+ *
+ * The only bound used to be undici's five-minute default for the
+ * response headers, and the service retries three times — so a provider
+ * that accepted the request and then went quiet could hold one of the
+ * app's requests open for a quarter of an hour, while the model kept
+ * running and the bill kept growing.
+ */
+const PROVIDER_TIMEOUT_MS = 120_000;
+
+/**
+ * The signal for one attempt: the caller's own, and a deadline.
+ *
+ * The caller's signal is the one that cancels a stream when the user
+ * walks away; the deadline is the one that stops the app waiting for a
+ * provider that has stopped answering.
+ */
+function attemptSignal(options?: LLMOptions): {
+  signal: AbortSignal;
+  clear: () => void;
+} {
+  const deadline = new AbortController();
+  const timer = setTimeout(() => {
+    deadline.abort(new Error("The provider did not answer in time."));
+  }, PROVIDER_TIMEOUT_MS);
+  // The deadline must not keep the process alive on its own.
+  timer.unref?.();
+
+  const signals: AbortSignal[] = [deadline.signal];
+  if (options?.signal) signals.push(options.signal);
+  const signal = signals.length === 1 ? deadline.signal : AbortSignal.any(signals);
+
+  return {
+    signal,
+    clear: () => clearTimeout(timer),
+  };
+}
+
 export class LLMService {
   constructor(private providerRegistry = registry) {}
 
@@ -253,8 +292,12 @@ export class LLMService {
     let lastError: unknown;
     const maxAttempts = provider.maxAttempts ?? 3;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const attempt_ = attemptSignal(params.options);
       try {
-        return await provider.invoke(params.messages, params.options);
+        return await provider.invoke(params.messages, {
+          ...params.options,
+          signal: attempt_.signal,
+        });
       } catch (err) {
         lastError = err;
         if (isVersionError(err)) {
@@ -264,10 +307,13 @@ export class LLMService {
         if (isTransientError(err) && attempt < maxAttempts - 1) {
           const delay = 200 * Math.pow(2, attempt);
           console.warn(`[LLM] Transient error from "${provider.name}", retrying in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`);
+          attempt_.clear();
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
         break;
+      } finally {
+        attempt_.clear();
       }
     }
     throw lastError;
@@ -295,9 +341,17 @@ export class LLMService {
     const maxAttempts = provider.maxAttempts ?? 3;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let emitted = false;
+      const attempt_ = attemptSignal(params.options);
       try {
-        for await (const chunk of provider.stream(params.messages, params.options)) {
+        for await (const chunk of provider.stream(params.messages, {
+          ...params.options,
+          signal: attempt_.signal,
+        })) {
           emitted = true;
+          // The deadline is for the *first* answer, not for the whole
+          // generation: a long reply takes a long time, and the user is
+          // watching it arrive.
+          attempt_.clear();
           yield chunk;
         }
         return;
@@ -310,6 +364,8 @@ export class LLMService {
           continue;
         }
         throw err;
+      } finally {
+        attempt_.clear();
       }
     }
   }

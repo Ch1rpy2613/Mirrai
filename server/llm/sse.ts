@@ -45,6 +45,17 @@ export async function* parseSSEData(response: Response): AsyncGenerator<string> 
       yield tail.slice(5).trim();
     }
   } finally {
+    /**
+     * The body is cancelled, not just unlocked.
+     *
+     * Releasing the lock hands the reader back but leaves the response
+     * body unread. When a stream ends early — the caller stops reading,
+     * or the retry in the LLM service starts a second request — undici
+     * then holds the socket open until the provider times it out, so the
+     * connection is not returned and the retry runs alongside the
+     * abandoned one.
+     */
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
@@ -99,6 +110,8 @@ export async function* parseNDJSON(response: Response): AsyncGenerator<string> {
     // chunk of a reply.
     for (const content of readLine(buffer)) yield content;
   } finally {
+    // The body is cancelled, not just unlocked — see the note above.
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
