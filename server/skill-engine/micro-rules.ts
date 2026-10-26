@@ -171,11 +171,29 @@ function toTimestamp(value: Date | string | null | undefined): string | undefine
 const MAX_CANDIDATES_PER_ROLE = 400;
 
 /**
+ * How many candidates the whole mining may look at.
+ *
+ * The cap above is per *speaker*, and the search compares every pair
+ * of the candidates of one speaker. So the work is the sum over the
+ * speakers of the square of their share — and a group chat has one
+ * speaker per person.
+ *
+ * With fifty speakers that was four million edit distances, each of
+ * them sixty cells square: fourteen billion cell operations, on the
+ * event loop, in the middle of a distillation. The server stopped
+ * answering requests for minutes.
+ *
+ * So the speakers share a budget.
+ */
+const MAX_CANDIDATES_IN_TOTAL = 1200;
+
+/**
  * Keeps the most recent candidates of each speaker.
  */
 function capPerRole<T extends { index: number; role: string }>(
   candidates: T[],
   cap: number,
+  totalCap: number = MAX_CANDIDATES_IN_TOTAL,
 ): T[] {
   const perRole = new Map<string, T[]>();
   for (const candidate of candidates) {
@@ -183,14 +201,24 @@ function capPerRole<T extends { index: number; role: string }>(
     list.push(candidate);
     perRole.set(candidate.role, list);
   }
+  /**
+   * The share each speaker gets.
+   *
+   * Everybody gets enough to be worth mining, and nobody gets more
+   * than the budget can carry.
+   */
+  const share = Math.max(
+    10,
+    Math.min(cap, Math.floor(totalCap / Math.max(1, perRole.size))),
+  );
   const kept: T[] = [];
   for (const list of perRole.values()) {
-    if (list.length <= cap) {
+    if (list.length <= share) {
       kept.push(...list);
       continue;
     }
     // The most recent ones: the last ones in the transcript.
-    kept.push(...list.slice(list.length - cap));
+    kept.push(...list.slice(list.length - share));
   }
   return kept.sort((a, b) => a.index - b.index);
 }

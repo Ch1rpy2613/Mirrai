@@ -1005,3 +1005,36 @@ describe("the pipeline and the mining", () => {
     expect(ids).not.toContain("r1");
   });
 });
+
+/**
+ * The mining has to finish.
+ *
+ * The candidate cap was per *speaker*, and the search compares every
+ * pair of the candidates of one speaker — so the work was the sum over
+ * the speakers of the square of their share. A group chat has one
+ * speaker per person, and fifty speakers meant four million edit
+ * distances on the event loop: the server stopped answering requests
+ * in the middle of a distillation.
+ */
+describe("the mining and the number of speakers", () => {
+  it("finishes on a chat with fifty speakers", () => {
+    const messages: any[] = [];
+    for (let speaker = 0; speaker < 50; speaker++) {
+      for (let line = 0; line < 400; line++) {
+        messages.push({
+          role: `speaker-${speaker}`,
+          content: `消息 ${speaker}-${line} 一点不一样的话`,
+          timestamp: null,
+        });
+      }
+    }
+
+    const started = Date.now();
+    const pairs = findContrastPairs(messages, { role: undefined, limit: 24 });
+    const elapsed = Date.now() - started;
+
+    expect(Array.isArray(pairs)).toBe(true);
+    // The work is bounded, so it is quick.
+    expect(elapsed).toBeLessThan(5000);
+  });
+});
