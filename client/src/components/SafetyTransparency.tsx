@@ -112,7 +112,17 @@ export default function SafetyTransparency() {
                   <button
                     type="button"
                     onClick={() => resolve.mutate({ id: event.id })}
-                    className="text-[0.625rem] px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
+                    /**
+                     * The button waits.
+                     *
+                     * It used to fire the mutation on every click, so a
+                     * double click sent two — and the second one
+                     * failed, because the event had already been
+                     * marked. The user saw a success message and then
+                     * an error, for one press of the button.
+                     */
+                    disabled={resolve.isPending}
+                    className="text-[0.625rem] px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-default"
                   >
                     {t("safetyPanel.markHandled")}
                   </button>
