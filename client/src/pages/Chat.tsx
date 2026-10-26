@@ -172,6 +172,14 @@ export default function Chat() {
   const [showCrisis, setShowCrisis] = useState(false);
   /** Whether there are older messages to load, and whether they are loading. */
   const [hasOlder, setHasOlder] = useState(false);
+  /**
+   * Whether the conversation has been walked back to its beginning.
+   *
+   * The poll runs every twenty seconds and only ever knows about the
+   * last page. So once the older pages have been read to the end, this
+   * is what tells the poll not to offer them again.
+   */
+  const historyExhausted = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   /** The notes kept for later are shown once per visit. */
   const [dismissedNotes, setDismissedNotes] = useState(false);
@@ -461,8 +469,15 @@ export default function Chat() {
       if (older.length === 0 && pending.length === 0) return fromServer;
       return [...older, ...fromServer, ...pending];
     });
-    // A full page of history means there is probably more behind it.
-    setHasOlder(history.length >= 50);
+    /**
+     * A full page of history means there is probably more behind it.
+     *
+     * But only while the older pages have not been walked to the end:
+     * the poll used to put the button back every twenty seconds after
+     * the user had reached the beginning of the conversation, so a
+     * button that does nothing kept reappearing.
+     */
+    setHasOlder(history.length >= 50 && !historyExhausted.current);
   }, [history]);
 
   useEffect(() => {
@@ -774,8 +789,11 @@ export default function Chat() {
             }));
           return [...fresh, ...prev];
         });
+        historyExhausted.current = older.length < 50;
         setHasOlder(older.length >= 50);
       } else {
+        // There is nothing before the oldest message on screen.
+        historyExhausted.current = true;
         setHasOlder(false);
       }
     } catch (e) {
@@ -1423,12 +1441,19 @@ export default function Chat() {
               </button>
             </motion.div>
           )}
-          {messages.length > 0 && (hasOlder || messages.length >= 50) && (
+          {/**
+           * The button is not shown once the conversation has been
+           * walked back to its beginning.
+           *
+           * It used to stay on the screen — disabled, doing nothing —
+           * for every conversation of fifty messages or more.
+           */}
+          {messages.length > 0 && hasOlder && (
             <div className="flex justify-center pb-3">
               <button
                 type="button"
                 onClick={loadOlderMessages}
-                disabled={loadingOlder || !hasOlder}
+                disabled={loadingOlder}
                 className="text-xs px-3.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
               >
                 {loadingOlder ? t("chat.loadingOlder") : t("chat.loadOlder")}
