@@ -137,7 +137,7 @@ export default function Questionnaire() {
     if (restored.current) return;
     restored.current = true;
     try {
-      const saved = sessionStorage.getItem(QUESTIONNAIRE_STORAGE_KEY);
+      const saved = localStorage.getItem(QUESTIONNAIRE_STORAGE_KEY);
       if (!saved) return;
       const parsed = JSON.parse(saved) as { step?: number; answers?: Answers };
       if (parsed.answers && typeof parsed.answers === "object") {
@@ -169,7 +169,15 @@ export default function Questionnaire() {
   // And kept up to date from then on.
   useEffect(() => {
     try {
-      sessionStorage.setItem(QUESTIONNAIRE_STORAGE_KEY, JSON.stringify({ step, answers }));
+      /**
+       * The answers are kept in the browser, not in the tab.
+       *
+       * They were kept in `sessionStorage` — which is per-tab, and is
+       * gone when the tab is closed. So ten steps of answers were lost
+       * by closing the window, and by opening the questionnaire in
+       * another tab.
+       */
+      localStorage.setItem(QUESTIONNAIRE_STORAGE_KEY, JSON.stringify({ step, answers }));
     } catch {
       // A browser that will not keep it is not a problem: the answers
       // are still in the page.
@@ -210,7 +218,7 @@ export default function Questionnaire() {
       // The answers have become a persona, so they are not kept for the
       // next questionnaire.
       try {
-        sessionStorage.removeItem(QUESTIONNAIRE_STORAGE_KEY);
+        localStorage.removeItem(QUESTIONNAIRE_STORAGE_KEY);
       } catch {
         // A browser that will not keep it is not a problem.
       }
