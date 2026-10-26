@@ -3048,8 +3048,15 @@ export const appRouter = router({
       .input(z.object({
         providerName: z.string().min(1),
         apiKey: z.string().max(512).optional(),
-        baseUrl: z.string().max(512).optional(),
-        model: z.string().max(128).optional(),
+        /**
+         * The endpoint and the model.
+         *
+         * They accept `null` — an empty field means "leave it alone",
+         * so a user could never *remove* a base URL they had set. A
+         * cleared field is now a removal.
+         */
+        baseUrl: z.string().max(512).nullable().optional(),
+        model: z.string().max(128).nullable().optional(),
         /**
          * The provider's own settings.
          *
@@ -3066,7 +3073,12 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         assertKnownProvider(input.providerName, ctx.locale);
         const { apiKey, ...rest } = input;
-        const payload: Parameters<typeof upsertLlmConfig>[1] = { ...rest };
+        const payload: Parameters<typeof upsertLlmConfig>[1] = {
+          ...rest,
+          // A cleared field is a removal, not "leave it alone".
+          ...(rest.baseUrl === null ? { baseUrl: null } : {}),
+          ...(rest.model === null ? { model: null } : {}),
+        };
 
         if (apiKey) {
           // The key is stored encrypted; only a hint is kept in the clear.

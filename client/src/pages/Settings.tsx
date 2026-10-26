@@ -130,7 +130,7 @@ function SliderField({ label, value, onChange, min, max, step, unit }: {
 
 // ─── PROVIDER CONFIG ROW ─────────────────────────────────────────────────────
 
-function ProviderConfigRow({ provider, hasKey, isDefault, onSave, onSetDefault }: {
+function ProviderConfigRow({ provider, hasKey, isDefault, baseUrlValue, modelValue, onSave, onSetDefault }: {
   provider: { name: string; configured: boolean };
   /**
    * Whether *the user* has a key for this provider.
@@ -141,14 +141,27 @@ function ProviderConfigRow({ provider, hasKey, isDefault, onSave, onSetDefault }
    */
   hasKey: boolean;
   isDefault: boolean;
-  onSave: (data: { providerName: string; apiKey?: string; baseUrl?: string; model?: string }) => void;
+  /**
+   * What the user saved.
+   *
+   * The row used to start empty every time — so a custom endpoint was
+   * never shown back, and the user could not tell what they had set.
+   */
+  baseUrlValue?: string | null;
+  modelValue?: string | null;
+  onSave: (data: {
+    providerName: string;
+    apiKey?: string;
+    baseUrl?: string | null;
+    model?: string | null;
+  }) => void;
   onSetDefault: () => void;
 }) {
   const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [model, setModel] = useState("");
+  const [baseUrl, setBaseUrl] = useState(baseUrlValue ?? "");
+  const [model, setModel] = useState(modelValue ?? "");
 
   return (
     <div className={cn(
@@ -214,7 +227,19 @@ function ProviderConfigRow({ provider, hasKey, isDefault, onSave, onSetDefault }
           </div>
           <Button size="sm" className="rounded-md px-4"
             onClick={() => {
-              onSave({ providerName: provider.name, apiKey: apiKey || undefined, baseUrl: baseUrl || undefined, model: model || undefined });
+              /**
+               * A cleared field is a removal.
+               *
+               * It used to be "leave it alone" — so a user who emptied
+               * the field kept the old value and was told it was
+               * saved.
+               */
+              onSave({
+                providerName: provider.name,
+                apiKey: apiKey || undefined,
+                baseUrl: baseUrl.trim() || null,
+                model: model.trim() || null,
+              });
               setExpanded(false);
             }}>
             <Check className="w-3.5 h-3.5" />{t("common.save")}
@@ -678,6 +703,16 @@ function AISettingsTab() {
     (userConfigs.data ?? []).map((config) => [config.providerName, config.hasKey]),
   );
   /**
+   * What the user saved for each provider.
+   *
+   * The endpoint and the model were fetched but never used — so the
+   * fields came up empty every time, and the user could not see what
+   * they had set.
+   */
+  const savedConfig = new Map(
+    (userConfigs.data ?? []).map((config) => [config.providerName, config]),
+  );
+  /**
    * The three saves say what happened.
    *
    * They had no `onError`, so a rejected save — a bad key, a network
@@ -751,6 +786,9 @@ function AISettingsTab() {
             <ProviderConfigRow key={p.name} provider={p}
               hasKey={userHasKey.get(p.name) ?? false}
               isDefault={defaultConfig.data?.providerName === p.name}
+              // What the user saved, shown back.
+              baseUrlValue={savedConfig.get(p.name)?.baseUrl ?? null}
+              modelValue={savedConfig.get(p.name)?.model ?? null}
               onSave={data => upsertConfig.mutate(data)}
               onSetDefault={() => setDefault.mutate({ providerName: p.name })} />
           ))}
