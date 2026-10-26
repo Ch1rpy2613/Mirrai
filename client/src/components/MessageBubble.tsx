@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
+import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { createPortal } from "react-dom";
 import {
   ChevronDown, Trash2, Loader2, Play, Pause, Volume2,
@@ -256,14 +257,20 @@ export function MessageBubble({
    * conversation behind it, so a keyboard user was tabbing through the
    * page *behind* a visually modal panel.
    */
-  const lightboxRef = useRef<HTMLDivElement | null>(null);
   const pictureRef = useRef<HTMLButtonElement | null>(null);
 
-  useEffect(() => {
-    if (!imgExpanded) return;
-    lightboxRef.current?.focus();
-    return () => pictureRef.current?.focus();
-  }, [imgExpanded]);
+  /**
+   * The lightbox.
+   *
+   * The focus used to be moved with `lightboxRef.current?.focus()` —
+   * and the element it pointed at was a `div` with no `tabIndex`, so
+   * the call did nothing. The focus stayed on the picture button
+   * *behind* the overlay, and because the overlay is portalled to the
+   * body it is not that button's ancestor — so the Escape handler on
+   * the overlay never received the key. Escape did nothing, and Tab
+   * walked the page behind a visually modal panel.
+   */
+  const lightboxRef = useDialogFocus<HTMLDivElement>(imgExpanded, () => setImgExpanded(false));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.content);
 
@@ -305,13 +312,7 @@ export function MessageBubble({
               aria-modal="true"
               aria-label={t("chat.imageAlt")}
               ref={lightboxRef}
-              onClick={() => setImgExpanded(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.stopPropagation();
-                  setImgExpanded(false);
-                }
-              }}>
+              onClick={() => setImgExpanded(false)}>
               <img src={msg.mediaUrl!} alt={t("chat.imageAlt")} className="max-w-full max-h-full object-contain rounded-md" />
               <button type="button" onClick={() => setImgExpanded(false)}
                 aria-label={t("common.close")}
