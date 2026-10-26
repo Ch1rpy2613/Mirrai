@@ -177,6 +177,24 @@ const MAX_BASE64_IMAGE_CHARS = base64CharsFor(MAX_IMAGE_UPLOAD_BYTES);
 const MAX_BASE64_AUDIO_CHARS = base64CharsFor(MAX_AUDIO_UPLOAD_BYTES);
 
 /**
+ * How much of an uploaded chat log is kept as text.
+ *
+ * A chat log is the material the persona is made of, so this is generous:
+ * half a million characters is a very long conversation, and the
+ * distillation presets only read the first few tens of thousands of them
+ * in any case.
+ */
+const MAX_EXTRACTED_CHARS = 500_000;
+
+/**
+ * How much transcript is handed to the distillation pipeline at once.
+ *
+ * The pipeline samples from the beginning of what it is given, so this
+ * bound is about memory, not about quality.
+ */
+const MAX_DISTILLATION_CHARS = 1_000_000;
+
+/**
  * Collects the uploaded material for a persona and kicks off the distillation
  * pipeline. Both `persona.triggerAnalysis` and `skillEngine.startPipeline`
  * route through here so there is a single persona-building path.
@@ -212,7 +230,8 @@ async function startPersonaDistillation(params: {
     const chatContent = files
       .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
       .map((f) => f.extractedMemory || "")
-      .join("\n\n---\n\n");
+      .join("\n\n---\n\n")
+      .slice(0, MAX_DISTILLATION_CHARS);
     const imageUrls = files
       .filter((f) => f.fileType === "image")
       .map((f) => f.fileUrl)
@@ -1062,9 +1081,17 @@ export const appRouter = router({
         const { url } = await storagePut(fileKey, buffer, input.mimeType);
         let extractedText: string | undefined;
         if (input.fileType === "chat_txt" || input.fileType === "chat_csv") {
-          extractedText = buffer.toString("utf-8").slice(0, 50000);
+          extractedText = buffer.toString("utf-8").slice(0, MAX_EXTRACTED_CHARS);
         }
-        const fileId = await createPersonaFile({ personaId: input.personaId, userId: ctx.user.id, fileType: input.fileType, originalName: safeName, fileKey, fileUrl: url, fileSize: buffer.length, extractedMemory: extractedText?.slice(0, 2000), processStatus: "done" });
+        // The whole transcript is stored.
+        //
+        // It used to be sliced to two thousand characters here, which is
+        // about forty lines of chat: the persona was distilled from the
+        // first few messages of a long history and nothing said so. The
+        // pipeline already decides how much of it to read — the presets
+        // ask for up to thirty thousand characters — so the limit belongs
+        // at the point of use, not on the way in.
+        const fileId = await createPersonaFile({ personaId: input.personaId, userId: ctx.user.id, fileType: input.fileType, originalName: safeName, fileKey, fileUrl: url, fileSize: buffer.length, extractedMemory: extractedText, processStatus: "done" });
         return { fileId, fileUrl: url };
       }),
 
