@@ -97,7 +97,17 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
       // three in the morning is not the persona being thoughtful — it is
       // the app being inconsiderate, and the quiet hours are the user's
       // own decision about when that is acceptable.
-      if (isQuietHour(now, ENV.reminderQuietHours)) {
+      /**
+       * The quiet hours are the *reader's* decision.
+       *
+       * They were measured against the server's wall clock, because no
+       * zone was passed at all: so at half past midnight in the user's
+       * own time the app decided it was not quiet and pushed a message,
+       * and at half past eight in the morning — when their quiet hours
+       * ended — it decided it was quiet and delivered nothing all day.
+       */
+      const timezone = await db.getUserTimezone(row.userId);
+      if (isQuietHour(now, ENV.reminderQuietHours, timezone)) {
         continue;
       }
 

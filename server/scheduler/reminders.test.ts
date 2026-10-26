@@ -14,9 +14,12 @@ const hasReminderDelivery = vi.fn();
 const recordReminder = vi.fn();
 
 const getUserLocale = vi.fn();
+const getUserTimezone = vi.fn();
+getUserTimezone.mockResolvedValue(null);
 
 vi.mock("../db", () => ({
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getAllPersonasForReminders: (...a: unknown[]) => getAllPersonasForReminders(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
@@ -69,6 +72,21 @@ describe("isQuietHour", () => {
   it("ignores a malformed setting", () => {
     expect(isQuietHour(new Date(), "not-a-window")).toBe(false);
   });
+
+  it("is the hour the reader is in, not the hour the server is in", () => {
+    // The quiet hours are the reader's decision about when they want to
+    // be woken up. They were measured against the server's wall clock
+    // in the proactive sweep, because no zone was passed at all — so at
+    // half past midnight in the user's own time the app decided it was
+    // not quiet and pushed a message, and at half past eight in the
+    // morning it decided it was quiet and delivered nothing all day.
+    const spec = "23:00-08:00";
+    // 16:30 UTC is 00:30 in Shanghai: the reader's quiet hours.
+    expect(isQuietHour(new Date("2026-10-26T16:30:00Z"), spec, "Asia/Shanghai")).toBe(true);
+    // And 00:30 UTC is 08:30 in Shanghai: the reader's quiet hours are
+    // over.
+    expect(isQuietHour(new Date("2026-10-27T00:30:00Z"), spec, "Asia/Shanghai")).toBe(false);
+  });
 });
 
 describe("collectReminders", () => {
@@ -102,6 +120,32 @@ describe("collectReminders", () => {
       now,
     });
     expect(reminders.some((r) => r.kind === "together_years")).toBe(false);
+  });
+
+  it("counts the years in the reader's calendar", () => {
+    // The years were counted in the *server's* calendar — the server's
+    // year, the server's midnight — so for a reader one zone east the
+    // year rolled over eight hours late and the anniversary was missed
+    // on the day itself.
+    //
+    // 16:30 UTC on the 20th is already the 21st in Shanghai.
+    const lateInShanghai = new Date("2026-05-20T16:30:00Z");
+    const reminders = collectReminders({
+      persona: persona({ togetherFrom: "2021-05-21" }),
+      anniversaries: [],
+      now: lateInShanghai,
+      timezone: "Asia/Shanghai",
+    });
+    expect(reminders.some((r) => r.kind === "together_years")).toBe(true);
+
+    const earlyInShanghai = new Date("2026-05-20T15:30:00Z");
+    const notYet = collectReminders({
+      persona: persona({ togetherFrom: "2021-05-21" }),
+      anniversaries: [],
+      now: earlyInShanghai,
+      timezone: "Asia/Shanghai",
+    });
+    expect(notYet.some((r) => r.kind === "together_years")).toBe(false);
   });
 
   it("keeps the anniversaries when they can reach each other", () => {

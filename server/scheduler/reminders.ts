@@ -170,13 +170,22 @@ export function collectReminders(params: {
     if (from) {
       const start = new Date(from);
       if (!Number.isNaN(start.getTime())) {
-        const years = now.getFullYear() - start.getFullYear();
-        const anniversaryThisYear = new Date(now.getFullYear(), start.getMonth(), start.getDate());
-        const diffDays = Math.round(
-          (now.getTime() - anniversaryThisYear.getTime()) / 86_400_000,
-        );
+        /**
+         * The years, in the user's own calendar.
+         *
+         * They were counted in the *server's* calendar — the server's
+         * year, the server's midnight — so for a user one zone east the
+         * year rolled over eight hours late and the anniversary was
+         * missed on the day itself, and for a user one zone west it
+         * came a day early.
+         */
+        const userYear = Number(dayKey.slice(0, 4));
+        const startYear = start.getFullYear();
+        const years = userYear - startYear;
+        // The month and the day of the start, in the user's calendar.
+        const startMonthDay = `${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
         // Only the day itself, not a week of "it's nearly your anniversary".
-        if (diffDays === 0 && years > 0) {
+        if (monthDay === startMonthDay && years > 0) {
           reminders.push({
             kind: "together_years",
             personaId: params.persona.id,
@@ -339,10 +348,19 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
       const anniversaries = await db.getMemoriesByPersonaId(persona.id, persona.userId);
       const files = await db.getFilesByPersonaId(persona.id, persona.userId);
       const locale = await db.getUserLocale(persona.userId);
+      /**
+       * The *reader's* clock.
+       *
+       * The persona's own zone was used: the reminder is read by a
+       * person, and the quiet hours are that person's decision about
+       * when they want to be woken up. The persona's zone is the
+       * persona's.
+       */
+      const timezone = await db.getUserTimezone(persona.userId);
       const reminders = collectReminders({
         locale,
         // The user's own calendar.
-        timezone: (persona as any).timezone ?? null,
+        timezone,
         persona: {
           id: persona.id,
           name: persona.name,
@@ -387,7 +405,7 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
           channel: binding?.channel ?? null,
           targetId: binding?.targetId ?? null,
           locale,
-          timezone: (persona as any).timezone ?? null,
+          timezone,
           now,
         });
         if (sent) delivered++;

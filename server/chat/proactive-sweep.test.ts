@@ -25,10 +25,13 @@ vi.mock("../db", () => ({
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getUserMessageCountForPersonaSince: (...a: unknown[]) => getUserMessageCountForPersonaSince(...a),
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
 }));
 
 const getUserLocale = vi.fn();
 getUserLocale.mockResolvedValue("zh");
+const getUserTimezone = vi.fn();
+getUserTimezone.mockResolvedValue(null);
 
 const invokeWithProvider = vi.fn();
 vi.mock("../llm", () => ({
