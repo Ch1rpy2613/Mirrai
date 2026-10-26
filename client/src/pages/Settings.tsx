@@ -275,13 +275,41 @@ function ProfileTab() {
   const [showCurrentPwd, setShowCurrentPwd] = useState(false);
   const [showNewPwd, setShowNewPwd] = useState(false);
 
+  /**
+   * The last values the server had.
+   *
+   * A field is only filled when the server's value for it has actually
+   * changed.
+   *
+   * Every save on this tab refetches the profile — the name, the
+   * address style, the graduation mode and the trajectory setting all
+   * live in the same record. So a refetch used to overwrite the whole
+   * form with the server's values: the user typed a new name, scrolled
+   * down and changed the graduation mode, and the name they had typed
+   * was silently replaced by the old one. The address style and the
+   * boundaries were lost the same way.
+   */
+  const lastProfileValues = useRef<{
+    name: string;
+    email: string;
+    addressStyle: string;
+    boundaries: string;
+  } | null>(null);
+
   useEffect(() => {
-    if (profile) {
-      setEditName(profile.name || "");
-      setEditEmail(profile.email || "");
-      setAddressStyle(profile.addressStyle || "");
-      setBoundaries(profile.boundaries || "");
-    }
+    if (!profile) return;
+    const next = {
+      name: profile.name || "",
+      email: profile.email || "",
+      addressStyle: profile.addressStyle || "",
+      boundaries: profile.boundaries || "",
+    };
+    const previous = lastProfileValues.current;
+    lastProfileValues.current = next;
+    if (!previous || previous.name !== next.name) setEditName(next.name);
+    if (!previous || previous.email !== next.email) setEditEmail(next.email);
+    if (!previous || previous.addressStyle !== next.addressStyle) setAddressStyle(next.addressStyle);
+    if (!previous || previous.boundaries !== next.boundaries) setBoundaries(next.boundaries);
   }, [profile]);
 
   /**
