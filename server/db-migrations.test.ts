@@ -107,9 +107,19 @@ describe("the SQL migration set", () => {
 
       // Every additive statement must be guarded, otherwise re-running the
       // file would fail.
+      /**
+       * Every additive statement must be guarded.
+       *
+       * The unique indexes were not in the list — the pattern said
+       * `CREATE INDEX` and not `CREATE UNIQUE INDEX` — so the seventeen
+       * of them were outside the check. They all happen to be guarded
+       * today; the check was not looking.
+       */
       const unguarded = sql
         .split("\n")
-        .filter((line) => /^\s*(CREATE TABLE|CREATE INDEX|ALTER TABLE .* ADD COLUMN)/.test(line))
+        .filter((line) =>
+          /^\s*(CREATE TABLE|CREATE (UNIQUE )?INDEX|ALTER TABLE .* ADD COLUMN)/.test(line),
+        )
         .filter((line) => !/IF NOT EXISTS/.test(line));
 
       expect(unguarded, `${name} has unguarded statements`).toEqual([]);
