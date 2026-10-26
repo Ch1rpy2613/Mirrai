@@ -658,6 +658,17 @@ export default function Chat() {
         ));
         setCurrentState(result.emotionalState);
         if (result.graduationSuggested) setShowGraduation(true);
+        /**
+         * The crisis card.
+         *
+         * It was missing on this path — the image and the voice paths
+         * show it, and the streaming path shows it. So on a server
+         * without the streaming route, a crisis reply arrived as an
+         * ordinary bubble with no support resources at all: the one
+         * moment the app exists for, and the one moment it said
+         * nothing.
+         */
+        if (result.crisis) setShowCrisis(true);
         if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
       }
     } catch (err) {
@@ -927,7 +938,20 @@ export default function Chat() {
       try {
         const result = await abortableMutation(
           "chat.sendImage",
-          { personaId, imageContent: base64, fileName: file.name, mimeType: file.type },
+          {
+            personaId,
+            imageContent: base64,
+            fileName: file.name,
+            mimeType: file.type,
+            /**
+             * The language the persona answers in.
+             *
+             * It was not sent — and the server defaults it to Chinese.
+             * So an English user's photo was answered in Chinese, with
+             * a Chinese care note and a Chinese crisis response.
+             */
+            locale: locale === "en" ? "en" : "zh",
+          },
           controller.signal,
         );
         setMessages(prev => prev.map(m => m.id === streamId
@@ -955,7 +979,7 @@ export default function Chat() {
     // `t` is in the list because the handler says things to the reader:
     // without it, a picture sent after a change of language was
     // described in the language that had been in use before.
-  }, [isSending, personaId, currentState, t]);
+  }, [isSending, personaId, currentState, t, locale]);
 
   const startRecording = useCallback(async () => {
     // The stop button has to work on this path too.
@@ -1004,7 +1028,15 @@ export default function Chat() {
           try {
             const result = await abortableMutation(
               "chat.sendVoice",
-              { personaId, audioContent: base64, duration, fileName: `voice-${Date.now()}.webm` },
+              {
+                personaId,
+                audioContent: base64,
+                duration,
+                fileName: `voice-${Date.now()}.webm`,
+                // The language the persona answers in — see the image
+                // path above.
+                locale: locale === "en" ? "en" : "zh",
+              },
               voiceController.signal,
             );
             /**
@@ -1053,7 +1085,7 @@ export default function Chat() {
         setRecordingTime(recordingSecondsRef.current);
       }, 1000);
     } catch { toast.error(t("chat.micDenied")); }
-  }, [personaId, currentState, t]);
+  }, [personaId, currentState, t, locale]);
 
   const stopRecording = useCallback(() => {
     if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
