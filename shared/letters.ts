@@ -95,6 +95,19 @@ export function buildLetterReplyInstruction(params: {
     "",
     params.letterBody,
     "",
-    copy(locale, "letters.answerPrompt", { personaName: params.personaName }),
+    /**
+     * The answer is different when the relationship is over.
+     *
+     * The flag was accepted and then ignored — the instruction was
+     * identical either way, so the caller believed the prompt had
+     * changed when it had not. The fact does still reach the persona
+     * through the system prompt, but a letter is the one place where
+     * it belongs in the instruction as well.
+     */
+    copy(
+      locale,
+      params.relationshipEnded ? "letters.answerPromptEnded" : "letters.answerPrompt",
+      { personaName: params.personaName },
+    ),
   ].join("\n");
 }

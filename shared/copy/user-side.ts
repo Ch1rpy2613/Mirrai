@@ -91,6 +91,10 @@ export const USER_SIDE: CopyTable = {
     zh: "请以{{personaName}}的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。",
     en: "Answer it as {{personaName}}, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter.",
   },
+  "letters.answerPromptEnded": {
+    zh: "请以{{personaName}}的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。这封信寄到的时候，你们已经走远了——回信是回信，不要假装还在一起。",
+    en: "Answer it as {{personaName}}, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter. This letter arrived after the two of you had drifted apart — answer it as an answer, and do not pretend you are still together.",
+  },
 
   // ── The time of day, on their clock ──────────────────────────────────────
   "labels.time.dawn": { zh: "凌晨", en: "early morning" },

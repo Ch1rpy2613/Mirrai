@@ -55,7 +55,7 @@ function loadMigrationFiles() {
     throw new Error(`Cannot read migrations directory ${MIGRATIONS_DIR}: ${e.message}`);
   }
 
-  return entries
+  const files = entries
     .filter((name) => name.endsWith(".sql"))
     // The order the migrations are applied in.
     //
@@ -63,15 +63,32 @@ function loadMigrationFiles() {
     // direction and a numeric difference for the other, which is not a
     // consistent ordering — the sort result was not guaranteed, and a
     // later schema change could be applied before an earlier one. Every
-    // file is named with its number, so the number is the order, and a
-    // file without one is refused rather than guessed at.
+    // file is named with its number, so the number is the order.
     .sort((a, b) => {
       const numA = Number.parseInt(a, 10);
       const numB = Number.parseInt(b, 10);
-      if (Number.isNaN(numA) || Number.isNaN(numB)) return a.localeCompare(b);
       if (numA !== numB) return numA - numB;
       return a.localeCompare(b);
-    })
+    });
+
+  // A file without a number is refused, not guessed at.
+  //
+  // The comparator used to fall back to a string comparison for one of
+  // them, so a file called `zzz_non_numeric.sql` was applied — after
+  // the numbered ones, in an order nobody chose. The comment beside
+  // the comparator promised the opposite, and the promise was the
+  // point: a migration whose order cannot be read is a migration whose
+  // order cannot be trusted.
+  for (const name of files) {
+    if (Number.isNaN(Number.parseInt(name, 10))) {
+      throw new Error(
+        `The migration file "${name}" does not start with a number. ` +
+          "Every migration is applied in the order of its number.",
+      );
+    }
+  }
+
+  return files
     .map((name) => {
       const sql = readFileSync(join(MIGRATIONS_DIR, name), "utf-8");
       const down = sql.includes(DOWN_MARKER)
