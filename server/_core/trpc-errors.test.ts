@@ -31,6 +31,39 @@ describe("the errors the client is told", () => {
     expect(formatted.message).toBe("Something went wrong on the server.");
   });
 
+  it("does not leak a database error that tRPC has already wrapped", () => {
+    // This is the shape the formatter actually sees.
+    //
+    // tRPC wraps an unknown error in a `TRPCError` with the original as
+    // its cause — and the message becomes the cause's message. So the
+    // test above, which used a plain `Error`, never exercised the path
+    // that runs in production: the leak was still there, and the test
+    // said it was not.
+    const cause = new Error(
+      'duplicate key value violates unique constraint "users_username_key"',
+    );
+    const error = new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause });
+    const formatted = formatErrorForClient({
+      shape: { message: cause.message, code: -32603, data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 } },
+      error,
+    });
+    expect(formatted.message).not.toMatch(/constraint|duplicate key/i);
+    expect(formatted.message).toBe("Something went wrong on the server.");
+  });
+
+  it("does not leak the SQL of a failed query", () => {
+    const cause = new Error(
+      'Failed query: select "id" from "users" where "users"."username" = $1 params: someone',
+    );
+    const error = new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause });
+    const formatted = formatErrorForClient({
+      shape: { message: cause.message, code: -32603, data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 } },
+      error,
+    });
+    expect(formatted.message).not.toMatch(/select|Failed query|params/i);
+    expect(formatted.message).toBe("Something went wrong on the server.");
+  });
+
   it("does not leak the path of a procedure either", () => {
     const formatted = formatErrorForClient({ shape, error: new Error("boom") });
     expect(JSON.stringify(formatted.data)).not.toContain("users_username_key");

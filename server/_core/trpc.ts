@@ -32,6 +32,27 @@ export function formatErrorForClient({
   ctx?: { locale?: "zh" | "en" };
 }): { message: string; code: number; data: Record<string, unknown> } {
   if (error instanceof TRPCError) {
+    const code = error.code;
+    const locale = ctx?.locale ?? "zh";
+    /**
+     * An error from somewhere else.
+     *
+     * tRPC wraps an unknown error in a `TRPCError` with the original
+     * as its `cause` — and the message becomes the cause's message. So
+     * a Postgres error reached the browser word for word: the SQL, the
+     * table names, the constraint names and the parameter values.
+     *
+     * The test for this used a plain `Error`, which the formatter never
+     * sees — tRPC has already wrapped it by then. The test passed and
+     * the leak was still there.
+     */
+    if (error.cause) {
+      return {
+        ...shape,
+        message: "Something went wrong on the server.",
+        data: { ...shape.data, message: undefined },
+      };
+    }
     /**
      * A procedure that throws without a message gets the *code* as its
      * message.
@@ -43,9 +64,7 @@ export function formatErrorForClient({
      *
      * The code is for the machine. This is for the person.
      */
-    const code = error.code;
     if (shape.message && shape.message !== code) return shape;
-    const locale = ctx?.locale ?? "zh";
     return {
       ...shape,
       message: copy(locale, `errors.code.${codeKey(code)}`),
