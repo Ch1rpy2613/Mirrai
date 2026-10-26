@@ -123,7 +123,13 @@ jobs:
         # gate says so and fails, rather than passing on nothing.
         if: ${{ env.EVAL_RECORDS != '' }}
         run: |
-          echo "$EVAL_RECORDS" | base64 --decode > /tmp/records.sql
+          echo "$EVAL_RECORDS" | base64 --decode > /tmp/records.raw
+          # `pg_dump` 18 writes `\restrict` and `\unrestrict` into the dump.
+          # Those are psql 18 meta-commands, and the runner's psql is older
+          # — it would answer "invalid command" and the restore would stop
+          # on the first line. They are a safety wrapper around the dump,
+          # not part of the data, so they go.
+          grep -vE '^\\(restrict|unrestrict)' /tmp/records.raw > /tmp/records.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /tmp/records.sql
 
       - name: Measure the persona
