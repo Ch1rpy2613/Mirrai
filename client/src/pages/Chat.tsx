@@ -696,6 +696,18 @@ export default function Chat() {
   }, []);
 
   /**
+   * How many messages the regeneration would take with it.
+   *
+   * The count of the messages *after* the one being regenerated — the
+   * user's own words and the answers that followed.
+   */
+  const messagesAfter = useCallback((id: number) => {
+    const index = messages.findIndex((m) => m.id === id);
+    if (index < 0) return 0;
+    return Math.max(0, messages.length - index - 1);
+  }, [messages]);
+
+  /**
    * Asks the persona again, replacing the turn that is on screen.
    *
    * The server removes the old turn and everything after it, so the
@@ -706,6 +718,19 @@ export default function Chat() {
     if (isSending) return;
     // A message that is still streaming has no id of its own yet.
     if (typeof msg.id !== "number") return;
+    /**
+     * The confirmation.
+     *
+     * The server removes the turn and *everything after it* — so
+     * regenerating an answer from the middle of a conversation takes the
+     * rest of that relationship's transcript with it, including the
+     * user's own words, and there is no way back.
+     *
+     * Every other destructive action in the app asks first. This one
+     * did not, and the button's own description said it was "replacing
+     * the turn that is on screen" — which is not what it does.
+     */
+    if (!window.confirm(t("chat.regenerateConfirm", { count: messagesAfter(msg.id) }))) return;
     setIsSending(true);
     // The stop button works here too.
     const controller = new AbortController();
@@ -760,7 +785,7 @@ export default function Chat() {
       abortRef.current = null;
       setIsSending(false);
     }
-  }, [isSending, personaId, locale, abortableMutation, t, utils.chat.getHistory]);
+  }, [isSending, personaId, locale, abortableMutation, t, utils.chat.getHistory, messagesAfter]);
 
   /** Saves an edited message. */
   const handleEditMessage = useCallback(async (msg: Message, content: string) => {

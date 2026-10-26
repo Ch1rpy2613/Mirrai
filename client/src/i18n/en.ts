@@ -209,6 +209,7 @@ export const en = {
     moreActions: "More actions",
     clear: "Clear conversation",
     clearConfirm: "Clear this conversation? Every message is deleted, and it cannot be undone.",
+    regenerateConfirm: "Regenerating this answer removes the {{count}} message(s) after it — including the ones you wrote. Continue?",
     cleared: "Conversation cleared",
     sceneActivated: "Scene activated",
     sceneDeactivated: "Left the scene",

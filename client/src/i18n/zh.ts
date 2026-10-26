@@ -207,6 +207,7 @@ export const zh = {
     moreActions: "更多操作",
     clear: "清空对话",
     clearConfirm: "清空这段对话？所有消息都会被删掉，救不回来。",
+    regenerateConfirm: "重新生成这一条回答，会删掉它后面的 {{count}} 条消息（包括你说的那些）。继续吗？",
     cleared: "对话已清空",
     sceneActivated: "场景已激活",
     sceneDeactivated: "已退出场景",
