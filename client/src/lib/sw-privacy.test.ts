@@ -157,4 +157,33 @@ describe("the service worker", () => {
       dispatchFetch(listeners, `${ORIGIN}/api/trpc/chat.send`, { method: "POST" }),
     ).toBe(false);
   });
+
+  it("names its cache after the release", () => {
+    // The cache name is the whole invalidation mechanism: the activate
+    // step deletes every cache whose name is not this one. A name that
+    // never changes means the cache is never invalidated, and the files
+    // in it that the build does not hash — the manifest, the icons, the
+    // font — stay at the version from the first install, for ever.
+    const source = readFileSync(SW_PATH, "utf-8");
+    const match = /const CACHE_VERSION = "([^"]+)"/.exec(source);
+    expect(match?.[1]).toBeTruthy();
+    expect(match?.[1]).not.toBe("mirrai-v1");
+  });
+
+  it("answers a navigation with something when the shell is not cached", async () => {
+    // `caches.match` resolves with nothing when the shell was never
+    // cached, and answering a navigation with nothing is a network
+    // error: the browser says "this site can't be reached" instead of
+    // showing the app.
+    const source = readFileSync(SW_PATH, "utf-8");
+    expect(source).toContain("offlineResponse");
+    expect(source).not.toMatch(/catch\(\(\)\s*=>\s*caches\.match\(/);
+  });
+
+  it("does not try to cache a failed response", async () => {
+    // `cache.put` rejects for a response that is not 2xx, and the put
+    // was not awaited, so every 404 produced an unhandled rejection.
+    const source = readFileSync(SW_PATH, "utf-8");
+    expect(source).toContain("if (response.ok)");
+  });
 });
