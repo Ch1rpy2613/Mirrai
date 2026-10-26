@@ -39,11 +39,22 @@ const CONFLICT_STYLES = [
   { key: "apologetic", labelKey: "questionnaire.conflictStyles.apologetic" },
 ] as const;
 
+/**
+ * The love languages the questionnaire offers.
+ *
+ * There were six buttons for five love languages: "实际做的事" and
+ * "日常的照顾" are the same language in different words, and both were
+ * stored as "服务的行动". So the two choices looked different and the
+ * persona came out the same — the user's answer made no difference at
+ * all, with nothing said.
+ *
+ * They are one button now, labelled so that either way of thinking
+ * about it is covered.
+ */
 const LOVE_LANGUAGES = [
   { key: "words", labelKey: "questionnaire.loveLanguages.words" },
   { key: "time", labelKey: "questionnaire.loveLanguages.time" },
   { key: "gifts", labelKey: "questionnaire.loveLanguages.gifts" },
-  { key: "acts", labelKey: "questionnaire.loveLanguages.acts" },
   { key: "touch", labelKey: "questionnaire.loveLanguages.touch" },
   { key: "service", labelKey: "questionnaire.loveLanguages.service" },
 ] as const;

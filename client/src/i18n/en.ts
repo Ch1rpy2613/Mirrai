@@ -991,9 +991,8 @@ export const en = {
       words: "Words of affirmation",
       time: "Time together",
       gifts: "Thoughtful gifts",
-      acts: "Things actually done",
       touch: "Physical contact",
-      service: "Everyday care",
+      service: "Everyday care, things actually done",
     },
   },
 

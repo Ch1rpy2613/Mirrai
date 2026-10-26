@@ -985,9 +985,8 @@ export const zh = {
       words: "肯定的言语",
       time: "陪伴的时间",
       gifts: "具体的礼物",
-      acts: "实际做的事",
       touch: "身体接触",
-      service: "日常的照顾",
+      service: "日常的照顾、实际做的事",
     },
   },
 
