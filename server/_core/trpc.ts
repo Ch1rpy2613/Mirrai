@@ -5,8 +5,41 @@ import type { TrpcContext } from "./context";
 import { rateLimiter, resolveRateLimitKey, type RateLimitRule } from "./rate-limit";
 import { copy } from "@shared/copy";
 
+/**
+ * What the client is told when something goes wrong.
+ *
+ * Every uncaught error used to reach the client word for word, and an
+ * uncaught error here is usually a Postgres one: a unique-violation
+ * race that names the constraint, a foreign-key violation that names
+ * the tables, or "DB not available". The user is told "duplicate key
+ * value violates unique constraint users_username_key" and learns the
+ * shape of the database, and a stranger learns it too.
+ *
+ * The message of a `TRPCError` is the app's own — it was written for
+ * the person reading it — so it is passed through. Everything else is
+ * replaced with something that says what happened without saying how.
+ *
+ * Exported so it can be tested on its own: the error formatter runs at
+ * the edge, and a test that goes through the router never reaches it.
+ */
+export function formatErrorForClient({
+  shape,
+  error,
+}: {
+  shape: { message: string; code: number; data: Record<string, unknown> };
+  error: unknown;
+}): { message: string; code: number; data: Record<string, unknown> } {
+  if (error instanceof TRPCError) return shape;
+  return {
+    ...shape,
+    message: "Something went wrong on the server.",
+    data: { ...shape.data, message: undefined },
+  };
+}
+
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter: formatErrorForClient,
 });
 
 export const router = t.router;
