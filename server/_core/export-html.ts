@@ -53,6 +53,7 @@ const COPY = {
     memoryCount: "memories",
     exportedOn: "Exported on",
     noMessages: "No messages",
+    diaryMore: "(the {shown} most recent of {total})",
   },
 } as const;
 
@@ -182,9 +183,24 @@ export function generateChatExportHTML(
     </div>`).join("\n")}</div>
   </section>` : "";
 
+  /**
+   * The newest diaries.
+   *
+   * The entries arrive oldest first, and the export took the first ten
+   * of them — so a user with forty-five diaries got the first ten days
+   * ever diarised and nothing about the last thirty-five. No count, no
+   * marker: the file simply did not have them.
+   *
+   * And the sibling export (the Markdown one) has all of them — so the
+   * two "export my data" buttons disagreed with each other.
+   */
+  const shownDiaries = diaryEntries.slice(-10);
   const diaryHtml = diaryEntries.length > 0 ? `<section class="section">
     <h2>${copy.diaries}</h2>
-    ${diaryEntries.slice(0, 10).map(d => `<div class="diary-entry">
+    ${diaryEntries.length > shownDiaries.length
+      ? `<p class="section-note">${copy.diaryMore.replace("{shown}", String(shownDiaries.length)).replace("{total}", String(diaryEntries.length))}</p>`
+      : ""}
+    ${shownDiaries.map(d => `<div class="diary-entry">
       <span class="diary-date">${escapeHtml(d.date)}</span>
       ${d.summary ? `<p>${escapeHtml(d.summary)}</p>` : ""}
       ${d.reflection ? `<p class="reflection">${escapeHtml(d.reflection)}</p>` : ""}
@@ -231,6 +247,7 @@ export function generateChatExportHTML(
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:#fafafa;color:#1a1a1a;line-height:1.6;max-width:800px;margin:0 auto;padding:24px 16px}
 h1{font-size:1.5rem;font-weight:600;margin-bottom:4px}
 h2{font-size:1.1rem;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #e5e5e5}
+.section-note{color:#888;font-size:0.9rem;margin:-6px 0 12px}
 .header{text-align:center;padding:32px 0;border-bottom:1px solid #e5e5e5;margin-bottom:24px}
 .meta{color:#888;font-size:0.85rem;margin-top:4px}
 .stats{display:flex;gap:24px;justify-content:center;margin-top:16px}

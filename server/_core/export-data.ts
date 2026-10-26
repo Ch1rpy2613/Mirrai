@@ -13,6 +13,7 @@ import * as db from "../db";
 import { computeIntimacy } from "./persona-utils";
 import { copy, type Locale } from "@shared/copy";
 import { intimacyLevelLabel } from "@shared/intimacy";
+import { USER_MOOD_LABELS, EVENT_LABELS } from "@shared/user-side";
 
 /**
  * How many messages one persona's export carries.
@@ -252,7 +253,15 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
     lines.push(`## ${copy(locale, "labels.export.myState")}`);
     lines.push("");
     for (const mood of bundle.moods) {
-      lines.push(`- ${mood.date} · ${mood.mood}${mood.note ? ` — ${mood.note}` : ""}`);
+      /**
+       * The mood is named, not coded.
+       *
+       * The stored key was printed as it is — "great", "down" — in a
+       * file that is otherwise in the reader's language. The labels
+       * already existed; they were simply not used here.
+       */
+      const label = USER_MOOD_LABELS[mood.mood]?.[locale] ?? mood.mood;
+      lines.push(`- ${mood.date} · ${label}${mood.note ? ` — ${mood.note}` : ""}`);
     }
     lines.push("");
   }
@@ -287,7 +296,10 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
       lines.push(`## ${copy(locale, "labels.export.events")}`);
       lines.push("");
       for (const event of persona.events) {
-        lines.push(`- ${iso(event.happenedAt)} · ${event.kind} · ${event.title}`);
+        // The kind is named, not coded: "breakup" is not a thing to
+        // read years from now.
+        const kind = EVENT_LABELS[event.kind]?.[locale] ?? event.kind;
+        lines.push(`- ${iso(event.happenedAt)} · ${kind} · ${event.title}`);
         if (event.detail) lines.push(`  - ${event.detail}`);
       }
       lines.push("");

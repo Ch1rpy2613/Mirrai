@@ -173,7 +173,7 @@ export function resolveRelationshipPhase(
  * reacts in character. The point is that the persona is not left speaking
  * from a snapshot of the relationship taken on the day it was built.
  */
-const EVENT_LABELS: Record<RelationshipEventKind, { zh: string; en: string }> = {
+export const EVENT_LABELS: Record<RelationshipEventKind, { zh: string; en: string }> = {
   together: { zh: "我们在一起了", en: "we got back together" },
   apart: { zh: "我们暂时分开了", en: "we are apart for a while" },
   reunion: { zh: "我们复合了", en: "we got back together" },
