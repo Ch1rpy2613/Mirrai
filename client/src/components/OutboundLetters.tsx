@@ -164,9 +164,19 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
+                    {/**
+                     * The buttons wait.
+                     *
+                     * Every one of them fired the mutation on each
+                     * click, so a double click sent two — and the
+                     * second one failed, because the letter had
+                     * already been dealt with. The user saw a success
+                     * message and then an error, for one press.
+                     */}
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={sentMutation.isPending}
                       onClick={() => sentMutation.mutate({ id: letter.id })}
                     >
                       <Check className="h-3.5 w-3.5" />
@@ -175,6 +185,7 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={selfMutation.isPending}
                       onClick={() => selfMutation.mutate({ id: letter.id })}
                     >
                       <BookMarked className="h-3.5 w-3.5" />
@@ -193,6 +204,7 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={dropMutation.isPending}
                       onClick={() => {
                         if (!window.confirm(t("outbound.dropConfirm"))) return;
                         dropMutation.mutate({ id: letter.id });
@@ -220,7 +232,7 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                   <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
                     {t("microRules.cancel")}
                   </Button>
-                  <Button size="sm" onClick={() => saveEdit(letter.id)}>
+                  <Button size="sm" disabled={updateMutation.isPending} onClick={() => saveEdit(letter.id)}>
                     <Send className="h-3.5 w-3.5" />
                     {t("microRules.save")}
                   </Button>
