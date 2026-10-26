@@ -341,7 +341,17 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
     lines.push("");
     for (const message of persona.messages) {
       const who = message.role === "user" ? copy(locale, "labels.export.speakerMe") : persona.name;
-      const when = new Date(message.createdAt).toISOString().slice(0, 16).replace("T", " ");
+      /**
+       * The time, as it was written.
+       *
+       * The column holds a wall clock with no time zone in it — the
+       * server's own — and `toISOString()` converts it to UTC. So the
+       * exported times did not match the times in the app: on a server
+       * east of Greenwich every message was written down an hour or
+       * more early.
+       */
+      const stamp = new Date(message.createdAt);
+      const when = `${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, "0")}-${String(stamp.getDate()).padStart(2, "0")} ${String(stamp.getHours()).padStart(2, "0")}:${String(stamp.getMinutes()).padStart(2, "0")}`;
       lines.push(`**${who}** · ${when}`);
       lines.push("");
       lines.push(message.content);
