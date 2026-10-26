@@ -571,6 +571,21 @@ function parseRules(raw: string): Array<Record<string, unknown>> {
  * What is left is a *candidate*: it is marked as mined and not confirmed,
  * and it only takes effect once the user has looked at it.
  */
+/**
+ * An id for a mined rule, derived from what it says.
+ *
+ * The same rule mined twice gets the same id — so the two copies are
+ * one rule, not two — and two different rules never collide.
+ */
+function ruleIdFor(trigger: string[], meaning: string): string {
+  const source = `${trigger.join("|")}::${meaning}`;
+  let hash = 0;
+  for (let i = 0; i < source.length; i++) {
+    hash = (hash * 31 + source.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
 export async function mineMicroRules(params: MineMicroRulesParams): Promise<MicroRule[]> {
   const locale = params.locale ?? "zh";
   const pairs = params.pairs ?? findContrastPairs(params.messages ?? []);
@@ -639,7 +654,17 @@ export async function mineMicroRules(params: MineMicroRulesParams): Promise<Micr
       if (!evidence.length) continue;
 
       const rule: MicroRule = {
-        id: `auto-${accepted.length + 1}`,
+        /**
+         * The id is derived from the rule itself.
+         *
+         * It was the position in the list — so the first rule of every
+         * run was "auto-1". Both merge paths dedupe by trigger and
+         * then concatenate the old list with the new one, so a
+         * confirmed "auto-1" from the previous run and a fresh "auto-1"
+         * lived side by side. The editor matches by id: confirming one
+         * rule confirmed *two*, and deleting one deleted *two*.
+         */
+        id: `auto-${ruleIdFor(trigger, meaning)}`,
         trigger,
         meaning,
         rendering,

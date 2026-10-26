@@ -772,9 +772,14 @@ describe("mining the rules", () => {
 
     const rules = await mineMicroRules({ pairs: PAIRS, userId: 1 });
 
-    // The rule that could not be grounded does not take a number, so
-    // the numbers stay consecutive.
-    expect(rules.map((rule) => rule.id)).toEqual(["auto-1", "auto-2"]);
+    // The ids come from what the rules say, so the same rule mined
+    // twice gets the same id — and the two copies are one rule, not
+    // two. The rule that could not be grounded does not take one.
+    expect(rules).toHaveLength(2);
+    expect(new Set(rules.map((rule) => rule.id)).size).toBe(2);
+    for (const rule of rules) {
+      expect(rule.id).toMatch(/^auto-[0-9a-z]+$/);
+    }
   });
 
   it("does not believe the model about how sure it is", async () => {

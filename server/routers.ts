@@ -3957,7 +3957,12 @@ export const appRouter = router({
 
           const existing = normalizeMicroRules((persona.personaData as any)?.microRules);
           const known = new Set(existing.map((rule) => rule.trigger.join("|")));
-          const fresh = mined.filter((rule) => !known.has(rule.trigger.join("|")));
+          // The id as well as the trigger: the same rule mined twice is
+          // one rule, and the list must not hold two copies of it.
+          const knownIds = new Set(existing.map((rule) => rule.id));
+          const fresh = mined.filter(
+            (rule) => !known.has(rule.trigger.join("|")) && !knownIds.has(rule.id),
+          );
           const rules = normalizeMicroRules([...existing, ...fresh]);
           await updatePersona(input.personaId, ctx.user.id, {
             personaData: {
