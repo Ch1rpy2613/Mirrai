@@ -11,7 +11,7 @@
  */
 import { checkGraduationEligibility } from "../_core/persona-utils";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
-import { getMessageCountInRange, getPersonasByUserId, getRecentEmotionTrend, setGraduationStatus } from "../db";
+import { getMessageCountInRange, getPersonasByUserId, getRecentEmotionTrend, setGraduationStatus, getUserTimezone } from "../db";
 import { writeFarewellLetter } from "../chat/farewell";
 import type { Persona } from "../../drizzle/schema";
 import type { ChannelId } from "./types";
@@ -333,9 +333,16 @@ async function handleGraduationCommand(
   // "manual" mode the user has already decided, so they do not apply.
   if (mode !== "manual") {
     // Re-check eligibility before honouring the request.
-    const recentEmotions = await getRecentEmotionTrend(personaId, params.userId, 14);
-    const recentFreq = await getMessageCountInRange(personaId, params.userId, 7, 0);
-    const prevFreq = await getMessageCountInRange(personaId, params.userId, 14, 7);
+    //
+    // The calendar is the user's own: the snapshots the emotion trend is
+    // read from are filed under the user's day keys, and the web path
+    // reads them on the user's clock. The channel path did not — so near
+    // a day boundary the channel could say "now is not the time to say
+    // goodbye" while the web said the opposite.
+    const timezone = await getUserTimezone(params.userId);
+    const recentEmotions = await getRecentEmotionTrend(personaId, params.userId, 14, timezone);
+    const recentFreq = await getMessageCountInRange(personaId, params.userId, 7, 0, timezone);
+    const prevFreq = await getMessageCountInRange(personaId, params.userId, 14, 7, timezone);
     const eligibility = checkGraduationEligibility({
       intimacyLevel: persona.intimacyLevel,
       recentEmotions,

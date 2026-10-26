@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const getPersonasByUserId = vi.fn();
 const getRecentEmotionTrend = vi.fn();
+const getUserTimezone = vi.fn();
 const getMessageCountInRange = vi.fn();
 const setGraduationStatus = vi.fn();
 const invoke = vi.fn();
@@ -11,6 +12,7 @@ const invoke = vi.fn();
 vi.mock("../db", () => ({
   getPersonasByUserId: (...a: unknown[]) => getPersonasByUserId(...a),
   getRecentEmotionTrend: (...a: unknown[]) => getRecentEmotionTrend(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getMessageCountInRange: (...a: unknown[]) => getMessageCountInRange(...a),
   setGraduationStatus: (...a: unknown[]) => setGraduationStatus(...a),
 }));
@@ -57,6 +59,7 @@ beforeEach(() => {
   clearAllActivePersonas();
   getPersonasByUserId.mockResolvedValue(personas);
   getRecentEmotionTrend.mockResolvedValue([]);
+  getUserTimezone.mockResolvedValue("Asia/Shanghai");
   getMessageCountInRange.mockResolvedValue(0);
 });
 

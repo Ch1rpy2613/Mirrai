@@ -2706,16 +2706,45 @@ export async function getRecentEmotionTrend(
     ));
 }
 
+/**
+ * The number of messages in a window of days.
+ *
+ * The window is the user's own.
+ *
+ * It used to be the server's midnight-to-midnight, while the emotion
+ * trend one line above was measured on the user's — so the two halves
+ * of the same gate were on two different calendars, and the gate
+ * fired at the wrong moment for anybody not on the server's clock.
+ */
+/**
+ * The start of the user's own day, N days ago.
+ *
+ * The messages are stored with the server's wall clock, so the user's
+ * midnight has to be expressed in it: shift to the user's clock, take
+ * the day, shift back.
+ */
+function startOfUserDay(now: Date, timezone: string | null | undefined, daysAgo: number): Date {
+  const start = new Date(now.getTime());
+  const shift = dayShiftMinutes(timezone, now);
+  start.setMinutes(start.getMinutes() + shift);
+  start.setHours(0, 0, 0, 0);
+  start.setMinutes(start.getMinutes() - shift);
+  start.setDate(start.getDate() - daysAgo);
+  return start;
+}
+
 export async function getMessageCountInRange(
   personaId: number,
   userId: number,
   startDaysAgo: number,
   endDaysAgo: number,
+  timezone?: string | null,
 ) {
   const db = await getDb();
   if (!db) return 0;
-  const start = new Date(); start.setDate(start.getDate() - startDaysAgo);
-  const end = new Date(); end.setDate(end.getDate() - endDaysAgo);
+  const now = new Date();
+  const start = startOfUserDay(now, timezone, startDaysAgo);
+  const end = startOfUserDay(now, timezone, endDaysAgo);
   const [result] = await db.select({ c: count() }).from(messages)
     .where(and(
       eq(messages.personaId, personaId),

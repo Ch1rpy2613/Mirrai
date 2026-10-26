@@ -1142,8 +1142,8 @@ export const appRouter = router({
           };
         }
         const recentEmotions = await getRecentEmotionTrend(input.id, ctx.user.id, 14, ctx.user.timezone);
-        const recentFreq = await getMessageCountInRange(input.id, ctx.user.id, 7, 0);
-        const prevFreq = await getMessageCountInRange(input.id, ctx.user.id, 14, 7);
+        const recentFreq = await getMessageCountInRange(input.id, ctx.user.id, 7, 0, ctx.user.timezone);
+        const prevFreq = await getMessageCountInRange(input.id, ctx.user.id, 14, 7, ctx.user.timezone);
         const result = checkGraduationEligibility({
           intimacyLevel: persona.intimacyLevel,
           recentEmotions,

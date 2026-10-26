@@ -1095,8 +1095,8 @@ export async function evaluateGraduation(params: {
 
   const timezone = await db.getUserTimezone(userId);
   const recentEmotions = await db.getRecentEmotionTrend(persona.id, userId, 14, timezone);
-  const recentFreq = await db.getMessageCountInRange(persona.id, userId, 7, 0);
-  const prevFreq = await db.getMessageCountInRange(persona.id, userId, 14, 7);
+  const recentFreq = await db.getMessageCountInRange(persona.id, userId, 7, 0, timezone);
+  const prevFreq = await db.getMessageCountInRange(persona.id, userId, 14, 7, timezone);
 
   const eligibility = checkGraduationEligibility({
     intimacyLevel: params.intimacyLevel,
