@@ -24,7 +24,12 @@ import type { MicroRule } from "@shared/micro-rules";
  * off. A rule the user cannot check is a rule the user cannot trust.
  */
 export default function MicroRulesEditor({ personaId }: { personaId: number }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  // The punctuation follows the interface's language: the full-width
+  // colon is Chinese typography, and an English reader saw
+  // "Meaning：the meaning".
+  const colon = locale === "en" ? ": " : "：";
+  const triggerSeparator = locale === "en" ? ", " : "、";
   const { data, refetch } = trpc.microRule.list.useQuery({ personaId });
   const saveMutation = trpc.microRule.save.useMutation({
     onSuccess: () => {
@@ -47,6 +52,13 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
 
   const rules: MicroRule[] = data?.rules ?? [];
   const [draft, setDraft] = useState<Partial<MicroRule> | null>(null);
+  /**
+   * What the user has typed into the trigger field.
+   *
+   * The field holds a list of triggers, and the list is split when the
+   * rule is saved — not on every keystroke.
+   */
+  const [triggerText, setTriggerText] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   function save(rulesToSave: MicroRule[]) {
@@ -74,6 +86,7 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
       trigger: [...rule.trigger],
       evidence: [...rule.evidence],
     });
+    setTriggerText(rule.trigger.join(triggerSeparator));
   }
 
   function add() {
@@ -87,12 +100,20 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
       verified: true,
       evidence: [],
     });
+    setTriggerText("");
   }
 
   function saveDraft() {
     if (!draft) return;
-    const trigger = (draft.trigger ?? [])
-      .flatMap((t) => t.split(/[、,，;；]/))
+    // The trigger is split once, here, and not on every keystroke.
+    //
+    // The field used to show the list joined with "、" and split it again
+    // on every key press, so a comma the user had just typed was
+    // replaced by a Chinese character the moment it appeared — and a
+    // trigger phrase that legitimately contains a comma could not be
+    // written at all.
+    const trigger = triggerText
+      .split(/[、,，;；\n]/)
       .map((t) => t.trim())
       .filter(Boolean);
     if (!trigger.length || !draft.meaning?.trim() || !draft.rendering?.trim()) {
@@ -204,11 +225,11 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
               </div>
             </div>
             <p className="mt-2 text-xs">
-              <span className="text-muted-foreground">{t("microRules.meaning")}：</span>
+              <span className="text-muted-foreground">{t("microRules.meaning")}{colon}</span>
               {rule.meaning}
             </p>
             <p className="mt-1 text-xs">
-              <span className="text-muted-foreground">{t("microRules.rendering")}：</span>
+              <span className="text-muted-foreground">{t("microRules.rendering")}{colon}</span>
               {rule.rendering}
             </p>
             {expanded === rule.id ? (
@@ -235,17 +256,9 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
           <div className="space-y-1.5">
             <Label className="text-xs">{t("microRules.trigger")}</Label>
             <Input
-              value={(draft.trigger ?? []).join("、")}
+              value={triggerText}
               placeholder={t("microRules.triggerHint")}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  trigger: e.target.value
-                    .split(/[、,，;；]/)
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
+              onChange={(e) => setTriggerText(e.target.value)}
             />
           </div>
           <div className="space-y-1.5">

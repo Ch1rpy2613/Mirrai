@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Check } from "lucide-react";
+import { toast } from "sonner";
 
 /**
  * What the app noticed.
@@ -14,7 +15,7 @@ import { Check } from "lucide-react";
  * open, with the user in charge of what counts as dealt with.
  */
 export default function SafetyTransparency() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
   const { data: eventsData } = trpc.safety.events.useQuery({ limit: 20 });
@@ -22,7 +23,10 @@ export default function SafetyTransparency() {
 
   const resolve = trpc.safety.resolveEvent.useMutation({
     onSuccess: () => utils.safety.events.invalidate(),
-    onError: (e) => console.warn(e),
+    // The failure used to go to the console and nowhere else: the user
+    // pressed "got it", the event stayed unhandled, and the only trace
+    // was a line in a log they will never read.
+    onError: (e: any) => toast.error(e.message),
   });
 
   const events = eventsData?.events ?? [];
@@ -85,7 +89,11 @@ export default function SafetyTransparency() {
                     {t(`safetyPanel.eventTypes.${event.type}` as any)}
                   </span>
                   <span className="text-[0.625rem] text-muted-foreground/70 ml-2">
-                    {new Date(event.createdAt).toLocaleDateString()}
+                    {/* The interface's language, not the browser's.
+                        `LetterBox` does it this way, so the same app
+                        showed two different date formats depending on
+                        which panel you were in. */}
+                    {new Date(event.createdAt).toLocaleDateString(locale)}
                   </span>
                 </span>
                 {event.handled ? (

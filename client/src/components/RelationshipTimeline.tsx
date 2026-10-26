@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
  * guessing would mean inventing a relationship the user did not have.
  */
 export default function RelationshipTimeline({ personaId }: { personaId: number }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const utils = trpc.useUtils();
 
   const { data } = trpc.relationship.list.useQuery({ personaId });
@@ -67,7 +67,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                     </p>
                   )}
                   <p className="text-[0.625rem] text-muted-foreground/70 mt-1">
-                    {new Date(event.happenedAt).toLocaleDateString()}
+                    {new Date(event.happenedAt).toLocaleDateString(locale)}
                   </p>
                 </div>
                 <button
