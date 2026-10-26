@@ -2528,7 +2528,15 @@ export const appRouter = router({
     /** The sources the user has already authorised. */
     listAuthorizedSources: protectedProcedure.query(async ({ ctx }) => {
       const { listCollectionSources } = await import("./collectors/db-store");
-      const sources = await listCollectionSources(ctx.user.id).catch(() => []);
+      /**
+       * The sources, or an error.
+       *
+       * The error used to be swallowed, so a transient database failure
+       * was rendered as "you have not authorised any source" — and the
+       * user was sent off to re-authorise credentials that were already
+       * stored.
+       */
+      const sources = await listCollectionSources(ctx.user.id);
       return sources.map((s: any) => ({
         source: s.source,
         label: s.label,
