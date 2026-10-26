@@ -41,6 +41,7 @@ import {
   getExportData, getRecentEmotionTrend, getMessageCountInRange, setGraduationStatus,
   getSafetyEvents, resolveSafetyEvent, getLatestGraduationAssessment, getLatestGraduationAssessments,
   getChannelBindingsByUserId, getChannelBinding, setChannelBindingPersona,
+  getChannelDefaultPersona, setChannelDefaultPersona,
   deleteChannelBinding, getChannelState, upsertChannelState,
   getUserTemplates, createUserTemplate, updateUserTemplate, deleteUserTemplate,
   createQuestionnaireAnswers, getActiveReminders, dismissReminder,
@@ -2034,6 +2035,42 @@ export const appRouter = router({
           targetName: input.targetName ?? null,
         });
         return { id };
+      }),
+
+    /**
+     * The persona a channel talks to.
+     *
+     * A conversation on Feishu only learns its id when the first
+     * message arrives — so the choice cannot be made per conversation
+     * from the interface. And the interface had no choice to make at
+     * all: the bot said "choose a persona under Settings → Feishu",
+     * and there was nothing there to choose with.
+     *
+     * This is the channel-level answer: the persona the channel talks
+     * to, until the conversation says otherwise.
+     */
+    setChannelDefault: protectedProcedure
+      .input(z.object({
+        channel: z.enum(["wechat", "feishu"]),
+        personaId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        await setChannelDefaultPersona({
+          userId: ctx.user.id,
+          channel: input.channel,
+          personaId: input.personaId,
+        });
+        return { success: true };
+      }),
+
+    /** The persona a channel talks to, if one has been chosen. */
+    getChannelDefault: protectedProcedure
+      .input(z.object({ channel: z.enum(["wechat", "feishu"]) }))
+      .query(async ({ ctx, input }) => {
+        const row = await getChannelDefaultPersona(ctx.user.id, input.channel);
+        return { personaId: row?.personaId ?? null };
       }),
 
     unbind: protectedProcedure

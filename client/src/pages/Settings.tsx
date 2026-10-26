@@ -860,7 +860,7 @@ function WeChatTab() {
         </div>
       </section>
 
-      <WeChatBindingsSection connected={isConnected} />
+      <WeChatBindingsSection connected={isConnected} loggedInUser={bot?.loggedInUser ?? null} />
       <WeChatCommandsSection />
     </div>
   );
@@ -868,7 +868,14 @@ function WeChatTab() {
 
 // ─── WECHAT DEFAULT PERSONA BINDINGS ────────────────────────────────────────
 
-function WeChatBindingsSection({ connected }: { connected: boolean }) {
+function WeChatBindingsSection({
+  connected,
+  loggedInUser,
+}: {
+  connected: boolean;
+  /** The WeChat account the bot is logged in as. */
+  loggedInUser: string | null;
+}) {
   const { t } = useLocale();
   const bindings = trpc.wechat.listBindings.useQuery();
   const personas = trpc.persona.list.useQuery();
@@ -901,11 +908,23 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
 
   function handleSetDefault() {
     const personaId = Number(selectedPersonaId);
-    if (!personaId || !primaryBinding) return;
+    if (!personaId) return;
+    /**
+     * The WeChat account the binding is for.
+     *
+     * The picker used to be shown only when a binding already existed —
+     * so the binding could never be made. The user was told to "come
+     * back here and choose a persona", and there was nothing to choose
+     * with.
+     *
+     * The login knows the account: it is the id the bot is talking to.
+     */
+    const wechatUserId = primaryBinding?.wechatUserId ?? loggedInUser;
+    if (!wechatUserId) return;
     setDefault.mutate({
-      wechatUserId: primaryBinding.wechatUserId,
+      wechatUserId,
       personaId,
-      wechatName: primaryBinding.wechatName ?? undefined,
+      wechatName: primaryBinding?.wechatName ?? undefined,
     });
   }
 
@@ -955,6 +974,46 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
             <div className="flex gap-2">
               <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
                 <SelectTrigger id="wechat-reply-persona" aria-labelledby="wechat-reply-persona-label" className="h-9 rounded-md text-sm w-full">
+                  <SelectValue placeholder={t("settings.wechat.selectPersona")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {readyPersonas.map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="rounded-md px-4 flex-shrink-0"
+                disabled={!selectedPersonaId || setDefault.isPending || readyPersonas.length === 0}
+                onClick={handleSetDefault}>
+                {setDefault.isPending ? t("common.saving") : t("common.save")}
+              </Button>
+            </div>
+            {readyPersonas.length === 0 && (
+              <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
+                {t("settings.wechat.noAnalyzed")}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : connected && loggedInUser ? (
+        /**
+         * The very first binding.
+         *
+         * The picker used to live behind "a binding already exists" —
+         * so the binding could never be made, and the channel could
+         * never answer: the user sent a WeChat message and the bot
+         * said "choose a persona under Settings → WeChat", and there
+         * was nothing to choose with.
+         */
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("settings.wechat.noDefault")}
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground" id="wechat-first-persona-label" htmlFor="wechat-first-persona">{t("settings.wechat.replyPersona")}</Label>
+            <div className="flex gap-2">
+              <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
+                <SelectTrigger id="wechat-first-persona" aria-labelledby="wechat-first-persona-label" className="h-9 rounded-md text-sm w-full">
                   <SelectValue placeholder={t("settings.wechat.selectPersona")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1328,8 +1387,37 @@ function FeishuSection() {
   const [appId, setAppId] = useState("");
   const [appSecret, setAppSecret] = useState("");
 
+  /**
+   * The persona Feishu talks to.
+   */
+  const personas = trpc.persona.list.useQuery();
+  const readyPersonas = (personas.data ?? []).filter(p => p.analysisStatus === "ready");
+  const channelDefault = trpc.channel.getChannelDefault.useQuery({ channel: "feishu" });
+  const [feishuPersonaId, setFeishuPersonaId] = useState("");
+  const setChannelDefault = trpc.channel.setChannelDefault.useMutation({
+    onSuccess: () => {
+      toast.success(t("settings.channels.feishu.personaSaved"));
+      channelDefault.refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const connected = status.data?.connected === true;
   const lastError = (status.data?.detail as { error?: string } | null | undefined)?.error;
+
+  /**
+   * The persona Feishu talks to.
+   *
+   * The picker opens on the one that is already chosen — so the user
+   * sees what is in force, instead of an empty box that looks like
+   * nothing has been set.
+   */
+  const chosenFeishuPersona = channelDefault.data?.personaId ?? null;
+  useEffect(() => {
+    if (chosenFeishuPersona && !feishuPersonaId) {
+      setFeishuPersonaId(String(chosenFeishuPersona));
+    }
+  }, [chosenFeishuPersona, feishuPersonaId]);
   /**
    * The save is possible with one of the two.
    *
@@ -1407,6 +1495,41 @@ function FeishuSection() {
       {lastError && (
         <p className="mt-4 text-xs text-destructive leading-relaxed">{lastError}</p>
       )}
+
+      {/**
+       * The persona Feishu talks to.
+       *
+       * There was no binding UI here at all — while the bot told the
+       * user to "choose a persona under Settings → Feishu on the web".
+       * A Feishu conversation only learns its id when the first message
+       * arrives, so the choice cannot be made per conversation; it is
+       * the channel's own.
+       */}
+      <div className="mt-5 space-y-1.5">
+        <Label className="text-xs text-muted-foreground" id="feishu-persona-label" htmlFor="feishu-persona">{t("settings.channels.feishu.personaTitle")}</Label>
+        <div className="flex gap-2">
+          <Select value={feishuPersonaId} onValueChange={setFeishuPersonaId}>
+            <SelectTrigger id="feishu-persona" aria-labelledby="feishu-persona-label" className="h-9 rounded-md text-sm w-full">
+              <SelectValue placeholder={t("settings.channels.feishu.personaPlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {readyPersonas.map(p => (
+                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" className="rounded-md px-4 flex-shrink-0"
+            disabled={!feishuPersonaId || setChannelDefault.isPending || readyPersonas.length === 0}
+            onClick={() => setChannelDefault.mutate({ channel: "feishu", personaId: Number(feishuPersonaId) })}>
+            {setChannelDefault.isPending ? t("common.saving") : t("common.save")}
+          </Button>
+        </div>
+        {readyPersonas.length === 0 && (
+          <p className="text-[0.6875rem] text-muted-foreground leading-relaxed">
+            {t("settings.wechat.noAnalyzed")}
+          </p>
+        )}
+      </div>
 
       <div className="flex gap-2 mt-5">
         <Button size="sm" className="rounded-md px-5" disabled={!canSave}

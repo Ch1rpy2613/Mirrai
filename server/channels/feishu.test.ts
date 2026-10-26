@@ -6,8 +6,11 @@ const handleChannelChat = vi.fn();
 const handleCommand = vi.fn();
 const getActivePersonaId = vi.fn();
 
+const getChannelDefaultPersona = vi.fn();
+
 vi.mock("../db", () => ({
   getChannelBinding: (...a: unknown[]) => getChannelBinding(...a),
+  getChannelDefaultPersona: (...a: unknown[]) => getChannelDefaultPersona(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
 }));
 
@@ -55,6 +58,9 @@ describe("handleFeishuEvent", () => {
     handleChannelChat.mockReset();
     handleCommand.mockReset();
     getActivePersonaId.mockReset();
+    getChannelDefaultPersona.mockReset();
+    // The channel's own choice, unless a test says otherwise.
+    getChannelDefaultPersona.mockResolvedValue(undefined);
 
     getChannelBinding.mockResolvedValue({ personaId: 7 });
     getPersonaById.mockResolvedValue({ id: 7, graduationStatus: null });
@@ -109,6 +115,7 @@ describe("handleFeishuEvent", () => {
 
   it("tells the user to pick a persona when nothing is bound", async () => {
     getChannelBinding.mockResolvedValue(undefined);
+    getChannelDefaultPersona.mockResolvedValue(undefined);
     const sent: string[] = [];
 
     await handleFeishuEvent({

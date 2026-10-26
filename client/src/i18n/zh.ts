@@ -725,6 +725,9 @@ export const zh = {
       feishu: {
         title: "飞书连接",
         note: "通过飞书自建应用接入，用长连接接收消息",
+        personaTitle: "飞书用哪个分身",
+        personaPlaceholder: "选择一个分身",
+        personaSaved: "飞书的默认分身已经改好了。",
         introLead: "飞书通道走长连接（WebSocket），需要你创建一个",
         introEmphasis: "企业自建应用",
         introTail: "，然后把它的 App ID 与 App Secret 填到下面。",

@@ -185,7 +185,20 @@ export async function handleFeishuEvent(params: {
   // answered in — the channel has no language switch of its own.
   const locale = detectLocale(text);
 
-  const binding = await db.getChannelBinding(userId, CHANNEL_ID, chatId);
+  /**
+   * The persona this conversation talks to.
+   *
+   * A conversation on Feishu only learns its id when the first message
+   * arrives — so a conversation that has never been bound falls back
+   * to the channel's own choice, the one made in the interface.
+   *
+   * Without that fallback the channel could never answer: the bot said
+   * "choose a persona under Settings → Feishu", and there was nothing
+   * there to choose with.
+   */
+  const binding =
+    (await db.getChannelBinding(userId, CHANNEL_ID, chatId)) ??
+    (await db.getChannelDefaultPersona(userId, CHANNEL_ID));
   if (!binding) {
     await sendText(chatId, copy(locale, "channels.noDefaultPersonaFeishu"));
     return;

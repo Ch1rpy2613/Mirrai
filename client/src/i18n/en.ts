@@ -727,6 +727,9 @@ export const en = {
       feishu: {
         title: "Feishu connection",
         note: "Connect through a self-built Feishu app over a long connection",
+        personaTitle: "The persona Feishu talks to",
+        personaPlaceholder: "Choose a persona",
+        personaSaved: "The default persona for Feishu has been changed.",
         introLead: "The Feishu channel runs over a long connection (WebSocket). Create a ",
         introEmphasis: "self-built enterprise app",
         introTail: ", then paste its App ID and App Secret below.",

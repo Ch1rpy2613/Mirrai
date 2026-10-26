@@ -726,6 +726,31 @@ export type ChannelBinding = typeof channelBindings.$inferSelect;
 export type InsertChannelBinding = typeof channelBindings.$inferInsert;
 
 /**
+ * The persona a channel talks to when a conversation has no binding of
+ * its own.
+ *
+ * A Feishu conversation only learns its id when the first message
+ * arrives, so the choice cannot be made per conversation from the
+ * interface — and the interface had no choice to make at all, so the
+ * channel could never answer.
+ *
+ * This is the channel-level answer: "the persona Feishu talks to".
+ */
+export const channelDefaultPersonas = pgTable("channel_default_personas", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  /** Channel identifier, e.g. "wechat" or "feishu". */
+  channel: varchar("channel", { length: 32 }).notNull(),
+  personaId: integer("personaId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userChannelUnique: uniqueIndex("channel_default_personas_user_channel_idx")
+    .on(table.userId, table.channel),
+}));
+
+export type ChannelDefaultPersona = typeof channelDefaultPersonas.$inferSelect;
+
+/**
  * Per-user channel state: connection status and encrypted credentials.
  */
 export const channelStates = pgTable("channel_states", {

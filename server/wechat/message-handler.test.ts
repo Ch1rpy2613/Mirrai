@@ -6,9 +6,11 @@ const handleCommand = vi.fn();
 const handlePersonaChat = vi.fn();
 const sendWeixinText = vi.fn();
 const getUserLocale = vi.fn();
+const getChannelDefaultPersona = vi.fn();
 
 vi.mock("../db", () => ({
   getWechatBindingByUserId: (...a: unknown[]) => getWechatBindingByUserId(...a),
+  getChannelDefaultPersona: (...a: unknown[]) => getChannelDefaultPersona(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
 }));
@@ -45,6 +47,9 @@ beforeEach(() => {
   handlePersonaChat.mockReset();
   sendWeixinText.mockReset();
   getUserLocale.mockReset();
+  getChannelDefaultPersona.mockReset();
+  // The channel's own choice, unless a test says otherwise.
+  getChannelDefaultPersona.mockResolvedValue(undefined);
 
   getUserLocale.mockResolvedValue("zh");
   getWechatBindingByUserId.mockResolvedValue({ id: 1, personaId: 7, wechatUserId: "wx-user-1" });

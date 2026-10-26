@@ -22,7 +22,15 @@ export async function handleWeixinMessage(
   if (!text) return;
 
   const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
-  const binding = await db.getWechatBindingByUserId(parsed.fromUserId, userId);
+  /**
+   * The persona this conversation talks to.
+   *
+   * A WeChat account that has never been bound falls back to the
+   * channel's own choice, the one made in the interface.
+   */
+  const binding =
+    (await db.getWechatBindingByUserId(parsed.fromUserId, userId)) ??
+    (await db.getChannelDefaultPersona(userId, "wechat"));
   if (!binding) {
     /**
      * In the reader's own language.

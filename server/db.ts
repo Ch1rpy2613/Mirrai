@@ -6,7 +6,7 @@ import {
   wechatBindings, skillJobs, llmConfigs, wechatBotState,
   memories, emotionSnapshots, diaryEntries, scenes,
   chatSummaries, safetyEvents, graduationAssessments,
-  channelBindings, channelStates, personaTemplates, personaQuestionnaireAnswers,
+  channelBindings, channelStates, channelDefaultPersonas, personaTemplates, personaQuestionnaireAnswers,
   reminderDeliveries, researchProfiles, collectedMessages, collectionSources,
   collectionJobs,
   evalCases, evalRuns, outboundLetters,
@@ -740,6 +740,7 @@ export async function bumpUserTokenVersion(id: number) {
 export async function deleteUserAccount(id: number) {
   await withTransaction(async (tx) => {
     await tx.delete(channelBindings).where(eq(channelBindings.userId, id));
+    await tx.delete(channelDefaultPersonas).where(eq(channelDefaultPersonas.userId, id));
     await tx.delete(channelStates).where(eq(channelStates.userId, id));
     await tx.delete(chatSummaries).where(eq(chatSummaries.userId, id));
     await tx.delete(collectedMessages).where(eq(collectedMessages.userId, id));
@@ -998,6 +999,7 @@ export async function deletePersona(id: number, userId: number) {
 
   await withTransaction(async (tx) => {
     await tx.delete(channelBindings).where(and(eq(channelBindings.personaId, id), eq(channelBindings.userId, userId)));
+    await tx.delete(channelDefaultPersonas).where(and(eq(channelDefaultPersonas.personaId, id), eq(channelDefaultPersonas.userId, userId)));
     await tx.delete(chatSummaries).where(and(eq(chatSummaries.personaId, id), eq(chatSummaries.userId, userId)));
     await tx.delete(collectedMessages).where(and(eq(collectedMessages.personaId, id), eq(collectedMessages.userId, userId)));
     await tx.delete(collectionJobs).where(and(eq(collectionJobs.personaId, id), eq(collectionJobs.userId, userId)));
@@ -2901,6 +2903,44 @@ export async function getChannelBinding(
  *
  * Replaces any existing active binding for the same conversation.
  */
+/**
+ * The persona a channel talks to when a conversation has no binding of
+ * its own.
+ */
+export async function getChannelDefaultPersona(userId: number, channel: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select().from(channelDefaultPersonas).where(and(
+    eq(channelDefaultPersonas.userId, userId),
+    eq(channelDefaultPersonas.channel, channel),
+  )).limit(1);
+  return row;
+}
+
+/**
+ * Sets the persona a channel talks to.
+ *
+ * It is an upsert: the choice is made again and again, and it always
+ * means "the persona this channel talks to".
+ */
+export async function setChannelDefaultPersona(params: {
+  userId: number;
+  channel: string;
+  personaId: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(channelDefaultPersonas).values({
+    userId: params.userId,
+    channel: params.channel,
+    personaId: params.personaId,
+  }).onConflictDoUpdate({
+    target: [channelDefaultPersonas.userId, channelDefaultPersonas.channel],
+    set: { personaId: params.personaId },
+  }).returning();
+  return row ?? null;
+}
+
 export async function setChannelBindingPersona(params: {
   userId: number;
   channel: string;
