@@ -236,9 +236,17 @@ function pump(): void {
      * was never given back and the next job was never started. One
      * failure and the collectors stopped for the life of the process.
      */
+    /**
+     * The slot is given back once.
+     *
+     * It used to be given back here *and* in the runner's `finally` —
+     * so a runner that rejected after its `finally` had already run
+     * took the slot twice, and the count went negative. A negative
+     * count means the queue starts more collectors than the limit
+     * allows: an unbounded number of Playwright browsers.
+     */
     void runJob(job).catch((error) => {
       console.error("[Collectors] The job runner failed:", error);
-      active -= 1;
       pump();
     });
   }
@@ -254,6 +262,19 @@ function isCancellation(error: unknown): boolean {
 
 /** Runs one job to completion. */
 async function runJob(job: CollectorJob): Promise<void> {
+  /**
+   * The controller is registered *first*.
+   *
+   * It used to be registered after the job was marked running and
+   * after two awaits — a dynamic import and a database round trip. So
+   * a cancellation that arrived in that window found no controller,
+   * was silently ignored, and the collector went on for up to thirty
+   * minutes and imported its messages anyway. The caller was told the
+   * cancellation had worked.
+   */
+  const controller = new AbortController();
+  controllers.set(job.id, controller);
+
   job.status = "running";
   job.startedAt = new Date().toISOString();
   store.save(job);
@@ -279,9 +300,6 @@ async function runJob(job: CollectorJob): Promise<void> {
       console.warn("[Collectors] Could not restore the stored credentials:", e);
     }
   }
-
-  const controller = new AbortController();
-  controllers.set(job.id, controller);
 
   try {
     const base = inputs.get(job.id) ?? {};
@@ -377,7 +395,7 @@ async function runJob(job: CollectorJob): Promise<void> {
         console.warn("[Collectors] Could not clear the credentials:", error);
       }
     }
-    active -= 1;
+    active = Math.max(0, active - 1);
     pump();
   }
 }

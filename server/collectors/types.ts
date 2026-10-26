@@ -474,6 +474,15 @@ const feishuConnector: SourceConnector = {
     if (input.target) argv.push("--name", input.target);
     if (input.options?.outputDir) argv.push("--output-dir", input.options.outputDir);
     if (input.limit) argv.push("--msg-limit", String(input.limit));
+    /**
+     * The reader's own time zone.
+     *
+     * The collectors turn an epoch into a wall clock, and the wall
+     * clock they wrote was the *machine's*. So on a server in another
+     * country every message landed at the wrong hour — and the server
+     * then read it back in the reader's zone, which shifted it again.
+     */
+    if (input.timezone) argv.push("--timezone", input.timezone);
     const credentials = collectCredentials(
       "feishu",
       input,
@@ -542,6 +551,15 @@ const dingtalkConnector: SourceConnector = {
     if (input.target) argv.push("--name", input.target);
     if (input.options?.outputDir) argv.push("--output-dir", input.options.outputDir);
     if (input.limit) argv.push("--msg-limit", String(input.limit));
+    /**
+     * The reader's own time zone.
+     *
+     * The collectors turn an epoch into a wall clock, and the wall
+     * clock they wrote was the *machine's*. So on a server in another
+     * country every message landed at the wrong hour — and the server
+     * then read it back in the reader's zone, which shifted it again.
+     */
+    if (input.timezone) argv.push("--timezone", input.timezone);
     if (input.options?.chrome_profile) argv.push("--chrome-profile", input.options.chrome_profile);
     if (input.options?.show_browser === "true") argv.push("--show-browser");
     return argv;
@@ -594,6 +612,15 @@ const slackConnector: SourceConnector = {
     if (input.target) argv.push("--name", input.target);
     if (input.options?.outputDir) argv.push("--output-dir", input.options.outputDir);
     if (input.limit) argv.push("--msg-limit", String(input.limit));
+    /**
+     * The reader's own time zone.
+     *
+     * The collectors turn an epoch into a wall clock, and the wall
+     * clock they wrote was the *machine's*. So on a server in another
+     * country every message landed at the wrong hour — and the server
+     * then read it back in the reader's zone, which shifted it again.
+     */
+    if (input.timezone) argv.push("--timezone", input.timezone);
     if (input.options?.channel_limit) argv.push("--channel-limit", input.options.channel_limit);
     return argv;
   },

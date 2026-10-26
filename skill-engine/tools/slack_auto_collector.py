@@ -38,6 +38,7 @@ import time
 import argparse
 from pathlib import Path
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 
 # ─── 依赖检查 ──────────────────────────────────────────────────────────────────
@@ -63,6 +64,26 @@ CONFIG_PATH = Path.home() / ".colleague-skill" / "slack_config.json"
 # one that holds the credentials of the person who asked for the
 # collection, rather than the ones of whoever set the machine up.
 _CONFIG_OVERRIDE: Path | None = None
+
+# The time zone the reader reads in. The timestamps are the
+# reader's own wall clock — so a server in another country must not
+# render them in its own zone.
+_TIMEZONE_OVERRIDE: Optional[str] = None
+
+
+def _reader_tz():
+    """The zone the messages are shown in.
+
+    The epoch is a moment; the wall clock it is written as belongs to
+    whoever reads it. So the zone is the reader's, and the server says
+    which one it is.
+    """
+    if not _TIMEZONE_OVERRIDE:
+        return None
+    try:
+        return ZoneInfo(_TIMEZONE_OVERRIDE)
+    except Exception:
+        return None
 
 
 def config_path() -> Path:
@@ -572,9 +593,15 @@ def _is_noise(text: str) -> bool:
 
 
 def _format_ts(ts: str) -> str:
-    """将 Slack timestamp（Unix float string）转为可读时间"""
+    """将 Slack timestamp（Unix float string）转为可读时间
+
+    时间按阅读者的时区渲染：时间是"那一刻"，而写下来的钟面属于读它的人。
+    服务器会告诉脚本该用哪个时区。
+    """
     try:
-        return datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M")
+        tz = _reader_tz()
+        moment = datetime.fromtimestamp(float(ts), tz) if tz else datetime.fromtimestamp(float(ts))
+        return moment.strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, OSError):
         return ts
 
@@ -796,8 +823,16 @@ def main() -> None:
         default="text",
         help="输出格式：text（默认，Markdown 报告）/ json（统一 JSON，供服务端解析）",
     )
+    parser.add_argument(
+        "--timezone",
+        default=None,
+        help="阅读者所在的时区（IANA 名称，如 Asia/Shanghai）",
+    )
 
     args = parser.parse_args()
+
+    global _TIMEZONE_OVERRIDE
+    _TIMEZONE_OVERRIDE = args.timezone
 
     # The server may point the collector at a file of its own — one that
     # holds the credentials of the person who asked for the collection

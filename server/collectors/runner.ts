@@ -46,13 +46,38 @@ export function parseProgressLine(line: string): number | null {
   return Math.min(100, Math.round(value));
 }
 
-/** Stops a child process, escalating to SIGKILL when it ignores SIGTERM. */
+/**
+ * Stops a child process, escalating to SIGKILL when it ignores SIGTERM.
+ *
+ * The whole *group* is stopped, not just the child.
+ *
+ * The DingTalk collector drives a browser through Playwright — and that
+ * browser is a grandchild. So a timeout or a cancellation left the
+ * Chromium running: it kept a profile open, kept a window on the
+ * operator's desktop, and went on fetching.
+ */
 function killChild(child: ChildProcess): void {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill("SIGTERM");
+  const signalGroup = (signal: NodeJS.Signals) => {
+    if (typeof child.pid !== "number") return;
+    try {
+      // The negative pid is the whole group.
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // The group is gone, or it was never one. The child itself is
+      // still signalled below.
+    }
+    try {
+      child.kill(signal);
+    } catch {
+      // It is already gone.
+    }
+  };
+  signalGroup("SIGTERM");
   const timer = setTimeout(() => {
     if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGKILL");
+      signalGroup("SIGKILL");
     }
   }, KILL_GRACE_MS);
   timer.unref();
@@ -155,6 +180,15 @@ export async function runCollector(
     // and to decrypt the stored credentials.
     env: collectorEnvironment(),
     stdio: ["ignore", "pipe", "pipe"],
+    /**
+     * Its own process group.
+     *
+     * So the browser the DingTalk collector drives — a grandchild — is
+     * stopped with it. It used to survive the timeout and the
+     * cancellation: a Chromium with the operator's profile open, still
+     * fetching.
+     */
+    detached: true,
   });
 
   return new Promise<{ stdout: string; stderr: string; stdoutTruncated?: boolean }>((resolve, reject) => {
@@ -781,7 +815,9 @@ function parseCollectorMessages(
     }
   }
 
-  const jsonl = parseJsonLines(text, source, target);
+  // The zone comes with it: the same payload in another format lands
+  // on the right day and the right hour.
+  const jsonl = parseJsonLines(text, source, target, timeZone);
   if (jsonl.length > 0) return jsonl;
 
   const transcript = parseRoleTranscript(text, source);
