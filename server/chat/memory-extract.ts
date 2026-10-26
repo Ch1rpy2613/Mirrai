@@ -434,10 +434,30 @@ function extractJsonArrayText(text: string): string | null {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = fenced ? fenced[1] : trimmed;
-  const start = body.indexOf("[");
-  const end = body.lastIndexOf("]");
-  if (start === -1 || end === -1 || end < start) return null;
-  return body.slice(start, end + 1);
+  /**
+   * The array.
+   *
+   * It used to be taken from the first `[` to the last `]` — so a
+   * model that wrote a sentence with a bracket in it before the array
+   * ("here are the memories [see below]: [...]") had its answer
+   * rejected, and the memories were lost.
+   *
+   * So every `[` is tried, from the first to the last, and the first
+   * one that parses as an array is taken. The string is short, and the
+   * brackets in it are few.
+   */
+  for (let start = body.indexOf("["); start !== -1; start = body.indexOf("[", start + 1)) {
+    for (let end = body.lastIndexOf("]"); end > start; end = body.lastIndexOf("]", end - 1)) {
+      const candidate = body.slice(start, end + 1);
+      try {
+        const value = JSON.parse(candidate);
+        if (Array.isArray(value)) return candidate;
+      } catch {
+        // Not this one.
+      }
+    }
+  }
+  return null;
 }
 
 /**
