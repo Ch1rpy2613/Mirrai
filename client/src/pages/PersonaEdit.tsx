@@ -236,8 +236,23 @@ export default function PersonaEdit() {
     importCardMutation.mutate({ fileContent });
   };
 
+  /**
+   * Whether the form has been filled in from the server.
+   *
+   * The effect below fills every field in from the persona, and the
+   * persona changes whenever one of the mutations refetches it. So
+   * typing a new personality and then pressing the "hold" button threw
+   * the typing away: the refetch arrived, the effect ran, and every
+   * field was set back to the last saved value.
+   *
+   * The form is filled in once. Everything the user does afterwards
+   * changes the form directly, so nothing is lost.
+   */
+  const formFilled = useRef(false);
+
   useEffect(() => {
-    if (!persona) return;
+    if (!persona || formFilled.current) return;
+    formFilled.current = true;
     setName(persona.name || "");
     setRelationshipDesc(persona.relationshipDesc || "");
     setTogetherFrom(persona.togetherFrom || "");
