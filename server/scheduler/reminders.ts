@@ -422,8 +422,16 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
         now,
       });
 
+        /**
+         * The user's bindings, read once.
+         *
+         * They were read inside the loop over the reminders, so a user
+         * with three reminders was read three times — on a timer that
+         * runs every minute.
+         */
+        const bindings = await db.getChannelBindingsByUserId(persona.userId);
+
         for (const reminder of reminders) {
-          const bindings = await db.getChannelBindingsByUserId(persona.userId);
           // A reminder about 小A should not be pushed into the conversation
           // that is set up for 小B. Prefer the binding for this persona; fall
           // back to the web card rather than to the wrong conversation.
