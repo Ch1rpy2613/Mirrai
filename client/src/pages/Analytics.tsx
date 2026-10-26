@@ -114,9 +114,21 @@ export default function Analytics() {
               const step = event.key === "ArrowRight" ? 1 : -1;
               const next = ranges[(index + step + ranges.length) % ranges.length];
               setDays(next);
+              /**
+               * The focus moves with the selection.
+               *
+               * The buttons are a roving tabindex — so the one the
+               * focus was on became tabIndex={-1} and aria-checked
+               * "false", and the newly selected one became tabIndex={0}
+               * without being focused. The focus ring stayed on the
+               * old option while the selection moved, and a screen
+               * reader announced the old option as "not checked".
+               */
+              const target = document.getElementById(`analytics-range-${next}`);
+              target?.focus();
             }}>
             {[7, 30, 90].map(d => (
-              <button key={d} onClick={() => setDays(d)}
+              <button key={d} id={`analytics-range-${d}`} onClick={() => setDays(d)}
                 role="radio"
                 aria-checked={days === d}
                 tabIndex={days === d ? 0 : -1}
@@ -205,8 +217,15 @@ export default function Analytics() {
               </p>
             </>
           ) : (
+            /**
+             * "Nothing recorded" is only true when the answer came back.
+             *
+             * A failed query — or one still on its way — left the list
+             * empty, and the page said "nothing recorded yet" about the
+             * user's own past. The failure is said above the charts.
+             */
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {t("analytics.myMoodEmpty")}
+              {isError ? t("common.error") : isLoading ? t("common.loading") : t("analytics.myMoodEmpty")}
             </p>
           )}
         </ChartCard>
@@ -252,7 +271,10 @@ export default function Analytics() {
         <ChartCard title={t("analytics.personaRanking")}>
           {(data?.personaEngagement || []).length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-sm text-muted-foreground">{t("analytics.noData")}</p>
+              {/* Not "no data" when the answer never arrived. */}
+              <p className="text-sm text-muted-foreground">
+                {isError ? t("common.error") : isLoading ? t("common.loading") : t("analytics.noData")}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
