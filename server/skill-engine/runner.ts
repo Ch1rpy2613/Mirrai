@@ -13,19 +13,31 @@ const execFileAsync = promisify(execFile);
  * missing, and then every one of them fails with a message about a
  * file that does not exist, which says nothing about what to do.
  *
- * The check is done once: the answer cannot change while the app runs.
+ * The answer was cached for the life of the process: the interpreter
+ * cannot come and go while the app runs — but it *can* be installed
+ * while the app runs, and then every tool kept failing with "Python is
+ * not available" for the rest of the server's life. So a failed check
+ * is remembered for a minute, and a successful one is remembered for
+ * the life of the process.
  */
 let interpreterChecked: Promise<boolean> | null = null;
+let interpreterCheckedAt = 0;
+
+/** How long a failed check is believed. */
+const FAILED_CHECK_TTL_MS = 60_000;
 
 export function pythonIsAvailable(): Promise<boolean> {
-  if (!interpreterChecked) {
-    interpreterChecked = execFileAsync(ENV.pythonPath, ["--version"], {
-      timeout: 10_000,
-      env: subprocessEnvironment(),
-    })
-      .then(() => true)
-      .catch(() => false);
+  const now = Date.now();
+  if (interpreterChecked && now - interpreterCheckedAt < FAILED_CHECK_TTL_MS) {
+    return interpreterChecked;
   }
+  interpreterCheckedAt = now;
+  interpreterChecked = execFileAsync(ENV.pythonPath, ["--version"], {
+    timeout: 10_000,
+    env: subprocessEnvironment(),
+  })
+    .then(() => true)
+    .catch(() => false);
   return interpreterChecked;
 }
 
@@ -48,6 +60,14 @@ export async function runPythonTool(
   return execFileAsync(ENV.pythonPath, [`tools/${toolName}`, ...args], {
     cwd: ENV.skillEngineDir,
     timeout: 120_000,
+    /**
+     * A megabyte of output is the default, and it is not much.
+     *
+     * The tools print their findings — a research report, an audit, a
+     * profile — and a run that printed more than a megabyte died with
+     * "stdout maxBuffer length exceeded" and the work was lost.
+     */
+    maxBuffer: 32 * 1024 * 1024,
     /**
      * The child is given a small environment of its own.
      *
