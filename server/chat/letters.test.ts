@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const createLetter = vi.fn();
+const createLetterWithMessage = vi.fn();
 const getDueLetters = vi.fn();
 const getLastLetterReplyAt = vi.fn();
 const answerLetter = vi.fn();
@@ -15,6 +16,7 @@ const getUserLocale = vi.fn();
 
 vi.mock("../db", () => ({
   createLetter: (...a: unknown[]) => createLetter(...a),
+  createLetterWithMessage: (...a: unknown[]) => createLetterWithMessage(...a),
   getDueLetters: (...a: unknown[]) => getDueLetters(...a),
   getLastLetterReplyAt: (...a: unknown[]) => getLastLetterReplyAt(...a),
   answerLetter: (...a: unknown[]) => answerLetter(...a),
@@ -125,11 +127,14 @@ describe("a letter that is handed over", () => {
       deliver: true,
     });
 
-    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({
-      role: "user",
-      content: "有件事我一直没说。",
-      origin: "letter",
-    }));
+    // The letter and the message that carries it are written together.
+    expect(createLetterWithMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "waiting" }),
+      expect.objectContaining({
+        content: "有件事我一直没说。",
+        origin: "letter",
+      }),
+    );
   });
 
   it("is recorded as waiting for an answer", async () => {
@@ -140,10 +145,11 @@ describe("a letter that is handed over", () => {
       deliver: true,
     });
 
-    expect(createLetter).toHaveBeenCalledWith(expect.objectContaining({
-      status: "waiting",
-    }));
-    const letter = createLetter.mock.calls[0][0] as any;
+    expect(createLetterWithMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "waiting" }),
+      expect.anything(),
+    );
+    const letter = createLetterWithMessage.mock.calls[0][0] as any;
     expect(letter.replyAt).toBeInstanceOf(Date);
   });
 });

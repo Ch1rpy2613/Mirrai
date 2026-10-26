@@ -190,6 +190,41 @@ export async function getProactivePersonas() {
  * "private" is kept and never answered; "waiting" is delivered, and the
  * reply lands later.
  */
+/**
+ * Writes a letter, and the message that carries it, together.
+ *
+ * The two are one thing: a letter that is in the letters table but not
+ * in the conversation is answered by the persona and never seen by the
+ * user. They were two writes with nothing between them, so a failure
+ * in the middle left the letter delivered with no message in the thread
+ * — and the reply could never be regenerated, because the letter was
+ * already answered.
+ */
+export async function createLetterWithMessage(
+  letter: InsertLetter,
+  message: {
+    personaId: number;
+    userId: number;
+    content: string;
+    channel?: "web" | "wechat" | "feishu";
+    origin?: string;
+  },
+): Promise<typeof letters.$inferSelect> {
+  return withTransaction(async (tx) => {
+    const [row] = await tx.insert(letters).values(letter).returning();
+    await tx.insert(messages).values({
+      personaId: message.personaId,
+      userId: message.userId,
+      role: "user",
+      content: message.content,
+      emotionalState: null,
+      channel: message.channel ?? "web",
+      origin: message.origin ?? "letter",
+    });
+    return row;
+  });
+}
+
 export async function createLetter(params: {
   userId: number;
   personaId: number;

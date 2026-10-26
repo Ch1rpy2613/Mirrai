@@ -54,31 +54,37 @@ export async function writeLetter(params: {
   }
 
   const replyAt = resolveReplyAt({ now });
-  const letter = await db.createLetter({
-    userId: params.userId,
-    personaId: params.persona.id,
-    body: params.body,
-    kind: params.kind ?? "letter",
-    mood: params.mood ?? null,
-    status: "waiting",
-    replyAt,
-  });
-
-  // Handing the letter over means it enters the conversation.
-  //
-  // It used to live only in the letters table, so a day later the reply
-  // arrived in the thread with nothing before it — a response to
-  // something the user could not see. A letter you sent is part of the
-  // conversation you sent it in.
-  await db.createMessage({
-    personaId: params.persona.id,
-    userId: params.userId,
-    role: "user",
-    content: params.body,
-    emotionalState: null,
-    channel: "web",
-    origin: "letter",
-  });
+  /**
+   * The letter and the message that carries it, together.
+   *
+   * Handing the letter over means it enters the conversation. It used
+   * to live only in the letters table, so a day later the reply arrived
+   * in the thread with nothing before it — a response to something the
+   * user could not see. A letter you sent is part of the conversation
+   * you sent it in.
+   *
+   * The two are written in one transaction: they were two writes with
+   * nothing between them, so a failure in the middle left the letter
+   * delivered with no message in the thread.
+   */
+  const letter = await db.createLetterWithMessage(
+    {
+      userId: params.userId,
+      personaId: params.persona.id,
+      body: params.body,
+      kind: params.kind ?? "letter",
+      mood: params.mood ?? null,
+      status: "waiting",
+      replyAt,
+    },
+    {
+      personaId: params.persona.id,
+      userId: params.userId,
+      content: params.body,
+      channel: "web",
+      origin: "letter",
+    },
+  );
 
   return letter;
 }
