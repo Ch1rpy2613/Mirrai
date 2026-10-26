@@ -113,6 +113,32 @@ describe("the packaged app", () => {
     expect(windows).toMatch(/migrationFailed[\s\S]{0,300}exit 1/);
   });
 
+  it("finds the templates and the tools in the packaged layout", async () => {
+    // The lookups have to include the place the packaging puts things.
+    //
+    // The shipped layout is:
+    //
+    //   <app>/dist/index.js
+    //   <app>/server/templates/builtin/*.json
+    //   <app>/skill-engine/tools/*.py
+    //
+    // The bundle sits in `dist`, so "beside the bundle's own folder" is
+    // one level up from it — not two, which is above the app.
+    const { builtinDirs } = await import("./templates/index");
+    const { skillEngineDirs } = await import("./_core/env");
+
+    // The candidate that is "one level up from the bundle".
+    const templates = builtinDirs().map((dir) => dir.replace(/\\/g, "/"));
+    const tools = skillEngineDirs().map((dir) => dir.replace(/\\/g, "/"));
+
+    const bundleDir = path.resolve(ROOT, "dist");
+    const besideTheBundle = path.resolve(bundleDir, "..");
+    expect(templates).toContain(
+      path.join(besideTheBundle, "server", "templates", "builtin").replace(/\\/g, "/"),
+    );
+    expect(tools).toContain(path.join(besideTheBundle, "skill-engine").replace(/\\/g, "/"));
+  });
+
   it("fetches the package manager while the image is being built", () => {
     // `corepack enable` only installs the shim: the pnpm itself is
     // downloaded into a cache on first use, and that cache lives in the

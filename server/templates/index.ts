@@ -24,7 +24,7 @@ import { normalizeTemplate, type PersonaTemplate } from "./schema";
  * bundle, and in the working directory — the same way the app looks
  * for its icons.
  */
-function builtinDirs(): string[] {
+export function builtinDirs(): string[] {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const cwd = process.cwd();
   const inServer = path.join("server", "templates", "builtin");
