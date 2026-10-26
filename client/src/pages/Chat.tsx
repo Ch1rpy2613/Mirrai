@@ -155,7 +155,6 @@ export default function Chat() {
   const [showTimeline, setShowTimeline] = useState(false);
   const [showEmotionReport, setShowEmotionReport] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [showScenePanel, setShowScenePanel] = useState(false);
   /* The form for a scene of the user's own. */
   const [showSceneForm, setShowSceneForm] = useState(false);
@@ -1389,7 +1388,7 @@ export default function Chat() {
       {showSearch && (
         <SearchPanel
           personaId={personaId}
-          onClose={() => { setShowSearch(false); setSearchQuery(""); }}
+          onClose={() => setShowSearch(false)}
           onJumpTo={jumpToMessage}
         />
       )}
