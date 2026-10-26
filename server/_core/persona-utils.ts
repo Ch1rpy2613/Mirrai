@@ -339,11 +339,33 @@ export function buildSystemPrompt(
   const timeOfDay = getTimeOfDay(now, options.timeZone ?? persona.timezone, locale);
   const togetherDays = daysSince(from, now);
 
-  const identitySection = isOver
-    ? copy(locale, "prompt.identityEnded", { name, rel, period })
-    : phase === "reunion" || phase === "reconciliation" || phase === "together"
-      ? copy(locale, "prompt.identityTogetherAgain", { name, rel, period })
-      : copy(locale, "prompt.identityNormal", { name, rel, period });
+  const identitySection = [
+    /**
+     * The facts about the persona, fenced.
+     *
+     * The name, the relationship and the dates are the user's own
+     * writing — and a PNG character card is somebody else's writing,
+     * imported whole. They used to reach the prompt with no fence at
+     * all, immediately after the sentence that says the material is
+     * data and not an instruction. So one imported card could put words
+     * into this persona's prompt for every conversation that followed.
+     *
+     * The app's own framing of the state — how the relationship stands
+     * — stays outside the fence, because that is an instruction.
+     */
+    asMaterial(
+      copy(locale, "prompt.identityHeading"),
+      copy(locale, "prompt.identityFacts", { name, rel, period }),
+    ),
+    copy(
+      locale,
+      isOver
+        ? "prompt.identityEndedNote"
+        : phase === "reunion" || phase === "reconciliation" || phase === "together"
+          ? "prompt.identityTogetherAgainNote"
+          : "prompt.identityNormalNote",
+    ),
+  ].join("\n");
 
   /**
    * The rules the persona discriminates by.
