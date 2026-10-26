@@ -2307,6 +2307,18 @@ export async function activateScene(personaId: number, sceneId: number | null, u
  */
 const MAX_PERSONA_EXPORT_MESSAGES = 10_000;
 
+/** How many memories one persona's export carries. */
+const MAX_PERSONA_EXPORT_MEMORIES = 10_000;
+
+/** How many days of emotional snapshots one persona's export carries. */
+const MAX_PERSONA_EXPORT_SNAPSHOTS = 3_650;
+
+/** How many diary entries one persona's export carries. */
+const MAX_PERSONA_EXPORT_DIARIES = 3_650;
+
+/** How many letters one persona's export carries. */
+const MAX_PERSONA_EXPORT_LETTERS = 10_000;
+
 export async function getExportData(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return null;
@@ -2317,18 +2329,30 @@ export async function getExportData(personaId: number, userId: number) {
     .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .orderBy(asc(messages.createdAt))
     .limit(MAX_PERSONA_EXPORT_MESSAGES);
+  /**
+   * The other four lists are bounded as well.
+   *
+   * The export is held in memory and then rendered into one HTML
+   * string, so the ceiling is a memory ceiling rather than a policy
+   * one. Memories grow by up to five a day, diaries and snapshots by
+   * one a day each, and letters by as many as the user writes.
+   */
   const allMemories = await db.select().from(memories)
     .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)))
-    .orderBy(asc(memories.createdAt));
+    .orderBy(asc(memories.createdAt))
+    .limit(MAX_PERSONA_EXPORT_MEMORIES);
   const allSnapshots = await db.select().from(emotionSnapshots)
     .where(and(eq(emotionSnapshots.personaId, personaId), eq(emotionSnapshots.userId, userId)))
-    .orderBy(asc(emotionSnapshots.date));
+    .orderBy(asc(emotionSnapshots.date))
+    .limit(MAX_PERSONA_EXPORT_SNAPSHOTS);
   const allDiaries = await db.select().from(diaryEntries)
     .where(and(eq(diaryEntries.personaId, personaId), eq(diaryEntries.userId, userId)))
-    .orderBy(asc(diaryEntries.date));
+    .orderBy(asc(diaryEntries.date))
+    .limit(MAX_PERSONA_EXPORT_DIARIES);
   const allLetters = await db.select().from(letters)
     .where(and(eq(letters.personaId, personaId), eq(letters.userId, userId)))
-    .orderBy(asc(letters.createdAt));
+    .orderBy(asc(letters.createdAt))
+    .limit(MAX_PERSONA_EXPORT_LETTERS);
   return {
     persona,
     messages: allMessages,
