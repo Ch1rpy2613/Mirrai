@@ -142,7 +142,7 @@ export default function Onboarding() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key</Label>
+              <Label htmlFor="apiKey">{t("onboarding.apiKeyLabel")}</Label>
               <Input
                 id="apiKey"
                 type="password"

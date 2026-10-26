@@ -316,7 +316,19 @@ export default function PersonaEdit() {
     setStarterQuestions(p.starterQuestions || []);
   }, [persona]);
 
-  const saveBasic = () => updateMutation.mutate({
+  const saveBasic = () => {
+    /**
+     * The name is checked here, not only on the server.
+     *
+     * The server caught it, and the message it sent was zod's own
+     * English — "Too small: expected string to have >=1 characters" —
+     * in a toast inside a Chinese interface.
+     */
+    if (!name.trim()) {
+      toast.error(t("personaEdit.nameRequired"));
+      return;
+    }
+    updateMutation.mutate({
     id: personaId, name, relationshipDesc,
     // Null, not undefined: an emptied field has to be cleared, and
     // Drizzle ignores `undefined` in an update.
@@ -327,7 +339,8 @@ export default function PersonaEdit() {
     reachability,
     proactiveFrequencyHours: proactiveHours,
     timezone: timezone || null,
-  });
+    });
+  };
 
   const savePersonaData = () => updateDataMutation.mutate({
     id: personaId,
@@ -579,7 +592,7 @@ export default function PersonaEdit() {
               </div>
               <Button size="sm" variant="ghost" onClick={() => setShowPrompt(!showPrompt)}
                 className="text-xs text-muted-foreground rounded-md flex-shrink-0">
-                <Eye className="w-3.5 h-3.5" />{showPrompt ? t("personaEdit.hide") : t("personaEdit.preview")} System Prompt
+                <Eye className="w-3.5 h-3.5" />{showPrompt ? t("personaEdit.hide") : t("personaEdit.preview")} {t("personaEdit.systemPrompt")}
               </Button>
             </div>
 

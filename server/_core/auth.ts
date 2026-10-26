@@ -36,7 +36,8 @@ async function rejectIfRateLimited(req: Request, res: Response): Promise<boolean
   const result = await rateLimiter.check(key, RATE_LIMITS.auth);
   if (result.allowed) return false;
   res.setHeader("Retry-After", Math.ceil(result.retryAfterMs / 1000));
-  res.status(429).json({ error: "Too many attempts, please try again later" });
+  // The message is shown to the user, so it is in their language.
+  res.status(429).json({ error: copy(localeOf(req), "errors.tooManyAttempts") });
   return true;
 }
 
