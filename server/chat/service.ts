@@ -963,10 +963,22 @@ async function maybeExtractMemories(
   now = new Date(),
 ): Promise<void> {
   const last = await db.getLastExtractionAt(persona.id, userId);
+  /**
+   * The messages the extraction would read.
+   *
+   * The count used to be taken from the last *day* — so a person who
+   * sends three or four messages a day never reached the ten that
+   * justify a run, in any twenty-four-hour window. The extraction log
+   * stayed empty and the persona never learned anything from talking to
+   * them.
+   *
+   * The window is the one the extraction itself reads: everything since
+   * the last run, and everything there is for the first one.
+   */
   const newMessages = await db.getUserMessageCountForPersonaSince(
     persona.id,
     userId,
-    last ?? new Date(now.getTime() - 24 * 3_600_000),
+    last ?? new Date(0),
   );
   if (!isExtractionDue({
     lastExtractedAt: last,
