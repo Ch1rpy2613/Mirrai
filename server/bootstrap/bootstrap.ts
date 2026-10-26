@@ -108,6 +108,10 @@ export async function bootstrapAdminAccount(): Promise<BootstrapResult> {
       username: ADMIN_USERNAME,
       passwordHash,
       name: "Administrator",
+      // The account is called "admin" and it is the administrator's.
+      // It was created with the default role — so it was an ordinary
+      // account with a name that promised something else.
+      role: "admin",
     });
 
     const dataRoot = resolveDataRoot();

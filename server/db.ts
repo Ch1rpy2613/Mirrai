@@ -100,13 +100,27 @@ export async function withTransaction<T>(fn: (tx: DbTransaction) => Promise<T>):
 
 // ─── User helpers ───────────────────────────────────────────────────────────
 
-export async function createUser(data: { username: string; passwordHash: string; name: string }) {
+export async function createUser(data: {
+  username: string;
+  passwordHash: string;
+  name: string;
+  /**
+   * The account's role.
+   *
+   * The first account is the administrator's — it is called "admin" and
+   * it is written to a credentials file. It was created with the
+   * default role, so it was an ordinary account with a name that
+   * promised something else.
+   */
+  role?: "user" | "admin";
+}) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [result] = await db.insert(users).values({
     username: data.username,
     passwordHash: data.passwordHash,
     name: data.name,
+    role: data.role ?? "user",
     lastSignedIn: new Date(),
   }).returning({ id: users.id });
   return result.id;
