@@ -352,10 +352,29 @@ export default function Chat() {
 
   const { data: scenesList, refetch: refetchScenes } = trpc.scene.list.useQuery(undefined, { enabled: isAuthenticated });
   const activateSceneMutation = trpc.scene.activate.useMutation({
-    onSuccess: () => { toast.success(t("chat.sceneActivated")); setShowScenePanel(false); },
+    onSuccess: () => {
+      toast.success(t("chat.sceneActivated"));
+      setShowScenePanel(false);
+      /**
+       * The persona is read again.
+       *
+       * The active scene is read from the persona — so the header's
+       * chip and the panel's tick kept showing the *previous* scene
+       * until a background refetch happened to come round.
+       */
+      refetchPersona();
+    },
+    // A failed activation used to be silent: no toast, nothing changed,
+    // and the panel closed as if it had worked.
+    onError: (e: any) => toast.error(e.message),
   });
   const deactivateSceneMutation = trpc.scene.deactivate.useMutation({
-    onSuccess: () => { toast.success(t("chat.sceneDeactivated")); setShowScenePanel(false); },
+    onSuccess: () => {
+      toast.success(t("chat.sceneDeactivated"));
+      setShowScenePanel(false);
+      refetchPersona();
+    },
+    onError: (e: any) => toast.error(e.message),
   });
   /* A scene of the user's own. The server owns the rules — the name
      length, the ownership check on delete — so the form only makes sure
@@ -393,6 +412,18 @@ export default function Chat() {
 
   const changeStateMutation = trpc.persona.update.useMutation({
     onSuccess: () => toast.success(t("chat.stateChanged")),
+    /**
+     * The mood goes back when the write fails.
+     *
+     * The chip changed the moment it was clicked — so a failed write
+     * left the header showing a mood the persona does not have, and
+     * said nothing about it. The next persona refetch reverted it
+     * silently.
+     */
+    onError: (e: any) => {
+      toast.error(e.message);
+      setCurrentState(persona?.emotionalState || "warm");
+    },
   });
 
   const sendImageMutation = trpc.chat.sendImage.useMutation({
