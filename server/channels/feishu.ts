@@ -165,7 +165,7 @@ export async function handleFeishuEvent(params: {
   event: {
     chat_id?: string;
     chat_type?: string;
-    message?: { message_type?: string; content?: string };
+    message?: { message_type?: string; content?: string; message_id?: string };
     sender?: { sender_id?: { open_id?: string } };
   };
   sendText: (targetId: string, text: string) => Promise<void>;
@@ -173,6 +173,17 @@ export async function handleFeishuEvent(params: {
   const { userId, event, sendText } = params;
   const chatId = event?.chat_id;
   if (!chatId) return;
+
+  /**
+   * The delivery is only answered once.
+   *
+   * Feishu retries a delivery it did not hear an answer to — and the
+   * guard against that was written and never called, so a retried
+   * message was answered twice: two replies to the same question, and
+   * two model calls.
+   */
+  const messageId = event.message?.message_id;
+  if (messageId && hasProcessedEvent(userId, messageId)) return;
 
   // Feishu delivers group messages too; the ClawBot-style private
   // conversation is the supported model here.
