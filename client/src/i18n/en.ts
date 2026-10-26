@@ -1435,6 +1435,7 @@ export const en = {
     empty: "Nothing recorded yet.",
     assessments: "How it sees the relationship",
     events: "What it noticed",
+    eventsFailed: "This part could not be read — it is not that nothing was noticed, it is that nothing was read.",
     handled: "Handled",
     markHandled: "Got it",
     regret: "Regret",

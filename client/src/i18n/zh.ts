@@ -1428,6 +1428,7 @@ export const zh = {
     empty: "目前没有记录。",
     assessments: "它怎么看你们的关系",
     events: "它注意到的事",
+    eventsFailed: "这一段没能读出来——不是没有记录，是没读到。",
     handled: "已处理",
     markHandled: "知道了",
     regret: "遗憾",

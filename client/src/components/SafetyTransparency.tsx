@@ -19,7 +19,7 @@ export default function SafetyTransparency() {
   const utils = trpc.useUtils();
 
   const { data: eventsData, isLoading, isError } = trpc.safety.events.useQuery({ limit: 20 });
-  const { data: assessmentsData } = trpc.safety.assessments.useQuery();
+  const { data: assessmentsData, isError: assessmentsError } = trpc.safety.assessments.useQuery();
 
   const resolve = trpc.safety.resolveEvent.useMutation({
     onSuccess: () => utils.safety.events.invalidate(),
@@ -32,7 +32,7 @@ export default function SafetyTransparency() {
   const events = eventsData?.events ?? [];
   const assessments = assessmentsData?.assessments ?? [];
 
-  if (events.length === 0 && assessments.length === 0) {
+  if (events.length === 0 && assessments.length === 0 && !assessmentsError) {
     return (
       <p className="text-xs text-muted-foreground leading-relaxed">
         {/* Not "nothing to report" while the record is still being
@@ -43,7 +43,7 @@ export default function SafetyTransparency() {
             list empty, so the panel said "nothing recorded yet" — a
             claim about the user's own emotional history that was simply
             false. */}
-        {isLoading ? t("common.loading") : isError ? t("common.error") : t("safetyPanel.empty")}
+        {isLoading ? t("common.loading") : isError || assessmentsError ? t("common.error") : t("safetyPanel.empty")}
       </p>
     );
   }
@@ -81,11 +81,24 @@ export default function SafetyTransparency() {
         </div>
       )}
 
-      {events.length > 0 && (
+      {/**
+       * The record of what was noticed.
+       *
+       * The section was rendered only when the list had something in
+       * it — so a failed request, with the assessments arriving
+       * normally, made the whole section vanish, and the user
+       * concluded that nothing had been noticed.
+       */}
+      {(events.length > 0 || isError) && (
         <div>
           <p className="text-xs font-medium text-foreground/80 mb-2">
             {t("safetyPanel.events")}
           </p>
+          {isError && (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("safetyPanel.eventsFailed")}
+            </p>
+          )}
           <ul className="space-y-2">
             {events.map((event: any) => (
               <li
