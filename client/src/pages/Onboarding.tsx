@@ -219,6 +219,14 @@ export default function Onboarding() {
               className="w-full text-muted-foreground"
               onClick={() => {
                 dismissOnboarding();
+                // The skip is a skip.
+                //
+                // The auto-skip effect is guarded by this ref, and only
+                // the auto-skip set it — so a user who reached the
+                // persona step through the *button* was still subject to
+                // the auto-skip, and the "back to the model service"
+                // button bounced them straight out again.
+                providerSkipped.current = true;
                 setStep("persona");
               }}
             >
@@ -290,7 +298,12 @@ export default function Onboarding() {
             <Button
               variant="ghost"
               className="w-full text-muted-foreground"
-              onClick={() => setStep("provider")}
+              onClick={() => {
+                // And the same in the other direction: coming back on
+                // purpose means the provider step is wanted.
+                providerSkipped.current = true;
+                setStep("provider");
+              }}
             >
               {t("onboarding.backToProvider")}
             </Button>
