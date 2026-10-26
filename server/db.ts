@@ -2561,6 +2561,17 @@ export interface MessageSnapshot {
   messageType: string | null;
   mediaUrl: string | null;
   replyToId: number | null;
+  /**
+   * Where the message came from.
+   *
+   * It was left out — so a restored WeChat message became a "web" one,
+   * and a letter's answer or a proactive message became an ordinary
+   * turn. The transcript said the wrong thing about where the message
+   * came from.
+   */
+  channel: string | null;
+  /** "letter" or "proactive", when the message was one of those. */
+  origin: string | null;
   createdAt: Date;
 }
 
@@ -2584,6 +2595,8 @@ export async function getMessagesFrom(
     messageType: messages.messageType,
     mediaUrl: messages.mediaUrl,
     replyToId: messages.replyToId,
+    channel: messages.channel,
+    origin: messages.origin,
     createdAt: messages.createdAt,
   })
     .from(messages)
@@ -2618,6 +2631,10 @@ export async function restoreMessages(
       messageType: row.messageType as any,
       mediaUrl: row.mediaUrl,
       replyToId: row.replyToId,
+      // The message keeps its own origin: a WeChat message stays a
+      // WeChat message, and a letter's answer stays a letter's answer.
+      ...(row.channel ? { channel: row.channel as any } : {}),
+      ...(row.origin ? { origin: row.origin as any } : {}),
       createdAt: row.createdAt,
     });
   }
