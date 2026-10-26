@@ -27,6 +27,30 @@ export type DistillationFamily = "relationship" | "colleague" | "celebrity";
 /** The celebrity research profile; null means the research flow does not run. */
 export type DistillationResearchProfile = "budget-friendly" | "budget-unfriendly";
 
+/**
+ * The interface dictionary keys of the presets.
+ *
+ * They used to be plain strings, so the call to `t()` had to be cast
+ * with `as any` — and a key that did not exist was not a compile
+ * error, it was the raw key shown to the reader.
+ *
+ * They are the keys themselves now, so a typo in one of them fails the
+ * build.
+ */
+export type DistillationClientLabelKey =
+  | "distillation.presets.fast.label"
+  | "distillation.presets.standard.label"
+  | "distillation.presets.deep.label"
+  | "distillation.presets.colleague.label"
+  | "distillation.presets.celebrity.label";
+
+export type DistillationClientDescriptionKey =
+  | "distillation.presets.fast.description"
+  | "distillation.presets.standard.description"
+  | "distillation.presets.deep.description"
+  | "distillation.presets.colleague.description"
+  | "distillation.presets.celebrity.description";
+
 export interface DistillationPreset {
   id: DistillationMode;
   /**
@@ -36,9 +60,9 @@ export interface DistillationPreset {
    * the label. It used to read as if it were the shared table, and a
    * call to `copy()` with it returned the key itself.
    */
-  clientLabelKey: string;
+  clientLabelKey: DistillationClientLabelKey;
   /** The *interface* dictionary key of the preset's explanation. */
-  clientDescriptionKey: string;
+  clientDescriptionKey: DistillationClientDescriptionKey;
   /** The family of prompts the run uses. */
   characterFamily: DistillationFamily;
   /** The research profile; null means the research flow does not run. */
