@@ -1274,7 +1274,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
               <Sunrise className="w-3.5 h-3.5" />{awakenMutation.isPending ? t("lobby.card.awakening") : t("lobby.card.awaken")}
             </Button>
             {persona.farewellLetter && (
-              <Button size="sm" variant="ghost" title={t("lobby.card.viewLetter")} className="text-muted-foreground hover:text-foreground rounded-md"
+              <Button size="sm" variant="ghost" title={t("lobby.card.viewLetter")} aria-label={t("lobby.card.viewLetter")} className="text-muted-foreground hover:text-foreground rounded-md"
                 onClick={() => setShowLetter(true)}>
                 <BookOpen className="w-3.5 h-3.5" />
               </Button>
@@ -1290,16 +1290,16 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
           </Button>
         )}
         {onTogglePin && (
-          <Button size="sm" variant="ghost" title={t("lobby.card.pin")}
+          <Button size="sm" variant="ghost" title={t("lobby.card.pin")} aria-label={t("lobby.card.pin")}
             className={`rounded-md ${persona.isPinned ? "text-mood-warm hover:text-mood-warm" : "text-muted-foreground hover:text-foreground"}`}
             onClick={onTogglePin}>
             <Pin className="w-3.5 h-3.5" />
           </Button>
         )}
-        <Button size="sm" variant="ghost" title={t("lobby.card.edit")} className="text-muted-foreground hover:text-foreground rounded-md" onClick={onEdit}>
+        <Button size="sm" variant="ghost" title={t("lobby.card.edit")} aria-label={t("lobby.card.edit")} className="text-muted-foreground hover:text-foreground rounded-md" onClick={onEdit}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
-        <Button size="sm" variant="ghost" title={t("lobby.card.delete")} className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-md" onClick={onDelete}>
+        <Button size="sm" variant="ghost" title={t("lobby.card.delete")} aria-label={t("lobby.card.delete")} className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-md" onClick={onDelete}>
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
       </div>
