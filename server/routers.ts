@@ -3177,6 +3177,8 @@ export const appRouter = router({
           // "the model did not answer in the right shape" instead of
           // "0 extracted".
           readable: result.readable,
+          // What the model returned that did not fit.
+          trimmed: result.trimmed,
         };
       }),
   }),

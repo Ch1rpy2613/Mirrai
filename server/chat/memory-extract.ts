@@ -24,8 +24,19 @@ import { copy } from "@shared/copy";
  */
 const LOOKBACK = 50;
 
-/** How many memories one run may add. */
-const MAX_PER_RUN = 5;
+/**
+ * How many memories one run may add.
+ *
+ * It was five — and the model was *asked* for five, but a model that
+ * returned eight had the last three dropped without a word. So the
+ * limit was applied twice: once in the request, and once to whatever
+ * came back, and the second one ate the answer.
+ *
+ * The request still asks for five. This is the ceiling on what is
+ * stored — a runaway answer is trimmed, and the count of what was
+ * trimmed is reported.
+ */
+const MAX_PER_RUN = 20;
 
 /**
  * The normal form of a title, for comparison.
@@ -93,6 +104,13 @@ export interface ExtractResult {
    * extraction looked like an empty conversation.
    */
   readable: boolean;
+  /**
+   * How many memories the model returned that were not stored.
+   *
+   * The limit is a ceiling, not a rule about what the model may say —
+   * so what was left out is counted rather than dropped in silence.
+   */
+  trimmed: number;
 }
 
 /**
@@ -161,7 +179,7 @@ export async function extractMemories(params: {
     lastExtracted ?? new Date(0),
     LOOKBACK,
   );
-  if (history.length === 0) return { added: [], skipped: 0, readable: true };
+  if (history.length === 0) return { added: [], skipped: 0, readable: true, trimmed: 0 };
 
   /**
    * The batch: the oldest messages first, and only as many as the model
@@ -199,7 +217,7 @@ export async function extractMemories(params: {
    * fact ("my birthday is the 3rd"), and the run happens at most once
    * a day, so the model call is worth it.
    */
-  if (fresh.length < 1) return { added: [], skipped: 0, readable: true };
+  if (fresh.length < 1) return { added: [], skipped: 0, readable: true, trimmed: 0 };
 
   // The transcript is read by the model, so the name it gives the user is
   // in the language the persona is speaking.
@@ -254,10 +272,10 @@ export async function extractMemories(params: {
       });
     } catch (e) {
       console.warn("[Memories] No provider could extract:", (e as Error).message);
-      return { added: [], skipped: 0, readable: false };
+      return { added: [], skipped: 0, readable: false, trimmed: 0 };
     }
   }
-  if (!response.trim()) return { added: [], skipped: 0, readable: false };
+  if (!response.trim()) return { added: [], skipped: 0, readable: false, trimmed: 0 };
 
   const existing = await db.getMemoriesByPersonaId(persona.id, userId);
   const added: ExtractResult["added"] = [];
@@ -300,6 +318,14 @@ export async function extractMemories(params: {
   }
   const items = Array.isArray(parsed) ? parsed : [];
   const seen: Array<{ title: string; description?: string | null }> = [];
+  /**
+   * What was trimmed.
+   *
+   * The model was asked for five memories and sometimes answered with
+   * more. The extras used to be dropped without a word — so a fact the
+   * model had found was simply not there, and nobody could tell.
+   */
+  const trimmed = Math.max(0, items.length - MAX_PER_RUN);
 
   for (const raw of items.slice(0, MAX_PER_RUN)) {
     const item = (raw ?? {}) as {
@@ -370,7 +396,12 @@ export async function extractMemories(params: {
       await db.markMemoryAttempted(persona.id, userId);
     }
   }
-  return { added, skipped, readable: understood };
+  if (trimmed > 0) {
+    console.warn(
+      `[Memories] The model returned ${items.length} memories; ${trimmed} were not stored (the limit is ${MAX_PER_RUN}).`,
+    );
+  }
+  return { added, skipped, readable: understood, trimmed };
 }
 
 /**
