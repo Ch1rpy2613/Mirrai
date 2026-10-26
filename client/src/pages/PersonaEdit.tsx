@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import PageLoader from "@/components/PageLoader";
+import NotFound from "@/pages/NotFound";
 import GraduationModeSelect, {
   graduationModeNoteKey,
 } from "@/components/GraduationModeSelect";
@@ -93,16 +94,25 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) 
 
 export default function PersonaEdit() {
   const params = useParams<{ id: string }>();
-  const personaId = parseInt(params.id || "0");
+  /**
+   * The persona's id, and whether it is one at all.
+   *
+   * `parseInt("abc")` is NaN, and `NaN > 0` is false — so the query was
+   * disabled, `isLoading` was false and `isError` was false, and the
+   * page showed "loading…" for ever with no error and no way out. A
+   * stale or hand-edited link did that.
+   */
+  const personaId = Number.parseInt(params.id ?? "", 10);
+  const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
   const { data: persona, refetch } = trpc.persona.get.useQuery(
-    { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
+    { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   const { data: promptData } = trpc.persona.getSystemPrompt.useQuery(
-    { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
+    { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   const providers = trpc.llmConfig.listProviders.useQuery();
 
@@ -152,13 +162,13 @@ export default function PersonaEdit() {
   });
 
   const { data: correctionLog } = trpc.persona.correctionLog.useQuery(
-    { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
+    { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
 
   /* The graduation mode: this persona's own override of the instance-wide
      default, and the mode that is in effect right now. */
   const { data: graduation } = trpc.persona.graduationMode.useQuery(
-    { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
+    { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   /** The mode in effect right now — the persona's own, or the inherited one. */
   const effectiveGraduationMode: GraduationMode = graduation?.mode ?? "suggest";
@@ -250,6 +260,20 @@ export default function PersonaEdit() {
    */
   const formFilled = useRef(false);
 
+  /**
+   * The form is filled again when the persona changes.
+   *
+   * The route's `:id` can change while the page is mounted — importing a
+   * character card creates a new persona and navigates to it — and React
+   * keeps the same component instance. So the flag stayed set, the form
+   * kept the *old* persona's values, and the header showed the new
+   * persona's name: saving wrote the old persona's data over the new
+   * one.
+   */
+  useEffect(() => {
+    formFilled.current = false;
+  }, [personaId]);
+
   useEffect(() => {
     if (!persona || formFilled.current) return;
     formFilled.current = true;
@@ -297,6 +321,7 @@ export default function PersonaEdit() {
       attachmentStyle, loveLanguage, conflictStyle, touchingMoments, customInstructions, starterQuestions },
   });
 
+  if (!hasPersonaId) return <NotFound />;
   if (!persona) return <PageLoader />;
 
   return (

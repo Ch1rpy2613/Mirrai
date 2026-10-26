@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import NotFound from "@/pages/NotFound";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -127,7 +128,16 @@ function getMimeType(file: File, fileType: string): string {
 
 export default function Upload() {
   const params = useParams<{ id: string }>();
-  const personaId = parseInt(params.id || "0");
+  /**
+   * The persona's id, and whether it is one at all.
+   *
+   * `parseInt("abc")` is NaN, and `NaN > 0` is false — so the query was
+   * disabled, `isLoading` was false and `isError` was false, and the
+   * page showed a loader for ever with no error and no way out. A stale
+   * or hand-edited link did that.
+   */
+  const personaId = Number.parseInt(params.id ?? "", 10);
+  const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
@@ -140,21 +150,21 @@ export default function Upload() {
   const [mode, setMode] = useState<DistillationMode>(DEFAULT_DISTILLATION_MODE);
 
   const { data: persona, refetch: refetchPersona } = trpc.persona.get.useQuery(
-    { id: personaId }, { enabled: isAuthenticated && personaId > 0 }
+    { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   const { data: files, refetch: refetchFiles } = trpc.file.list.useQuery(
-    { personaId }, { enabled: isAuthenticated && personaId > 0 }
+    { personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   // Material pulled in by a collector is just as usable as an uploaded file.
   // A persona whose only material came from a collector must still be
   // distillable from here.
   const { data: collected } = trpc.collector.preview.useQuery(
     { personaId, limit: 1 },
-    { enabled: isAuthenticated && personaId > 0 },
+    { enabled: isAuthenticated && hasPersonaId },
   );
   const { data: analysisStatus, refetch: refetchStatus } = trpc.persona.getAnalysisStatus.useQuery(
     { id: personaId },
-    { enabled: isAuthenticated && personaId > 0,
+    { enabled: isAuthenticated && hasPersonaId,
       refetchInterval: (query) => query.state.data?.status === "analyzing" ? 1500 : false }
   );
 
@@ -236,8 +246,10 @@ export default function Upload() {
   const hasFiles = (files?.length || 0) > 0;
   const hasCollected = (collected?.total || 0) > 0;
   const hasMaterial = hasFiles || hasCollected;
-  const filesLoading = isAuthenticated && personaId > 0 && files === undefined;
+  const filesLoading = isAuthenticated && hasPersonaId && files === undefined;
   const pendingUploads = Object.entries(uploadingFiles).filter(([, s]) => s !== "done");
+
+  if (!hasPersonaId) return <NotFound />;
 
   return (
     <div className="min-h-screen bg-background">

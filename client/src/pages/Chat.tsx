@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import NotFound from "@/pages/NotFound";
 import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -68,7 +69,14 @@ function CrisisCard() {
 
 export default function Chat() {
   const params = useParams<{ id: string }>();
-  const personaId = parseInt(params.id || "0");
+  /**
+   * The persona's id, and whether it is one at all.
+   *
+   * `parseInt("abc")` is NaN, and `NaN > 0` is false — so every query
+   * was disabled and the page had nothing to show and nothing to say.
+   */
+  const personaId = Number.parseInt(params.id ?? "", 10);
+  const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
@@ -145,7 +153,7 @@ export default function Chat() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const { data: waitingNotesData } = trpc.letter.todos.useQuery(
     { personaId },
-    { enabled: isAuthenticated && personaId > 0 },
+    { enabled: isAuthenticated && hasPersonaId },
   );
   const waitingNotes = waitingNotesData?.todos ?? [];
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -210,7 +218,7 @@ export default function Chat() {
 
   const { data: persona } = trpc.persona.get.useQuery(
     { id: personaId },
-    { enabled: isAuthenticated && personaId > 0 }
+    { enabled: isAuthenticated && hasPersonaId }
   );
 
   /* The time on their side of the world. */
@@ -241,14 +249,14 @@ export default function Chat() {
 
   const { data: intimacy } = trpc.persona.getIntimacy.useQuery(
     { id: personaId },
-    { enabled: isAuthenticated && personaId > 0 }
+    { enabled: isAuthenticated && hasPersonaId }
   );
 
   /* The graduation mode decides whether the app may offer a farewell and
      whether the user may start one from here. */
   const { data: graduation } = trpc.persona.graduationMode.useQuery(
     { id: personaId },
-    { enabled: isAuthenticated && personaId > 0 }
+    { enabled: isAuthenticated && hasPersonaId }
   );
   const graduationMode = graduation?.mode ?? "suggest";
 
@@ -267,7 +275,7 @@ export default function Chat() {
   const { data: history } = trpc.chat.getHistory.useQuery(
     { personaId },
     {
-      enabled: isAuthenticated && personaId > 0,
+      enabled: isAuthenticated && hasPersonaId,
       refetchInterval: 20_000,
       refetchIntervalInBackground: false,
     }
@@ -926,6 +934,8 @@ export default function Chat() {
     personaStarters: (persona?.personaData as any)?.starterQuestions,
     fallback: Array.from(t("chat.defaultStarters")),
   });
+
+  if (!hasPersonaId) return <NotFound />;
 
   return (
     <div className="h-dvh bg-background flex flex-col relative">

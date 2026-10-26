@@ -5,6 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
 import { ArrowLeft, Download, Quote, Calendar, Sprout } from "lucide-react";
 import PageLoader from "@/components/PageLoader";
+import NotFound from "@/pages/NotFound";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import OutboundLetters from "@/components/OutboundLetters";
 import { Button } from "@/components/ui/button";
@@ -24,26 +25,35 @@ import { Button } from "@/components/ui/button";
  */
 export default function Graduation() {
   const params = useParams<{ id: string }>();
-  const personaId = parseInt(params.id || "0");
+  /**
+   * The persona's id, and whether it is one at all.
+   *
+   * `parseInt("abc")` is NaN, and `NaN > 0` is false — so the query was
+   * disabled, `isLoading` was false and `isError` was false, and the
+   * page showed a loader for ever with no error and no way out. A stale
+   * or hand-edited link did that.
+   */
+  const personaId = Number.parseInt(params.id ?? "", 10);
+  const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
 
   const { data: persona, isLoading, isError, error } = trpc.persona.get.useQuery(
     { id: personaId },
-    { enabled: isAuthenticated && personaId > 0 },
+    { enabled: isAuthenticated && hasPersonaId },
   );
   const { data: eventsData } = trpc.relationship.list.useQuery(
     { personaId },
-    { enabled: isAuthenticated && personaId > 0 },
+    { enabled: isAuthenticated && hasPersonaId },
   );
   const { data: memories } = trpc.memory.list.useQuery(
     { personaId },
-    { enabled: isAuthenticated && personaId > 0 },
+    { enabled: isAuthenticated && hasPersonaId },
   );
   const { data: diaries } = trpc.diary.list.useQuery(
     { personaId },
-    { enabled: isAuthenticated && personaId > 0 },
+    { enabled: isAuthenticated && hasPersonaId },
   );
 
   // The spinner used to spin for ever.
@@ -52,6 +62,8 @@ export default function Graduation() {
   // device — made the query fail, `persona` stayed undefined and
   // `isLoading` became false, so the page showed a loader with no way
   // back and no explanation.
+  if (!hasPersonaId) return <NotFound />;
+
   if (isError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
