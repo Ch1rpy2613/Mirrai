@@ -1457,6 +1457,7 @@ export const zh = {
     events: "它注意到的事",
     eventsFailed: "这一段没能读出来——不是没有记录，是没读到。",
     handled: "已处理",
+    showMore: "再看 {{count}} 条",
     markHandled: "知道了",
     regret: "遗憾",
     gratitude: "释然",

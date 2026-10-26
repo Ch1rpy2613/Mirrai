@@ -3391,6 +3391,9 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const events = await getSafetyEvents(ctx.user.id, input.limit ?? 50);
         return {
+          // How many there are in all — so the panel can say that what
+          // it is showing is not everything.
+          total: await countSafetyEvents(ctx.user.id),
           events: events.map((event) => ({
             id: event.id,
             type: event.type,

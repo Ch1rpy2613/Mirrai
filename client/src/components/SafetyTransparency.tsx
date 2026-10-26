@@ -153,6 +153,24 @@ export default function SafetyTransparency() {
               </li>
             ))}
           </ul>
+          {/**
+           * The rest of the record.
+           *
+           * The panel showed the newest twenty and stopped — so a user
+           * with a year of history saw twenty rows and no sign that
+           * there were more.
+           */}
+          {(eventsData?.total ?? 0) > events.length && (
+            <button
+              type="button"
+              onClick={() => setLimit((current) => current + 20)}
+              className="mt-2 text-[0.625rem] px-2.5 py-1 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {t("safetyPanel.showMore", {
+                count: (eventsData?.total ?? 0) - events.length,
+              })}
+            </button>
+          )}
         </div>
       )}
     </div>

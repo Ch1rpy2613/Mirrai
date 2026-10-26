@@ -3059,6 +3059,20 @@ export async function hasSafetyEventSince(params: {
   return rows.length > 0;
 }
 
+/**
+ * How many safety events there are in all.
+ *
+ * The panel shows the newest twenty — so without this it could not say
+ * that what it is showing is not everything.
+ */
+export async function countSafetyEvents(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db.select({ c: count() }).from(safetyEvents)
+    .where(eq(safetyEvents.userId, userId));
+  return rows[0]?.c ?? 0;
+}
+
 export async function getSafetyEvents(userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];

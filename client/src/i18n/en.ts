@@ -1463,6 +1463,8 @@ export const en = {
     events: "What it noticed",
     eventsFailed: "This part could not be read — it is not that nothing was noticed, it is that nothing was read.",
     handled: "Handled",
+    showMore: "Show {{count}} more",
+    showMore: "Show {{count}} more",
     markHandled: "Got it",
     regret: "Regret",
     gratitude: "Gratitude",
