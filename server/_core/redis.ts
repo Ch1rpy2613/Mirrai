@@ -595,9 +595,31 @@ export async function withRedisLock<T>(
   const taken = await redis.client.set(key, token, { NX: true, PX: ttlMs });
   if (taken !== "OK") return null;
 
+  /**
+   * The lock is renewed while the work runs.
+   *
+   * The lease has a time limit, so that a copy of the app that dies
+   * mid-sweep does not block the next one for long. But the work can
+   * take longer than the lease — the sweep makes model calls, and one
+   * of them is allowed two minutes — so the lease used to run out
+   * *while the sweep was still running*, and a second copy started the
+   * same sweep.
+   */
+  const renew = setInterval(() => {
+    redis.client
+      .eval(
+        `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) else return 0 end`,
+        { keys: [key], arguments: [token, String(ttlMs)] },
+      )
+      .catch(() => undefined);
+  }, Math.max(1_000, Math.floor(ttlMs / 3)));
+  // The renewal must not keep the process alive on its own.
+  renew.unref?.();
+
   try {
     return await fn();
   } finally {
+    clearInterval(renew);
     // Only release it if it is still ours.
     await redis.client
       .eval(
