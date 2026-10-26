@@ -294,10 +294,26 @@ async function startPersonaDistillation(params: {
     // The persona must never be left stuck in "pending" — the upload page
     // only surfaces progress for "analyzing" and errors for "error".
     console.error("[Persona] Distillation failed to start:", e);
-    await updatePersona(personaId, userId, {
-      analysisStatus: "error",
-      analysisMessage: copy(locale, "persona.analysisFailed"),
-    }).catch(() => {});
+    /**
+     * The write that unsticks the persona is not allowed to fail
+     * quietly.
+     *
+     * It used to be swallowed — so if the database was having a bad
+     * moment, the persona was left at "analyzing" and the upload page
+     * showed a spinner that never resolved. The persona could never be
+     * talked to again, and the user had no way out.
+     */
+    try {
+      await updatePersona(personaId, userId, {
+        analysisStatus: "error",
+        analysisMessage: copy(locale, "persona.analysisFailed"),
+      });
+    } catch (writeError) {
+      console.error(
+        "[Persona] Could not mark the distillation as failed:",
+        (writeError as Error).message,
+      );
+    }
   } finally {
     runningDistillations.delete(personaId);
   }
