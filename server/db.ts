@@ -2846,6 +2846,19 @@ export async function getPreviousMessage(
   personaId: number,
   userId: number,
   messageId: number,
+  /**
+   * The role the row must have.
+   *
+   * It was the row immediately before — whatever it was. So a reply to
+   * a message the user did not write (a proactive message, a letter
+   * answer, a message that came from another channel) had no previous
+   * *user* message, and the regeneration said "that message was not
+   * found".
+   *
+   * With a role, the search walks back to the nearest row of that
+   * role — which is the user's own question that the reply answered.
+   */
+  role?: "user" | "assistant",
 ) {
   const db = await getDb();
   if (!db) return null;
@@ -2855,6 +2868,7 @@ export async function getPreviousMessage(
     .where(and(
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
+      ...(role ? [eq(messages.role, role)] : []),
       sql`"createdAt" < (SELECT "createdAt" FROM "messages" WHERE "id" = ${messageId} AND "personaId" = ${personaId} AND "userId" = ${userId})`,
     ))
     .orderBy(desc(messages.createdAt))

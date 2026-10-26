@@ -1440,7 +1440,22 @@ export const appRouter = router({
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         if (persona.analysisStatus !== "ready") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotReadyShort") });
 
-        const previous = await getPreviousMessage(input.personaId, ctx.user.id, input.messageId);
+        /**
+         * The user's own question.
+         *
+         * The search used to stop at the row immediately before the
+         * answer — so a reply to something the user did not write (a
+         * proactive message, a letter answer, a message from another
+         * channel) had no question, and the regeneration said "that
+         * message was not found". The search walks back to the nearest
+         * *user* message now.
+         */
+        const previous = await getPreviousMessage(
+          input.personaId,
+          ctx.user.id,
+          input.messageId,
+          "user",
+        );
         if (!previous || previous.role !== "user") {
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.messageNotFound") });
         }
