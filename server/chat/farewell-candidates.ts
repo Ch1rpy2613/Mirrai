@@ -34,8 +34,14 @@ import {
 import { resolveProviderForUser } from "../llm/user-provider";
 import { llmService } from "../llm";
 import type { LLMMessage, LLMOptions } from "../llm/types";
-import { renderImperfection, selectImperfection } from "@shared/imperfection";
-import { renderMicroRules } from "@shared/micro-rules";
+import {
+  normalizeImperfectionProfile,
+  renderImperfection,
+  selectImperfection,
+} from "@shared/imperfection";
+import { normalizeMicroRules, renderMicroRules } from "@shared/micro-rules";
+import { toStringList, toText } from "../_core/persona-schema";
+import { asMaterial } from "../_core/material";
 import * as db from "../db";
 
 /** One sentence the persona might say but has never said. */
@@ -203,29 +209,46 @@ export function describePersonaForCandidates(
   persona: Persona,
   locale: "zh" | "en" = "zh",
 ): string {
-  const p = (persona as any).personaData ?? {};
+  /**
+   * The persona's data, read safely.
+   *
+   * It used to be read raw — so a `catchphrases` that was a string
+   * instead of a list threw, and a `microRules` that was not a list
+   * threw. The throw was swallowed by the caller, so the user silently
+   * got the degraded single-pass letter, and the reason was logged as
+   * "the model failed".
+   *
+   * The fields are read as they are, and not filled in: a prompt that
+   * describes everything describes nothing, so only what she has is put
+   * in it.
+   */
+  const raw = (persona as any).personaData ?? {};
+  const personality = toText(raw.personality);
+  const speakingStyle = toText(raw.speakingStyle);
+  const catchphrases = toStringList(raw.catchphrases ?? raw.catchPhrase);
+  const nickname = toText(raw.nickname);
   const sections: string[] = [persona.name];
 
-  if (p.personality) {
+  if (personality) {
     sections.push(
-      `${copy(locale, "prompt.personalityHeading")}\n${p.personality}`,
+      `${copy(locale, "prompt.personalityHeading")}\n${personality}`,
     );
   }
-  if (p.speakingStyle) {
+  if (speakingStyle) {
     sections.push(
-      `${copy(locale, "prompt.speakingStyleHeading")}\n${p.speakingStyle}`,
+      `${copy(locale, "prompt.speakingStyleHeading")}\n${speakingStyle}`,
     );
   }
   sections.push(
     copy(locale, "prompt.catchphrases", {
       value:
-        (p.catchphrases || []).join(locale === "en" ? ", " : "、") ||
+        catchphrases.join(locale === "en" ? ", " : "、") ||
         copy(locale, "prompt.noCatchphrases"),
     }),
   );
   sections.push(
     copy(locale, "prompt.nickname", {
-      value: p.nickname || copy(locale, "prompt.noNickname"),
+      value: nickname || copy(locale, "prompt.noNickname"),
     }),
   );
 
@@ -233,13 +256,16 @@ export function describePersonaForCandidates(
   // discriminates by: the two things that make a sentence sound like her
   // rather than like a person in general.
   const imperfection = renderImperfection(
-    selectImperfection(p.imperfectionProfile, persona.emotionalState),
-    p.realismLevel ?? 70,
+    selectImperfection(
+      normalizeImperfectionProfile(raw.imperfectionProfile, locale),
+      persona.emotionalState,
+    ),
+    typeof raw.realismLevel === "number" ? raw.realismLevel : 70,
     locale,
   );
   if (imperfection) sections.push(imperfection);
 
-  const rules = renderMicroRules(p.microRules ?? [], locale);
+  const rules = renderMicroRules(normalizeMicroRules(raw.microRules), locale);
   if (rules) sections.push(rules);
 
   return sections.join("\n");
@@ -277,9 +303,19 @@ export async function buildFarewellCandidates(params: {
     .filter(Boolean)
     .join("\n\n");
 
+  /**
+   * The persona and the memories are material.
+   *
+   * They are distilled from the uploaded chat log — so they are text
+   * the user did not write — and they used to go into the system
+   * message unmarked. A line in an uploaded log could therefore steer
+   * the farewell, which is the ritual's most important artefact.
+   *
+   * They are fenced now, the way the rest of the app fences material.
+   */
   const systemPrompt = copy(locale, "prompts.farewellCandidates", {
-    persona: describePersonaForCandidates(persona, locale),
-    memories,
+    persona: asMaterial(describePersonaForCandidates(persona, locale), locale),
+    memories: asMaterial(memories, locale),
   });
   const userPrompt = copy(locale, "prompts.farewellCandidatesUser");
 

@@ -144,7 +144,14 @@ const RELATIONSHIP_PHASES: RelationshipPhase[] = [
 ];
 
 /** Coerces anything to a trimmed non-empty string, or "" when unusable. */
-function toText(value: unknown): string {
+/**
+ * The text of a field, whatever shape it arrived in.
+ *
+ * Exported because a reader of the persona's data has to be able to
+ * ask for it safely — the shape of `personaData` is whatever was
+ * stored, and a field that is not a string is not a crash.
+ */
+export function toText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (Array.isArray(value)) {
@@ -154,7 +161,10 @@ function toText(value: unknown): string {
 }
 
 /** Coerces a value to a string array, accepting a single string or a delimited string. */
-function toStringList(value: unknown): string[] {
+/**
+ * A list of strings, whatever shape it arrived in.
+ */
+export function toStringList(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((v) => toText(v)).filter(Boolean);
   }
