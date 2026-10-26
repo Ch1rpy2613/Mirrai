@@ -1762,7 +1762,7 @@ export default function Chat() {
               </Button>
             </div>
           ) : (
-            /**
+            /*
              * The notices are a row of their own.
              *
              * The "replying to…" strip and the "it is the middle of the
@@ -1773,6 +1773,7 @@ export default function Chat() {
              * wide, exactly at the hours when a partner abroad is
              * asleep — which is a normal evening for the user.
              */
+            <>
             <div className="space-y-1.5 mb-1.5">
               {/* The message being replied to. */}
               {replyTo && (
@@ -1854,6 +1855,7 @@ export default function Chat() {
                 </Button>
               )}
             </div>
+            </>
           )}
           <p className="hidden sm:block text-muted-foreground/35 text-[10px] mt-1.5 text-right tracking-wide">
             {t("chat.enterToSend")}
