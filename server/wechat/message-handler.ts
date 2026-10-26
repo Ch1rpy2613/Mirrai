@@ -94,7 +94,23 @@ export async function handleWeixinMessage(
   // so the user received two instructions to type "/毕业" at the end of
   // one message. And it was hard-coded Chinese, so an English user on
   // WeChat was told to type a Chinese command.
-  await sendText(userId, parsed, reply);
+  /**
+   * The delivery is checked.
+   *
+   * The reply is stored in the conversation before it is sent, so the
+   * web interface shows the conversation as answered. When the send
+   * failed — the token had expired, the backend refused it, the user
+   * had blocked the bot — nothing arrived, and the user was told
+   * nothing at all.
+   */
+  const delivered = await sendText(userId, parsed, reply);
+  if (!delivered) {
+    const { noteDeliveryFailure } = await import("./bot");
+    noteDeliveryFailure(
+      userId,
+      copy(locale, "channels.messageFailed", { reason: copy(locale, "channels.replyFailed") }),
+    );
+  }
 }
 
 /**

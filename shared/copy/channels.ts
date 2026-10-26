@@ -130,6 +130,10 @@ export const CHANNELS = {
     zh: "\n\n如果哪天想好好说声再见，随时发 /毕业，我会给你写封信。",
     en: "\n\nIf you ever want to say goodbye properly, send /graduate and I'll write you a letter.",
   },
+  "channels.messageFailed": {
+    zh: "消息没有发出去：{{reason}}",
+    en: "The message was not sent: {{reason}}",
+  },
   "channels.replyFailed": {
     zh: "刚才没能说出话来，请再发一次。",
     en: "The reply could not be produced just now — please send it again.",

@@ -112,6 +112,31 @@ type AccountState = {
 
 const accounts = new Map<number, AccountState>();
 
+/**
+ * What the user is told when the bot's credentials have expired.
+ *
+ * The token has to be obtained again — the pause is an hour, and the
+ * token does not come back on its own.
+ */
+const STALE_TOKEN_MESSAGE =
+  "微信登录已过期，请重新扫码连接。";
+
+/**
+ * Records that a reply could not be delivered.
+ *
+ * The reply is stored in the conversation before it is sent, so the web
+ * interface shows it as answered. When the send fails — the token has
+ * expired, the backend refused it, the user has blocked the bot —
+ * nothing arrived, and the user was told nothing.
+ */
+export function noteDeliveryFailure(userId: number, reason: string): void {
+  const account = getAccount(userId);
+  account.lastError = reason;
+  void db
+    .upsertWechatBotState(userId, { lastError: reason })
+    .catch((e) => logError(`状态写入失败: ${String(e)}`));
+}
+
 function getAccount(userId: number): AccountState {
   let account = accounts.get(userId);
   if (!account) {
@@ -605,6 +630,21 @@ async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
         if (resp.errcode === STALE_TOKEN_ERRCODE || resp.ret === STALE_TOKEN_ERRCODE) {
           account.pauseUntil = Date.now() + SESSION_PAUSE_DURATION_MS;
           logError("凭据已失效（errcode -14），暂停 1 小时");
+          /**
+           * The user is told.
+           *
+           * The account used to pause silently: its status stayed
+           * "logged_in" and nothing was written to the database, so the
+           * interface said "connected" while the bot was dead. The
+           * pause then repeated hourly, for ever, with no error
+           * anywhere — and the only way out was to notice and re-scan
+           * by hand.
+           */
+          account.status = "error";
+          account.lastError = STALE_TOKEN_MESSAGE;
+          await db
+            .upsertWechatBotState(userId, { status: "error", lastError: STALE_TOKEN_MESSAGE })
+            .catch((e) => logError(`状态写入失败: ${String(e)}`));
           consecutiveFailures = 0;
           continue;
         }
