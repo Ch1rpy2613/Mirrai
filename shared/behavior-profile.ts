@@ -197,7 +197,11 @@ export function sampleReplyDelayMs(
 }
 
 /**
- * The delay at a given quantile.
+ * The delay at a given quantile, in **seconds**.
+ *
+ * The unit is in the name because the other one is in milliseconds —
+ * `sampleReplyDelayMs` — and the two sat side by side with nothing to
+ * say which was which.
  *
  * The profile stores the *shape* rather than a list of measured gaps,
  * so the percentiles are read off the shape. That is the point of
@@ -206,7 +210,7 @@ export function sampleReplyDelayMs(
  *
  * `p` is a fraction: 0.1 for the tenth percentile, 0.5 for the median.
  */
-export function replyDelayQuantile(profile: BehaviorProfile | null, p: number): number {
+export function replyDelayQuantileSec(profile: BehaviorProfile | null, p: number): number {
   if (!profile) return 0;
   const fraction = Math.max(0, Math.min(1, Number.isFinite(p) ? p : 0.5));
   // The inverse of the standard normal, approximated. It only has to

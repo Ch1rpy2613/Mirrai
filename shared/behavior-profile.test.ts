@@ -8,7 +8,7 @@ import {
   normalizeBehaviorProfile,
   sampleBurstSize,
   sampleProactiveDelayMs,
-  replyDelayQuantile,
+  replyDelayQuantileSec,
   sampleReplyDelayMs,
   type BehaviorSample,
 } from "./behavior-profile";
@@ -315,56 +315,56 @@ describe("the percentiles", () => {
   const profile = fitBehaviorProfile(samples)!;
 
   it("puts the median at the median", () => {
-    const median = replyDelayQuantile(profile, 0.5);
+    const median = replyDelayQuantileSec(profile, 0.5);
     expect(median).toBeCloseTo(profile.replyGapMedianSec, 0);
   });
 
   it("orders the percentiles", () => {
     // The tenth percentile is faster than the ninetieth — a person
     // who is quick half the time is quicker half the time.
-    expect(replyDelayQuantile(profile, 0.1)).toBeLessThan(
-      replyDelayQuantile(profile, 0.5),
+    expect(replyDelayQuantileSec(profile, 0.1)).toBeLessThan(
+      replyDelayQuantileSec(profile, 0.5),
     );
-    expect(replyDelayQuantile(profile, 0.9)).toBeGreaterThan(
-      replyDelayQuantile(profile, 0.5),
+    expect(replyDelayQuantileSec(profile, 0.9)).toBeGreaterThan(
+      replyDelayQuantileSec(profile, 0.5),
     );
   });
 
   it("answers for a percentile nobody measured", () => {
     // The shape was fitted, so the percentile for a gap that never
     // happened is still there.
-    expect(Number.isFinite(replyDelayQuantile(profile, 0.97))).toBe(true);
+    expect(Number.isFinite(replyDelayQuantileSec(profile, 0.97))).toBe(true);
   });
 
   it("stays inside the bounds a person could live inside", () => {
-    expect(replyDelayQuantile(profile, 0.001)).toBeGreaterThanOrEqual(
+    expect(replyDelayQuantileSec(profile, 0.001)).toBeGreaterThanOrEqual(
       BEHAVIOR_MIN_GAP_SEC,
     );
-    expect(replyDelayQuantile(profile, 0.999)).toBeLessThanOrEqual(
+    expect(replyDelayQuantileSec(profile, 0.999)).toBeLessThanOrEqual(
       BEHAVIOR_MAX_GAP_SEC,
     );
   });
 
   it("has nothing to say without a profile", () => {
-    expect(replyDelayQuantile(null, 0.5)).toBe(0);
+    expect(replyDelayQuantileSec(null, 0.5)).toBe(0);
   });
 
   it("answers for the ends of the distribution", () => {
-    expect(replyDelayQuantile(profile, 0)).toBe(BEHAVIOR_MIN_GAP_SEC);
+    expect(replyDelayQuantileSec(profile, 0)).toBe(BEHAVIOR_MIN_GAP_SEC);
     // The far end of the tail is still the person's own shape.
-    expect(replyDelayQuantile(profile, 1)).toBeGreaterThan(
-      replyDelayQuantile(profile, 0.9),
+    expect(replyDelayQuantileSec(profile, 1)).toBeGreaterThan(
+      replyDelayQuantileSec(profile, 0.9),
     );
   });
 
   it("does not read a percentile outside the scale", () => {
-    expect(replyDelayQuantile(profile, -1)).toBe(replyDelayQuantile(profile, 0));
-    expect(replyDelayQuantile(profile, 2)).toBe(replyDelayQuantile(profile, 1));
+    expect(replyDelayQuantileSec(profile, -1)).toBe(replyDelayQuantileSec(profile, 0));
+    expect(replyDelayQuantileSec(profile, 2)).toBe(replyDelayQuantileSec(profile, 1));
   });
 
   it("has no opinion about a percentile that is not a number", () => {
-    expect(replyDelayQuantile(profile, Number.NaN)).toBeCloseTo(
-      replyDelayQuantile(profile, 0.5),
+    expect(replyDelayQuantileSec(profile, Number.NaN)).toBeCloseTo(
+      replyDelayQuantileSec(profile, 0.5),
       6,
     );
   });
@@ -375,7 +375,7 @@ describe("the percentiles", () => {
       replyGapLogSigma: 2,
       samples: 30,
     })!;
-    expect(replyDelayQuantile(wide, 1)).toBe(BEHAVIOR_MAX_GAP_SEC);
+    expect(replyDelayQuantileSec(wide, 1)).toBe(BEHAVIOR_MAX_GAP_SEC);
   });
 });
 
