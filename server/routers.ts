@@ -847,8 +847,21 @@ export const appRouter = router({
           };
         }
 
+        /**
+         * The correction is merged into the persona, not written over it.
+         *
+         * The normalised data carries the fields the correction knows
+         * about. It does not carry `customInstructions` — the user's own
+         * words to the persona — nor `starterQuestions`: they are not in
+         * the type, so the normaliser drops them, and the whole blob was
+         * replaced. So a correction silently deleted what the user had
+         * written.
+         */
         await updatePersona(input.id, ctx.user.id, {
-          personaData: result.personaData as any,
+          personaData: {
+            ...((persona.personaData as any) || {}),
+            ...(result.personaData as any),
+          },
         });
 
         await appendPersonaCorrection(input.id, ctx.user.id, buildCorrectionLog({
