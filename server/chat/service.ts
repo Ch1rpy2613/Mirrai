@@ -534,8 +534,9 @@ async function* runConversationTurn(
   const contextLimit = clampContextLimit(extraConfig.contextLimit);
 
   // The user's turn is stored first so the history and any summarisation see it.
+  let storedUserMessageId: number | null = null;
   if (!options.alreadyPersisted) {
-    await db.createMessage({
+    storedUserMessageId = await db.createMessage({
       personaId: persona.id,
       userId,
       role: "user",
@@ -645,6 +646,25 @@ async function* runConversationTurn(
     // "（沉默）" in its place would put a message in the transcript that
     // the person never received and never asked for.
     if (options.signal?.aborted) {
+      /**
+       * A message with nothing under it.
+       *
+       * The turn was cut short — a closed tab, a network blip — so
+       * nothing was stored as the answer. The user's own message was
+       * stored already, and it would sit in the transcript for ever
+       * with nothing under it.
+       *
+       * The client takes its bubble away when a send fails, so the
+       * transcript says the same thing: the message is taken away too.
+       *
+       * A half-answer is different: the client keeps that, and so does
+       * the transcript.
+       */
+      if (storedUserMessageId && !replyText) {
+        await db
+          .deleteMessage(storedUserMessageId, userId, persona.id)
+          .catch(() => false);
+      }
       yield { type: "error", message: "aborted", partial: replyText.length > 0 };
       return;
     }
