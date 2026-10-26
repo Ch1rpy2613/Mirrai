@@ -318,8 +318,10 @@ export default function PersonaEdit() {
 
   const saveBasic = () => updateMutation.mutate({
     id: personaId, name, relationshipDesc,
-    togetherFrom: togetherFrom || undefined, togetherTo: togetherTo || undefined,
-    llmProvider: llmProvider || undefined,
+    // Null, not undefined: an emptied field has to be cleared, and
+    // Drizzle ignores `undefined` in an update.
+    togetherFrom: togetherFrom.trim() || null, togetherTo: togetherTo.trim() || null,
+    llmProvider: llmProvider || null,
     remindersEnabled,
     presence,
     reachability,
@@ -383,11 +385,13 @@ export default function PersonaEdit() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="persona-together-from" className="text-xs text-muted-foreground">{t("personaEdit.togetherFromLabel")}</Label>
-              <Input id="persona-together-from" type="date" value={togetherFrom} onChange={e => setTogetherFrom(e.target.value)} />
+              <Input id="persona-together-from" value={togetherFrom} onChange={e => setTogetherFrom(e.target.value)}
+                placeholder="2021-05" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="persona-together-to" className="text-xs text-muted-foreground">{t("personaEdit.togetherToLabel")}</Label>
-              <Input id="persona-together-to" type="date" value={togetherTo} onChange={e => setTogetherTo(e.target.value)} />
+              <Input id="persona-together-to" value={togetherTo} onChange={e => setTogetherTo(e.target.value)}
+                placeholder="2021-05" />
             </div>
           </div>
           <div className="space-y-1.5">

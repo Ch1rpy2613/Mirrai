@@ -645,10 +645,18 @@ export const appRouter = router({
         id: z.number(),
         name: z.string().min(1).max(100).optional(),
         relationshipDesc: z.string().max(200).optional(),
-        togetherFrom: z.string().max(50).optional(),
-        togetherTo: z.string().max(50).optional(),
+        /**
+         * Nullable, so a field can be cleared.
+         *
+         * Drizzle ignores `undefined` in an update, so an emptied field
+         * was silently dropped and the old value stayed: the user
+         * cleared the date, pressed save, saw the success toast, and
+         * the date was back.
+         */
+        togetherFrom: z.string().max(50).nullable().optional(),
+        togetherTo: z.string().max(50).nullable().optional(),
         emotionalState: z.enum(["warm","playful","nostalgic","melancholy","happy","distant"]).optional(),
-        llmProvider: z.string().max(64).optional(),
+        llmProvider: z.string().max(64).nullable().optional(),
         remindersEnabled: z.boolean().optional(),
         /**
          * This persona's graduation mode. Null means "inherit the user's
