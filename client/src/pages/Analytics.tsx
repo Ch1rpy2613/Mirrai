@@ -196,8 +196,20 @@ export default function Analytics() {
             </div>
           ) : (
             <div className="space-y-3">
-              {(data?.personaEngagement || []).map((p: any, i: number) => {
-                const max = Math.max(...(data?.personaEngagement || []).map((x: any) => Number(x.messageCount)));
+              {(() => {
+                /**
+                 * The longest bar.
+                 *
+                 * It was computed inside the map — so the whole list was
+                 * walked once for every row, and the list was walked
+                 * again for every row of it.
+                 */
+                const engagement = data?.personaEngagement || [];
+                const max = engagement.reduce(
+                  (biggest: number, x: any) => Math.max(biggest, Number(x.messageCount)),
+                  0,
+                );
+                return engagement.map((p: any, i: number) => {
                 const pct = max > 0 ? (Number(p.messageCount) / max) * 100 : 0;
                 return (
                   <div key={p.personaId} className="flex items-center gap-3">
@@ -209,7 +221,8 @@ export default function Analytics() {
                     <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">{p.messageCount}</span>
                   </div>
                 );
-              })}
+                });
+              })()}
             </div>
           )}
         </ChartCard>
