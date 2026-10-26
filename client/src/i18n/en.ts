@@ -612,6 +612,7 @@ export const en = {
       baseUrl: "Base URL",
       model: "Model",
       setDefault: "Make default",
+      expand: "Show the settings",
       default: "Default",
       hasKey: "Configured",
       noKey: "Not configured",

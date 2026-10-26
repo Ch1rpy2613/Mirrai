@@ -465,8 +465,10 @@ export default function PersonaEdit() {
             <p className="text-muted-foreground text-sm mt-1">{t("graduationMode.note")}</p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("graduationMode.title")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="persona-graduation-mode">{t("graduationMode.title")}</Label>
             <GraduationModeSelect
+              id="persona-graduation-mode"
+              ariaLabel={t("graduationMode.title")}
               value={graduationMode}
               allowInherit
               onChange={setGraduationMode}

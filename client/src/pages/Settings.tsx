@@ -101,13 +101,18 @@ function SliderField({ label, value, onChange, min, max, step, unit }: {
   label: string; value: number; onChange: (v: number) => void;
   min: number; max: number; step: number; unit?: string;
 }) {
+  // The id that ties the label to the slider.
+  const id = `slider-${label.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}`;
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between">
-        <Label className="text-sm text-foreground/80">{label}</Label>
+        <Label className="text-sm text-foreground/80" htmlFor={id}>{label}</Label>
         <span className="stat-value text-sm">{value}{unit}</span>
       </div>
-      <Slider value={[value]} onValueChange={v => onChange(v[0])} min={min} max={max} step={step} />
+      {/* The slider has no name of its own: it was announced as
+          "slider" with nothing to say what it set. */}
+      <Slider id={id} aria-label={label} aria-valuetext={`${value}${unit ?? ""}`}
+        value={[value]} onValueChange={v => onChange(v[0])} min={min} max={max} step={step} />
       <div className="flex justify-between text-[0.6875rem] text-muted-foreground">
         <span>{min}{unit}</span><span>{max}{unit}</span>
       </div>
@@ -134,48 +139,60 @@ function ProviderConfigRow({ provider, isDefault, onSave, onSetDefault }: {
       "surface overflow-hidden",
       isDefault && "border-cinnabar/40"
     )}>
-      <div role="button" tabIndex={0}
-        onClick={() => setExpanded(!expanded)}
-        onKeyDown={e => {
-          if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault(); setExpanded(!expanded);
-          }
-        }}
-        aria-expanded={expanded}
-        className="w-full flex items-center justify-between gap-3 p-3.5 hover:bg-muted/30 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-        <div className="flex items-center gap-2 min-w-0">
+      {/**
+       * The header is a real button.
+       *
+       * It was a `div` with `role="button"` that contained a real
+       * button — the "make this the default" action. Nested
+       * interactive controls confuse assistive technology: the row
+       * announced as a button that contains a button.
+       *
+       * The two actions are now siblings.
+       */}
+      <div className="w-full flex items-center justify-between gap-3 p-3.5 hover:bg-muted/30 transition-colors">
+        <button type="button"
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          aria-controls={`provider-panel-${provider.name}`}
+          className="flex items-center gap-2 min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded">
           <span className="text-sm text-foreground font-medium truncate">{provider.name}</span>
           {isDefault && <StatusChip tone="primary">{t("settings.ai.default")}</StatusChip>}
           <StatusChip tone={provider.configured ? "success" : "muted"}>
             {provider.configured ? t("settings.ai.hasKey") : t("settings.ai.noKey")}
           </StatusChip>
-        </div>
+        </button>
         <div className="flex items-center gap-2 flex-shrink-0">
           {!isDefault && (
-            <button type="button" onClick={e => { e.stopPropagation(); onSetDefault(); }}
+            <button type="button" onClick={onSetDefault}
               className="text-xs text-primary hover:text-primary/80 px-1">{t("settings.ai.setDefault")}</button>
           )}
-          {expanded
-            ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-            : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          <button type="button" onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            aria-controls={`provider-panel-${provider.name}`}
+            aria-label={expanded ? t("common.close") : t("settings.ai.expand")}
+            className="text-muted-foreground hover:text-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded">
+            {expanded
+              ? <ChevronUp className="w-4 h-4" />
+              : <ChevronDown className="w-4 h-4" />}
+          </button>
         </div>
       </div>
       {expanded && (
         <div className="p-3.5 pt-3 space-y-3 border-t border-border">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("settings.ai.apiKey")}</Label>
-            <Input value={apiKey} onChange={e => setApiKey(e.target.value)}
+            <Label className="text-xs text-muted-foreground" htmlFor={`provider-${provider.name}-api-key`}>{t("settings.ai.apiKey")}</Label>
+            <Input id={`provider-${provider.name}-api-key`} value={apiKey} onChange={e => setApiKey(e.target.value)}
               placeholder="sk-..." type="password" className="h-9 rounded-md text-sm" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("settings.ai.baseUrl")}</Label>
-              <Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
+              <Label className="text-xs text-muted-foreground" htmlFor={`provider-${provider.name}-base-url`}>{t("settings.ai.baseUrl")}</Label>
+              <Input id={`provider-${provider.name}-base-url`} value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
                 placeholder="https://api.openai.com/v1" className="h-9 rounded-md text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("settings.ai.model")}</Label>
-              <Input value={model} onChange={e => setModel(e.target.value)}
+              <Label className="text-xs text-muted-foreground" htmlFor={`provider-${provider.name}-model`}>{t("settings.ai.model")}</Label>
+              <Input id={`provider-${provider.name}-model`} value={model} onChange={e => setModel(e.target.value)}
                 placeholder="gpt-4o" className="h-9 rounded-md text-sm" />
             </div>
           </div>
@@ -275,13 +292,13 @@ function ProfileTab() {
             {editing ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{t("settings.profile.name")}</Label>
-                  <Input value={editName} onChange={e => setEditName(e.target.value)}
+                  <Label className="text-xs text-muted-foreground" htmlFor="profile-name">{t("settings.profile.name")}</Label>
+                  <Input id="profile-name" value={editName} onChange={e => setEditName(e.target.value)}
                     className="h-9 rounded-md text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{t("settings.profile.email")}</Label>
-                  <Input value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                  <Label className="text-xs text-muted-foreground" htmlFor="profile-email">{t("settings.profile.email")}</Label>
+                  <Input id="profile-email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
                     type="email" placeholder="your@email.com"
                     className="h-9 rounded-md text-sm" />
                 </div>
@@ -352,6 +369,8 @@ function ProfileTab() {
         <SectionHeader note={t("graduationMode.globalNote")} title={t("graduationMode.globalTitle")} />
         <div className="space-y-2.5">
           <GraduationModeSelect
+            id="graduation-mode"
+            ariaLabel={t("graduationMode.globalTitle")}
             value={(profile.graduationMode as GraduationMode) ?? "suggest"}
             onChange={mode => updateGraduationMode.mutate({ mode: mode as GraduationMode })}
             disabled={updateGraduationMode.isPending}
@@ -368,8 +387,9 @@ function ProfileTab() {
         <SectionHeader note={t("userProfile.note")} title={t("userProfile.title")} />
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("userProfile.addressStyle")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="user-address-style">{t("userProfile.addressStyle")}</Label>
             <Input
+              id="user-address-style"
               value={addressStyle}
               onChange={e => setAddressStyle(e.target.value)}
               placeholder={t("userProfile.addressStylePlaceholder")}
@@ -381,8 +401,9 @@ function ProfileTab() {
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("userProfile.boundaries")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="user-boundaries">{t("userProfile.boundaries")}</Label>
             <textarea
+              id="user-boundaries"
               value={boundaries}
               onChange={e => setBoundaries(e.target.value)}
               placeholder={t("userProfile.boundariesPlaceholder")}
@@ -427,8 +448,9 @@ function ProfileTab() {
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("localFirst.trajectoryTitle")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="trajectory-assessment">{t("localFirst.trajectoryTitle")}</Label>
             <select
+              id="trajectory-assessment"
               value={(profile.trajectoryAssessment as "auto" | "on" | "off") ?? "auto"}
               onChange={(e) => updateTrajectoryAssessment.mutate({ setting: e.target.value as any })}
               disabled={updateTrajectoryAssessment.isPending}
@@ -476,9 +498,9 @@ function ProfileTab() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">{t("settings.profile.currentPassword")}</Label>
+              <Label className="text-sm text-foreground/80" htmlFor="current-password">{t("settings.profile.currentPassword")}</Label>
               <div className="relative">
-                <Input value={currentPwd} onChange={e => setCurrentPwd(e.target.value)}
+                <Input id="current-password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)}
                   type={showCurrentPwd ? "text" : "password"} placeholder={t("settings.profile.currentPasswordPlaceholder")}
                   className="h-10 rounded-md pr-10" />
                 <button type="button" onClick={() => setShowCurrentPwd(!showCurrentPwd)}
@@ -489,9 +511,9 @@ function ProfileTab() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">{t("settings.profile.newPassword")}</Label>
+              <Label className="text-sm text-foreground/80" htmlFor="new-password">{t("settings.profile.newPassword")}</Label>
               <div className="relative">
-                <Input value={newPwd} onChange={e => setNewPwd(e.target.value)}
+                <Input id="new-password" value={newPwd} onChange={e => setNewPwd(e.target.value)}
                   type={showNewPwd ? "text" : "password"} placeholder={t("settings.profile.newPasswordPlaceholder")}
                   className="h-10 rounded-md pr-10" />
                 <button type="button" onClick={() => setShowNewPwd(!showNewPwd)}
@@ -505,8 +527,8 @@ function ProfileTab() {
               )}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">{t("settings.profile.confirmPassword")}</Label>
-              <Input value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
+              <Label className="text-sm text-foreground/80" htmlFor="confirm-password">{t("settings.profile.confirmPassword")}</Label>
+              <Input id="confirm-password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
                 type="password" placeholder={t("settings.profile.confirmPasswordPlaceholder")}
                 className="h-10 rounded-md" />
               {confirmPwd && confirmPwd !== newPwd && (
@@ -686,9 +708,10 @@ function WeChatTab() {
 
         {needsCode && (
           <div className="mt-4 p-4 rounded-lg border border-border space-y-3">
-            <Label className="text-xs text-muted-foreground">{t("settings.wechat.codeLabel")}</Label>
+            <Label className="text-xs text-muted-foreground" htmlFor="wechat-verify-code">{t("settings.wechat.codeLabel")}</Label>
             <div className="flex gap-2">
               <Input
+                id="wechat-verify-code"
                 value={verifyCode}
                 onChange={(e) => setVerifyCode(e.target.value)}
                 placeholder={t("settings.wechat.codePlaceholder")}
@@ -811,10 +834,10 @@ function WeChatBindingsSection({ connected }: { connected: boolean }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("settings.wechat.replyPersona")}</Label>
+            <Label className="text-xs text-muted-foreground" id="wechat-reply-persona-label" htmlFor="wechat-reply-persona">{t("settings.wechat.replyPersona")}</Label>
             <div className="flex gap-2">
               <Select value={selectedPersonaId} onValueChange={setSelectedPersonaId}>
-                <SelectTrigger className="h-9 rounded-md text-sm w-full">
+                <SelectTrigger id="wechat-reply-persona" aria-labelledby="wechat-reply-persona-label" className="h-9 rounded-md text-sm w-full">
                   <SelectValue placeholder={t("settings.wechat.selectPersona")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1080,16 +1103,16 @@ function DataManagementTab() {
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">{t("settings.data.passwordLabel")}</Label>
-              <Input value={deletePassword} onChange={e => setDeletePassword(e.target.value)}
+              <Label className="text-sm text-foreground/80" htmlFor="delete-account-password">{t("settings.data.passwordLabel")}</Label>
+              <Input id="delete-account-password" value={deletePassword} onChange={e => setDeletePassword(e.target.value)}
                 type="password" placeholder={t("settings.data.passwordPlaceholder")}
                 className="h-10 rounded-md" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-foreground/80">
+              <Label className="text-sm text-foreground/80" htmlFor="delete-account-phrase">
                 {t("settings.data.phraseLabel", { phrase: t("settings.data.phrase") })}
               </Label>
-              <Input value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
+              <Input id="delete-account-phrase" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
                 placeholder={t("settings.data.phrase")}
                 className="h-10 rounded-md" />
             </div>
@@ -1250,13 +1273,13 @@ function FeishuSection() {
 
       <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">{t("settings.channels.appId")}</Label>
-          <Input value={appId} onChange={e => setAppId(e.target.value)}
+          <Label className="text-xs text-muted-foreground" htmlFor="channel-app-id">{t("settings.channels.appId")}</Label>
+          <Input id="channel-app-id" value={appId} onChange={e => setAppId(e.target.value)}
             placeholder="cli_xxxxxxxxxxxx" className="h-9 rounded-md text-sm" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">{t("settings.channels.appSecret")}</Label>
-          <Input value={appSecret} onChange={e => setAppSecret(e.target.value)}
+          <Label className="text-xs text-muted-foreground" htmlFor="channel-app-secret">{t("settings.channels.appSecret")}</Label>
+          <Input id="channel-app-secret" value={appSecret} onChange={e => setAppSecret(e.target.value)}
             type="password" placeholder="••••••••" className="h-9 rounded-md text-sm" />
         </div>
       </div>
@@ -1417,7 +1440,7 @@ function DataSourcesTab() {
         <SectionHeader note={t("settings.sources.startNote")} title={t("settings.sources.startTitle")} />
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("settings.sources.sourceLabel")}</Label>
+            <Label className="text-xs text-muted-foreground" id="source-select-label" htmlFor="source-select">{t("settings.sources.sourceLabel")}</Label>
             <Select value={sourceId} onValueChange={v => {
               setSourceId(v as CollectorSourceId);
               // The credentials of the platform that was chosen before
@@ -1431,7 +1454,7 @@ function DataSourcesTab() {
               // was handed to another.
               setCredentials({});
             }}>
-              <SelectTrigger className="h-9 rounded-md text-sm w-full">
+              <SelectTrigger id="source-select" aria-labelledby="source-select-label" className="h-9 rounded-md text-sm w-full">
                 <SelectValue placeholder={t("settings.sources.selectPlatform")} />
               </SelectTrigger>
               <SelectContent>
@@ -1456,10 +1479,11 @@ function DataSourcesTab() {
               </p>
               {credentialKeys.map(key => (
                 <div key={key} className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
+                  <Label className="text-xs text-muted-foreground" htmlFor={`credential-${key}`}>
                     {t(`settings.sources.credentialLabels.${key}` as any)}
                   </Label>
                   <Input
+                    id={`credential-${key}`}
                     type={key.toLowerCase().includes("secret") || key.toLowerCase().includes("token") ? "password" : "text"}
                     value={credentials[key] ?? ""}
                     onChange={e => setCredentials(prev => ({ ...prev, [key]: e.target.value }))}
@@ -1484,9 +1508,9 @@ function DataSourcesTab() {
           )}
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("settings.sources.personaLabel")}</Label>
+            <Label className="text-xs text-muted-foreground" id="source-persona-label" htmlFor="source-persona">{t("settings.sources.personaLabel")}</Label>
             <Select value={personaId} onValueChange={setPersonaId}>
-              <SelectTrigger className="h-9 rounded-md text-sm w-full">
+              <SelectTrigger id="source-persona" aria-labelledby="source-persona-label" className="h-9 rounded-md text-sm w-full">
                 <SelectValue placeholder={t("settings.sources.selectPersona")} />
               </SelectTrigger>
               <SelectContent>
@@ -1502,13 +1526,13 @@ function DataSourcesTab() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("settings.sources.targetLabel")}</Label>
-              <Input value={target} onChange={e => setTarget(e.target.value)}
+              <Label className="text-xs text-muted-foreground" htmlFor="source-target">{t("settings.sources.targetLabel")}</Label>
+              <Input id="source-target" value={target} onChange={e => setTarget(e.target.value)}
                 placeholder={t("settings.sources.targetPlaceholder")} className="h-9 rounded-md text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("settings.sources.limitLabel")}</Label>
-              <Input value={limit} onChange={e => setLimit(e.target.value)}
+              <Label className="text-xs text-muted-foreground" htmlFor="source-limit">{t("settings.sources.limitLabel")}</Label>
+              <Input id="source-limit" value={limit} onChange={e => setLimit(e.target.value)}
                 placeholder={t("settings.sources.limitPlaceholder")} className="h-9 rounded-md text-sm" inputMode="numeric" />
             </div>
           </div>
@@ -1584,7 +1608,10 @@ function DataSourcesTab() {
               become the material the persona is distilled from. */}
           <div className="mt-4 pt-4 border-t border-border space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("distillation.title")}</Label>
+              {/* The picker names itself — it is a radiogroup with its
+                  own label — so this is a heading rather than a label
+                  for a control that is not there. */}
+              <p className="text-xs text-muted-foreground">{t("distillation.title")}</p>
               <DistillationModePicker
                 value={mode}
                 onChange={next => {
@@ -1884,9 +1911,9 @@ function TemplateLibraryTab() {
         <SectionHeader note={t("settings.templates.fromPersonaNote")} title={t("settings.templates.fromPersonaTitle")} />
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("settings.sources.personaLabel")}</Label>
+            <Label className="text-xs text-muted-foreground" id="template-persona-label" htmlFor="template-persona">{t("settings.sources.personaLabel")}</Label>
             <Select value={personaId} onValueChange={setPersonaId}>
-              <SelectTrigger className="h-9 rounded-md text-sm w-full">
+              <SelectTrigger id="template-persona" aria-labelledby="template-persona-label" className="h-9 rounded-md text-sm w-full">
                 <SelectValue placeholder={t("settings.templates.selectAnalyzed")} />
               </SelectTrigger>
               <SelectContent>
@@ -1904,20 +1931,20 @@ function TemplateLibraryTab() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("settings.templates.nameLabel")}</Label>
-              <Input value={name} onChange={e => setName(e.target.value)}
+              <Label className="text-xs text-muted-foreground" htmlFor="template-name">{t("settings.templates.nameLabel")}</Label>
+              <Input id="template-name" value={name} onChange={e => setName(e.target.value)}
                 placeholder={t("settings.templates.namePlaceholder")} className="h-9 rounded-md text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("settings.templates.tagsLabel")}</Label>
-              <Input value={tags} onChange={e => setTags(e.target.value)}
+              <Label className="text-xs text-muted-foreground" htmlFor="template-tags">{t("settings.templates.tagsLabel")}</Label>
+              <Input id="template-tags" value={tags} onChange={e => setTags(e.target.value)}
                 placeholder={t("settings.templates.tagsPlaceholder")} className="h-9 rounded-md text-sm" />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("settings.templates.descriptionLabel")}</Label>
-            <Textarea value={description} onChange={e => setDescription(e.target.value)}
+            <Label className="text-xs text-muted-foreground" htmlFor="template-description">{t("settings.templates.descriptionLabel")}</Label>
+            <Textarea id="template-description" value={description} onChange={e => setDescription(e.target.value)}
               placeholder={t("settings.templates.descriptionPlaceholder")} className="min-h-16 text-sm" />
           </div>
 
@@ -2021,10 +2048,20 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Tab Navigation · 发丝线下划线页签 */}
-        <div className="flex gap-1 mb-7 border-b border-border overflow-x-auto scrollbar-hide">
+        {/* Tab Navigation · 发丝线下划线页签
+
+            It is a tab list: the active tab used to be signalled only
+            by a coloured underline, so a screen-reader user could not
+            tell which of the seven sections was open. */}
+        <div role="tablist" aria-label={t("settings.title")}
+          className="flex gap-1 mb-7 border-b border-border overflow-x-auto scrollbar-hide">
           {TABS.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              role="tab"
+              id={`settings-tab-${tab.key}`}
+              aria-selected={activeTab === tab.key}
+              aria-controls={`settings-panel-${tab.key}`}
+              tabIndex={activeTab === tab.key ? 0 : -1}
               className={cn(
                 "px-3 sm:px-4 py-2.5 -mb-px text-sm border-b-2 transition-colors flex-shrink-0",
                 activeTab === tab.key
@@ -2038,6 +2075,9 @@ export default function SettingsPage() {
 
         {/* Tab Content */}
         <motion.div key={activeTab}
+          role="tabpanel"
+          id={`settings-panel-${activeTab}`}
+          aria-labelledby={`settings-tab-${activeTab}`}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}>

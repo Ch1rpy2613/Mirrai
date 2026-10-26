@@ -206,6 +206,11 @@ export default function Questionnaire() {
                   <button
                     key={style.key}
                     type="button"
+                    // The chips are toggles, and they said nothing
+                    // about their state: a screen-reader user heard a
+                    // row of unlabelled buttons with no feedback that a
+                    // choice was already made.
+                    aria-pressed={active}
                     onClick={() => set("communicationStyles", toggle(answers.communicationStyles, style.key))}
                     className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                       active
@@ -256,6 +261,7 @@ export default function Questionnaire() {
                   <button
                     key={style.key}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => set("conflictStyle", active ? "" : style.key)}
                     className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                       active
@@ -278,6 +284,7 @@ export default function Questionnaire() {
                   <button
                     key={lang.key}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => set("loveLanguage", active ? "" : lang.key)}
                     className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                       active

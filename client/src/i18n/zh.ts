@@ -610,6 +610,7 @@ export const zh = {
       baseUrl: "接口地址",
       model: "模型",
       setDefault: "设为默认",
+      expand: "展开设置",
       default: "默认",
       hasKey: "已配置",
       noKey: "未配置",

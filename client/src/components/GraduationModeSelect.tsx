@@ -32,6 +32,13 @@ interface Props {
   allowInherit?: boolean;
   disabled?: boolean;
   id?: string;
+  /**
+   * The label of the control, for a screen reader.
+   *
+   * The select had no name of its own — it was announced as an unnamed
+   * dropdown — so the caller says what it sets.
+   */
+  ariaLabel?: string;
 }
 
 export default function GraduationModeSelect({
@@ -40,12 +47,14 @@ export default function GraduationModeSelect({
   allowInherit = false,
   disabled,
   id,
+  ariaLabel,
 }: Props) {
   const { t } = useLocale();
 
   return (
     <select
       id={id}
+      aria-label={ariaLabel}
       value={value}
       disabled={disabled}
       onChange={e => onChange(e.target.value as GraduationMode | "inherit")}
