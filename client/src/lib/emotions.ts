@@ -114,6 +114,31 @@ export const EMOTIONS: Record<EmotionKey, EmotionDefinition> = {
   },
 };
 
+/**
+ * The emotion a mood names.
+ *
+ * A diary is written in the reader's language, and the prompt asks the
+ * model for the emotion *in that language* — so the arc holds "温柔" or
+ * "俏皮", not "warm" or "playful". A lookup by the English key never
+ * matched, and the chip fell back to the unstyled grey text in a
+ * Chinese diary.
+ *
+ * The label is read back out of the dictionary, so it works in every
+ * language and needs no second list.
+ */
+export function resolveEmotionKey(
+  mood: string,
+  label: (key: string) => string,
+): string | undefined {
+  const table = EMOTIONS as Record<string, EmotionDefinition | undefined>;
+  if (table[mood]) return mood;
+  for (const key of Object.keys(table)) {
+    const definition = table[key];
+    if (definition && label(definition.labelKey) === mood) return key;
+  }
+  return undefined;
+}
+
 /** The states in a stable order — the charts rely on it. */
 export const EMOTION_KEYS = Object.keys(EMOTIONS) as EmotionKey[];
 

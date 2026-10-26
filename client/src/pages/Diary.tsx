@@ -8,7 +8,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, PenLine, Trash2, Loader2, Message
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
-import { EMOTIONS, type EmotionDefinition } from "@/lib/emotions";
+import { EMOTIONS, resolveEmotionKey, type EmotionDefinition } from "@/lib/emotions";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -41,8 +41,9 @@ function parseLocalDate(dateStr: string): Date {
 
 function MoodChip({ mood, small }: { mood: string; small?: boolean }) {
   const { t } = useLocale();
-  const cls = MOOD_CHIP[mood] ?? "bg-muted/60 text-muted-foreground border-border/60";
-  const definition = (EMOTIONS as Record<string, EmotionDefinition | undefined>)[mood];
+  const key = resolveEmotionKey(mood, t as (key: any) => string);
+  const cls = (key ? MOOD_CHIP[key] : undefined) ?? "bg-muted/60 text-muted-foreground border-border/60";
+  const definition = key ? (EMOTIONS as Record<string, EmotionDefinition | undefined>)[key] : undefined;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-md border ${small ? "px-2 py-0.5 text-[0.6875rem]" : "px-2.5 py-1 text-xs"} ${cls}`}>
       <span className="w-1 h-1 bg-current" />
