@@ -116,12 +116,41 @@ export function getTimeOfDay(
 
 /**
  * Days since a relationship started, from a `YYYY-MM` or `YYYY-MM-DD` string.
+ *
+ * The date is read in the *machine's own* calendar, not in Greenwich's.
+ *
+ * `new Date("2026-01-01")` is midnight in Greenwich, which is eight in
+ * the morning in Shanghai — so the day was already partly over when it
+ * was parsed, and the count was one short for the first eight hours of
+ * every day. The prompt told the persona "you have known each other for
+ * 0 days" on the day the relationship was one day old.
  */
 export function daysSince(from: string | null | undefined, now: Date = new Date()): number | null {
   if (!from) return null;
-  const parsed = new Date(from);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return Math.max(0, Math.floor((now.getTime() - parsed.getTime()) / 86_400_000));
+  const parsed = parseLocalDay(from);
+  if (!parsed) return null;
+  const from_ = parsed.getTime();
+  const to = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.max(0, Math.round((to - from_) / 86_400_000));
+}
+
+/**
+ * A calendar date, read in the machine's own calendar.
+ *
+ * Returns null for anything that is not a date.
+ */
+function parseLocalDay(value: string): Date | null {
+  const trimmed = value.trim();
+  const match = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(trimmed);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = match[3] === undefined ? 1 : Number(match[3]);
+    const date = new Date(year, month, day);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export interface SystemPromptOptions {

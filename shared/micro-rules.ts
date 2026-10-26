@@ -157,7 +157,9 @@ export function renderMicroRules(rules: MicroRule[], locale: "zh" | "en" = "zh")
   if (!active.length) return "";
   const lines = active.map((rule) =>
     copy(locale, "prompt.microRuleLine", {
-      trigger: rule.trigger.join(locale === "en" ? " / " : " / "),
+      // The separator follows the language: the Chinese one is the
+      // enumeration comma, and the whole prompt otherwise uses it.
+      trigger: rule.trigger.join(locale === "en" ? " / " : "、"),
       meaning: rule.meaning,
       rendering: rule.rendering,
     }),

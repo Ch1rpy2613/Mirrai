@@ -222,9 +222,17 @@ export function buildRelationshipSection(
   for (const event of events.slice(0, 8)) {
     const kind = isRelationshipEventKind(event.kind) ? event.kind : null;
     const label = kind ? EVENT_LABELS[kind][locale] : null;
-    const when = event.happenedAt ? formatWhen(event.happenedAt, locale) : null;
+    const when = event.happenedAt ? formatWhen(event.happenedAt, locale, now) : null;
+    // The punctuation follows the language.
+    //
+    // It was full-width in both: an English persona's system prompt
+    // said "2026-01-01，there is something to tell you：x" — a sentence
+    // in two languages at once, which is exactly what the rest of the
+    // prompt code avoids.
+    const comma = locale === "en" ? ", " : "，";
+    const colon = locale === "en" ? ": " : "：";
     const line = label
-      ? `${when ? `${when}，` : ""}${label}：${event.title}`
+      ? `${when ? `${when}${comma}` : ""}${label}${colon}${event.title}`
       : event.title;
     const detail = event.detail?.trim();
     parts.push(detail ? `- ${line}\n  ${detail}` : `- ${line}`);
@@ -233,7 +241,10 @@ export function buildRelationshipSection(
   if (phase) {
     const heading = copy(locale, "userSide.phaseHeading");
     const phaseLine = copy(locale, `userSide.phase.${phase}`);
-    parts.push(`（${heading}：${phaseLine}）`);
+    const open = locale === "en" ? "(" : "（";
+    const close = locale === "en" ? ")" : "）";
+    const colon = locale === "en" ? ": " : "：";
+    parts.push(`${open}${heading}${colon}${phaseLine}${close}`);
   }
 
   const title = copy(locale, "userSide.eventsTitle");
@@ -263,11 +274,19 @@ export function buildRelationshipSection(
 
 
 
-/** A short, human date for an event. */
-function formatWhen(value: Date | string, locale: "zh" | "en"): string {
+/**
+ * A short, human date for an event.
+ *
+ * The `now` is the one the caller was given, not the wall clock: the
+ * relative dates in the prompt were wrong whenever a caller supplied a
+ * `now` — the scheduler's sweeps, the evaluations, the replays — and
+ * the same function's freshness check used a different clock than its
+ * own date labels.
+ */
+function formatWhen(value: Date | string, locale: "zh" | "en", now: Date = new Date()): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
+  const days = Math.floor((now.getTime() - date.getTime()) / 86_400_000);
   if (days === 0) return copy(locale, "userSide.when.today");
   if (days === 1) return copy(locale, "userSide.when.yesterday");
   if (days < 7) return copy(locale, "userSide.when.daysAgo", { days });
