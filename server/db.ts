@@ -1022,12 +1022,58 @@ export async function getPersonaFileById(id: number, userId: number) {
   return rows[0];
 }
 
-export async function getFilesByPersonaId(personaId: number, userId: number) {
+/**
+ * A file, as the list of the files of a persona returns it.
+ */
+export type PersonaFileRow = Omit<
+  typeof personaFiles.$inferSelect,
+  "extractedMemory"
+> & { extractedMemory?: string | null };
+
+/**
+ * The files of a persona, newest first.
+ *
+ * The extracted text is not part of the answer unless it is asked for.
+ * It is up to half a million characters per file, and the list of the
+ * files is shown on a page that never reads it — so every visit pulled
+ * megabytes of chat-log text to the browser and threw it away.
+ */
+export async function getFilesByPersonaId(
+  personaId: number,
+  userId: number,
+  options: { withExtractedMemory?: boolean } = {},
+): Promise<Array<PersonaFileRow>> {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(personaFiles)
-    .where(and(eq(personaFiles.personaId, personaId), eq(personaFiles.userId, userId)))
-    .orderBy(desc(personaFiles.createdAt));
+  const columns = {
+    id: personaFiles.id,
+    personaId: personaFiles.personaId,
+    userId: personaFiles.userId,
+    fileType: personaFiles.fileType,
+    originalName: personaFiles.originalName,
+    fileKey: personaFiles.fileKey,
+    fileUrl: personaFiles.fileUrl,
+    fileSize: personaFiles.fileSize,
+    processStatus: personaFiles.processStatus,
+    createdAt: personaFiles.createdAt,
+  };
+  /**
+   * The extracted text is read only when it is asked for.
+   *
+   * The column is left out of the select otherwise — so the text is
+   * never brought back from the database at all, rather than being
+   * brought back and thrown away.
+   */
+  const rows = options.withExtractedMemory
+    ? await db.select({ ...columns, extractedMemory: personaFiles.extractedMemory })
+        .from(personaFiles)
+        .where(and(eq(personaFiles.personaId, personaId), eq(personaFiles.userId, userId)))
+        .orderBy(desc(personaFiles.createdAt))
+    : await db.select(columns)
+        .from(personaFiles)
+        .where(and(eq(personaFiles.personaId, personaId), eq(personaFiles.userId, userId)))
+        .orderBy(desc(personaFiles.createdAt));
+  return rows;
 }
 
 // ─── Message helpers ────────────────────────────────────────────────────────

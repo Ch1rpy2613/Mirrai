@@ -250,7 +250,10 @@ async function startPersonaDistillation(params: {
   runningDistillations.add(personaId);
 
   try {
-    const files = await getFilesByPersonaId(personaId, userId);
+    // The distillation needs the extracted text of every file.
+    const files = await getFilesByPersonaId(personaId, userId, {
+      withExtractedMemory: true,
+    });
     const chatContent = files
       .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
       .map((f) => f.extractedMemory || "")
