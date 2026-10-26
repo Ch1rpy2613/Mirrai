@@ -14,6 +14,10 @@ import path from "node:path";
  *
  * The migration runner had the same problem: the desktop start scripts
  * run it out of the bundle, and it was not there.
+ *
+ * And the tools need an interpreter: the Docker image had none, so the
+ * tools it shipped could never run. The only symptom was a line in the
+ * log.
  */
 const ROOT = path.resolve(__dirname, "..");
 
@@ -35,18 +39,86 @@ const PACKAGES = [
   },
 ];
 
+/**
+ * The source without its comments.
+ *
+ * The check used to look for a path anywhere in the file — so a path
+ * that was only mentioned in a comment passed. And a comment is
+ * exactly where a path that is *not* copied ends up.
+ */
+function withoutComments(source: string): string {
+  return source
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#")) return false;
+      if (trimmed.startsWith("//")) return false;
+      if (trimmed.startsWith("<#")) return false;
+      return true;
+    })
+    .join("\n");
+}
+
+/** The path, with the separators the script uses. */
+function normalise(value: string): string {
+  return value.replace(/\//g, "\\");
+}
+
 describe("the packaged app", () => {
   for (const pack of PACKAGES) {
     describe(pack.name, () => {
       const source = readFileSync(path.join(ROOT, pack.file), "utf-8");
+      const code = withoutComments(source);
 
       for (const item of pack.mustCarry) {
         it(`carries ${item}`, () => {
-          // The path has to be there with the separators the script uses.
-          const normalised = source.replace(/\//g, "\\").replace(/\\\\/g, "\\");
-          expect(normalised).toContain(item.replace(/\//g, "\\"));
+          // The path has to be there with the separators the script uses —
+          // and in the code, not only in a comment.
+          expect(normalise(code)).toContain(normalise(item));
         });
       }
     });
   }
+
+  it("gives the tools an interpreter in the Docker image", () => {
+    // The tools are Python scripts. They were shipped, and there was no
+    // Python to run them with: every distillation failed at the "write
+    // the skill package" step, every collector failed to start, and the
+    // celebrity research flow was skipped — with nothing but a line in
+    // the log to say so.
+    const dockerfile = readFileSync(path.join(ROOT, "Dockerfile"), "utf-8");
+    expect(dockerfile).toMatch(/apk add[^\n]*\bpython3\b/);
+  });
+
+  it("gives the tools an interpreter on the desktop", () => {
+    // The desktop builds rely on the operating system's Python. It may
+    // be missing — so the failure has to say what is missing.
+    const runner = readFileSync(path.join(ROOT, "server/skill-engine/runner.ts"), "utf-8");
+    expect(runner).toContain("pythonIsAvailable");
+    expect(runner).toMatch(/Python is not available/);
+  });
+
+  it("stops when the data migrations fail", () => {
+    // A failed data migration is exactly the case where the schema and
+    // the data disagree. All three entrypoints used to carry on and
+    // serve wrong or empty data with no error at all.
+    const docker = readFileSync(path.join(ROOT, "scripts/docker-entrypoint.sh"), "utf-8");
+    // The migration is not in a `||` that swallows its failure.
+    expect(docker).toMatch(/^\s*node scripts\/migrate\.mjs\s*$/m);
+
+    const macos = readFileSync(path.join(ROOT, "scripts/macos/start.sh"), "utf-8");
+    expect(macos).toMatch(/migrate\.mjs[\s\S]{0,300}exit 1/);
+
+    const windows = readFileSync(path.join(ROOT, "scripts/windows/start.ps1"), "utf-8");
+    expect(windows).toMatch(/migrationFailed[\s\S]{0,300}exit 1/);
+  });
+
+  it("fetches the package manager while the image is being built", () => {
+    // `corepack enable` only installs the shim: the pnpm itself is
+    // downloaded into a cache on first use, and that cache lives in the
+    // build stage. So the container reached for the npm registry on
+    // every start, and an air-gapped install could not start at all.
+    const dockerfile = readFileSync(path.join(ROOT, "Dockerfile"), "utf-8");
+    expect(dockerfile).toMatch(/corepack prepare pnpm@/);
+  });
 });
