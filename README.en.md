@@ -7,7 +7,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/Ch1rpy2613/Mirrai?style=social)](https://github.com/Ch1rpy2613/Mirrai/stargazers)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6.svg)](https://typescriptlang.org)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
-[![Node.js](https://img.shields.io/badge/Node.js-20+-339933.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-24+-339933.svg)](https://nodejs.org)
 
 [简体中文](README.md) | **English**
 
@@ -57,7 +57,7 @@ Then open http://localhost:3000 — PostgreSQL is included.
 
 ### From source
 
-Requirements: Node.js 20+, pnpm, PostgreSQL 14+, Python 3.9+ (optional, for the distillation engine)
+Requirements: Node.js 24+, pnpm, PostgreSQL 14+, Python 3.9+ (optional, for the distillation engine)
 
 ```bash
 git clone https://github.com/Ch1rpy2613/Mirrai.git

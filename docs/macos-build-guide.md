@@ -41,7 +41,7 @@ Mirrai.app/Contents/
 │   └── Mirrai                  # 薄启动器（AppleScript 打开 Terminal）
 ├── Resources/
 │   ├── start.sh                # 真正的启动脚本
-│   ├── node/bin/node           # Node.js v20.18.1 arm64
+│   ├── node/bin/node           # Node.js v24.22.1 arm64
 │   ├── pgsql/                  # PostgreSQL 16
 │   │   ├── bin/                # postgres, pg_ctl, initdb, createdb, psql, pg_isready
 │   │   ├── lib/                # 所有 .dylib（含 ICU）
@@ -82,7 +82,7 @@ pnpm build    # Vite 前端 + esbuild 后端 → dist/
 从 nodejs.org 下载官方 arm64 二进制，只取 `bin/node`：
 
 ```
-https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-arm64.tar.gz
+https://nodejs.org/dist/v24.22.1/node-v24.22.1-darwin-arm64.tar.gz
 ```
 
 ### 3. 嵌入 PostgreSQL

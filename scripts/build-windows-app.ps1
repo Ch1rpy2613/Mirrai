@@ -16,7 +16,7 @@ $BuildDir = Join-Path $ProjectDir "build-windows"
 $AppName = "Mirrai"
 $DistName = "Mirrai-Windows-x64"
 
-$NodeVersion = "20.18.1"
+$NodeVersion = "24.22.1"
 $NodeArch = "x64"
 $NodeZip = "node-v${NodeVersion}-win-${NodeArch}.zip"
 $NodeUrl = "https://nodejs.org/dist/v${NodeVersion}/${NodeZip}"

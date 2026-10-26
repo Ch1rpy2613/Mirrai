@@ -78,7 +78,7 @@ corepack pnpm build
 
 ### 2. 嵌入 Node.js
 
-下载 `node-v20.18.1-win-x64.zip`，解压后把**内容**（不是目录本身）放进 `node/`。
+下载 `node-v24.22.1-win-x64.zip`，解压后把**内容**（不是目录本身）放进 `node/`。
 
 ### 3. 嵌入 PostgreSQL
 

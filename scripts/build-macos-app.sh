@@ -14,7 +14,7 @@ CONTENTS="$APP_BUNDLE/Contents"
 RESOURCES="$CONTENTS/Resources"
 DMG_NAME="Mirrai-macOS-arm64"
 
-NODE_VERSION="20.18.1"
+NODE_VERSION="24.22.1"
 NODE_ARCH="arm64"
 NODE_TARBALL="node-v${NODE_VERSION}-darwin-${NODE_ARCH}.tar.gz"
 NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TARBALL}"
