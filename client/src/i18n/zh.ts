@@ -830,6 +830,7 @@ export const zh = {
       instantiated: "已按模板创建分身",
       deleted: "模板已删除",
       exported: "模板已导出",
+      exportFailed: "模板导出失败：{{message}}",
       imported: "模板已导入",
       readFailed: "读取文件失败",
       deleteTitle: "删除这个模板",

@@ -72,9 +72,20 @@ export default function DistillationModePicker({ value, onChange, disabled }: Pr
             role="radio"
             tabIndex={selected ? 0 : -1}
             aria-checked={selected}
-            disabled={disabled}
-            onClick={() => onChange(preset.id)}
-            className={`w-full text-left p-3 rounded-md border transition-colors disabled:opacity-50 ${
+            /**
+             * The button is marked unavailable, not switched off.
+             *
+             * A `disabled` button cannot hold the focus: the browser
+             * moves it to the body the moment it becomes disabled. And
+             * the group was disabled for the whole duration of the
+             * save — which begins the instant an arrow key is pressed.
+             * So the focus was gone after one key press, and the
+             * arrow keys — the only way a keyboard user reaches a
+             * preset that is not the selected one — stopped working.
+             */
+            aria-disabled={disabled || undefined}
+            onClick={() => { if (disabled) return; onChange(preset.id); }}
+            className={`w-full text-left p-3 rounded-md border transition-colors aria-disabled:opacity-50 aria-disabled:cursor-not-allowed ${
               selected
                 ? "border-cinnabar/40 bg-cinnabar/5"
                 : "border-border hover:border-foreground/30 hover:bg-muted/40"

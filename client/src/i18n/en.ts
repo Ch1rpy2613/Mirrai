@@ -836,6 +836,7 @@ export const en = {
       instantiated: "Persona created from the template",
       deleted: "Template deleted",
       exported: "Template exported",
+      exportFailed: "The template could not be exported: {{message}}",
       imported: "Template imported",
       readFailed: "Could not read the file",
       deleteTitle: "Delete this template",

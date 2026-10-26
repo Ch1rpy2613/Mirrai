@@ -2225,6 +2225,20 @@ function TemplateLibraryTab() {
    */
   const downloadedRef = useRef<string | null>(null);
 
+  /**
+   * A failed export says so.
+   *
+   * The export is a query, and its error was never read: on a failure
+   * the data stayed undefined, the download effect did nothing at all,
+   * and the button looked like it had worked. The server does fail —
+   * the template may have been deleted in another tab since the list
+   * was drawn.
+   */
+  useEffect(() => {
+    if (!exportQuery.error) return;
+    toast.error(t("settings.templates.exportFailed", { message: exportQuery.error.message }));
+  }, [exportQuery.error, t]);
+
   useEffect(() => {
     const data = exportQuery.data;
     if (!data) return;
