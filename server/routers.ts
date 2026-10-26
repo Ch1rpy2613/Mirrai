@@ -286,10 +286,20 @@ async function startPersonaDistillation(params: {
 
     // Messages pulled in by the collectors are part of the history too.
     const collected = await getCollectedMessagesForPersona(personaId, userId);
+    /**
+     * The collected transcript has a ceiling too.
+     *
+     * The one-megabyte slice was applied to the *uploaded* files only.
+     * So the material handed to the pipeline was that megabyte plus
+     * the whole collected history — up to twenty thousand rows — and a
+     * collector with a lot to say made the request enormous, and slow,
+     * and expensive.
+     */
     const collectedTranscript = collected.length > 0
       ? collected
           .map((m) => `${collectedSpeaker(m.role, locale)}${m.content}`)
           .join("\n")
+          .slice(0, MAX_DISTILLATION_CHARS)
       : "";
 
     await updatePersona(personaId, userId, {
