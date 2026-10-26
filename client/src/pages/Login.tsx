@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useMemo, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,16 @@ import { ArrowLeft } from "lucide-react";
 import { useLocale } from "@/contexts/LocaleContext";
 
 export default function Login() {
-  const [location, navigate] = useLocation();
+  const [, navigate] = useLocation();
+  /**
+   * The query string.
+   *
+   * `useLocation` gives the *path* only — the query lives in its own
+   * hook. So the query was read from a path that has none in it, and
+   * every option the address carried was ignored.
+   */
+  const search = useSearch();
+  const query = useMemo(() => new URLSearchParams(search), [search]);
   const { t, locale } = useLocale();
   const utils = trpc.useUtils();
   /**
@@ -24,7 +33,7 @@ export default function Login() {
    * "register" and mean it.
    */
   const [isRegister, setIsRegister] = useState(
-    () => new URLSearchParams(location.split("?")[1] ?? "").get("mode") === "register",
+    () => query.get("mode") === "register",
   );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -64,8 +73,8 @@ export default function Login() {
       await utils.auth.me.refetch();
       // The page they were trying to reach is kept in the address, so
       // signing in brings them back to it.
-      const next = new URLSearchParams(location.split("?")[1] ?? "").get("next");
-      navigate(next && next.startsWith("/") ? next : "/");
+      const next = query.get("next");
+      navigate(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
     } catch {
       setError(t("auth.networkError"));
     } finally {

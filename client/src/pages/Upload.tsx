@@ -241,7 +241,7 @@ export default function Upload() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const handleFiles = useCallback(async (fileList: FileList) => {
+  const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     for (const file of Array.from(fileList)) {
       const key = `${file.name}-${Date.now()}`;
       const fileType = detectFileType(file);
@@ -461,14 +461,26 @@ export default function Upload() {
             the zone does not re-enter it. */}
         <input ref={fileInputRef} type="file" accept={ALL_ACCEPT}
           className="hidden" tabIndex={-1}
+          multiple
           onChange={e => {
-            const files = e.target.files;
+            /**
+             * The files are taken out of the input *first*.
+             *
+             * `input.files` is the input's own live list, and setting
+             * the value to "" empties it — so the list that was read
+             * before the reset is empty by the time it is used. In
+             * Chromium the same list object is emptied in place, so the
+             * picker did nothing at all: no upload, no message, no
+             * error. Firefox swaps in a new list, so it happened to
+             * work there.
+             */
+            const files = Array.from(e.target.files ?? []);
             // The value is cleared, so that choosing the *same* file
             // twice in a row fires the event again — it used to fire
             // nothing the second time, and the second upload silently
             // did not happen.
             e.target.value = "";
-            if (files && files.length) handleFiles(files);
+            if (files.length) handleFiles(files);
           }} />
 
         {/* No chat logs? The questionnaire builds a persona without them. */}
