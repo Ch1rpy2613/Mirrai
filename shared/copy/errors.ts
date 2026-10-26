@@ -394,6 +394,16 @@ export const ERRORS = {
     zh: "微信登录已过期，请重新扫码连接。",
     en: "The WeChat login has expired. Please scan the code again to reconnect.",
   },
+  /** The QR code expired before the scan came back. */
+  "errors.wechatQrExpired": {
+    zh: "二维码已过期，请重新发起连接。",
+    en: "The QR code has expired. Please start the connection again.",
+  },
+  /** The backend confirmed the login but sent no credentials. */
+  "errors.wechatNoCredentials": {
+    zh: "登录失败：服务器未返回凭据。",
+    en: "The sign-in failed: the server returned no credentials.",
+  },
   /** The stored WeChat credentials could not be decrypted. */
   "errors.wechatCredentialsLost": {
     zh: "凭据已失效，请重新连接微信",

@@ -325,6 +325,13 @@ export async function cancelLogin(userId: number): Promise<BotStatusSnapshot> {
  * Each poll is a single long-poll request; the loop re-arms as needed.
  */
 async function pollLoginStatus(userId: number): Promise<void> {
+  /**
+   * The language the reader reads.
+   *
+   * The errors of the login are read by a person — and the two that
+   * could be said in words were hard-coded in Chinese.
+   */
+  const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
   const account = getAccount(userId);
   if (account.loginPolling) return;
   account.loginPolling = true;
@@ -358,7 +365,7 @@ async function pollLoginStatus(userId: number): Promise<void> {
       // server-side expiry drives the refresh cycle.
       if (Date.now() - session.startedAt > LOGIN_TTL_MS) {
         account.status = "error";
-        account.lastError = "二维码已过期，请重新发起连接。";
+        account.lastError = copy(locale, "errors.wechatQrExpired");
         await db.upsertWechatBotState(userId, { status: "error", lastError: account.lastError });
         account.loginSession = null;
         break;
@@ -458,19 +465,60 @@ async function pollLoginStatus(userId: number): Promise<void> {
       }
 
       if (result.status === "binded_redirect") {
-        account.status = "logged_in";
+        /**
+         * The bot is already bound to this instance.
+         *
+         * The path set the status to "logged_in" and stored no token,
+         * and it never started the poll loop — so the interface showed
+         * the green "Connected" chip while the bot received nothing
+         * and could not send. It only came alive after a restart, when
+         * the restore path found the token that was still there.
+         *
+         * So the stored credentials are kept, the stored user is
+         * restored, and the monitor starts.
+         */
+        const stored = await db.getWechatBotState(userId).catch(() => undefined);
         account.needsVerifyCode = false;
         account.lastError = null;
         account.qrCodeUrl = null;
         account.loginSession = null;
-        await db.upsertWechatBotState(userId, { status: "logged_in", qrCodeUrl: null, lastError: null });
+        if (stored?.loggedInUser) account.loggedInUser = stored.loggedInUser;
+
+        if (!stored?.botTokenEnc) {
+          /**
+           * There are no credentials.
+           *
+           * The backend says the bot is bound to this instance, but
+           * there is nothing here to poll with — so saying "connected"
+           * would be a lie, and the interface would show a channel that
+           * cannot receive or send.
+           */
+          account.status = "error";
+          account.lastError = copy(locale, "errors.wechatCredentialsLost");
+          await db.upsertWechatBotState(userId, {
+            status: "error",
+            qrCodeUrl: null,
+            lastError: account.lastError,
+            loggedInUser: account.loggedInUser ?? null,
+          });
+          break;
+        }
+
+        account.status = "logged_in";
+        await db.upsertWechatBotState(userId, {
+          status: "logged_in",
+          qrCodeUrl: null,
+          lastError: null,
+          loggedInUser: account.loggedInUser ?? null,
+        });
+        startWeChatBot(userId);
         break;
       }
 
       if (result.status === "confirmed") {
         if (!result.botToken || !result.accountId) {
           account.status = "error";
-          account.lastError = "登录失败：服务器未返回凭据。";
+          account.lastError = copy(locale, "errors.wechatNoCredentials");
           await db.upsertWechatBotState(userId, { status: "error", lastError: account.lastError });
           account.loginSession = null;
           break;
