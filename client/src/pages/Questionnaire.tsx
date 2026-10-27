@@ -130,7 +130,18 @@ export default function Questionnaire() {
    * and the mutation failed with "not authorised", with the answer lost.
    */
   const { user } = useAuth({ redirectOnUnauthenticated: true });
-  const storageKey = storageKeyFor((user as any)?.id);
+  /**
+   * The key the answers are kept under.
+   *
+   * It is the user's own key — two people on the same browser must not
+   * answer each other's questionnaire.
+   *
+   * The app only knows who the user is once the sign-in request has
+   * answered, so before that there is no key to keep the answers under
+   * and they stay in the page.
+   */
+  const authUserId = (user as any)?.id ?? null;
+  const storageKey = storageKeyFor(authUserId);
   /**
    * The step and the answers, kept in the session.
    *
@@ -143,11 +154,28 @@ export default function Questionnaire() {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>(EMPTY);
 
-  // Restored once, on the first render.
-  const restored = useRef(false);
+  /**
+   * Whether the user has typed anything in this session.
+   *
+   * What they typed wins over what was saved — they are here now.
+   */
+  const touched = useRef(false);
+
+  /**
+   * The answers are restored when the app knows who the user is.
+   *
+   * They used to be restored once, on the first render — and on the
+   * first render the app did not know who the user was yet, so the key
+   * was the browser-wide one and the signed-in user's own saved
+   * answers were never read. Reloading the page threw ten steps of
+   * work away, which is the one thing the saving was for.
+   *
+   * So the restore waits for the key to settle, and runs again if it
+   * changes. Anything the user has typed in the meantime wins over
+   * what was saved.
+   */
   useEffect(() => {
-    if (restored.current) return;
-    restored.current = true;
+    if (!authUserId) return;
     try {
       const saved = localStorage.getItem(storageKey);
       if (!saved) return;
@@ -163,23 +191,34 @@ export default function Questionnaire() {
          * broken ones.
          */
         const merged = { ...EMPTY, ...parsed.answers };
-        setAnswers({
+        const restored: Answers = {
           ...merged,
           communicationStyles: Array.isArray(merged.communicationStyles)
             ? merged.communicationStyles.filter((v): v is string => typeof v === "string")
             : [],
-        });
+        };
+        setAnswers((current) => (touched.current ? current : restored));
       }
       if (typeof parsed.step === "number" && parsed.step > 0 && parsed.step < STEP_KEYS.length) {
-        setStep(parsed.step);
+        setStep((current) => (touched.current ? current : parsed.step!));
       }
     } catch {
       // A broken saved answer is not worth a crash.
     }
-  }, []);
+  }, [storageKey, authUserId]);
 
   // And kept up to date from then on.
   useEffect(() => {
+    /**
+     * Only once the app knows who the user is.
+     *
+     * There was a browser-wide key for the answers typed before the
+     * sign-in request answered — and it was read back by the next
+     * person to use the same browser, which is the leak the per-user
+     * key was introduced to close. The answers stay in the page until
+     * there is a key that belongs to somebody.
+     */
+    if (!authUserId) return;
     try {
       /**
        * The answers are kept in the browser, not in the tab.
@@ -194,12 +233,15 @@ export default function Questionnaire() {
       // A browser that will not keep it is not a problem: the answers
       // are still in the page.
     }
-  }, [step, answers]);
+  }, [step, answers, storageKey, authUserId]);
 
   const createPersona = trpc.persona.createFromQuestionnaire.useMutation();
 
-  const set = <K extends keyof Answers>(key: K, value: Answers[K]) =>
+  const set = <K extends keyof Answers>(key: K, value: Answers[K]) => {
+    // What the user has typed wins over what was saved.
+    touched.current = true;
     setAnswers((prev) => ({ ...prev, [key]: value }));
+  };
 
   const canAdvance = () => {
     if (step === 0) return answers.name.trim().length > 0;
