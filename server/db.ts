@@ -4034,13 +4034,22 @@ export async function hasReminderDelivery(userId: number, dedupeKey: string) {
   return rows.length > 0;
 }
 
-/** Reminders that were delivered and have not been dismissed. */
+/**
+ * The reminders that are waiting for the reader on the web.
+ *
+ * Only the ones that were delivered on the web. A reminder that went out
+ * on WeChat or Feishu was delivered there — the user read it in the app
+ * they had open — and it used to turn up in the web lobby as well, so
+ * the same anniversary showed up twice: once in the conversation and
+ * once in the hall, with nothing to say which one was the real one.
+ */
 export async function getActiveReminders(userId: number, limit = 20) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(reminderDeliveries)
     .where(and(
       eq(reminderDeliveries.userId, userId),
+      eq(reminderDeliveries.channel, "web"),
       sql`${reminderDeliveries.dismissedAt} IS NULL`,
     ))
     .orderBy(desc(reminderDeliveries.deliveredAt)).limit(limit);

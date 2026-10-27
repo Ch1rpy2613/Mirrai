@@ -504,6 +504,32 @@ describe("the safety record", () => {
   });
 });
 
+describe("the reminders waiting in the hall", () => {
+  it("lists only the ones that were delivered on the web", async () => {
+    registry.select.reminder_deliveries = [{ id: 1 }];
+    await db.getActiveReminders(3);
+
+    const conditions = whereOf();
+    const channel = conditions.find((c) => c.sql.includes('"channel"'));
+    expect(channel).toBeDefined();
+    expect(channel!.params).toContain("web");
+  });
+
+  it("still belongs to the user who was reminded", async () => {
+    registry.select.reminder_deliveries = [{ id: 1 }];
+    await db.getActiveReminders(3);
+
+    expect(whereOf().flatMap((c) => c.params)).toContain(3);
+  });
+
+  it("does not list the ones that were dismissed", async () => {
+    registry.select.reminder_deliveries = [{ id: 1 }];
+    await db.getActiveReminders(3);
+
+    expect(whereOf().some((c) => c.sql.includes('"dismissedAt" IS NULL'))).toBe(true);
+  });
+});
+
 describe("the research profiles", () => {
   it("creates one and says which row it was", async () => {
     registry.returning.research_profiles = [{ id: 21 }];
