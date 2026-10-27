@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { APP_VERSION } from "./live-config.mjs";
 
 const ROOT = process.cwd();
 const state = JSON.parse(readFileSync(path.join(ROOT, ".live-wechat-state.json"), "utf-8"));
@@ -10,9 +11,9 @@ const apiOptions = {
   baseUrl: state.baseUrl || "https://ilinkai.weixin.qq.com",
   token: state.botToken,
   appId: process.env.WECHAT_ILINK_APP_ID || "bot",
-  clientVersion: buildClientVersion(process.env.APP_VERSION || "1.0.0"),
-  channelVersion: process.env.APP_VERSION || "1.0.0",
-  botAgent: `Mirrai/${process.env.APP_VERSION || "1.0.0"}`,
+  clientVersion: buildClientVersion(APP_VERSION),
+  channelVersion: APP_VERSION,
+  botAgent: `Mirrai/${APP_VERSION}`,
 };
 
 // Raw POST so the exact wire response is visible.

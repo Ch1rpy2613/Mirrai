@@ -17,6 +17,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { APP_VERSION } from "./live-config.mjs";
 const ROOT = process.cwd();
 const STATE_FILE = path.join(ROOT, ".live-wechat-state.json");
 const QR_PNG = path.join(ROOT, "live-wechat-qr.png");
@@ -32,7 +33,7 @@ const { buildClientVersion } = await import(
 const API_BASE = process.env.WECHAT_ILINK_BASE_URL || "https://ilinkai.weixin.qq.com";
 const APP_ID = process.env.WECHAT_ILINK_APP_ID || "bot";
 const BOT_TYPE = process.env.WECHAT_BOT_TYPE || "3";
-const APP_VERSION = process.env.APP_VERSION || "1.0.0";
+
 
 function apiOptions(token) {
   return {

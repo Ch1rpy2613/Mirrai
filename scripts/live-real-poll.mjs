@@ -5,6 +5,7 @@
  * client. Nothing about the network peer is faked here.
  */
 import path from "node:path";
+import { APP_VERSION } from "./live-config.mjs";
 
 const ROOT = process.cwd();
 const state = JSON.parse(
@@ -25,9 +26,9 @@ const apiOptions = {
   baseUrl: state.baseUrl || "https://ilinkai.weixin.qq.com",
   token: state.botToken,
   appId: process.env.WECHAT_ILINK_APP_ID || "bot",
-  clientVersion: buildClientVersion(process.env.APP_VERSION || "1.0.0"),
-  channelVersion: process.env.APP_VERSION || "1.0.0",
-  botAgent: `Mirrai/${process.env.APP_VERSION || "1.0.0"}`,
+  clientVersion: buildClientVersion(APP_VERSION),
+  channelVersion: APP_VERSION,
+  botAgent: `Mirrai/${APP_VERSION}`,
 };
 
 console.log("=== REAL getUpdates long-poll against iLinkai.weixin.qq.com ===");

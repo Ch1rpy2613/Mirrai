@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { APP_VERSION } from "./live-config.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = process.cwd();
@@ -43,7 +44,7 @@ async function loadIlink() {
 const API_BASE = process.env.WECHAT_ILINK_BASE_URL || "https://ilinkai.weixin.qq.com";
 const APP_ID = process.env.WECHAT_ILINK_APP_ID || "bot";
 const BOT_TYPE = process.env.WECHAT_BOT_TYPE || "3";
-const APP_VERSION = process.env.APP_VERSION || "1.0.0";
+
 
 const { buildClientVersion } = await import(
   path.join(ROOT, ".live-test/ilink/client.js")

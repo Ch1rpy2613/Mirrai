@@ -4,6 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { APP_VERSION } from "./live-config.mjs";
 
 const ROOT = process.cwd();
 const state = JSON.parse(
@@ -18,9 +19,9 @@ const apiOptions = {
   baseUrl: process.env.WECHAT_ILINK_BASE_URL || state.baseUrl,
   token: state.botToken,
   appId: process.env.WECHAT_ILINK_APP_ID || "bot",
-  clientVersion: buildClientVersion(process.env.APP_VERSION || "1.0.0"),
-  channelVersion: process.env.APP_VERSION || "1.0.0",
-  botAgent: `Mirrai/${process.env.APP_VERSION || "1.0.0"}`,
+  clientVersion: buildClientVersion(APP_VERSION),
+  channelVersion: APP_VERSION,
+  botAgent: `Mirrai/${APP_VERSION}`,
   routeTag: process.env.WECHAT_ROUTE_TAG || "",
 };
 

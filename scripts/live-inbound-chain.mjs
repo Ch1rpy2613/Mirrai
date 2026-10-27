@@ -8,6 +8,7 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { APP_VERSION } from "./live-config.mjs";
 
 const ROOT = process.cwd();
 const received = [];
@@ -150,8 +151,8 @@ const resp = await getUpdates({
   baseUrl: "http://127.0.0.1:9911",
   token: "stub-token",
   appId: "bot",
-  channelVersion: "1.0.0",
-  botAgent: "Mirrai/1.0.0",
+  channelVersion: APP_VERSION,
+  botAgent: `Mirrai/${APP_VERSION}`,
   get_updates_buf: "",
   timeoutMs: 5000,
 });

@@ -4,6 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { APP_VERSION } from "./live-config.mjs";
 
 const ROOT = process.cwd();
 const state = JSON.parse(readFileSync(path.join(ROOT, ".live-wechat-state.json"), "utf-8"));
@@ -15,8 +16,8 @@ const base = {
   token: state.botToken,
   appId: "bot",
   clientVersion: 65536,
-  channelVersion: "1.0.0",
-  botAgent: "Mirrai/1.0.0",
+  channelVersion: APP_VERSION,
+  botAgent: `Mirrai/${APP_VERSION}`,
   routeTag: "",
 };
 

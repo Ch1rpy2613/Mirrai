@@ -55,7 +55,28 @@ export const LLM_MODEL = process.env.MIRRAI_LIVE_LLM_MODEL ?? "";
 export const ILINK_BASE_URL = process.env.WECHAT_ILINK_BASE_URL ?? "https://ilinkai.weixin.qq.com";
 export const ILINK_APP_ID = process.env.WECHAT_ILINK_APP_ID ?? "bot";
 export const ILINK_BOT_TYPE = process.env.WECHAT_BOT_TYPE ?? "3";
-export const APP_VERSION = process.env.APP_VERSION ?? "1.0.0";
+/**
+ * The app's own version.
+ *
+ * It was written down while the app was still at its first release. So the
+ * live scripts told the channel that they were an old build, and the
+ * version they reported was not the version they were testing.
+ *
+ * The app's own `package.json` is the answer, and the environment
+ * variable still wins when it is given.
+ */
+export const APP_VERSION = process.env.APP_VERSION ?? appVersion();
+
+/** The version in the app's own `package.json`. */
+function appVersion() {
+  try {
+    const path = fileURLToPath(new URL("../package.json", import.meta.url));
+    const parsed = JSON.parse(readFileSync(path, "utf-8"));
+    return typeof parsed.version === "string" && parsed.version ? parsed.version : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
 
 /** Port for the local QR page. */
 export const QR_PAGE_PORT = Number(process.env.MIRRAI_LIVE_QR_PORT ?? 8898);

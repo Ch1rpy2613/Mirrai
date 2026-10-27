@@ -194,6 +194,20 @@ describe("the packaged app", () => {
     expect(verify).toContain("DATABASE_URL is not set");
   });
 
+  it("does not tell the channel that the live scripts are an old build", () => {
+    /**
+     * The version was written down — "1.0.0" — while the app was at
+     * 1.3.0. So the live scripts told the channel that they were an
+     * old build, and the version they reported was not the version
+     * they were testing.
+     */
+    const scripts = readdirSync(path.join(ROOT, "scripts")).filter((name) => name.endsWith(".mjs"));
+    for (const name of scripts) {
+      const source = readFileSync(path.join(ROOT, "scripts", name), "utf-8");
+      expect(source, name).not.toMatch(/"1\.0\.0"/);
+    }
+  });
+
   it("does not let a tripped smoke test pass as a healthy release", () => {
     /**
      * The Windows smoke test ran with `continue-on-error: true` — so
