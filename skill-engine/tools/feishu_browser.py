@@ -27,22 +27,36 @@ import sys
 import time
 import json
 import argparse
+import os
 import platform
 from pathlib import Path
 from typing import Optional
 
 
+def default_chrome_profile() -> str:
+    """
+    这个工具自己的 Chrome profile。
+
+    它原来用的是**操作者自己的** Chrome profile——所以工具是在这个人
+    每天都在用的那个文件夹上开浏览器的，并且会往里写：他的 cookie、
+    他的历史、他访问的每一个站点的登录态。而如果 Chrome 正在跑，
+    那个 profile 是被锁着的，浏览器就打不开。
+
+    （而且那个路径本身也不对：`…/Chrome/Default` 是一个 profile，
+    不是 Playwright 要的 user data 目录，所以它多半从来就没登录成功过。）
+
+    现在工具自己有一份 profile，用的人在里面登录一次就好。
+    要用操作者自己的 profile，仍然可以用 --chrome-profile 指名。
+    """
+    root = os.environ.get("MIRRAI_DATA_ROOT", "").strip()
+    if not root:
+        root = str(Path.home() / ".mirrai")
+    return str(Path(root) / "feishu-chrome-profile")
+
+
 def get_default_chrome_profile() -> str:
-    """根据操作系统返回 Chrome 默认 Profile 路径"""
-    system = platform.system()
-    if system == "Darwin":
-        return str(Path.home() / "Library/Application Support/Google/Chrome/Default")
-    elif system == "Linux":
-        return str(Path.home() / ".config/google-chrome/Default")
-    elif system == "Windows":
-        import os
-        return str(Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/User Data/Default")
-    return str(Path.home() / ".config/google-chrome/Default")
+    """兼容旧名字。"""
+    return default_chrome_profile()
 
 
 def make_context(playwright, chrome_profile: Optional[str], headless: bool):
