@@ -36,6 +36,22 @@ vi.mock("./skill-engine/micro-rules", () => ({
   mineMicroRules: (...a: unknown[]) => mineMicroRules(...a),
 }));
 
+const applyPersonaCorrection = vi.fn();
+
+vi.mock("./skill-engine/correction", () => ({
+  applyPersonaCorrection: (...a: unknown[]) => applyPersonaCorrection(...a),
+  buildCorrectionLog: (log: unknown) => log,
+}));
+
+vi.mock("./llm/user-provider", () => ({
+  resolveProviderForUserWithOwnership: async () => ({
+    provider: { name: "Test" },
+    owned: true,
+  }),
+  resolveProviderForUser: async () => null,
+  invalidateUserProviderCache: () => {},
+}));
+
 import { appRouter } from "./routers";
 
 function ctxFor(userId: number): TrpcContext {
@@ -90,6 +106,13 @@ describe("the persona's own fields", () => {
       stored = { ...stored, ...(data?.personaData ?? {}) };
     });
     getCollectedMessagesForPersonaRows.mockResolvedValue([]);
+    applyPersonaCorrection.mockResolvedValue({
+      personaData: { personality: "更温柔" },
+      changedFields: ["personality"],
+      summary: "更温柔了",
+      needsClarification: false,
+      question: "",
+    });
     appendPersonaCorrection.mockResolvedValue(undefined);
     updateSkillJob.mockResolvedValue(undefined);
     // The mining takes a while — that is when the overlap happens.
@@ -129,6 +152,22 @@ describe("the persona's own fields", () => {
     const last = written[written.length - 1];
     expect(last.imperfectionProfile).toBeDefined();
     expect(last.microRules).toBeDefined();
+  });
+
+  it("limits how often a correction can be asked for", async () => {
+    // The correction sends the persona's whole field set and the user's
+    // own words to the provider, and it had no limit at all.
+    const caller = appRouter.createCaller(ctxFor(555111));
+    let refused = false;
+    for (let i = 0; i < 40; i++) {
+      try {
+        await caller.persona.applyCorrection({ id: 5, correction: "温柔一点" });
+      } catch {
+        refused = true;
+        break;
+      }
+    }
+    expect(refused).toBe(true);
   });
 
   it("does not lose the rules when the profile is saved in the middle of the mining", async () => {

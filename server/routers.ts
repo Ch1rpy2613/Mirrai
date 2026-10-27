@@ -1054,6 +1054,12 @@ export const appRouter = router({
      * persona fields, and the change is recorded so it is auditable.
      */
     applyCorrection: protectedProcedure
+      /**
+       * The correction sends the persona's whole field set and the
+       * user's own words to the provider, and it had no limit at all.
+       * Every other procedure that calls a model has one.
+       */
+      .use(rateLimit(RATE_LIMITS.llm))
       .input(z.object({
         id: z.number(),
         correction: z.string().min(1).max(2000),
