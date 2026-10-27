@@ -15,6 +15,9 @@ import { translate } from "@/i18n";
  *   not do.
  */
 let persona: any;
+/** The memories the server sends, and how many there are in all. */
+let memoryItems: any[] = [];
+let memoryTotal = 0;
 /** Whether the query is still on its way. */
 let personaLoading = false;
 /** Whether the query failed. */
@@ -33,7 +36,7 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
-    memory: { list: { useQuery: () => ({ data: { items: [] } }) } },
+    memory: { list: { useQuery: () => ({ data: { items: memoryItems, total: memoryTotal } }) } },
     relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
   },
 }));
@@ -69,6 +72,26 @@ import PersonaProfile from "./PersonaProfile";
 describe("the portrait", () => {
   beforeEach(() => {
     locale = "zh";
+    memoryItems = [];
+    memoryTotal = 0;
+  });
+
+  it("says when the memories are cut short", () => {
+    /**
+     * The server says how many there are — and this page did not say
+     * anything, so a persona with four hundred memories showed two
+     * hundred of them and the page said "here are the milestones".
+     */
+    memoryItems = [
+      { id: 1, title: "第一次见面", category: "milestone", date: "2024-03-14" },
+    ];
+    memoryTotal = 400;
+
+    render(<PersonaProfile />);
+
+    expect(
+      screen.getByText(translate("zh", "chat.memory.capped", { shown: 1, total: 400 })),
+    ).toBeInTheDocument();
   });
 
   it("does not print a Chinese identifier in the English interface", () => {

@@ -327,6 +327,19 @@ export default function PersonaProfile() {
                 </li>
               ))}
             </ul>
+            {/**
+             * The list is cut short.
+             *
+             * The server says how many there are — and this page did
+             * not say anything, so a persona with four hundred memories
+             * showed two hundred of them and the page said "here are
+             * the milestones".
+             */}
+            {(memories?.total ?? 0) > memoryItems.length && (
+              <p className="mt-2 text-[0.625rem] text-muted-subtle">
+                {t("chat.memory.capped", { shown: memoryItems.length, total: memories?.total ?? 0 })}
+              </p>
+            )}
           </motion.section>
         )}
 
