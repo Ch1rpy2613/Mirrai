@@ -180,13 +180,18 @@ describe("the packaged app", () => {
      * The fallback was one particular person's account on one
      * particular machine: so on any other machine — and in CI — the
      * verification connected to a database that is not there, and the
-     * failure said nothing about what to set.
+     * failure said nothing about what to set ("role postgres is not
+     * permitted to log in", which is a fact about the machine and not
+     * about the script).
      */
     const scripts = readdirSync(path.join(ROOT, "scripts")).filter((name) => name.endsWith(".mjs"));
     for (const name of scripts) {
       const source = readFileSync(path.join(ROOT, "scripts", name), "utf-8");
       expect(source, name).not.toContain("postgresql://ch1rpy@");
     }
+    // And the verification says what to set when it is not told.
+    const verify = readFileSync(path.join(ROOT, "scripts", "live-verify.mjs"), "utf-8");
+    expect(verify).toContain("DATABASE_URL is not set");
   });
 
   it("does not let a tripped smoke test pass as a healthy release", () => {

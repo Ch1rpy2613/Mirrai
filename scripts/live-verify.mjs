@@ -11,6 +11,28 @@
 const BASE = process.env.MIRRAI_BASE || "http://localhost:3111";
 let cookie = "";
 
+/**
+ * The database the verification runs against.
+ *
+ * It used to be one particular person's account on one particular
+ * machine: so on any other machine — and in CI — the verification
+ * connected to a database that is not there, and the failure said
+ * nothing about what to set ("role postgres is not permitted to log
+ * in", which is a fact about the machine and not about the script).
+ *
+ * So it is the environment variable now, and the script says what to
+ * do when it is not set.
+ */
+function databaseUrl() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. The verification needs to know which database the server is using — the same one the server was started with.",
+    );
+  }
+  return url;
+}
+
 function cookieHeader() {
   return cookie ? { cookie } : {};
 }
@@ -116,7 +138,7 @@ async function main() {
        * It is the project's own default now, and the environment
        * variable is still what decides it.
        */
-      connectionString: process.env.DATABASE_URL ?? "postgresql://postgres:password@localhost:5432/mirrai_live",
+      connectionString: databaseUrl(),
     });
     await client.connect();
     await client.query(`UPDATE personas SET "analysisStatus" = 'ready' WHERE id = $1`, [personaId]);
