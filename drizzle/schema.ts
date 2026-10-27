@@ -1009,8 +1009,14 @@ export const collectionJobs = pgTable("collection_jobs", {
    *
    * The interface needs both: "how many are in the persona" and "how
    * many were there".
+   *
+   * It is nullable on purpose. A row that was collected before this
+   * column existed has no kept count, and that is not the same as
+   * having kept zero — so the column says nothing, and the reader
+   * falls back to the message count. `NOT NULL DEFAULT 0` would turn
+   * "we do not know" into a number the user reads.
    */
-  keptCount: integer("keptCount").default(0).notNull(),
+  keptCount: integer("keptCount"),
   /** Whether the collection was cut short at the limit. */
   truncated: boolean("truncated").default(false).notNull(),
   error: text("error"),

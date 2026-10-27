@@ -4269,6 +4269,22 @@ export async function upsertCollectionJob(
         progress: data.progress,
         messageCount: data.messageCount,
         foundCount: data.foundCount,
+        /**
+         * The kept count is written here too.
+         *
+         * It was not — and the row is INSERTed once, when the job is
+         * queued, at which point the count is still zero. Every later
+         * snapshot takes the `ON CONFLICT DO UPDATE` branch, whose SET
+         * list is what is written — and the kept count was not in it.
+         * So the column kept the value it was inserted with: zero.
+         *
+         * And a job is read from the database as soon as it falls out
+         * of the process's memory — which happens after two hundred
+         * jobs, and on every restart. So the user saw "found 400,
+         * kept 0": the exact self-contradicting sentence the column
+         * was added to remove.
+         */
+        keptCount: data.keptCount,
         truncated: data.truncated,
         error: data.error,
         personaId: data.personaId,

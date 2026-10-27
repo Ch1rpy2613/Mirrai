@@ -17,8 +17,23 @@
 --
 -- So the kept count is its own column.
 
+-- The column is nullable on purpose.
+--
+-- A row collected before this column existed has no kept count — and
+-- that is not the same as having kept zero. `NOT NULL DEFAULT 0` would
+-- turn "we do not know" into a number the user reads.
 ALTER TABLE "collection_jobs"
-  ADD COLUMN IF NOT EXISTS "keptCount" integer DEFAULT 0 NOT NULL;
+  ADD COLUMN IF NOT EXISTS "keptCount" integer;
+
+-- The rows that were already there.
+--
+-- They were collected before the two counts were apart: the message
+-- count was the count of the collection. So that is what they kept.
+-- Without this they would read "found 400, kept 0" — the exact
+-- self-contradicting sentence the column was added to remove.
+UPDATE "collection_jobs"
+  SET "keptCount" = "messageCount"
+  WHERE "keptCount" IS NULL;
 
 -- mirrai: down
 ALTER TABLE "collection_jobs" DROP COLUMN IF EXISTS "keptCount";

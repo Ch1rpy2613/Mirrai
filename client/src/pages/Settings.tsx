@@ -2304,7 +2304,17 @@ function DataSourcesTab() {
                         messages as it kept — and the rest were simply
                         gone.
                         */}
-                    {job.truncated && (
+                    {/**
+                        The note about the collection being cut short.
+
+                        It says nothing when there is nothing to say:
+                        a collector that found no messages at all and
+                        said it was truncated would otherwise produce
+                        "only part of it was taken: up to 0 — there may
+                        be more" — a sentence its own number
+                        contradicts.
+                        */}
+                    {job.truncated && (job.keptCount ?? job.messageCount) > 0 && (
                       <span className="text-xs text-muted-subtle whitespace-nowrap">
                         {/**
                             Two cases, and they are different.
