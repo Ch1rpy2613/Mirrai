@@ -53,8 +53,18 @@ const server = createServer(async (req, res) => {
     res.writeHead(upstream.status, { "Content-Type": "application/json" });
     res.end(text);
   } catch (e) {
+    /**
+     * The reason goes to the terminal, not to the browser.
+     *
+     * The error used to be sent as it was — and an error carries the
+     * stack, and the stack says where the operator's files are. The
+     * page that asked for it is a local one, but the rule is the same
+     * as anywhere else: what the server says about its own insides
+     * stays on the server.
+     */
+    console.error("[live-llm-proxy] the upstream call failed:", e);
     res.writeHead(502, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: String(e) }));
+    res.end(JSON.stringify({ error: "the upstream call failed — see the terminal" }));
   }
 });
 

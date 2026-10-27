@@ -1,0 +1,19 @@
+# What CodeQL looks at.
+#
+# The default suite is kept — only the paths are narrowed, because a
+# file that is not shipped cannot be a hole in the shipped thing.
+#
+# The tests are full of routes, handlers and servers that are stood up
+# for a moment to show that something is refused. CodeQL reads them as
+# endpoints that answer to the world: one of them stood up a route in
+# a test and was reported as "missing rate limiting" for it.
+name: "CodeQL config"
+
+paths-ignore:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.test.mjs"
+  - "**/*.test.js"
+  - "**/tests/**"
+  - "**/test/**"
+  - "**/__tests__/**"

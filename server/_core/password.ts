@@ -51,7 +51,28 @@ export async function hashPassword(password: string): Promise<string> {
   ].join("$");
 }
 
-/** Legacy `salt:sha256hex` verification, kept for accounts predating scrypt. */
+/**
+ * Legacy `salt:sha256hex` verification, kept for accounts predating scrypt.
+ *
+ * The rule says a password must not be hashed with something cheap — and
+ * it is right: SHA-256 is fast, so a stolen copy of an old hash can be
+ * tried against far too many guesses.
+ *
+ * But the alternative is worse. The accounts that carry an old hash are
+ * real people's accounts: dropping the old format would lock every one
+ * of them out of their own history, on the day the app was updated.
+ *
+ * So the old format is *read*, and never *written*: a password that
+ * arrives is checked against the old hash, and the moment it matches it
+ * is written again with scrypt — see `needsRehash` and the sign-in
+ * path. So an old hash lives only until the account's owner next signs
+ * in, and one that never signs in again keeps a hash that is only worth
+ * something to somebody who already has the account's database.
+ *
+ * The rule is suppressed here rather than silenced everywhere: it is
+ * right about the hash and wrong about what to do about it.
+ */
+// codeql[js/insufficient-password-hash]
 function verifyLegacySha256(password: string, stored: string): boolean {
   const separator = stored.indexOf(":");
   if (separator <= 0) return false;

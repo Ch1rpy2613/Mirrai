@@ -189,8 +189,17 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
+  // codeql[js/missing-rate-limiting]
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     const locale = localeOf(req);
+    /**
+     * The limit is the first thing the route does.
+     *
+     * CodeQL cannot see it: the check is behind `rejectIfRateLimited`,
+     * and the rule only recognises a limit it can follow to the
+     * middleware that applies it. The limit is 10 attempts a minute,
+     * keyed by the address — which is what credential stuffing needs.
+     */
     if (await rejectIfRateLimited(req, res)) return;
 
     const { username, password } = req.body;

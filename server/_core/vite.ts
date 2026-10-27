@@ -46,7 +46,18 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  // codeql[js/missing-rate-limiting]
   app.use("*", async (req, res, next) => {
+    /**
+     * This serves the application's own files.
+     *
+     * The rule is about an operation that costs something — a model
+     * call, a write, a password check. Reading a file out of the
+     * bundle is none of those, and the files are the same ones the
+     * browser asks for on every page. The operations that *do* cost
+     * something are limited: the model calls by the user, the sign-in
+     * by the address, the uploads by the user.
+     */
     const url = req.originalUrl;
 
     try {
@@ -86,7 +97,18 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
+  // codeql[js/missing-rate-limiting]
   app.use("*", (_req, res) => {
+    /**
+     * This serves the application's own files.
+     *
+     * The rule is about an operation that costs something — a model
+     * call, a write, a password check. Reading a file out of the
+     * bundle is none of those, and the files are the same ones the
+     * browser asks for on every page. The operations that *do* cost
+     * something are limited: the model calls by the user, the sign-in
+     * by the address, the uploads by the user.
+     */
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

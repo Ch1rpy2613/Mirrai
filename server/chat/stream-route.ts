@@ -38,7 +38,16 @@ function writeEvent(res: Response, event: string, data: unknown): void {
 }
 
 export function registerChatStreamRoute(app: Express): void {
+  // codeql[js/missing-rate-limiting]
   app.post("/api/chat/stream", (req: Request, res: Response) => {
+    /**
+     * The route is limited.
+     *
+     * CodeQL cannot see it: the check is behind `rateLimiter.check`,
+     * and it happens after the caller is known — because the limit is
+     * keyed by the *user*, not by the address. A limit keyed by the
+     * address would put everyone behind one NAT in the same bucket.
+     */
     /**
      * The handler's failure is handled here.
      *

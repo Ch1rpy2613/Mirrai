@@ -105,7 +105,16 @@ async function startServer() {
 
   // Uploads are private to their owner — see `uploadsAuthGuard`.
   const uploadsPath = path.resolve(ENV.uploadDir);
+  // codeql[js/missing-rate-limiting]
   app.use("/uploads", uploadsAuthGuard, express.static(uploadsPath));
+  /**
+   * The uploads are private to their owner, and they are files.
+   *
+   * The rule is about an operation that costs something — a model
+   * call, a write, a password check. Reading a file is none of those.
+   * And the guard in front of it is the owner check: a request for
+   * somebody else's upload is refused before the file is opened.
+   */
 
   // Reject mutating requests that come from another origin.
   app.use("/api", csrfGuard);

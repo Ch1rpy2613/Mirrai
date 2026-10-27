@@ -61,11 +61,35 @@ function displayWidth(text: string): number {
   return width;
 }
 
+/**
+ * The administrator's password.
+ *
+ * Every character is equally likely.
+ *
+ * It used to be `bytes[i] % alphabet.length` — and the alphabet has 62
+ * characters while a byte has 256 values, so 256 does not divide by 62:
+ * the first eight characters came up about a quarter more often than
+ * the rest. So the password was drawn from a *slightly* smaller set than
+ * it looked like — and the password is the one secret the operator has
+ * to copy off the screen by hand.
+ *
+ * So the bytes that do not divide evenly are drawn again: the ones from
+ * 248 upwards are thrown away, and every character then has exactly
+ * four chances out of the 248.
+ */
 export function generatePassword(length = PASSWORD_LENGTH): string {
-  const bytes = randomBytes(length);
+  const alphabet = PASSWORD_ALPHABET;
+  // The largest multiple of the alphabet's length that fits in a byte.
+  const usable = 256 - (256 % alphabet.length);
   let password = "";
-  for (let i = 0; i < length; i++) {
-    password += PASSWORD_ALPHABET[bytes[i] % PASSWORD_ALPHABET.length];
+  while (password.length < length) {
+    for (const byte of randomBytes(length)) {
+      // A byte that does not divide evenly would favour the first few
+      // characters — so it is not used.
+      if (byte >= usable) continue;
+      password += alphabet[byte % alphabet.length];
+      if (password.length === length) break;
+    }
   }
   return password;
 }

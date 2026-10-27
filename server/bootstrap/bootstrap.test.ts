@@ -59,6 +59,45 @@ describe("generatePassword", () => {
     const passwords = new Set(Array.from({ length: 20 }, () => generatePassword()));
     expect(passwords.size).toBeGreaterThan(1);
   });
+
+  it("uses every character equally often", () => {
+    /**
+     * The characters are equally likely.
+     *
+     * It used to be `bytes[i] % alphabet.length` — and the alphabet
+     * has 62 characters while a byte has 256 values, so 256 does not
+     * divide by 62: the first eight characters came up about a quarter
+     * more often than the rest. So the password was drawn from a
+     * slightly smaller set than it looked like — and the password is
+     * the one secret the operator has to copy off the screen by hand.
+     *
+     * The counting is over a lot of characters, so the test is about
+     * the *shape* of the distribution and not about one draw: the
+     * busiest character must not be noticeably busier than the
+     * quietest one.
+     */
+    const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
+    const counts = new Map<string, number>();
+    const rounds = 6000;
+    for (let i = 0; i < rounds; i++) {
+      for (const character of generatePassword(64)) {
+        counts.set(character, (counts.get(character) ?? 0) + 1);
+      }
+    }
+    const values = [...counts.values()];
+    expect(values.length).toBe(alphabet.length);
+    const busiest = Math.max(...values);
+    const quietest = Math.min(...values);
+    /**
+     * With every character equally likely, the busiest and the
+     * quietest differ by the sampling noise of a third of a million
+     * draws — about 7% at the far ends.
+     *
+     * With the old modulo, the first eight characters were 25% ahead,
+     * and this ratio would be 1.25.
+     */
+    expect(busiest / quietest).toBeLessThan(1.15);
+  });
 });
 
 describe("resolveDataRoot", () => {

@@ -64,6 +64,15 @@ on:
       - "scripts/fidelity-gate.ts"
   workflow_dispatch:
 
+# The workflow needs to read the repository and nothing else.
+#
+# Without this, the workflow gets the repository's *default* token
+# permissions — and the default is whatever the repository's settings
+# say, which is often "write everything". So a script that runs here
+# with a token could push, release, or change the settings.
+permissions:
+  contents: read
+
 jobs:
   structure:
     name: Does the persona still have everything it needs

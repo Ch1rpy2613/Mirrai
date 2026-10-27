@@ -216,8 +216,18 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ png: cur.png, url: cur.url, issuedAt: cur.issuedAt }));
     } catch (e) {
+      /**
+       * The reason goes to the terminal, not to the browser.
+       *
+       * The error used to be sent as it was — and an error carries the
+       * stack, and the stack says where the operator's files are. The
+       * page is a local one, but the rule is the same as anywhere
+       * else: what the server says about its own insides stays on the
+       * server.
+       */
+      console.error("[live-qr-page] the QR code could not be issued:", e);
       res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: String(e).slice(0, 200) }));
+      res.end(JSON.stringify({ error: "the QR code could not be issued — see the terminal" }));
     }
     return;
   }
