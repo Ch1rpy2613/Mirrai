@@ -30,7 +30,14 @@ vi.mock("@/lib/trpc", () => ({
       markSent: { useMutation: () => ({ mutate: markSent, isPending: false }) },
       drop: { useMutation: () => ({ mutate: drop, isPending: false }) },
       keepForSelf: { useMutation: () => ({ mutate: keepForSelf, isPending: false }) },
-      markStaleNotified: { useMutation: () => ({ mutate: markStaleNotified, isPending: false }) },
+      markStaleNotified: {
+        useMutation: () => ({
+          mutate: (input: any, options: any) => {
+            markStaleNotified(input, options);
+          },
+          isPending: false,
+        }),
+      },
       updateText: {
         useMutation: () => ({
           mutate: (input: any, options: any) => {
@@ -136,6 +143,55 @@ describe("the way out", () => {
 
     await waitFor(() => expect(markStaleNotified).toHaveBeenCalled());
     expect(markStaleNotified.mock.calls[0][0]).toMatchObject({ id: 1 });
+  });
+
+  it("says it again when the record could not be written", async () => {
+    /**
+     * The server used to say "success" whatever happened — so a write
+     * that found nothing looked exactly like a write that worked. The
+     * panel then kept quiet about the letter for the rest of the
+     * session and never tried again, and the next time it was opened
+     * it said the same reminder again — over and over, with no way to
+     * stop it.
+     */
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
+    const letter = { id: 1, status: "ready", text: "一句话", createdAt: old };
+    letters = [letter];
+    const { rerender } = render(
+      <ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>,
+    );
+
+    await waitFor(() => expect(markStaleNotified).toHaveBeenCalledTimes(1));
+    const options = markStaleNotified.mock.calls[0][1];
+    expect(options).toBeTruthy();
+
+    // The panel is told it was not recorded, so the mark is taken off.
+    act(() => {
+      options.onSuccess({ recorded: false });
+    });
+
+    // So the next time the list is read, it is said again.
+    letters = [{ ...letter }];
+    rerender(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
+    await waitFor(() => expect(markStaleNotified).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not say it again when the record was written", async () => {
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
+    const letter = { id: 1, status: "ready", text: "一句话", createdAt: old };
+    letters = [letter];
+    const { rerender } = render(
+      <ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>,
+    );
+
+    await waitFor(() => expect(markStaleNotified).toHaveBeenCalledTimes(1));
+    act(() => {
+      markStaleNotified.mock.calls[0][1].onSuccess({ recorded: true });
+    });
+
+    letters = [{ ...letter }];
+    rerender(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
+    await waitFor(() => expect(markStaleNotified).toHaveBeenCalledTimes(1));
   });
 
   it("does not say it again once it has been said", () => {

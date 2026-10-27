@@ -180,7 +180,7 @@ beforeEach(() => {
   createOutboundLetter.mockResolvedValue(1);
   setOutboundLetterStatus.mockResolvedValue(true);
   updateOutboundLetterText.mockResolvedValue(true);
-  markOutboundLetterStaleNotified.mockResolvedValue(undefined);
+  markOutboundLetterStaleNotified.mockResolvedValue(true);
   getPersonaBehaviorProfile.mockResolvedValue(null);
   getMessagesByPersonaId.mockResolvedValue([]);
   getMessagesByPersonaIdPaged.mockResolvedValue([]);
@@ -470,8 +470,23 @@ describe("the way out", () => {
 
   it("records that the reminder was said, so it is not said again", async () => {
     const caller = appRouter.createCaller(makeCtx());
-    await caller.outbound.markStaleNotified({ id: 7 });
+    const result = await caller.outbound.markStaleNotified({ id: 7 });
     expect(markOutboundLetterStaleNotified).toHaveBeenCalledWith(7, 1);
+    expect(result).toEqual({ recorded: true });
+  });
+
+  it("says so when the reminder could not be recorded", async () => {
+    /**
+     * It used to say "success" whatever happened — so a write that
+     * found nothing (the letter is gone, or the database is not
+     * there) looked exactly like a write that worked, and the
+     * reminder was said again the next time without anyone knowing
+     * why.
+     */
+    markOutboundLetterStaleNotified.mockResolvedValue(false);
+    const caller = appRouter.createCaller(makeCtx());
+    const result = await caller.outbound.markStaleNotified({ id: 7 });
+    expect(result).toEqual({ recorded: false });
   });
 
   it("scopes the write to the user who owns it", async () => {

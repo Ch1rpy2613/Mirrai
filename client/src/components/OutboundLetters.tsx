@@ -62,9 +62,15 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
     onSuccess: () => refetch(),
     onError: (e: any) => toast.error(e.message),
   });
-  const staleMutation = trpc.outbound.markStaleNotified.useMutation({
-    onError: (e: any) => toast.error(e.message),
-  });
+  /**
+   * The reminder is said once.
+   *
+   * Nobody asked for it — the panel says it on its own — so a failure
+   * is not the user's news and there is nothing they could do about
+   * it. It used to raise an error toast every time, which is a red
+   * box for something the user never did and cannot change.
+   */
+  const staleMutation = trpc.outbound.markStaleNotified.useMutation();
   const updateMutation = trpc.outbound.updateText.useMutation({
     onSuccess: () => refetch(),
     onError: (e: any) => toast.error(e.message),
@@ -89,7 +95,26 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
       if (!isStale(letter)) continue;
       if (letter.staleNotifiedAt || mentioned.current.has(letter.id)) continue;
       mentioned.current.add(letter.id);
-      staleMutation.mutate({ id: letter.id });
+      staleMutation.mutate(
+        { id: letter.id },
+        {
+          onSuccess: (result: { recorded: boolean }) => {
+            /**
+             * The record did not happen.
+             *
+             * The letter is marked as said, so the line stays on
+             * screen and the panel is quiet — but nothing was
+             * written, so the next time the panel is opened it would
+             * say it again, and the user would see the same reminder
+             * over and over with no way to stop it. So the mark is
+             * taken off, and it is said again next time.
+             */
+            if (result && result.recorded === false) {
+              mentioned.current.delete(letter.id);
+            }
+          },
+        },
+      );
     }
   }, [letters]);
 

@@ -4923,11 +4923,21 @@ export const appRouter = router({
     markStaleNotified: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await markOutboundLetterStaleNotified(input.id, ctx.user.id);
-        // Recording the reminder is best-effort: failing to write it
-        // would mean the reminder is said again, which is not worth an
-        // error the user cannot act on.
-        return { success: true };
+        const recorded = await markOutboundLetterStaleNotified(input.id, ctx.user.id);
+        /**
+         * Whether the record was written.
+         *
+         * It used to say "success" whatever happened — so a write that
+         * found nothing (the letter is gone, or it belongs to
+         * somebody else) looked exactly like a write that worked, and
+         * the reminder was said again the next time without anyone
+         * knowing why.
+         *
+         * It is not an error: the reminder is said once, and a letter
+         * that is not there has no reminder to record. The caller
+         * decides what to do with the answer.
+         */
+        return { recorded };
       }),
 
     updateText: protectedProcedure
