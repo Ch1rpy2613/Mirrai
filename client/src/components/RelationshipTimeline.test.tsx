@@ -241,6 +241,21 @@ describe("the relationship timeline", () => {
     expect(addEvent).not.toHaveBeenCalled();
   });
 
+  it("gives the remove button a target big enough to hit", () => {
+    /**
+     * It was twenty-two pixels across — two short of what the
+     * accessibility rules ask for, and the thing that removes a record
+     * of the user's own life is not the place to save two pixels.
+     */
+    query.data = { events: [makeEvent({ id: 9 })] };
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
+
+    const button = screen.getByLabelText(translate("zh", "relationship.remove"));
+    const size = window.getComputedStyle(button);
+    expect(parseFloat(size.minWidth)).toBeGreaterThanOrEqual(24);
+    expect(parseFloat(size.minHeight)).toBeGreaterThanOrEqual(24);
+  });
+
   it("removes an entry the user asks to remove", async () => {
     const user = userEvent.setup();
     query.data = { events: [makeEvent({ id: 9 })] };

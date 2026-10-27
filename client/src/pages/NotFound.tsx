@@ -9,7 +9,7 @@ export default function NotFound() {
   const { t } = useLocale();
 
   return (
-    <div className="min-h-dvh w-full flex items-center justify-center bg-background px-4">
+    <main className="min-h-dvh w-full flex items-center justify-center bg-background px-4">
       <div className="max-w-md animate-fade-in-up">
         <div className="mb-8">
           <Wordmark />
@@ -18,9 +18,22 @@ export default function NotFound() {
           404<span className="text-cinnabar">.</span>
         </div>
 
-        <h2 className="page-title mb-3">
+        {/**
+         * The heading of the page.
+         *
+         * It was an `h2`, and there was no `main` around it — so the
+         * focus could never move onto this page. A keyboard user who
+         * followed a link to a page that is not there stayed focused
+         * on the link they came from, and a screen reader read out
+         * the page before, with nothing to say that the page had
+         * changed.
+         *
+         * The heading is the first thing on the page and it says what
+         * the page is, so it is what the focus should land on.
+         */}
+        <h1 className="page-title mb-3">
           {t("errors.notFoundHeading")}
-        </h2>
+        </h1>
 
         <p className="text-muted-foreground mb-8 leading-relaxed text-[0.9375rem]">
           {t("errors.notFoundBodyLine1")}
@@ -35,6 +48,6 @@ export default function NotFound() {
           {t("errors.backHome")}
         </Button>
       </div>
-    </div>
+    </main>
   );
 }

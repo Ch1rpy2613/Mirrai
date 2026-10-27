@@ -161,6 +161,21 @@ describe("editing a persona", () => {
     expect(screen.getAllByRole("button", { name: /添加/ }).length).toBeGreaterThan(0);
   });
 
+  it("gives the tag remove button a target big enough to hit", () => {
+    /**
+     * It was a twelve-pixel cross with nothing around it — so the
+     * thing that removes a tag was the smallest thing on the screen,
+     * and it was hard to hit on a touch screen and hard to hit at all
+     * with a hand that shakes.
+     */
+    render(<PersonaEdit />);
+
+    const remove = screen.getByRole("button", { name: /嗯嗯/ });
+    const size = window.getComputedStyle(remove);
+    expect(parseFloat(size.minWidth)).toBeGreaterThanOrEqual(24);
+    expect(parseFloat(size.minHeight)).toBeGreaterThanOrEqual(24);
+  });
+
   it("shows the persona's own realism level", () => {
     render(<PersonaEdit />);
     const slider = screen.getByRole("slider") as HTMLInputElement;

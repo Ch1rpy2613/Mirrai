@@ -94,7 +94,22 @@ function TagInput({
               {tag}
               <button onClick={() => onChange(tags.filter((_, j) => j !== i))}
                 aria-label={`${label}: ${tag}`}
-                className="text-muted-foreground hover:text-destructive transition-colors">
+                /**
+                 * The button is big enough to hit.
+                 *
+                 * It was a twelve-pixel cross with nothing around it —
+                 * so the thing that removes a tag was the smallest
+                 * thing on the screen, and it was hard to hit on a
+                 * touch screen and hard to hit at all with a hand
+                 * that shakes. The target is now at least twenty-four
+                 * pixels across, which is what the accessibility rules
+                 * ask for.
+                 *
+                 * The size is set in the style, so it does not depend
+                 * on a class that a later change could quietly shrink.
+                 */
+                style={{ minWidth: "1.5rem", minHeight: "1.5rem" }}
+                className="text-muted-foreground hover:text-destructive transition-colors inline-flex items-center justify-center w-6 h-6 -m-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
                 <X className="w-3 h-3" />
               </button>
             </span>

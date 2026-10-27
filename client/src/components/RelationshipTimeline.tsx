@@ -154,7 +154,20 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                   // flight: two clicks meant two removals, and the
                   // second one failed on a row that was already gone.
                   disabled={removeEvent.isPending}
-                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1 disabled:opacity-50"
+                  /**
+                   * The button is big enough to hit.
+                   *
+                   * It was twenty-two pixels across — two short of
+                   * what the accessibility rules ask for, and the
+                   * thing that removes a record of the user's own
+                   * life is not the place to save two pixels.
+                   *
+                   * The size is set in the style, so it does not
+                   * depend on a class that a later change could
+                   * quietly shrink.
+                   */
+                  style={{ minWidth: "1.5rem", minHeight: "1.5rem" }}
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1.5 disabled:opacity-50 inline-flex items-center justify-center w-6 h-6 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   aria-label={t("relationship.remove")}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
