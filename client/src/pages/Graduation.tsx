@@ -1,7 +1,7 @@
 import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
-import { formatDayKey } from "@/lib/dates";
+import { formatDayKey, formatInstantInZone } from "@/lib/dates";
 import { zonedDateKey } from "@shared/timezone";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -210,7 +210,15 @@ export default function Graduation() {
             {persona.graduatedAt && (
               <p className="text-xs text-muted-subtle mt-5 text-right">
                 {t("graduationPage.signed", {
-                  date: new Date(persona.graduatedAt).toLocaleDateString(locale),
+                  /**
+                   * The user's own calendar.
+                   *
+                   * The browser's zone and the zone the user chose are
+                   * not always the same — so the date the persona said
+                   * goodbye on was a day off from the date the timeline
+                   * right above it says.
+                   */
+                  date: formatInstantInZone(persona.graduatedAt, locale, timezone),
                 })}
               </p>
             )}

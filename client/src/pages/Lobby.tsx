@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { formatInstantInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -611,10 +612,19 @@ function ActivityHeatmap() {
       const key = zonedDateKey(d, timezone);
       const count = map.get(key) || 0;
       if (count > maxCount) maxCount = count;
+      /**
+       * The label names the day the cell is on.
+       *
+       * It used to be the browser's month and day — while the cell
+       * itself is the user's day. So for a user whose stored zone and
+       * browser zone disagreed, hovering a cell named a day the cell
+       * was not on.
+       */
+      const [, month, day] = key.split("-");
       cells.push({
         date: key,
         count,
-        label: t("lobby.heatmap.cell", { month: d.getMonth() + 1, day: d.getDate(), count }),
+        label: t("lobby.heatmap.cell", { month: Number(month), day: Number(day), count }),
       });
     }
     return { cells, maxCount };
@@ -998,6 +1008,15 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
   onToggleSelect?: () => void;
 }) {
   const { t, locale } = useLocale();
+  /**
+   * The user's own calendar.
+   *
+   * The browser's zone and the zone the user chose are not always the
+   * same — so the date the persona said goodbye on could be a day off
+   * from the date the timeline right above it says.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const status = STATUS_CONFIG[persona.analysisStatus] || STATUS_CONFIG.pending;
   const emotion = emotionOf(persona.emotionalState) || EMOTIONS.warm;
   const EmotionIcon = emotion.icon;
@@ -1341,7 +1360,17 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
               </div>
               {persona.graduatedAt && (
                 <p className="text-xs text-muted-foreground text-center mt-4">
-                  {t("lobby.card.graduatedAt", { date: new Date(persona.graduatedAt).toLocaleDateString(locale) })}
+                  {/**
+                   * The user's own calendar.
+                   *
+                   * The browser's zone and the zone the user chose are
+                   * not always the same — so the date the persona said
+                   * goodbye on was a day off from the date the timeline
+                   * right above it says.
+                   */}
+                  {t("lobby.card.graduatedAt", {
+                    date: formatInstantInZone(persona.graduatedAt, locale, timezone),
+                  })}
                 </p>
               )}
             </div>

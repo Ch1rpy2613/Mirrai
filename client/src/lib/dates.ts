@@ -41,3 +41,36 @@ export function formatMonthKey(monthKey: string, locale: string): string {
   if (Number.isNaN(date.getTime())) return String(monthKey);
   return date.toLocaleDateString(locale, { year: "numeric", month: "long" });
 }
+
+/**
+ * An instant, as a date in the reader's own calendar.
+ *
+ * The browser's zone and the zone the user has chosen are not always
+ * the same: a person whose partner is abroad, one whose machine is set
+ * to the wrong city, one who travels. Every other date on the pages is
+ * read in the zone the user chose, so this one has to be as well —
+ * otherwise the date a persona said goodbye on is a day off from the
+ * date the timeline right above it says.
+ *
+ * A day key is not an instant, so it is read with `formatDayKey`; this
+ * is for the values that carry an hour.
+ */
+export function formatInstantInZone(
+  value: string | number | Date | null | undefined,
+  locale: string,
+  timeZone?: string | null,
+): string {
+  const date = value instanceof Date ? value : new Date(value ?? NaN);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat(locale || "zh", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      ...(timeZone ? { timeZone } : {}),
+    }).format(date);
+  } catch {
+    // A zone this browser does not know.
+    return date.toLocaleDateString(locale);
+  }
+}
