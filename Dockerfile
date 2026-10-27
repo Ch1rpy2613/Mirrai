@@ -37,7 +37,14 @@ RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
 # package" step, every collector failed to start, and the celebrity
 # research flow was skipped — with nothing but a line in the log to say
 # so.
-RUN apk add --no-cache redis python3 py3-pip
+# `tzdata` is the IANA time zone database.
+#
+# Python's `zoneinfo` has no database of its own: without it, a zone
+# name like "Asia/Shanghai" cannot be loaded, and the collectors fell
+# back to the *machine's* clock — so every message was rendered at the
+# wrong hour for a reader in another country, and often on the wrong
+# day.
+RUN apk add --no-cache redis python3 py3-pip tzdata
 
 # The one dependency the collectors and the skill writer cannot do
 # without. The optional ones — the browser automation, the document

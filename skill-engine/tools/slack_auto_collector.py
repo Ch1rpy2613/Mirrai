@@ -37,7 +37,7 @@ import sys
 import time
 import argparse
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional
 
@@ -70,6 +70,11 @@ _CONFIG_OVERRIDE: Path | None = None
 # render them in its own zone.
 _TIMEZONE_OVERRIDE: Optional[str] = None
 
+# The reader's own offset from UTC, in minutes. It is passed by the
+# server so that the collector can still render the messages in the
+# reader's clock on a machine that has no IANA database.
+_TIMEZONE_OFFSET_MINUTES: Optional[int] = None
+
 
 def _reader_tz():
     """The zone the messages are shown in.
@@ -77,13 +82,33 @@ def _reader_tz():
     The epoch is a moment; the wall clock it is written as belongs to
     whoever reads it. So the zone is the reader's, and the server says
     which one it is.
+
+    The zone *name* needs the IANA database, and `zoneinfo` has no
+    database of its own: on Windows there is none, and on Alpine there
+    is none unless it is installed. So the zone used to be ignored in
+    silence, and the messages were rendered in the *machine's* clock —
+    eight hours out for a Shanghai reader on a UTC server, and often
+    on the wrong day.
+
+    So the server also passes the reader's offset in minutes, which
+    needs no database at all, and that is what is used when the zone
+    cannot be loaded. The reason is said out loud, because a collection
+    with the wrong hours in it is worse than one that says why.
     """
     if not _TIMEZONE_OVERRIDE:
         return None
     try:
         return ZoneInfo(_TIMEZONE_OVERRIDE)
-    except Exception:
-        return None
+    except Exception as e:
+        print(
+            f"⚠️  时区数据库里没有 {_TIMEZONE_OVERRIDE}（{e}）；"
+            f"改用服务器给出的偏移 {_TIMEZONE_OFFSET_MINUTES} 分钟。"
+            "安装 tzdata 可以让时区本身生效。",
+            file=sys.stderr,
+        )
+        if _TIMEZONE_OFFSET_MINUTES is None:
+            return None
+        return timezone(timedelta(minutes=_TIMEZONE_OFFSET_MINUTES))
 
 
 def config_path() -> Path:
@@ -872,11 +897,18 @@ def main() -> None:
         default=None,
         help="阅读者所在的时区（IANA 名称，如 Asia/Shanghai）",
     )
+    parser.add_argument(
+        "--timezone-offset",
+        type=int,
+        default=None,
+        help="阅读者相对 UTC 的偏移分钟数（时区库缺失时的兜底）",
+    )
 
     args = parser.parse_args()
 
-    global _TIMEZONE_OVERRIDE
+    global _TIMEZONE_OVERRIDE, _TIMEZONE_OFFSET_MINUTES
     _TIMEZONE_OVERRIDE = args.timezone
+    _TIMEZONE_OFFSET_MINUTES = args.timezone_offset
 
     # The server may point the collector at a file of its own — one that
     # holds the credentials of the person who asked for the collection

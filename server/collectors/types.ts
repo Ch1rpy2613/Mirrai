@@ -28,6 +28,7 @@ import path from "path";
 import { encryptSecret } from "../_core/crypto";
 import { normaliseCollectorOutput, parseNormalisedPayload, runCollector } from "./runner";
 import { copy } from "@shared/copy";
+import { zonedOffsetMinutes } from "@shared/timezone";
 
 export type CollectorSourceId = "feishu" | "dingtalk" | "slack" | "email" | "wechat_export";
 
@@ -556,7 +557,23 @@ const feishuConnector: SourceConnector = {
      * country every message landed at the wrong hour — and the server
      * then read it back in the reader's zone, which shifted it again.
      */
-    if (input.timezone) argv.push("--timezone", input.timezone);
+    if (input.timezone) {
+      argv.push("--timezone", input.timezone);
+      /**
+       * The reader's own offset, in minutes.
+       *
+       * The zone *name* needs the IANA database, and `zoneinfo` has no
+       * database of its own: on Windows there is none, and on Alpine
+       * there is none unless it is installed. So the zone was silently
+       * ignored and the messages were rendered in the *machine's* clock
+       * — eight hours out for a Shanghai reader on a UTC server, and
+       * often on the wrong day.
+       *
+       * The offset needs no database at all, so it is passed as well
+       * and used when the zone cannot be loaded.
+       */
+      argv.push("--timezone-offset", String(zonedOffsetMinutes(new Date(), input.timezone)));
+    }
     const credentials = collectCredentials(
       "feishu",
       input,
@@ -640,7 +657,23 @@ const dingtalkConnector: SourceConnector = {
      * country every message landed at the wrong hour — and the server
      * then read it back in the reader's zone, which shifted it again.
      */
-    if (input.timezone) argv.push("--timezone", input.timezone);
+    if (input.timezone) {
+      argv.push("--timezone", input.timezone);
+      /**
+       * The reader's own offset, in minutes.
+       *
+       * The zone *name* needs the IANA database, and `zoneinfo` has no
+       * database of its own: on Windows there is none, and on Alpine
+       * there is none unless it is installed. So the zone was silently
+       * ignored and the messages were rendered in the *machine's* clock
+       * — eight hours out for a Shanghai reader on a UTC server, and
+       * often on the wrong day.
+       *
+       * The offset needs no database at all, so it is passed as well
+       * and used when the zone cannot be loaded.
+       */
+      argv.push("--timezone-offset", String(zonedOffsetMinutes(new Date(), input.timezone)));
+    }
     if (input.options?.chrome_profile) argv.push("--chrome-profile", input.options.chrome_profile);
     if (input.options?.show_browser === "true") argv.push("--show-browser");
     return argv;
@@ -714,7 +747,23 @@ const slackConnector: SourceConnector = {
      * country every message landed at the wrong hour — and the server
      * then read it back in the reader's zone, which shifted it again.
      */
-    if (input.timezone) argv.push("--timezone", input.timezone);
+    if (input.timezone) {
+      argv.push("--timezone", input.timezone);
+      /**
+       * The reader's own offset, in minutes.
+       *
+       * The zone *name* needs the IANA database, and `zoneinfo` has no
+       * database of its own: on Windows there is none, and on Alpine
+       * there is none unless it is installed. So the zone was silently
+       * ignored and the messages were rendered in the *machine's* clock
+       * — eight hours out for a Shanghai reader on a UTC server, and
+       * often on the wrong day.
+       *
+       * The offset needs no database at all, so it is passed as well
+       * and used when the zone cannot be loaded.
+       */
+      argv.push("--timezone-offset", String(zonedOffsetMinutes(new Date(), input.timezone)));
+    }
     if (input.options?.channel_limit) argv.push("--channel-limit", input.options.channel_limit);
     return argv;
   },
