@@ -58,7 +58,8 @@ vi.mock("@/lib/trpc", () => ({
 
 vi.mock("@/_core/hooks/useAuth", () => ({
   useAuth: () => ({
-    user: { username: "测试" },
+    // The user's own zone — the page reads the clock in it.
+    user: { username: "测试", timezone: "Asia/Shanghai" },
     isAuthenticated: true,
     loading: false,
     logout: vi.fn(),
@@ -244,6 +245,36 @@ describe("the lobby", () => {
     await user.keyboard("{ArrowDown}");
     const after = screen.getAllByRole("menuitem");
     expect(after.some((item) => document.activeElement === item)).toBe(true);
+  });
+
+  it("greets the user in their own clock", () => {
+    /**
+     * The hour was the machine's.
+     *
+     * So the greeting was wrong for up to eight hours a day for
+     * anybody whose own zone is not the machine's — and the same page
+     * uses the user's stored zone for the heatmap, the streak and the
+     * calendar, so the screen disagreed with itself.
+     */
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Ten at night in Shanghai is two in the afternoon in Greenwich.
+    vi.setSystemTime(new Date("2026-03-14T14:00:00Z"));
+    // And the machine's own zone is Greenwich, so the machine's hour
+    // and the user's hour are not the same.
+    const machineZone = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      personas = [makePersona()];
+      render(<Lobby />);
+      // Ten at night in Shanghai — so the night greeting, while the
+      // machine's own clock says it is the afternoon.
+      expect(screen.getByText(new RegExp(translate("zh", "lobby.greetings.night.text")))).toBeInTheDocument();
+      expect(screen.queryByText(new RegExp(translate("zh", "lobby.greetings.afternoon.text")))).toBeNull();
+    } finally {
+      if (machineZone === undefined) delete process.env.TZ;
+      else process.env.TZ = machineZone;
+      vi.useRealTimers();
+    }
   });
 
   it("folds the graduated ones away until they are asked for", async () => {

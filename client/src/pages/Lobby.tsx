@@ -33,7 +33,7 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
-import { localDateKey, zonedDateKey } from "@shared/timezone";
+import { localDateKey, zonedDateKey, zonedHour } from "@shared/timezone";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeIntimacyLevel } from "@shared/intimacy";
 
@@ -116,8 +116,16 @@ const ACHIEVEMENTS = [
 /** The translator handed out by `useLocale`. */
 type Translate = ReturnType<typeof useLocale>["t"];
 
-function getGreeting(): { textKey: "lobby.greetings.night.text" | "lobby.greetings.morning.text" | "lobby.greetings.forenoon.text" | "lobby.greetings.noon.text" | "lobby.greetings.afternoon.text" | "lobby.greetings.evening.text"; subKey: "lobby.greetings.night.sub" | "lobby.greetings.morning.sub" | "lobby.greetings.forenoon.sub" | "lobby.greetings.noon.sub" | "lobby.greetings.afternoon.sub" | "lobby.greetings.evening.sub" } {
-  const h = new Date().getHours();
+/**
+ * The greeting, in the user's own clock.
+ *
+ * The hour used to be the machine's: so the greeting was wrong for up
+ * to eight hours a day for anybody whose own zone is not the machine's
+ * — and the page uses the user's stored zone for the heatmap, the
+ * streak and the calendar, so the same screen disagreed with itself.
+ */
+function getGreeting(timeZone?: string | null): { textKey: "lobby.greetings.night.text" | "lobby.greetings.morning.text" | "lobby.greetings.forenoon.text" | "lobby.greetings.noon.text" | "lobby.greetings.afternoon.text" | "lobby.greetings.evening.text"; subKey: "lobby.greetings.night.sub" | "lobby.greetings.morning.sub" | "lobby.greetings.forenoon.sub" | "lobby.greetings.noon.sub" | "lobby.greetings.afternoon.sub" | "lobby.greetings.evening.sub" } {
+  const h = zonedHour(new Date(), timeZone);
   if (h < 6) return { textKey: "lobby.greetings.night.text", subKey: "lobby.greetings.night.sub" };
   if (h < 9) return { textKey: "lobby.greetings.morning.text", subKey: "lobby.greetings.morning.sub" };
   if (h < 12) return { textKey: "lobby.greetings.forenoon.text", subKey: "lobby.greetings.forenoon.sub" };
@@ -317,7 +325,8 @@ function PanelTitle({ icon: Icon, title, right }: { icon: any; title: string; ri
 
 function HeroBanner({ username, stats }: { username?: string; stats?: any }) {
   const { t, locale } = useLocale();
-  const greeting = getGreeting();
+  const { user } = useAuth();
+  const greeting = getGreeting((user as any)?.timezone ?? null);
   /**
    * The quote.
    *
