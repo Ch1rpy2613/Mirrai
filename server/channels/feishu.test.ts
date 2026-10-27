@@ -203,6 +203,55 @@ describe("handleFeishuEvent", () => {
     expect(sent.join("\n")).toContain("默认分身");
   });
 
+  it("tells the user when the database is not there", async () => {
+    /**
+     * The reply that says "something went wrong" only covered the
+     * conversation itself. The binding lookup sat outside it — so a
+     * database that was not there made the user's message vanish: no
+     * reply, no error, and nothing but a line in the server's log.
+     */
+    getChannelBinding.mockRejectedValue(new Error("the database is not there"));
+    const sent: string[] = [];
+
+    await handleFeishuEvent({
+      userId: 1,
+      event: {
+        chat_id: "oc_abc",
+        chat_type: "p2p",
+        message: { message_type: "text", content: JSON.stringify({ text: "在吗" }) },
+      },
+      sendText: async (_target, text) => {
+        sent.push(text);
+      },
+    });
+
+    expect(handleChannelChat).not.toHaveBeenCalled();
+    expect(sent.join("\n")).not.toBe("");
+  });
+
+  it("tells the user when a command cannot run", async () => {
+    // The command writes to the database — so a database that was not
+    // there left the user with no reply at all, and the persona
+    // half-graduated.
+    handleCommand.mockRejectedValue(new Error("the database is not there"));
+    const sent: string[] = [];
+
+    await handleFeishuEvent({
+      userId: 1,
+      event: {
+        chat_id: "oc_abc",
+        chat_type: "p2p",
+        message: { message_type: "text", content: JSON.stringify({ text: "/毕业" }) },
+      },
+      sendText: async (_target, text) => {
+        sent.push(text);
+      },
+    });
+
+    expect(handleChannelChat).not.toHaveBeenCalled();
+    expect(sent.join("\n")).not.toBe("");
+  });
+
   it("lets a slash command short-circuit the conversation", async () => {
     handleCommand.mockResolvedValue({ handled: true, reply: "已切换到 小A。" });
     const sent: string[] = [];

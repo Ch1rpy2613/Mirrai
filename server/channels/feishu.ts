@@ -236,9 +236,25 @@ export async function handleFeishuEvent(params: {
    * "choose a persona under Settings → Feishu", and there was nothing
    * there to choose with.
    */
-  const binding =
-    (await db.getChannelBinding(userId, CHANNEL_ID, chatId)) ??
-    (await db.getChannelDefaultPersona(userId, CHANNEL_ID));
+  /**
+   * The binding is read inside a guard.
+   *
+   * The reply that says "something went wrong" only covered the
+   * conversation itself — the binding lookup and the command handling
+   * sat outside it. So a database that was not there made the user's
+   * message vanish: no reply, no error, and nothing but a line in the
+   * server's log.
+   */
+  let binding: Awaited<ReturnType<typeof db.getChannelDefaultPersona>> | null = null;
+  try {
+    binding =
+      (await db.getChannelBinding(userId, CHANNEL_ID, chatId)) ??
+      (await db.getChannelDefaultPersona(userId, CHANNEL_ID));
+  } catch (e) {
+    console.warn("[Feishu] Could not read the binding:", (e as Error).message);
+    await sendText(chatId, copy(locale, "channels.replyFailed"));
+    return;
+  }
   if (!binding) {
     await sendText(chatId, copy(locale, "channels.noDefaultPersonaFeishu"));
     return;
@@ -246,19 +262,33 @@ export async function handleFeishuEvent(params: {
 
   const defaultPersonaId = binding.personaId;
 
-  const commandResult = await handleCommand({
-    userId,
-    conversationKey: chatId,
-    text,
-    defaultPersonaId,
-    // The channel names itself — so the message that says where a
-    // letter was saved can say "Feishu" and not "this channel".
-    channel: "feishu",
-    sendLetter: async (letter) => {
-      await sendText(chatId, letter);
-      return true;
-    },
-  });
+  let commandResult: Awaited<ReturnType<typeof handleCommand>>;
+  try {
+    commandResult = await handleCommand({
+      userId,
+      conversationKey: chatId,
+      text,
+      defaultPersonaId,
+      // The channel names itself — so the message that says where a
+      // letter was saved can say "Feishu" and not "this channel".
+      channel: "feishu",
+      sendLetter: async (letter) => {
+        await sendText(chatId, letter);
+        return true;
+      },
+    });
+  } catch (e) {
+    /**
+     * A command that cannot run still answers.
+     *
+     * The command writes to the database — so a database that was not
+     * there left the user with no reply at all, and the persona
+     * half-graduated.
+     */
+    console.warn("[Feishu] The command failed:", (e as Error).message);
+    await sendText(chatId, copy(locale, "channels.replyFailed"));
+    return;
+  }
 
   if (commandResult.handled) {
     if (commandResult.reply) await sendText(chatId, commandResult.reply);
