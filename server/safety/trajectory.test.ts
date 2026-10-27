@@ -191,6 +191,26 @@ describe("assessTrajectory", () => {
     expect(messages[1].content).not.toContain("在的");
   });
 
+  it("fences the transcript it sends", async () => {
+    recentRows = enoughUserMessages();
+    invoke.mockResolvedValue(JSON.stringify({ trajectory: "stable" }));
+
+    await assessTrajectory({ userId: 7, personaId: 3, now: NOW });
+
+    const messages = invoke.mock.calls[0][0].messages;
+    const sent = messages[1].content;
+    /**
+     * The transcript is the user's own messages, verbatim — and a
+     * message can contain newlines, so a line in it could forge a
+     * transcript line, or an instruction, and the verdict about the
+     * user's own state is computed from it.
+     */
+    expect(sent).toMatch(/MATERIAL>>>:[0-9a-f]{8}/);
+    expect(sent).toMatch(/<<<END MATERIAL>>>:[0-9a-f]{8}/);
+    // The content is still there.
+    expect(sent).toContain("如果当初");
+  });
+
   it("uses the provider instance when the caller resolved one", async () => {
     // The assessment has to run on the same credentials as the conversation —
     // otherwise a user who configured their own key silently falls back to the

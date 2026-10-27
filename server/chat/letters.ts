@@ -350,7 +350,6 @@ export async function composeLetterReply(params: {
   });
 
   const instruction = buildLetterReplyInstruction({
-    personaName: persona.name,
     letterBody: params.letterBody,
     locale,
     relationshipEnded: Boolean(persona.togetherTo?.trim()),

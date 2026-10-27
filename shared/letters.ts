@@ -85,7 +85,6 @@ export function earliestAnswerAt(
  * bubble.
  */
 export function buildLetterReplyInstruction(params: {
-  personaName: string;
   letterBody: string;
   locale?: "zh" | "en";
   relationshipEnded?: boolean;
@@ -118,10 +117,19 @@ export function buildLetterReplyInstruction(params: {
      * through the system prompt, but a letter is the one place where
      * it belongs in the instruction as well.
      */
+    /**
+     * The name is not in the instruction.
+     *
+     * It is the user's own writing, or a character's name out of a PNG
+     * card somebody else made — and interpolated into an instruction, a
+     * name that said "ignore everything above" was an instruction the
+     * app handed to the model on purpose. The letter body is fenced
+     * above; the persona's name is in the identity block, where it is
+     * fenced too. Here the app only needs to say "your own voice".
+     */
     copy(
       locale,
       params.relationshipEnded ? "letters.answerPromptEnded" : "letters.answerPrompt",
-      { personaName: params.personaName },
     ),
   ].join("\n");
 }

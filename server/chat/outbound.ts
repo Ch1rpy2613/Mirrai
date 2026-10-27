@@ -28,6 +28,7 @@
  */
 import { copy } from "@shared/copy";
 import { extractJsonObject } from "../_core/json";
+import { asMaterial } from "../_core/material";
 import { llmService, type LLMProvider } from "../llm";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 
@@ -571,9 +572,23 @@ async function collectWithModel(params: {
       },
       {
         role: "user" as const,
-        content: copy(params.locale, "prompts.outboundCandidatesUser", {
-          transcript,
-        }),
+        /**
+         * The transcript is fenced.
+         *
+         * It is the conversation verbatim, and a message can contain
+         * newlines — so a line in it could forge a transcript line, or
+         * an instruction, and the list of candidate letters is computed
+         * from it.
+         *
+         * The same value is fenced everywhere else in the app: the
+         * memories, the anchors, the summaries, the quoted letter.
+         */
+        content: asMaterial(
+          copy(params.locale, "prompts.outboundCandidatesUser", {
+            transcript,
+          }),
+          params.locale,
+        ),
       },
     ],
     options: { temperature: 0, maxTokens: 800 },

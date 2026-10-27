@@ -92,12 +92,22 @@ describe("buildFarewellPrompt", () => {
 
     expect(result.memoryCount).toBe(1);
     expect(result.systemPrompt).toContain("第一次一起看海");
-    expect(result.userPrompt).toContain("小A");
+    // The name is not in the instruction — see above.
+    expect(result.userPrompt).not.toContain("小A");
   });
 
   it("asks for the letter in the persona's own voice", async () => {
     const result = await buildFarewellPrompt({ persona: persona(), userId: 1 });
-    expect(result.userPrompt).toContain("小A");
+    /**
+     * "Your own voice" — not the name.
+     *
+     * The name is the user's own writing, or a character's name out of
+     * a PNG card somebody else made, and interpolated into an
+     * instruction it was an instruction the app handed to the model on
+     * purpose.
+     */
+    expect(result.userPrompt).toContain("你自己的口吻");
+    expect(result.userPrompt).not.toContain("小A");
     expect(result.userPrompt).toMatch(/200-400/);
   });
 

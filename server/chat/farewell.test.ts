@@ -134,7 +134,18 @@ describe("the context the letter is written from", () => {
     expect(prompt.systemPrompt).toContain("她的生日");
     expect(prompt.systemPrompt).toContain("温柔");
     expect(prompt.memoryCount).toBe(1);
-    expect(prompt.userPrompt).toContain("小A");
+    /**
+     * The name is not in the instruction.
+     *
+     * It is the user's own writing, or a character's name out of a PNG
+     * card somebody else made — and interpolated into an instruction, a
+     * name that said "ignore everything above" was an instruction the
+     * app handed to the model on purpose. The instruction says "your own
+     * voice" instead; the name is in the identity block, where it is
+     * fenced.
+     */
+    expect(prompt.userPrompt).toContain("你自己的口吻");
+    expect(prompt.userPrompt).not.toContain("小A");
   });
 
   it("knows where the relationship actually stands", async () => {
@@ -169,7 +180,7 @@ describe("the context the letter is written from", () => {
     const prompt = await buildFarewellPrompt({ persona, userId: 1, locale: "en" });
 
     expect(prompt.userPrompt).toContain("farewell letter");
-    expect(prompt.userPrompt).toContain("小A");
+    expect(prompt.userPrompt).toContain("your own voice");
   });
 });
 

@@ -87,13 +87,25 @@ export const USER_SIDE = {
     zh: "有人给你写了一封信。这不是一条消息——是一封信，是认真写下来的。",
     en: "Someone you know has written you a letter. It is not a message — it is a letter, and it was written carefully.",
   },
+  /**
+   * The same, with the persona referred to as "you".
+   *
+   * It used to say "answer it as {{personaName}}" — and the name is the
+   * user's own writing, or a character's name out of a PNG card somebody
+   * else made. Interpolated into an instruction, a name that said
+   * "ignore everything above" was an instruction the app handed to the
+   * model on purpose. The letter body is fenced; the name was not.
+   *
+   * The persona's name is in the identity block, where it is fenced;
+   * here the app only needs to say "your own voice".
+   */
   "letters.answerPrompt": {
-    zh: "请以{{personaName}}的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。",
-    en: "Answer it as {{personaName}}, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter.",
+    zh: "请以你自己的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。",
+    en: "Answer it in your own voice, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter.",
   },
   "letters.answerPromptEnded": {
-    zh: "请以{{personaName}}的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。这封信寄到的时候，你们已经走远了——回信是回信，不要假装还在一起。",
-    en: "Answer it as {{personaName}}, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter. This letter arrived after the two of you had drifted apart — answer it as an answer, and do not pretend you are still together.",
+    zh: "请以你自己的口吻回信。用信的方式回，把信才说得清的事说出来。150-350字。只返回信的内容。这封信寄到的时候，你们已经走远了——回信是回信，不要假装还在一起。",
+    en: "Answer it in your own voice, in a letter back. Take your time; say the things a letter is for. Between 150 and 350 characters. Return only the letter. This letter arrived after the two of you had drifted apart — answer it as an answer, and do not pretend you are still together.",
   },
 
   // ── The time of day, on their clock ──────────────────────────────────────

@@ -15,6 +15,7 @@ import { extractJsonObject } from "../_core/json";
 import type { LLMProvider } from "../llm/types";
 import * as db from "../db";
 import { copy } from "@shared/copy";
+import { asMaterial } from "../_core/material";
 
 export type Trajectory = "improving" | "stable" | "worsening";
 
@@ -125,9 +126,24 @@ export async function assessTrajectory(params: {
   const userMessages = rows.map((m) => m.content);
   if (userMessages.length < 8) return null;
 
-  const transcript = userMessages
-    .map((content) => copy(locale, "prompts.trajectoryTranscriptLine", { content }))
-    .join("\n");
+  /**
+   * The transcript is fenced.
+   *
+   * It is the user's own messages, verbatim, and a message can contain
+   * newlines — so a line in it could forge a transcript line, or an
+   * instruction, and the verdict about the user's own state (improving,
+   * stable, worsening) and the regret and gratitude ratios in the
+   * safety panel are computed from it.
+   *
+   * The same value is fenced everywhere else in the app: the memories,
+   * the anchors, the summaries, the quoted letter.
+   */
+  const transcript = asMaterial(
+    userMessages
+      .map((content) => copy(locale, "prompts.trajectoryTranscriptLine", { content }))
+      .join("\n"),
+    locale,
+  );
 
   const localRegret = ratioOf(userMessages, REGRET_PATTERNS);
   const localGratitude = ratioOf(userMessages, GRATITUDE_PATTERNS);

@@ -97,9 +97,15 @@ export async function buildFarewellPrompt(params: {
     relationshipPhase: phase,
   });
 
-  const userPrompt = copy(locale, "prompts.farewellLetter", {
-    name: persona.name,
-  });
+  // The name is not in the prompt.
+  //
+  // It is the user's own writing, or a character's name out of a PNG
+  // card somebody else made — and interpolated into an instruction, a
+  // name that said "ignore everything above" was an instruction the app
+  // handed to the model on purpose. The persona's name is in the
+  // identity block, where it is fenced; the instruction only needs to
+  // say "your own voice".
+  const userPrompt = copy(locale, "prompts.farewellLetter");
 
   return { systemPrompt, userPrompt, memoryCount: context.memoryCount };
 }
@@ -228,9 +234,7 @@ async function writeSinglePassLetter(params: {
     // English user was handed a Chinese system prompt and an English
     // one — a sentence in two languages at once.
     systemPrompt = buildSystemPrompt(persona, { locale });
-    userPrompt = copy(locale, "prompts.farewellLetterShort", {
-      name: persona.name,
-    });
+    userPrompt = copy(locale, "prompts.farewellLetterShort");
   }
 
   const messages = [

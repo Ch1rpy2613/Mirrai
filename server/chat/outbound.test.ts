@@ -400,6 +400,28 @@ describe("asking a model which words were never said out loud", () => {
     user(3, "你会离开我吗？", afternoon),
   ];
 
+  it("fences the transcript it sends", async () => {
+    invokeWithProvider.mockResolvedValue(JSON.stringify({ items: [], note: "" }));
+
+    await collectOutboundCandidates({
+      userId: 1,
+      personaId: 1,
+      messages: conversation,
+    });
+
+    const sent = invokeWithProvider.mock.calls[0][1].messages[1].content;
+    /**
+     * The transcript is the conversation verbatim, and a message can
+     * contain newlines — so a line in it could forge a transcript line,
+     * or an instruction, and the list of candidate letters is computed
+     * from it.
+     */
+    expect(sent).toMatch(/MATERIAL>>>:[0-9a-f]{8}/);
+    expect(sent).toMatch(/<<<END MATERIAL>>>:[0-9a-f]{8}/);
+    // The content is still there.
+    expect(sent).toContain("我害怕");
+  });
+
   it("drops an item whose messageId belongs to the persona", async () => {
     invokeWithProvider.mockResolvedValue(
       JSON.stringify({

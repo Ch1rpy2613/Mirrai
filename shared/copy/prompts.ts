@@ -91,13 +91,25 @@ export const PROMPTS = {
    * written from what actually happened between the two of them rather
    * than from the persona's identity alone.
    */
+  /**
+   * The same, with the persona referred to as "you".
+   *
+   * It used to say "write a farewell letter in {{name}}'s own voice" —
+   * and the name is the user's own writing, or a character's name out of
+   * a PNG card somebody else made. Interpolated into an instruction, a
+   * name that said "ignore everything above" was an instruction the app
+   * handed to the model on purpose.
+   *
+   * The persona's name is in the identity block, where it is fenced;
+   * here the app only needs to say "your own voice".
+   */
   "prompts.farewellLetter": {
-    zh: "我们已经走过了很长的路，现在是时候说再见了。请用{{name}}的口吻，写一封告别信。回顾你们之间真实发生过的那些事——具体的、只有你们两个人知道的瞬间——然后温柔地道别，表达祝福与不舍。信的长度在200-400字之间。只返回信的内容，不要有其他文字。",
-    en: "We have come a long way, and it is time to say goodbye. Write a farewell letter in {{name}}'s own voice. Look back at the things that actually happened between us — the specific moments, the things only the two of us would know — and say goodbye with warmth and a wish for their wellbeing. Between 200 and 400 characters. Return only the letter itself, with nothing else.",
+    zh: "我们已经走过了很长的路，现在是时候说再见了。请用你自己的口吻，写一封告别信。回顾你们之间真实发生过的那些事——具体的、只有你们两个人知道的瞬间——然后温柔地道别，表达祝福与不舍。信的长度在200-400字之间。只返回信的内容，不要有其他文字。",
+    en: "We have come a long way, and it is time to say goodbye. Write a farewell letter in your own voice. Look back at the things that actually happened between us — the specific moments, the things only the two of us would know — and say goodbye with warmth and a wish for their wellbeing. Between 200 and 400 characters. Return only the letter itself, with nothing else.",
   },
   "prompts.farewellLetterShort": {
-    zh: "请用{{name}}的口吻，写一封告别信，200-400字。只返回信的内容。",
-    en: "Write a farewell letter in {{name}}'s own voice, between 200 and 400 characters. Return only the letter.",
+    zh: "请用你自己的口吻，写一封告别信，200-400字。只返回信的内容。",
+    en: "Write a farewell letter in your own voice, between 200 and 400 characters. Return only the letter.",
   },
   /**
    * The letter written when the model could not be reached.
