@@ -595,10 +595,25 @@ export const appRouter = router({
      * The interface sends it on every request, but the things the app
      * sends on its own — a reminder at midnight, a reply in a chat
      * window — have to know it without being asked.
+     *
+     * It is a *public* procedure on purpose.
+     *
+     * It used to be protected — and the language switch on the landing
+     * page sent it. So a visitor who was not signed in — the landing
+     * page is the front door, shown to anybody — got UNAUTHORIZED back,
+     * and the app's own handler for that threw them to the sign-in page:
+     * to change the language you had to sign in. The language itself was
+     * already saved in the browser; they were thrown out for nothing.
+     *
+     * So the procedure is public and does the work only when there is
+     * somebody to do it for. There is nothing to write for a visitor who
+     * is not signed in — the interface language is in their browser
+     * anyway.
      */
-    setLocale: protectedProcedure
+    setLocale: publicProcedure
       .input(z.object({ locale: z.enum(["zh", "en"]) }))
       .mutation(async ({ ctx, input }) => {
+        if (!ctx.user) return { success: true };
         await setUserLocale(ctx.user.id, input.locale);
         return { success: true };
       }),
