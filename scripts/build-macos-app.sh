@@ -328,6 +328,39 @@ chmod +x "$CONTENTS/MacOS/Mirrai"
 cp "$SCRIPT_DIR/macos/start.sh" "$RESOURCES/start.sh"
 chmod +x "$RESOURCES/start.sh"
 
+# ─── Step 6b: sign the bundle ───────────────────────────────────────────────
+#
+# The bundle itself was not signed — only the binaries inside it were.
+#
+# And the bundle is what macOS looks at: an unsigned app is refused
+# ("Mirrai cannot be opened"), and on an Apple Silicon Mac the refusal
+# is immediate. So the app the build produced could not be opened by
+# the person who built it, let alone by the person who downloaded it.
+#
+# A Developer ID identity is used when the keychain has one — that is
+# the signature that gets past Gatekeeper. Otherwise the bundle is
+# signed ad-hoc, which says "this is the bundle that was built here" —
+# enough for macOS to run it, and honest about what it is.
+log "Signing the app bundle..."
+SIGN_IDENTITY=""
+if command -v security >/dev/null 2>&1; then
+  SIGN_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+    | grep -E 'Developer ID Application:' \
+    | head -1 \
+    | sed -E 's/.*"(.*)"/\1/')
+fi
+if [ -n "$SIGN_IDENTITY" ]; then
+  log "Signing with: $SIGN_IDENTITY"
+  codesign --force --deep --options runtime --timestamp \
+    --sign "$SIGN_IDENTITY" "$APP_BUNDLE" || die "Could not sign the app bundle."
+else
+  log "No Developer ID identity in the keychain; signing ad-hoc."
+  codesign --force --deep --sign - "$APP_BUNDLE" || die "Could not sign the app bundle."
+fi
+# The signature is checked, not assumed: a build that produced an
+# unsigned bundle is a build that produced an app macOS will refuse.
+codesign --verify --deep --strict "$APP_BUNDLE" || die "The app bundle is not correctly signed."
+
 # ─── Step 7: Create .dmg ────────────────────────────────────────────────────
 log "Creating DMG..."
 DMG_TMP="$BUILD_DIR/dmg-staging"

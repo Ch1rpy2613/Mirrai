@@ -255,6 +255,19 @@ describe("the packaged app", () => {
     expect(workflow).toContain(".sha256");
   });
 
+  it("signs the macOS app bundle, not only the binaries inside it", () => {
+    /**
+     * The bundle was not signed — only the binaries inside it were.
+     * And the bundle is what macOS looks at: an unsigned app is
+     * refused, so the app the build produced could not be opened by the
+     * person who built it, let alone by the person who downloaded it.
+     */
+    const build = readFileSync(path.join(ROOT, "scripts/build-macos-app.sh"), "utf-8");
+    expect(build).toContain('codesign --force --deep');
+    // And the signature is checked, not assumed.
+    expect(build).toContain("codesign --verify --deep --strict");
+  });
+
   it("builds the macOS app for the machine it is built on", () => {
     /**
      * The architecture was written down — arm64 — so building on an
