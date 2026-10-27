@@ -100,6 +100,19 @@ def parse_feishu_txt(file_path: str, target_name: str) -> list[dict]:
         r"^(?P<time>\d{4}[-/]\d{1,2}[-/]\d{1,2}[\s\d:]*)\s+(?P<sender>.+?)[:：]\s*(?P<content>.+)$"
     )
 
+    # 这个文件里有没有带时间戳的行。
+    #
+    # 有的话，后面不匹配的行就是**续行**——一段话被换行截断了，
+    # 这是导出的聊天记录里最常见的写法。
+    # 没有的话，整个文件就是没有时间戳的纯文本，每一行都是一条消息。
+    has_timestamps = any(pattern.match(line.strip()) for line in lines if line.strip())
+
+    # 上一条匹配的行是不是目标本人的。
+    #
+    # 续行要接在**它自己的**那条消息后面：如果上一行是别人说的，
+    # 这一行就是别人说的话，不是目标本人的续行。
+    last_was_target = False
+
     for line in lines:
         line = line.strip()
         if not line:
@@ -112,6 +125,7 @@ def parse_feishu_txt(file_path: str, target_name: str) -> list[dict]:
             timestamp = m.group("time").strip()
 
             if target_name and target_name not in sender:
+                last_was_target = False
                 continue
             if not content:
                 continue
@@ -121,7 +135,16 @@ def parse_feishu_txt(file_path: str, target_name: str) -> list[dict]:
                 "content": content,
                 "timestamp": timestamp,
             })
+            last_was_target = True
         else:
+            # 没有匹配格式的行。
+            if has_timestamps and messages and last_was_target:
+                # 续行：接在上一条消息后面。
+                #
+                # 它原来是自己的一条消息——而且因为它没有目标人的名字，
+                # 原来连这条都不是，直接被丢掉了。
+                messages[-1]["content"] = (messages[-1]["content"] + "\n" + line).strip()
+                continue
             # 没有匹配格式，检查是否包含目标人名
             if target_name and target_name in line:
                 messages.append({
@@ -129,6 +152,7 @@ def parse_feishu_txt(file_path: str, target_name: str) -> list[dict]:
                     "content": line,
                     "timestamp": "",
                 })
+                last_was_target = True
 
     return messages
 
