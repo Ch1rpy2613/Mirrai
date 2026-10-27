@@ -18,9 +18,11 @@ import {
   existsSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   readSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "fs";
 import os from "os";
@@ -422,11 +424,60 @@ function writeCredentialFile(
   return file;
 }
 
+/**
+ * The temp directories the collectors left behind.
+ *
+ * A collector removes its own directory when it finishes — but a
+ * collector that was killed (the machine slept, the process was
+ * stopped, the app was quit) leaves it: the transcript it fetched, the
+ * credential file it wrote, the browser profile it made.
+ *
+ * So every collector tidies up the ones that are old enough to be
+ * certainly nobody's. The young ones belong to a collector that is
+ * running right now, and they are left alone.
+ */
+export function cleanStaleCollectorDirs(
+  currentDir: string,
+  maxAgeMs = 60 * 60 * 1000,
+  root: string = os.tmpdir(),
+): number {
+  let removed = 0;
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(root);
+  } catch {
+    return 0;
+  }
+  for (const name of entries) {
+    if (!name.startsWith("mirrai-collector-")) continue;
+    const full = path.join(root, name);
+    if (full === currentDir) continue;
+    let age: number;
+    try {
+      age = Date.now() - statSync(full).mtimeMs;
+    } catch {
+      // It is gone already, or it cannot be read.
+      continue;
+    }
+    if (age < maxAgeMs) continue;
+    try {
+      rmSync(full, { recursive: true, force: true });
+      removed++;
+    } catch {
+      // Another process has it, or the disk says no. It will be tried
+      // again the next time.
+    }
+  }
+  return removed;
+}
+
 async function collectViaOutputDir(
   connector: SourceConnector,
   input: CollectInput,
 ): Promise<CollectResult> {
   const outputDir = mkdtempSync(path.join(os.tmpdir(), "mirrai-collector-"));
+  // The ones that were left behind by collectors that did not finish.
+  cleanStaleCollectorDirs(outputDir);
   try {
     const effective: CollectInput = {
       ...input,
