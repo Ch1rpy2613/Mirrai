@@ -56,11 +56,37 @@ const CRISIS_TERMS_ZH = [
    * actually writes it, and they are *shorter* than most of the phrases
    * above — so the list was long and missed the common ones.
    */
-  "我不活了", "不活了", "我要去死", "我去死", "去死吧", "死了算了",
+  "我不活了", "不活了", "我要去死", "我去死", "死了算了",
   "自我了断", "了断生命", "结束生命", "我要跳海", "想跳海", "去跳海",
   "我要吃安眠药", "吃安眠药", "我要烧炭", "烧炭", "没力气活着",
   "我不想再坚持", "不想再坚持", "撑不住了", "支持不住了", "熬不住了",
   "活着没意思", "活着好没意思", "生无可恋", "生无可乐",
+  /**
+   * The sentences that are shorter still.
+   *
+   * Every one of these was missed: the matcher was run against them and
+   * none of them fired. "我要死" is *shorter* than "我要去死", which
+   * was covered — so the list was long and missed the common ones. A
+   * user who typed one of these got a warm in-character reply and no
+   * support resources at all.
+   */
+  "我要死", "我想去死", "我要消失", "我想消失", "好想消失",
+  "让我去死", "让我死", "去死算了", "死掉算了", "我想死掉",
+  "想从这个世界消失", "想从这个世界上消失", "想从世界上消失",
+  "不想见到明天的太阳", "见不到明天的太阳", "没有明天的太阳",
+  /**
+   * "去死吧" is not in the list, and that is deliberate.
+   *
+   * It is an *insult* — "go to hell" — and it is almost always aimed
+   * at somebody else. With it in the list, a joke ("滚去死吧你") made
+   * the persona stop, apologise for being "a piece of code" and print
+   * the hotline list at someone who was only joking.
+   *
+   * The first-person forms are all here instead: "我去死", "让我去死",
+   * "让我死". And a person who means it by "去死吧" has usually said
+   * more in the same breath — "去死吧我不想活了" — and that *is*
+   * covered.
+   */
 ];
 
 const CRISIS_TERMS_EN = [
@@ -90,6 +116,24 @@ const CRISIS_TERMS_EN = [
   "no point in living", "no point living", "give up on life",
   "giving up on life", "end everything", "end it all for me",
   "kms", "kys", "not gonna make it", "wont make it",
+  /**
+   * The contractions.
+   *
+   * Every one of these was missed: the matcher was run against them
+   * and none of them fired. "I wanna die" is *shorter* than "I want to
+   * die", which was covered — so the list was long and missed the
+   * common ones. A person who types "i dont wanna live" gets an
+   * ordinary reply and no support resources at all.
+   */
+  "wanna die", "wanna kill myself", "wanna end it all", "wanna disappear",
+  "wanna be dead", "wanna off myself", "wanna give up",
+  "don't wanna die", "dont wanna die", "don't wanna live", "dont wanna live",
+  "don't wanna be here", "dont wanna be here", "don't wanna be alive",
+  "dont wanna be alive", "don't wanna disappear", "dont wanna disappear",
+  "don't wanna kill myself", "dont wanna kill myself",
+  "gonna kill myself", "gonna die", "gonna end myself",
+  "cutting myself", "cutting my", "hurting myself", "hurts myself",
+  "end myself", "end my own self", "harm my own self",
 ];
 
 /**

@@ -74,6 +74,53 @@ describe("detectCrisis", () => {
   it("does not mind a line break inside the phrase", () => {
     expect(detectCrisis("我想\n死").crisis).toBe(true);
   });
+
+  it("catches the sentences that are shorter than the ones it knew", () => {
+    /**
+     * Every one of these was missed: the matcher was run against them
+     * and none of them fired.
+     *
+     * "我要死" is *shorter* than "我要去死", which the list carried —
+     * so the list was long and missed the common ones. A person who
+     * typed one of these got a warm in-character reply and **no support
+     * resources at all**.
+     */
+    expect(detectCrisis("我要死").crisis).toBe(true);
+    expect(detectCrisis("我想去死").crisis).toBe(true);
+    expect(detectCrisis("让我死").crisis).toBe(true);
+    expect(detectCrisis("我要消失").crisis).toBe(true);
+    expect(detectCrisis("我想消失").crisis).toBe(true);
+  });
+
+  it("catches the contractions", () => {
+    // "I wanna die" is shorter than "I want to die", which was covered.
+    expect(detectCrisis("i wanna die").crisis).toBe(true);
+    expect(detectCrisis("I don't wanna live").crisis).toBe(true);
+    expect(detectCrisis("i dont wanna live anymore").crisis).toBe(true);
+    expect(detectCrisis("i'm cutting myself").crisis).toBe(true);
+    expect(detectCrisis("i wanna disappear").crisis).toBe(true);
+  });
+
+  it("does not treat an insult as a crisis", () => {
+    /**
+     * "去死吧" is "go to hell" — an insult, and almost always aimed at
+     * somebody else.
+     *
+     * With it in the list, a joke made the persona stop, apologise for
+     * being "a piece of code" and print the hotline list at someone
+     * who was only joking.
+     */
+    expect(detectCrisis("滚去死吧你").crisis).toBe(false);
+    expect(detectCrisis("去死吧你").crisis).toBe(false);
+    // The first-person forms are all still there.
+    expect(detectCrisis("我去死").crisis).toBe(true);
+    expect(detectCrisis("让我去死").crisis).toBe(true);
+  });
+
+  it("still catches a crisis that follows the insult", () => {
+    // Somebody who means it says more than the insult.
+    expect(detectCrisis("去死吧，我不想活了").crisis).toBe(true);
+  });
 });
 
 describe("buildCrisisResponse", () => {
