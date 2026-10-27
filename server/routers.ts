@@ -52,7 +52,7 @@ import {
   appendPersonaCorrection,
   upsertUserMood, getUserMoods,
   createLetter, getLetters, countLetters, getDueLetters, getLastLetterReplyAt,
-  answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes,
+  answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes, countWaitingNotes,
   createRelationshipEvent, getRelationshipEvents, deleteRelationshipEvent,
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
   getOutboundLetters, setOutboundLetterStatus, updateOutboundLetterText,
@@ -4261,7 +4261,12 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return { todos: await getWaitingNotes(input.personaId, ctx.user.id) };
+        return {
+          todos: await getWaitingNotes(input.personaId, ctx.user.id),
+          // How many there are — so the interface can say that the list
+          // is not everything.
+          total: await countWaitingNotes(input.personaId, ctx.user.id),
+        };
       }),
 
     remove: protectedProcedure

@@ -317,6 +317,19 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               </li>
             ))}
           </ul>
+          {/**
+           * The list stops at twenty.
+           *
+           * So the user has to be told that there are more — otherwise
+           * their own words are quietly not on the screen, and the box
+           * says "here are your notes" and means "here are twenty of
+           * them".
+           */}
+          {(todosData?.total ?? 0) > todos.length && (
+            <p className="mt-2 text-[0.625rem] text-muted-subtle">
+              {t("letters.todoCapped", { count: (todosData?.total ?? 0) - todos.length })}
+            </p>
+          )}
         </div>
       )}
 

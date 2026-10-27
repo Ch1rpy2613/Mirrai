@@ -17,6 +17,8 @@ const invalidate = vi.fn();
 
 let letters: any[] = [];
 let todos: any[] = [];
+/** How many notes there are in all. */
+let todosTotal = 0;
 /** What the server answered with when the letter was written. */
 let writeResult: any = { success: true, letter: { kind: "letter", status: "private" } };
 /**
@@ -43,7 +45,7 @@ vi.mock("@/lib/trpc", () => ({
     }),
     letter: {
       list: { useQuery: () => ({ data: listData }) },
-      todos: { useQuery: () => ({ data: { todos } }) },
+      todos: { useQuery: () => ({ data: { todos, total: todosTotal } }) },
       write: {
         useMutation: (options: any) => ({
           mutate: (values: any) => {
@@ -110,6 +112,7 @@ describe("the letters", () => {
     vi.clearAllMocks();
     letters = [];
     todos = [];
+    todosTotal = 0;
     writeResult = { success: true, letter: { kind: "letter", status: "private" } };
     listData = { letters: [] };
     olderPage = [];
@@ -295,6 +298,22 @@ describe("the letters", () => {
     await waitFor(() => {
       expect(screen.getByText("信 99")).toBeInTheDocument();
     });
+  });
+
+  it("says when there are more notes than the box shows", () => {
+    /**
+     * The list stops at twenty — so the user has to be told that there
+     * are more. Otherwise their own words are quietly not on the
+     * screen, and the box says "here are your notes" and means "here
+     * are twenty of them".
+     */
+    listData = { letters: [], total: 0 };
+    todos = [{ id: 1, body: "等 TA 回来再说", kind: "todo", status: "private" }];
+    todosTotal = 5;
+
+    render(<LetterBox personaId={1} />);
+
+    expect(screen.getByText(translate("zh", "letters.todoCapped", { count: 4 }))).toBeInTheDocument();
   });
 
   it("shows no resources for an ordinary letter", async () => {

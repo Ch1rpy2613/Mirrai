@@ -1421,6 +1421,7 @@ export const en = {
     kindLabel: "What this letter is",
     kindTodo: "When they come back",
     todoTitle: "When they come back",
+    todoCapped: "{{count}} more are not shown here.",
     todoNote: "Write it down for the moment you are in touch again. Nobody is going to rush you.",
     saveTodo: "Save it",
   },

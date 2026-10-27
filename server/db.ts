@@ -378,6 +378,25 @@ export async function getWaitingNotes(personaId: number, userId: number) {
     .limit(20);
 }
 
+/**
+ * How many notes there are in all.
+ *
+ * The list stops at twenty — so the interface needs to know that there
+ * are more, or it says "here are your notes" and the rest of the
+ * user's own words are simply not on the screen.
+ */
+export async function countWaitingNotes(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db.select({ c: count() }).from(letters)
+    .where(and(
+      eq(letters.personaId, personaId),
+      eq(letters.userId, userId),
+      eq(letters.kind, "todo"),
+    ));
+  return rows[0]?.c ?? 0;
+}
+
 /** Pushes a letter's reply further out. */
 export async function deferLetter(id: number, userId: number, replyAt: Date) {
   const db = await getDb();

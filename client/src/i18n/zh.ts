@@ -1434,6 +1434,7 @@ export const zh = {
     kindLabel: "这封信是什么",
     kindTodo: "等 TA 回来再说",
     todoTitle: "等 TA 回来再说",
+    todoCapped: "还有 {{count}} 条没有显示。",
     todoNote: "记下来，等你们重新联系上的时候再说。不会有人催你。",
     saveTodo: "记下来",
   },
