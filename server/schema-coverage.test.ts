@@ -27,7 +27,16 @@ const migrations = readdirSync(path.join(ROOT, "drizzle"))
 /** The columns each table declares, as `table -> [column]`. */
 function declaredColumns(): Record<string, string[]> {
   const out: Record<string, string[]> = {};
-  const tablePattern = /export const (\w+) = pgTable\("([^"]+)"/g;
+  /**
+   * The tables, and the columns they declare.
+   *
+   * The name of a table may be on the next line — three of them are
+   * written that way — so the pattern has to allow the line break.
+   * It did not, so those three tables were never checked: their
+   * columns were not compared with the migrations, and a column
+   * missing from a migration looked fine.
+   */
+  const tablePattern = /export const (\w+) = pgTable\(\s*"([^"]+)"/g;
   let match: RegExpExecArray | null;
   while ((match = tablePattern.exec(schema)) !== null) {
     const tableName = match[2];
@@ -73,7 +82,10 @@ describe("the migrations cover the schema", () => {
   const created = createdTables();
   const added = addedColumns();
 
-  it("finds the tables in the schema", () => {
+  it("finds every table in the schema", () => {
+    // Every table the schema declares, and no fewer.
+    const declared = (schema.match(/= pgTable\(/g) ?? []).length;
+    expect(Object.keys(tables).length).toBe(declared);
     expect(Object.keys(tables).length).toBeGreaterThan(5);
   });
 
