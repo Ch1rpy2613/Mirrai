@@ -127,10 +127,10 @@ export default function PersonaEdit() {
   const personaId = Number.parseInt(params.id ?? "", 10);
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
-  const { data: persona, refetch, isError, error } = trpc.persona.get.useQuery(
+  const { data: persona, refetch, isError, error, isLoading } = trpc.persona.get.useQuery(
     { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   const { data: promptData } = trpc.persona.getSystemPrompt.useQuery(
@@ -400,19 +400,27 @@ export default function PersonaEdit() {
    * on another device, or a device that had gone offline, and the user
    * had no way back and no explanation.
    */
-  if (isError) {
-    /**
-     * The screen has a way out.
-     *
-     * It used to be a message and nothing else — so a persona deleted
-     * on another device left the user with no back button and no
-     * retry. The profile page and the graduation page both got one;
-     * this one was missed.
-     */
+  /**
+   * The screen has a way out.
+   *
+   * It used to be a message and nothing else — so a persona deleted
+   * on another device left the user with no back button and no retry.
+   * The profile page and the graduation page both got one; this one was
+   * missed.
+   *
+   * It answers the case where the query will never run at all too: the
+   * sign-in request failed, so the persona query stayed disabled, so
+   * there was no persona and no error and no way back. The page used
+   * to spin for ever.
+   */
+  if (isLoading || authLoading) return <PageLoader />;
+  if (isError || !persona) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
         <div className="text-center space-y-4">
-          <p className="text-sm text-foreground/80">{t("errors.notFound")}</p>
+          <p className="text-sm text-foreground/80">
+            {isError ? t("errors.notFound") : t("common.error")}
+          </p>
           <p className="text-xs text-muted-foreground">{(error as any)?.message ?? ""}</p>
           <div className="flex items-center justify-center gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => navigate("/")}>
@@ -426,7 +434,6 @@ export default function PersonaEdit() {
       </div>
     );
   }
-  if (!persona) return <PageLoader />;
 
   return (
     <div className="min-h-screen bg-background">

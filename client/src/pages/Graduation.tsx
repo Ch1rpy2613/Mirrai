@@ -45,7 +45,7 @@ export default function Graduation() {
   const personaId = Number.parseInt(params.id ?? "", 10);
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
-  const { isAuthenticated, user } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, user, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
   /** The user's own calendar — the one the server files the days in. */
   const timezone = (user as any)?.timezone ?? null;
   const { t, locale } = useLocale();
@@ -81,8 +81,14 @@ export default function Graduation() {
    * The header that carries the back button is drawn *after* this, so
    * a failed request used to strand the user on a page with nothing to
    * press but the browser's back button.
+   *
+   * It answers the case where the query will never run at all too: the
+   * sign-in request failed, so the persona query stayed disabled, so
+   * there was no persona and no error and no way back. The page used
+   * to spin for ever.
    */
-  if (isError) {
+  if (isLoading || authLoading) return <PageLoader />;
+  if (isError || !persona) {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-40 app-header">
@@ -94,7 +100,9 @@ export default function Graduation() {
         </header>
         <main className="container page-main max-w-3xl">
           <div className="text-center space-y-4 py-16">
-            <p className="text-sm text-foreground/80">{t("errors.notFound")}</p>
+            <p className="text-sm text-foreground/80">
+              {isError ? t("errors.notFound") : t("common.error")}
+            </p>
             <p className="text-xs text-muted-foreground">{(error as any)?.message ?? ""}</p>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               {t("common.retry")}
@@ -104,8 +112,6 @@ export default function Graduation() {
       </div>
     );
   }
-  if (isLoading || !persona) return <PageLoader />;
-
   const letter = persona.farewellLetter;
   /** Which lines the second pass kept, and which it cut. */
   const draft = (persona as any).farewellDraft as

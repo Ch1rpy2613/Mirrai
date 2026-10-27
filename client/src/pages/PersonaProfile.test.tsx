@@ -15,11 +15,23 @@ import { translate } from "@/i18n";
  *   not do.
  */
 let persona: any;
+/** Whether the query is still on its way. */
+let personaLoading = false;
+/** Whether the query failed. */
+let personaFailed = false;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: {
-      get: { useQuery: () => ({ data: persona }) },
+      get: {
+        useQuery: () => ({
+          data: persona,
+          isLoading: personaLoading,
+          isError: personaFailed,
+          error: null,
+          refetch: () => {},
+        }),
+      },
     },
     memory: { list: { useQuery: () => ({ data: { items: [] } }) } },
     relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
@@ -27,7 +39,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
-  useAuth: () => ({ isAuthenticated: true }),
+  useAuth: () => ({ isAuthenticated: true, loading: false }),
 }));
 
 vi.mock("wouter", () => ({
@@ -52,7 +64,23 @@ vi.mock("@/components/FidelityPanel", () => ({
 import PersonaProfile from "./PersonaProfile";
 
 describe("the portrait", () => {
+  it("does not spin for ever when the persona cannot be read", () => {
+    // The sign-in request failed, so the persona query stayed disabled:
+    // no persona, no error, and the loader the page showed for ever.
+    // There has to be a way back.
+    persona = undefined as any;
+    personaLoading = false;
+    personaFailed = false;
+
+    render(<PersonaProfile />);
+
+    expect(screen.getByText(translate("zh", "common.retry"))).toBeInTheDocument();
+  });
+
+
   beforeEach(() => {
+    personaLoading = false;
+    personaFailed = false;
     persona = {
       id: 1,
       userId: 1,
