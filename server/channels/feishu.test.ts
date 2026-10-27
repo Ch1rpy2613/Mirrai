@@ -92,6 +92,71 @@ describe("handleFeishuEvent", () => {
     expect(sent).toContain("在的。");
   });
 
+  it("does not answer the bot's own message", async () => {
+    // Feishu delivers the app's own messages back into the same event
+    // stream. So the bot answered itself — and the answer came back,
+    // and was answered too. An endless loop of model calls, at the
+    // user's expense.
+    const sendText = vi.fn();
+
+    await handleFeishuEvent({
+      userId: 1,
+      event: {
+        chat_id: "oc_abc",
+        chat_type: "p2p",
+        message: { message_type: "text", content: JSON.stringify({ text: "在的。" }) },
+        sender: { sender_id: { open_id: "ou_bot" }, sender_type: "app" },
+      },
+      botOpenId: "ou_bot",
+      sendText,
+    });
+
+    expect(handleChannelChat).not.toHaveBeenCalled();
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("does not answer a message the bot itself sent", async () => {
+    // The sender type was not always there — so the bot's own open id
+    // is the second line of defence.
+    const sendText = vi.fn();
+
+    await handleFeishuEvent({
+      userId: 1,
+      event: {
+        chat_id: "oc_abc",
+        chat_type: "p2p",
+        message: { message_type: "text", content: JSON.stringify({ text: "在的。" }) },
+        sender: { sender_id: { open_id: "ou_bot" } },
+      },
+      botOpenId: "ou_bot",
+      sendText,
+    });
+
+    expect(handleChannelChat).not.toHaveBeenCalled();
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("still answers a person", async () => {
+    const sent: string[] = [];
+
+    await handleFeishuEvent({
+      userId: 1,
+      event: {
+        chat_id: "oc_abc",
+        chat_type: "p2p",
+        message: { message_type: "text", content: JSON.stringify({ text: "在吗" }) },
+        sender: { sender_id: { open_id: "ou_person" }, sender_type: "user" },
+      },
+      botOpenId: "ou_bot",
+      sendText: async (_target, text) => {
+        sent.push(text);
+      },
+    });
+
+    expect(handleChannelChat).toHaveBeenCalled();
+    expect(sent).toContain("在的。");
+  });
+
   it("ignores a group conversation", async () => {
     const sendText = vi.fn();
     await handleFeishuEvent({

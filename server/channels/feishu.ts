@@ -166,13 +166,33 @@ export async function handleFeishuEvent(params: {
     chat_id?: string;
     chat_type?: string;
     message?: { message_type?: string; content?: string; message_id?: string };
-    sender?: { sender_id?: { open_id?: string } };
+    sender?: { sender_id?: { open_id?: string }; sender_type?: string };
   };
   sendText: (targetId: string, text: string) => Promise<void>;
+  /**
+   * The bot's own open id.
+   *
+   * Feishu delivers the messages the app sends back into the same
+   * event stream, so the bot answered itself — and the answer came
+   * back, and was answered too. An endless loop of model calls, at
+   * the user's expense.
+   */
+  botOpenId?: string | null;
 }): Promise<void> {
   const { userId, event, sendText } = params;
   const chatId = event?.chat_id;
   if (!chatId) return;
+
+  /**
+   * The bot's own messages are not answered.
+   *
+   * Two ways to recognise them: the sender is an application rather
+   * than a person, and the sender is this bot.
+   */
+  const senderType = event?.sender?.sender_type;
+  const senderOpenId = event?.sender?.sender_id?.open_id;
+  if (senderType === "app") return;
+  if (params.botOpenId && senderOpenId === params.botOpenId) return;
 
   /**
    * The delivery is only answered once.
@@ -417,6 +437,41 @@ export class FeishuAdapter implements ChannelAdapter {
       }
     };
 
+    /**
+     * The bot's own open id, read once.
+     *
+     * It is what tells an echo from a person: Feishu sends the app's
+     * own messages back into the same stream, and the bot answered
+     * itself — and the answer came back, and was answered too. An
+     * endless loop of model calls, at the user's expense.
+     *
+     * It is read the first time a message arrives, and then kept.
+     */
+    let botOpenId: Promise<string | null> | null = null;
+    const readBotOpenId = (): Promise<string | null> => {
+      if (!botOpenId) {
+        botOpenId = (async () => {
+          try {
+            // The bot's own identity: GET /open-apis/bot/v3/info.
+            //
+            // The typed client does not declare the generic request, so
+            // it is called through the runtime's own shape.
+            const response = (await (client as any).request({
+              url: "/open-apis/bot/v3/info",
+              method: "GET",
+            })) as any;
+            const info = response?.data ?? response;
+            return info?.bot?.open_id ?? info?.data?.bot?.open_id ?? null;
+          } catch (e) {
+            // The sender type still tells an echo from a person.
+            console.warn("[Feishu] Could not read the bot's own id:", (e as Error).message);
+            return null;
+          }
+        })();
+      }
+      return botOpenId;
+    };
+
     const dispatcher = new lark.EventDispatcher().register({
       "im.message.receive_v1": async (data: any) => {
         // Feishu expects a reply within three seconds. The conversation takes
@@ -443,6 +498,7 @@ export class FeishuAdapter implements ChannelAdapter {
               userId,
               event: data?.event ?? {},
               sendText,
+              botOpenId: await readBotOpenId(),
             });
           } finally {
             giveTheRoomBack();
@@ -477,6 +533,20 @@ export class FeishuAdapter implements ChannelAdapter {
 
     const state = ws.getConnectionStatus?.();
     if (state && state.state !== "connected") {
+      /**
+       * The socket is closed before the entry is dropped.
+       *
+       * The SDK's client reconnects by itself — so a connection that
+       * never came up stayed reconnecting in the background, and the
+       * retry made a *second* client. And `stop()` could not close it,
+       * because the map no longer had it: the connection was alive on
+       * the machine and nothing could reach it.
+       */
+      try {
+        ws.close?.();
+      } catch {
+        // Already closed.
+      }
       connections.delete(userId);
       const message = copy(locale, "errors.feishuNotConnected");
       await db.upsertChannelState(userId, CHANNEL_ID, {
