@@ -346,15 +346,53 @@ export async function getLetters(
 ) {
   const db = await getDb();
   if (!db) return [];
+  /**
+   * Only the letters.
+   *
+   * The notes for later — 「等 TA 回来再说」 — are a different thing,
+   * and they are read by their own helper. They used to be in these
+   * rows, and the interface filtered them out *after* the server had
+   * applied the limit. So the notes took the page slots: the paging
+   * cursor walked through rows that were never displayed, and because
+   * the total counts only the letters while the list was truncated by
+   * the notes, the panel could say "no letters yet" and "N older
+   * letters are not shown" at the same time.
+   *
+   * And the cursor gets the id as a tie-breaker, the way the messages
+   * read does. Two letters written in the same millisecond share a
+   * `createdAt`, and the comparison was on the time alone — so the row
+   * that sorts after the cursor within that millisecond was on neither
+   * page, and could never be reached. The letter was in the export and
+   * not in the product.
+   */
+  let cursor: { createdAt: Date; id: number } | undefined;
+  if (before) {
+    const [row] = await db
+      .select({ createdAt: letters.createdAt, id: letters.id })
+      .from(letters)
+      .where(and(
+        eq(letters.id, before),
+        eq(letters.personaId, personaId),
+        eq(letters.userId, userId),
+      ))
+      .limit(1);
+    cursor = row ? { createdAt: row.createdAt, id: row.id } : undefined;
+  }
   return db.select().from(letters)
     .where(and(
       eq(letters.personaId, personaId),
       eq(letters.userId, userId),
-      ...(before
-        ? [sql`"createdAt" < (SELECT "createdAt" FROM "letters" WHERE "id" = ${before} AND "personaId" = ${personaId} AND "userId" = ${userId})`]
+      eq(letters.kind, "letter"),
+      ...(cursor
+        ? [
+            or(
+              lt(letters.createdAt, cursor.createdAt),
+              and(eq(letters.createdAt, cursor.createdAt), lt(letters.id, cursor.id)),
+            )!,
+          ]
         : []),
     ))
-    .orderBy(desc(letters.createdAt))
+    .orderBy(desc(letters.createdAt), desc(letters.id))
     .limit(limit);
 }
 
