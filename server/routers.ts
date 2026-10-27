@@ -1,5 +1,6 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { createSessionToken } from "./_core/auth";
 import { isUniqueViolation } from "./_core/auth";
 import { detectCrisis } from "./safety/crisis";
 import { withKeyLock } from "./_core/lock";
@@ -760,8 +761,28 @@ export const appRouter = router({
         const valid = await verifyPassword(input.currentPassword, user.passwordHash);
         if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: copy(ctx.locale, "errors.currentPasswordWrong") });
         await updateUserPassword(ctx.user.id, await hashPassword(input.newPassword));
-        // A password change signs every other device out.
+        /**
+         * A password change signs every other device out — and keeps this
+         * one in.
+         *
+         * The token version was bumped and nothing else: so the token the
+         * browser was holding was retired along with everyone else's, and
+         * the person who had just changed their password was signed out
+         * of the tab they changed it in — with the new password already
+         * in hand and no way to tell that from a failure.
+         *
+         * So the version is bumped (every other token is retired) and a
+         * fresh token is minted for this device with the new version.
+         */
         await bumpUserTokenVersion(ctx.user.id);
+        const fresh = await getUserById(ctx.user.id);
+        const token = await createSessionToken(
+          ctx.user.id,
+          fresh?.name || ctx.user.name || user.name || user.username,
+          fresh?.tokenVersion ?? (ctx.user.tokenVersion ?? 0) + 1,
+        );
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
         return { success: true };
       }),
 
