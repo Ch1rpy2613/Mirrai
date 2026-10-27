@@ -575,10 +575,29 @@ export function startWeChatBot(userId: number) {
   }
 
   account.monitorAbort = new AbortController();
-  account.monitorPromise = runMonitor(userId, account.monitorAbort.signal).finally(() => {
-    account.monitorPromise = null;
-    account.monitorAbort = null;
-  });
+  account.monitorPromise = runMonitor(userId, account.monitorAbort.signal)
+    .catch((e) => {
+      /**
+       * The monitor's own failure is not left to the process.
+       *
+       * The promise is only waited for when the bot is stopped — so a
+       * failure before the loop even starts (a database that cannot be
+       * read, a credential that cannot be decrypted) sat there as an
+       * unhandled rejection for as long as the app ran, and Node ends
+       * the process on an unhandled rejection.
+       *
+       * The channel is told as well: the user is told their WeChat
+       * connection is broken, instead of the bot simply going quiet.
+       */
+      logError(`监控异常退出: ${String(e)}`);
+      void db
+        .upsertWechatBotState(userId, { status: "error", lastError: String(e) })
+        .catch(() => undefined);
+    })
+    .finally(() => {
+      account.monitorPromise = null;
+      account.monitorAbort = null;
+    });
 }
 
 /**
