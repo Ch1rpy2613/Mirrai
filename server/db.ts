@@ -909,7 +909,87 @@ export async function bumpUserTokenVersion(id: number) {
  * behind after the account is gone. `server/db-migrations.test.ts` asserts
  * that this list stays in step with the schema.
  */
+/**
+ * The files a user (or a persona) has on disk.
+ *
+ * The rows are deleted and the bytes were not — so the uploaded
+ * photographs and the extracted chat logs stayed in the uploads
+ * directory after the account or the persona was gone. Nothing read
+ * them again and nothing cleaned them up.
+ *
+ * The keys are collected before the rows go.
+ */
+async function collectStoredFiles(userId: number, personaId?: number): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const keys = new Set<string>();
+
+  const files = await db
+    .select({ fileKey: personaFiles.fileKey })
+    .from(personaFiles)
+    .where(
+      personaId === undefined
+        ? eq(personaFiles.userId, userId)
+        : and(eq(personaFiles.userId, userId), eq(personaFiles.personaId, personaId)),
+    );
+  for (const file of files) {
+    if (file.fileKey) keys.add(file.fileKey);
+  }
+
+  /**
+   * The pictures and the voice notes of the conversation.
+   *
+   * They are stored on the message, not in the files table, so they
+   * would have been left behind even after the files table was
+   * cleaned.
+   */
+  const media = await db
+    .select({ mediaUrl: messages.mediaUrl })
+    .from(messages)
+    .where(
+      personaId === undefined
+        ? eq(messages.userId, userId)
+        : and(eq(messages.userId, userId), eq(messages.personaId, personaId)),
+    );
+  for (const message of media) {
+    const url = message.mediaUrl;
+    if (!url) continue;
+    // The url is a path: "/uploads/chat/1/2/x.png".
+    const marker = "/uploads/";
+    const at = url.indexOf(marker);
+    if (at === -1) continue;
+    keys.add(url.slice(at + marker.length));
+  }
+
+  return [...keys];
+}
+
+/**
+ * Removes the files of a deleted account or persona.
+ *
+ * A file that is already gone is not an error: the point is that it is
+ * not there.
+ */
+async function removeStoredFiles(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const { storageDelete } = await import("./storage");
+  await Promise.all(keys.map((key) => storageDelete(key).catch(() => false)));
+}
+
 export async function deleteUserAccount(id: number) {
+  /**
+   * The files on disk.
+   *
+   * The rows are deleted and the bytes are not: so the uploaded
+   * photographs and the extracted chat logs stayed in the uploads
+   * directory, under the user's own id, after the account was gone.
+   * Nothing read them again and nothing cleaned them up.
+   *
+   * So the keys are collected before the rows go, and the files are
+   * removed after.
+   */
+  const storedFiles = await collectStoredFiles(id);
+
   await withTransaction(async (tx) => {
     await tx.delete(channelBindings).where(eq(channelBindings.userId, id));
     await tx.delete(channelDefaultPersonas).where(eq(channelDefaultPersonas.userId, id));
@@ -944,6 +1024,8 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(personas).where(eq(personas.userId, id));
     await tx.delete(users).where(eq(users.id, id));
   });
+
+  await removeStoredFiles(storedFiles);
 }
 
 export async function getAccountStats(userId: number) {
@@ -1215,6 +1297,15 @@ export async function deletePersona(id: number, userId: number) {
   const owned = await getPersonaById(id, userId);
   if (!owned) throw new Error("Persona not found");
 
+  /**
+   * The files on disk.
+   *
+   * The rows are deleted and the bytes are not: so the uploaded
+   * photographs and the extracted chat logs stayed in the uploads
+   * directory after the persona was gone.
+   */
+  const storedFiles = await collectStoredFiles(userId, id);
+
   await withTransaction(async (tx) => {
     await tx.delete(channelBindings).where(and(eq(channelBindings.personaId, id), eq(channelBindings.userId, userId)));
     await tx.delete(channelDefaultPersonas).where(and(eq(channelDefaultPersonas.personaId, id), eq(channelDefaultPersonas.userId, userId)));
@@ -1241,6 +1332,8 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(wechatBindings).where(and(eq(wechatBindings.personaId, id), eq(wechatBindings.userId, userId)));
     await tx.delete(personas).where(and(eq(personas.id, id), eq(personas.userId, userId)));
   });
+
+  await removeStoredFiles(storedFiles);
 }
 
 // ─── PersonaFile helpers ────────────────────────────────────────────────────

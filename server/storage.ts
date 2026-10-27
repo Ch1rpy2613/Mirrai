@@ -26,6 +26,38 @@ export async function storagePut(
   return { key, url };
 }
 
+/**
+ * Removes a stored file.
+ *
+ * The rows were deleted and the bytes were not: so deleting a persona
+ * — or an account — left the uploaded photographs and the extracted
+ * files on the disk, in the uploads directory, under the user's own
+ * id. Nothing ever read them again and nothing ever cleaned them up.
+ *
+ * The key is validated the same way it is on the way in, so this can
+ * only ever remove a file inside the uploads directory.
+ *
+ * A file that is already gone is not an error: the point is that it is
+ * not there.
+ */
+export async function storageDelete(relKey: string): Promise<boolean> {
+  const key = relKey.replace(/^\/+/, "");
+  let filePath: string;
+  try {
+    filePath = resolveUploadPath(ENV.uploadDir, key);
+  } catch {
+    // A key that would escape the uploads directory is not ours to
+    // remove.
+    return false;
+  }
+  try {
+    await fs.promises.unlink(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function storageGet(
   relKey: string
 ): Promise<{ key: string; url: string }> {

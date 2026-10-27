@@ -115,3 +115,36 @@ describe("deleting a persona cleans up after it", () => {
     expect(match?.[0]).toContain("withTransaction");
   });
 });
+
+describe("deleting a user removes their files from the disk", () => {
+  /**
+   * The rows were deleted and the bytes were not.
+   *
+   * So the uploaded photographs and the extracted chat logs stayed in
+   * the uploads directory, under the user's own id, after the account
+   * was gone. Nothing read them again and nothing cleaned them up.
+   */
+  it("removes the uploaded files of the account", () => {
+    const match = /export async function deleteUserAccount\([\s\S]*?\}\n/.exec(db);
+    expect(match?.[0]).toContain("removeStoredFiles");
+  });
+
+  it("removes the uploaded files of the persona", () => {
+    const match = /export async function deletePersona\([\s\S]*?\}\n/.exec(db);
+    expect(match?.[0]).toContain("removeStoredFiles");
+  });
+
+  it("collects the keys before the rows are gone", () => {
+    /**
+     * The keys come from the files table and from the media of the
+     * messages — so they have to be read before the rows are deleted.
+     */
+    const match = /export async function deleteUserAccount\([\s\S]*?\}\n/.exec(db);
+    const body = match?.[0] ?? "";
+    const collected = body.indexOf("collectStoredFiles");
+    const deleted = body.indexOf("tx.delete(personaFiles)");
+    expect(collected).toBeGreaterThan(-1);
+    expect(deleted).toBeGreaterThan(-1);
+    expect(collected).toBeLessThan(deleted);
+  });
+});
