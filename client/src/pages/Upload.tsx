@@ -199,7 +199,17 @@ export default function Upload() {
    * same name uploaded in the same millisecond were **one row** — and
    * the row of the first one was deleted when the second one finished.
    */
-  const [uploadingFiles, setUploadingFiles] = useState<Record<string, { name: string; status: "uploading" | "done" | "error" }>>({});
+  /**
+   * The uploads that are on their way, and the ones that failed.
+   *
+   * The file itself is kept for the failed ones — so the row can offer
+   * "try it again" instead of making the user find the file again.
+   */
+  const [uploadingFiles, setUploadingFiles] = useState<Record<string, {
+    name: string;
+    status: "uploading" | "done" | "error";
+    file?: File;
+  }>>({});
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /* The distillation preset this run uses. It is remembered on the
@@ -350,7 +360,7 @@ export default function Upload() {
         toast.error(t("upload.fileTooLarge", { name: file.name }));
         continue;
       }
-      setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "uploading" } }));
+      setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "uploading", file } }));
       try {
         const content = await fileToBase64(file);
         await uploadMutation.mutateAsync({
@@ -374,10 +384,50 @@ export default function Upload() {
       } catch {
         // The failure is kept, so the row says what happened. It goes
         // when the page is left.
-        setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "error" } }));
+        //
+        // The file is kept with it — so the row can offer to try it
+        // again. It used to be thrown away: the row could only be
+        // dismissed, so a file that failed because the network was
+        // shaky had to be found and chosen all over again.
+        setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "error", file } }));
       }
     }
   }, [personaId, uploadMutation, refetchFiles, t]);
+
+  /**
+   * Try one file again.
+   *
+   * The row's own file is used — the same one that failed — so the
+   * retry is the same upload, not a new one.
+   */
+  const retryUpload = useCallback(async (key: string) => {
+    const entry = uploadingFiles[key];
+    if (!entry?.file) return;
+    setUploadingFiles(prev => ({ ...prev, [key]: { ...entry, status: "uploading" } }));
+    try {
+      const file = entry.file;
+      const fileType = detectFileType(file);
+      if (!fileType) {
+        setUploadingFiles(prev => ({ ...prev, [key]: { ...entry, status: "error" } }));
+        toast.error(t("upload.unsupportedType", { name: file.name }));
+        return;
+      }
+      const content = await fileToBase64(file);
+      await uploadMutation.mutateAsync({
+        personaId, fileName: file.name, fileType,
+        fileSize: file.size, fileContent: content, mimeType: getMimeType(file, fileType),
+      });
+      setUploadingFiles(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      toast.success(t("upload.uploadSuccess", { name: file.name }));
+      refetchFiles();
+    } catch {
+      setUploadingFiles(prev => ({ ...prev, [key]: { ...entry, status: "error" } }));
+    }
+  }, [uploadingFiles, personaId, uploadMutation, refetchFiles, t]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -667,6 +717,16 @@ export default function Upload() {
                       {/* A failed upload used to stay in the panel for
                           ever: it could not be cleared and the file
                           could not be tried again from here. */}
+                      {entry.file && (
+                        <button
+                          type="button"
+                          onClick={() => void retryUpload(key)}
+                          aria-label={t("upload.retryFailed", { name: entry.name })}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {t("common.retry")}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setUploadingFiles(prev => {

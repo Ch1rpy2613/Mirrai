@@ -1051,6 +1051,7 @@ export const zh = {
     uploading: "上传中",
     uploadFailed: "上传失败",
     dismissFailed: "不再显示 {{name}} 的上传失败提示",
+    retryFailed: "再试一次上传 {{name}}",
     uploadError: "上传失败：{{message}}",
     uploadSuccess: "{{name}} 上传成功",
     analysisStarted: "AI 解析已开始",

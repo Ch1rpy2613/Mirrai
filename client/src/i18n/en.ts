@@ -1056,6 +1056,7 @@ export const en = {
     uploading: "Uploading",
     uploadFailed: "Upload failed",
     dismissFailed: "Hide the failed upload of {{name}}",
+    retryFailed: "Try uploading {{name}} again",
     uploadError: "Upload failed: {{message}}",
     uploadSuccess: "{{name}} uploaded",
     analysisStarted: "The AI analysis has started",

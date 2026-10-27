@@ -127,6 +127,35 @@ describe("the files that are on their way", () => {
     });
   });
 
+  it("offers to try a failed upload again", async () => {
+    /**
+     * The failed row could only be dismissed — so a file that failed
+     * because the network was shaky had to be found and chosen all
+     * over again.
+     */
+    vi.stubGlobal("FileReader", FakeFileReader);
+    // The first upload fails.
+    upload.mockRejectedValueOnce(new Error("the network went away"));
+    render(<Upload />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [makeFile("notes.txt")] } });
+
+    const retry = await screen.findByRole("button", {
+      name: translate("zh", "upload.retryFailed", { name: "notes.txt" }),
+    });
+
+    // And it works: the same file goes up again.
+    upload.mockImplementation(() => Promise.resolve({}));
+    fireEvent.click(retry);
+
+    await waitFor(() => {
+      expect(upload).toHaveBeenCalledTimes(2);
+    });
+    const last = upload.mock.calls[upload.mock.calls.length - 1][0] as any;
+    expect(last.fileName).toBe("notes.txt");
+  });
+
   it("shows the file's own name, not the row's key", async () => {
     vi.stubGlobal("FileReader", FakeFileReader);
     render(<Upload />);
