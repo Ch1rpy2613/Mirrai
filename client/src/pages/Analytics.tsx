@@ -273,9 +273,29 @@ export default function Analytics() {
           <ChartCard title={t("analytics.hourlyDistribution")}>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={hourlyData.filter((_, i) => i % 2 === 0)}>
+                {/**
+                 * All twenty-four hours are plotted.
+                 *
+                 * Every *other* hour used to be dropped — so a user who
+                 * talks at one, three or five in the morning was shown a
+                 * chart that said they never talk then, and the hours
+                 * the server had counted were simply not there.
+                 *
+                 * The labels are what get thinned: an hour's worth of
+                 * ticks around a small circle cannot all be read, so
+                 * every second one is left out and the shape of the
+                 * radar keeps the whole day.
+                 */}
+                <RadarChart data={hourlyData}>
                   <PolarGrid stroke="var(--color-border)" />
-                  <PolarAngleAxis dataKey="hour" tick={{ fontSize: 9 }} stroke="var(--color-muted-foreground)" />
+                  <PolarAngleAxis
+                    dataKey="hour"
+                    tick={{ fontSize: 9 }}
+                    stroke="var(--color-muted-foreground)"
+                    tickFormatter={(value: unknown, index: number) =>
+                      index % 2 === 0 ? String(value) : ""
+                    }
+                  />
                   <Radar dataKey="count" stroke="var(--color-chart-1)" fill="var(--color-chart-1)" fillOpacity={0.22} />
                 </RadarChart>
               </ResponsiveContainer>

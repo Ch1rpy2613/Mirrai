@@ -32,6 +32,28 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+/**
+ * What the radar chart was given.
+ *
+ * The chart is asked for the hours of the day — and the hours it was
+ * given were every *other* one. So a user who talks at one, three or
+ * five in the morning was shown a chart that said they never talk then,
+ * and the messages the server had counted were not on it.
+ */
+let radarData: { hour: string; count: number }[] = [];
+
+vi.mock("recharts", async (importOriginal) => {
+  const original = (await importOriginal()) as any;
+  const Actual = original.RadarChart;
+  return {
+    ...original,
+    RadarChart: (props: any) => {
+      radarData = props.data;
+      return Actual ? <Actual {...props} /> : null;
+    },
+  };
+});
+
 /** The sign-in request's answer. */
 let authError: Error | null = null;
 
@@ -96,5 +118,31 @@ describe("the statistics page", () => {
     render(<Analytics />);
 
     expect(screen.getByText("42")).toBeInTheDocument();
+  });
+
+  it("plots every hour of the day, not every other one", () => {
+    /**
+     * Messages sent at 1am, 3am and 5am.
+     */
+    overview.data = {
+      stats: { totalMessages: 3, activeDays: 1, longestStreak: 1, avgPerDay: 3 },
+      messageVolume: [],
+      emotionTimeline: [],
+      moods: [],
+      hourlyDistribution: [
+        { hour: 1, count: 4 },
+        { hour: 3, count: 7 },
+        { hour: 5, count: 2 },
+      ],
+    };
+
+    render(<Analytics />);
+
+    // Twenty-four hours.
+    expect(radarData).toHaveLength(24);
+    // And the odd ones are there, with the counts the server sent.
+    expect(radarData.find((row) => row.hour === "1:00")?.count).toBe(4);
+    expect(radarData.find((row) => row.hour === "3:00")?.count).toBe(7);
+    expect(radarData.find((row) => row.hour === "5:00")?.count).toBe(2);
   });
 });
