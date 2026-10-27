@@ -224,9 +224,16 @@ def fetch_messages(page, chat_name: str, target_name: str, limit: int = 500) -> 
     time.sleep(2)
 
     # 提取消息
+    # The name is written into the script as a JSON string, so it is a
+    # *value* and never a piece of code.
+    #
+    # It used to be interpolated straight into a JavaScript string
+    # literal: a name with a quote in it broke the script, and a name
+    # written as code ran in the logged-in page.
+    target_literal = json.dumps(target_name, ensure_ascii=True)
     messages = page.evaluate(f"""
         () => {{
-            const target = "{target_name}";
+            const target = {target_literal};
             const results = [];
 
             // 常见的消息 DOM 结构

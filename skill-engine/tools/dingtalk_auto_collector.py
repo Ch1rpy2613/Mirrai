@@ -751,9 +751,18 @@ def collect_messages_browser(
         time.sleep(2)
 
         # 提取消息
+        # The name is written into the script as a JSON string, so it is
+        # a *value* and never a piece of code.
+        #
+        # It used to be interpolated straight into a JavaScript string
+        # literal: a name with a quote in it broke the script — so the
+        # collection of John "JD" Doe collected nothing at all — and a
+        # name written as code ran in the logged-in page, where the
+        # session cookie was.
+        target_literal = json.dumps(name, ensure_ascii=True)
         raw_messages = page.evaluate(f"""
             () => {{
-                const target = "{name}";
+                const target = {target_literal};
                 const results = [];
                 const selectors = [
                     '.message-item-content-container',
