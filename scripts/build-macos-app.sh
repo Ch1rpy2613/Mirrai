@@ -75,23 +75,13 @@ log "Copying PostgreSQL binaries..."
 PG_DEST="$RESOURCES/pgsql"
 mkdir -p "$PG_DEST/bin" "$PG_DEST/lib" "$PG_DEST/share"
 
-PG_BINS="postgres pg_ctl initdb createdb psql pg_isready"
-for bin in $PG_BINS; do
-  if [ -f "$PG_PREFIX/bin/$bin" ]; then
-    cp "$PG_PREFIX/bin/$bin" "$PG_DEST/bin/"
-    chmod +x "$PG_DEST/bin/$bin"
-  else
-    log "Warning: $bin not found, skipping"
-  fi
-done
-
-# Copy shared libraries
-cp -R "$PG_PREFIX/lib/"*.dylib "$PG_DEST/lib/" 2>/dev/null || true
-cp -R "$PG_PREFIX/lib/postgresql" "$PG_DEST/lib/" 2>/dev/null || true
-
-# Copy share files (needed for initdb)
-cp -R "$PG_PREFIX/share/postgresql@16/"* "$PG_DEST/share/" 2>/dev/null || \
-  cp -R "$PG_PREFIX/share/"* "$PG_DEST/share/" 2>/dev/null || true
+# The PostgreSQL half of the bundle.
+#
+# It is a script of its own because every failure in here used to be
+# swallowed: the build went on, the .dmg was made, and the app failed
+# on the user's own machine — at first launch, with a message about a
+# missing file and nothing to connect it to the build.
+bash "$SCRIPT_DIR/macos/copy-postgres-files.sh" "$PG_PREFIX" "$PG_DEST"
 
 # ─── Step 3b: Bundle ALL Homebrew dependencies (recursive) ──────────────────
 log "Collecting all Homebrew library dependencies..."
