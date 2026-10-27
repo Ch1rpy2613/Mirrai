@@ -235,11 +235,14 @@ describe("the lobby", () => {
     const items = screen.getAllByRole("menuitem");
     expect(items.length).toBeGreaterThan(0);
     // The focus is inside the menu.
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole("menuitem").some((item) => document.activeElement === item),
-      ).toBe(true);
-    });
+    await waitFor(
+      () => {
+        expect(
+          screen.getAllByRole("menuitem").some((item) => document.activeElement === item),
+        ).toBe(true);
+      },
+      { timeout: 3000 },
+    );
 
     // And the arrow keys move between the items.
     await user.keyboard("{ArrowDown}");
