@@ -143,12 +143,44 @@ let starting: Promise<RedisHandle | null> | null = null;
 let managedChild: ChildProcess | null = null;
 
 /**
+ * Whether a handle can still be used.
+ *
+ * A client whose connection has gone throws on the first command — with
+ * a `ClientClosedError` — so a handle like that must not be handed out
+ * as though it worked.
+ */
+export function isRedisUsable(candidate: RedisHandle | null | undefined): boolean {
+  if (!candidate) return false;
+  try {
+    return candidate.client.isOpen === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Connects to a Redis, or returns null when there is none to be had.
  *
  * Never throws: the app must start whether or not Redis is there.
  */
 export async function connectRedis(): Promise<RedisHandle | null> {
-  if (handle) return handle;
+  /**
+   * The handle, if it is still alive.
+   *
+   * It used to be returned as it was. So when the connection went away
+   * — the Redis was killed, the machine rebooted, the client was closed
+   * — every later call handed back a handle whose client was closed,
+   * and the first command on it threw. The scheduler's tick died with
+   * it: the reminders, the letters and the proactive messages were all
+   * skipped, and the module's own comment says the sweep has to happen
+   * whether or not there is a Redis behind it.
+   *
+   * The handle is kept — the reconnect machinery brings it back when
+   * the store comes back — but it is not handed out while it is dead.
+   */
+  if (handle) {
+    return isRedisUsable(handle) ? handle : null;
+  }
   if (starting) return starting;
   // The last look found nothing, so there is no point looking again this
   // soon.
@@ -586,13 +618,33 @@ export async function withRedisLock<T>(
   ttlMs: number,
   fn: () => Promise<T>,
 ): Promise<T | null> {
-  const redis = handle ?? (await connectRedis());
+  const redis = await connectRedis();
   if (!redis) return null;
 
   const key = `mirrai:lock:${name}`;
   const token = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 
-  const taken = await redis.client.set(key, token, { NX: true, PX: ttlMs });
+  let taken: string | null;
+  try {
+    taken = await redis.client.set(key, token, { NX: true, PX: ttlMs });
+  } catch (e) {
+    /**
+     * The store went away between the check and the command.
+     *
+     * It used to throw, and the throw went all the way up to the
+     * scheduler — so a Redis that died took the reminders, the letters
+     * and the proactive messages with it, and none of them went out for
+     * as long as the store was down.
+     *
+     * A lock that cannot be taken is not a lock. The caller decides
+     * what to do without one.
+     */
+    console.warn(
+      "[redis] The lock could not be taken — the shared store is unavailable:",
+      e instanceof Error ? e.message : String(e),
+    );
+    return null;
+  }
   if (taken !== "OK") return null;
 
   /**

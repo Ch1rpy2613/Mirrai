@@ -15,7 +15,7 @@
 import { runReminderSweep } from "./reminders";
 import { answerDueLetters } from "../chat/letters";
 import { runProactiveSweep } from "../chat/proactive-sweep";
-import { connectRedis, withRedisLock } from "../_core/redis";
+import { connectRedis, withRedisLock, isRedisUsable } from "../_core/redis";
 
 const TICK_INTERVAL_MS = 60_000;
 
@@ -88,7 +88,7 @@ async function tick(): Promise<void> {
  * from doing the same work twice; with one copy there is no second copy to
  * stop, so the tick simply runs.
  */
-async function runTick(): Promise<void> {
+export async function runSchedulerTick(): Promise<void> {
   if (sweeping) {
     console.warn("[Scheduler] The previous sweep is still running — this tick is skipped.");
     return;
@@ -96,11 +96,30 @@ async function runTick(): Promise<void> {
   sweeping = true;
   try {
     const shared = await connectRedis().catch(() => null);
-    if (!shared) {
+    if (!shared || !isRedisUsable(shared)) {
       await tick();
       return;
     }
-    await withRedisLock("scheduler", LOCK_TTL_MS, tick);
+    /**
+     * The store can die between the check above and the command.
+     *
+     * It used to kill the whole tick when it did: the lock could not be
+     * taken, the error went up, and the reminders, the letters and the
+     * proactive messages were all skipped — for as long as the store
+     * was down, which is exactly as long as somebody was waiting for
+     * an anniversary.
+     *
+     * So the lock is not the only way in. If it could not be taken and
+     * the store is gone, the sweep runs anyway: there is no second copy
+     * of the app to stop.
+     */
+    const ran = await withRedisLock("scheduler", LOCK_TTL_MS, tick);
+    if (ran === null && !isRedisUsable(shared)) {
+      console.warn(
+        "[Scheduler] The shared store went away — sweeping without the lock.",
+      );
+      await tick();
+    }
   } finally {
     sweeping = false;
   }
@@ -116,7 +135,7 @@ export function startScheduler(): void {
   if (timer) return;
 
   timer = setInterval(() => {
-    runTick().catch((e) => console.warn("[Scheduler] The tick failed:", e));
+    runSchedulerTick().catch((e) => console.warn("[Scheduler] The tick failed:", e));
   }, TICK_INTERVAL_MS);
 
   // Do not hold the process open just for the scheduler.
@@ -124,7 +143,7 @@ export function startScheduler(): void {
 
   firstSweep = setTimeout(() => {
     firstSweep = null;
-    runTick().catch((e) => console.warn("[Scheduler] The first sweep failed:", e));
+    runSchedulerTick().catch((e) => console.warn("[Scheduler] The first sweep failed:", e));
   }, 10_000);
   firstSweep.unref?.();
 
