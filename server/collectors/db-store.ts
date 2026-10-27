@@ -14,6 +14,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { collectionSources } from "../../drizzle/schema";
 import { decryptSecret, encryptSecret } from "../_core/crypto";
+import { createHash } from "node:crypto";
 import * as db from "../db";
 import type { CollectedMessage } from "./types";
 import type { CollectorAuthState, CollectorCredentials, CollectInput, SourceConnector } from "./types";
@@ -188,6 +189,18 @@ function idempotencyKey(source: string, timestamp: Date | null, content: string)
 }
 
 /**
+ * The key, shortened.
+ *
+ * The key itself is the source, the timestamp and the whole content —
+ * and the content can be long, so it is hashed before it is stored and
+ * indexed. The hash is the same on every side: it is the same string
+ * the importer works out, so it does not have to be reversible.
+ */
+function hashKey(key: string): string {
+  return createHash("md5").update(key).digest("hex");
+}
+
+/**
  * The idempotency key of a message that has no timestamp.
  *
  * The timestamp is what keeps two messages of the same minute apart —
@@ -282,6 +295,13 @@ export async function importCollectedMessages(params: {
       role: message.role,
       content: message.content,
       timestamp,
+      /**
+       * The key, stored with the message.
+       *
+       * The database refuses the second copy of one — so two importers
+       * running at once cannot both write the same history.
+       */
+      idempotencyKey: hashKey(key),
     });
   }
   if (rows.length === 0) return 0;

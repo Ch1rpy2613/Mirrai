@@ -1029,6 +1029,25 @@ export const collectedMessages = pgTable("collected_messages", {
   content: text("content").notNull(),
   timestamp: timestamp("timestamp"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /**
+   * The key that says "this message is already here".
+   *
+   * The guarantee that the same sentence is stored once used to rest
+   * entirely on a read: the importer read the keys that were there,
+   * worked out which of the new ones were new, and wrote the rest.
+   * Nothing in the database stopped two of those from running at once —
+   * so two instances of the app, or a second copy of the app on the
+   * same database, both read the same empty table and both wrote the
+   * same history. And the history was duplicated for ever after.
+   *
+   * So the key is stored, and the database refuses the second copy.
+   *
+   * It is nullable, and the index only covers the rows that have one:
+   * the rows that were collected before this column existed have none,
+   * and giving them one would mean guessing at which of two identical
+   * messages came first.
+   */
+  idempotencyKey: text("idempotencyKey"),
 }, (table) => ({
   /**
    * The collected history of one persona.
@@ -1038,6 +1057,12 @@ export const collectedMessages = pgTable("collected_messages", {
    * sequential scan of every row of every user on the instance.
    */
   personaUserIdx: index("collected_messages_persona_user_idx").on(table.personaId, table.userId),
+  /**
+   * One copy of each message, enforced by the database.
+   */
+  idempotencyUniqueIdx: uniqueIndex("collected_messages_idempotency_unique_idx")
+    .on(table.personaId, table.userId, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} IS NOT NULL`),
 }));
 
 export type CollectedMessage = typeof collectedMessages.$inferSelect;

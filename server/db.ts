@@ -4059,7 +4059,17 @@ export async function createCollectedMessages(
   await db.transaction(async (tx) => {
     for (let start = 0; start < rows.length; start += chunkSize) {
       const chunk = rows.slice(start, start + chunkSize);
-      await tx.insert(collectedMessages).values(chunk);
+      /**
+       * The second copy of a message is not written.
+       *
+       * The importer already checks which messages are new — but that
+       * check is a read, and two of them running at once both read the
+       * same table and both found the same messages new. So the
+       * database refuses the second copy: the unique index on the
+       * idempotency key turns "the same sentence stored twice" into
+       * "the second copy is quietly dropped".
+       */
+      await tx.insert(collectedMessages).values(chunk).onConflictDoNothing();
     }
   });
   return rows.length;
@@ -4097,7 +4107,22 @@ export async function getCollectedMessageKeys(
       eq(collectedMessages.personaId, personaId),
       eq(collectedMessages.userId, userId),
       eq(collectedMessages.source, source),
-    ));
+    ))
+    /**
+     * In the order they were written.
+     *
+     * The order was not specified — so the database was free to return
+     * the rows in any order. And the order is what tells the first
+     * "嗯" from the second: a message without a timestamp is keyed by
+     * how many times that same text has been seen. So a re-collection
+     * could number the "嗯"s differently from the first collection, the
+     * keys would not match, and the messages would be stored a second
+     * time.
+     *
+     * A chat log is mostly repeated messages, so this was not a rare
+     * case.
+     */
+    .orderBy(collectedMessages.id);
 }
 
 /**
