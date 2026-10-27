@@ -11,22 +11,30 @@ import { getDaysUntilAnniversary } from "./Lobby";
 
 describe("the days until the anniversary", () => {
   it("is zero on the day itself", () => {
-    // A fixed "today" is needed, so the test is about the arithmetic
-    // and not about the day it happens to run.
-    const today = new Date();
-    const from = today.toISOString().slice(0, 10);
-    expect(getDaysUntilAnniversary(from, "Asia/Shanghai")).toBe(0);
+    // The clock is pinned: the answer depends on which day it is, and
+    // a test that depends on the hour it happens to run at is a test
+    // that fails at midnight.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-14T04:00:00Z"));
+    try {
+      // Noon in Shanghai on the fourteenth.
+      expect(getDaysUntilAnniversary("2026-03-14", "Asia/Shanghai")).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("counts the days, not the milliseconds", () => {
-    const today = new Date();
-    const from = new Date(today.getTime() - 10 * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    // Ten days back is an anniversary ten days *ago* — so it is next
-    // year, which is more than thirty days away, and the banner is
-    // not shown.
-    expect(getDaysUntilAnniversary(from, "Asia/Shanghai")).toBeNull();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-14T04:00:00Z"));
+    try {
+      // Ten days back is an anniversary ten days *ago* — so it is next
+      // year, which is more than thirty days away, and the banner is
+      // not shown.
+      expect(getDaysUntilAnniversary("2026-03-04", "Asia/Shanghai")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("uses the user's zone, and not the browser's", () => {

@@ -169,12 +169,20 @@ def to_json_messages(records: list, source: str = SOURCE_NAME) -> list:
         if key in seen:
             continue
         seen.add(key)
-        messages.append({
+        message = {
             "role": "assistant",
             "content": content,
             "timestamp": timestamp,
             "source": source,
-        })
+        }
+        # The page's own id, when there is one.
+        #
+        # The server uses it to tell one message from another when the
+        # message has no time of its own.
+        message_id = str(record.get("id", "") or "")
+        if message_id:
+            message["id"] = message_id
+        messages.append(message)
     return messages
 
 
@@ -974,12 +982,21 @@ def collect_messages_browser(
                     const sender = senderEl ? senderEl.innerText.trim() : '';
                     const content = contentEl ? contentEl.innerText.trim() : '';
                     const time = timeEl ? timeEl.innerText.trim() : '';
+                    // The page's own id for this message.
+                    //
+                    // A message with no time can only be told apart by
+                    // its text and by how many times that text has been
+                    // seen — and the collector returns a *window*, not
+                    // the whole history, so the window moves and the
+                    // new message is not imported. The id is what says
+                    // "this is this one".
+                    const id = item.getAttribute('data-message-id') || '';
 
                     if (!content) return;
                     if (target && !sender.includes(target)) return;
                     if (['[图片]','[文件]','[表情]','[语音]'].includes(content)) return;
 
-                    results.push({{ sender, content, time }});
+                    results.push({{ sender, content, time, id }});
                 }});
 
                 return results.slice(-{msg_limit});

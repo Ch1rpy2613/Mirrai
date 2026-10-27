@@ -4147,6 +4147,17 @@ export interface CollectedMessageKey {
   source: string | null;
   timestamp: Date | null;
   content: string;
+  /**
+   * The source's own id for the message.
+   *
+   * It is what tells one message from another when the message has no
+   * time of its own. The rows collected before the column existed have
+   * none — and they are matched the way they were written.
+   *
+   * It is not called `id`: the row has an `id` of its own, and the two
+   * are nothing alike.
+   */
+  sourceMessageId?: string | null;
 }
 
 /**
@@ -4167,6 +4178,7 @@ export async function getCollectedMessageKeys(
     source: collectedMessages.source,
     timestamp: collectedMessages.timestamp,
     content: collectedMessages.content,
+    sourceMessageId: collectedMessages.sourceMessageId,
   })
     .from(collectedMessages)
     .where(and(

@@ -181,12 +181,20 @@ def to_json_messages(records: list, source: str = SOURCE_NAME) -> list:
         if key in seen:
             continue
         seen.add(key)
-        messages.append({
+        message = {
             "role": role,
             "content": content,
             "timestamp": timestamp,
             "source": source,
-        })
+        }
+        # The source's own id, when there is one.
+        #
+        # The server uses it to tell one message from another when the
+        # message has no time of its own.
+        message_id = str(record.get("id", "") or "")
+        if message_id:
+            message["id"] = message_id
+        messages.append(message)
     return messages
 
 
@@ -746,7 +754,18 @@ def fetch_messages_from_chat(
                 except Exception:
                     pass
 
-            messages.append({"content": content, "time": ts})
+            # The source's own id for this message.
+            #
+            # A message with no time can only be told apart by its text
+            # and by how many times that text has been seen — and the
+            # collector returns a *window*, not the whole history, so
+            # the window moves and the new message is not imported.
+            # The id is what says "this is this one".
+            messages.append({
+                "content": content,
+                "time": ts,
+                "id": str(item.get("message_id", "") or ""),
+            })
 
         pages += 1
         page_token = next_page_token(data, page_token, pages)
@@ -832,6 +851,9 @@ def fetch_p2p_messages(
             messages.append({
                 "content": content,
                 "time": ts,
+                # The source's own id for this message — see the note in
+                # the group fetch above.
+                "id": str(item.get("message_id", "") or ""),
                 "sender_id": sender_id,
                 "is_target": is_target,
             })

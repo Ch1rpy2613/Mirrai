@@ -40,6 +40,21 @@ export interface CollectedMessage {
   /** ISO 8601 if known. */
   timestamp?: string;
   source?: string;
+  /**
+   * The source's own id for this message.
+   *
+   * The timestamp is what tells two messages apart — and a message
+   * without one can only be told apart by its text and by how many
+   * times that text has been seen. The collectors return a *window*,
+   * not the whole history, so the window moves: the new message gets
+   * the occurrence number of one that is already stored, and it is
+   * never imported.
+   *
+   * The id is what says "this is this one". It is the source's own
+   * identifier — Feishu's `message_id`, Slack's `ts`, the page's
+   * `data-message-id` — and it does not change.
+   */
+  id?: string;
 }
 
 export interface CollectResult {

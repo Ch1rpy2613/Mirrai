@@ -594,7 +594,33 @@ function toMessage(
     timeZone,
   );
   if (timestamp) message.timestamp = timestamp;
+  /**
+   * The source's own id for the message.
+   *
+   * It is what tells one message from another when the message has no
+   * time of its own — the collectors return a window, not the whole
+   * history, so the window moves and the count of "how many times
+   * this text has been seen" no longer lines up.
+   */
+  const id = extractMessageId(record);
+  if (id) message.id = id;
   return message;
+}
+
+/**
+ * The source's own id for a message.
+ *
+ * The collectors write it as `id`; a payload in some other shape may
+ * write it as `message_id` or `msg_id`. An empty string is not an id —
+ * it is the absence of one.
+ */
+function extractMessageId(record: Record<string, unknown>): string | undefined {
+  for (const key of ["id", "message_id", "messageId", "msg_id"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return undefined;
 }
 
 /** Parses a JSONL payload (one JSON object per line). */

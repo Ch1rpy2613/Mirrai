@@ -221,6 +221,23 @@ function untimedKey(source: string, content: string, occurrence: number): string
 }
 
 /**
+ * The key of a message that is identified by the source's own id.
+ *
+ * The timestamp is what tells two messages apart — and a message without
+ * one could only be told apart by its text and by how many times that
+ * text had been seen. The collectors return a *window*, not the whole
+ * history, so the window moves: a new message with no time of its own
+ * got the occurrence number of one that was already stored, and it was
+ * never imported.
+ *
+ * The source's own id — Feishu's `message_id`, Slack's `ts`, the
+ * page's `data-message-id` — does not move.
+ */
+function sourceIdKey(source: string, id: string): string {
+  return `${source}#id#${id}`;
+}
+
+/**
  * Imports collected messages into the persona.
  *
  * The import is idempotent: a message that is already there — same source,
@@ -247,9 +264,21 @@ export async function importCollectedMessages(params: {
 
   const seen = new Set<string>();
   /**
+   * The keys of the rows that were collected before the source's own id
+   * was stored.
+   *
+   * They are kept apart, because they are matched the old way: by the
+   * text and by how many times that text has been seen. And the old way
+   * is what they were written with — so a row without an id is still
+   * recognised by its old key, and a collection of the same history
+   * does not import it twice.
+   */
+  const legacyKeys = new Set<string>();
+  /**
    * How many of each untimed message are already there.
    *
-   * The count is what tells the first "嗯" from the second.
+   * The count is what tells the first "嗯" from the second — for the
+   * rows that have no id of their own.
    */
   const untimedCounts = new Map<string, number>();
   for (const m of existing) {
@@ -258,9 +287,16 @@ export async function importCollectedMessages(params: {
       continue;
     }
     const source = m.source ?? params.source;
+    if (m.sourceMessageId) {
+      // The row knows which message it is.
+      seen.add(sourceIdKey(source, m.sourceMessageId));
+      continue;
+    }
     const occurrence = untimedCounts.get(m.content) ?? 0;
     untimedCounts.set(m.content, occurrence + 1);
-    seen.add(untimedKey(source, m.content, occurrence));
+    const key = untimedKey(source, m.content, occurrence);
+    legacyKeys.add(key);
+    seen.add(key);
   }
 
   /**
@@ -277,30 +313,7 @@ export async function importCollectedMessages(params: {
    * It starts at zero: the first "嗯" of the batch is the first "嗯"
    * that was stored, so a re-collected history matches itself.
    *
-   * A known limit, and it is a real one.
-   *
-   * A message with no time can only be told apart by its text and by
-   * how many times that text has been seen. So when the collector
-   * returns a *window* rather than the whole history — which is what
-   * they all do, since they ask for the most recent messages — the
-   * window has moved, and the first "嗯" of the new window gets the
-   * occurrence number of the first "嗯" that was stored. So a new
-   * untimed message is not imported.
-   *
-   * The other way round is worse: counting from what is already
-   * stored would import a *duplicate* every time the same history was
-   * collected again — and "the same sentence is stored once" is the
-   * promise this whole thing is about.
-   *
-   * So the promise is kept and the narrow loss is accepted. The
-   * messages that have a time — nearly all of them, because the
-   * collectors take the time from the source — are keyed by it, and
-   * they are exact.
-   *
-   * Doing it properly needs the source's own message id carried
-   * through the payload and stored in a column: that is a change to
-   * three collectors, to the payload contract and to the schema, and
-   * it is not a thing to do in passing.
+   * It is only used for the messages that have no id of their own.
    */
   const batchCounts = new Map<string, number>();
   for (const message of params.messages) {
@@ -308,6 +321,28 @@ export async function importCollectedMessages(params: {
     let key: string;
     if (timestamp) {
       key = idempotencyKey(params.source, timestamp, message.content);
+    } else if (message.id) {
+      /**
+       * The message knows which one it is.
+       *
+       * The source's own id does not move — so a collector that
+       * returns a *window* rather than the whole history (which is
+       * what they all do, since they ask for the most recent
+       * messages) does not make the new messages look like the old
+       * ones.
+       *
+       * The old key is checked as well: the rows collected before the
+       * id was stored have no id of their own, and they were written
+       * with the old key. So a collection of the same history does not
+       * import them twice.
+       */
+      const idKey = sourceIdKey(params.source, message.id);
+      const occurrence = batchCounts.get(message.content) ?? 0;
+      batchCounts.set(message.content, occurrence + 1);
+      const legacyKey = untimedKey(params.source, message.content, occurrence);
+      if (seen.has(idKey)) continue;
+      if (legacyKeys.has(legacyKey)) continue;
+      key = idKey;
     } else {
       const occurrence = batchCounts.get(message.content) ?? 0;
       batchCounts.set(message.content, occurrence + 1);
@@ -323,6 +358,11 @@ export async function importCollectedMessages(params: {
       role: message.role,
       content: message.content,
       timestamp,
+      /**
+       * The source's own id, so the next collection can tell this
+       * message from another one with the same text.
+       */
+      sourceMessageId: message.id ?? null,
       /**
        * The key, stored with the message.
        *

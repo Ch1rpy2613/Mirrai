@@ -191,12 +191,20 @@ def to_json_messages(records: list, source: str = SOURCE_NAME) -> list:
         if key in seen:
             continue
         seen.add(key)
-        messages.append({
+        message = {
             "role": "assistant",
             "content": content,
             "timestamp": timestamp,
             "source": source,
-        })
+        }
+        # Slack's own id, when there is one.
+        #
+        # The server uses it to tell one message from another when the
+        # message has no time of its own.
+        message_id = str(record.get("id", "") or "")
+        if message_id:
+            message["id"] = message_id
+        messages.append(message)
     return messages
 
 
@@ -718,6 +726,15 @@ def fetch_messages_from_channel(
                 {
                     "content": text,
                     "time": time_str,
+                    # Slack's own id for this message.
+                    #
+                    # A message with no time can only be told apart by
+                    # its text and by how many times that text has been
+                    # seen — and the collector returns a *window*, not
+                    # the whole history, so the window moves and the
+                    # new message is not imported. The id is what says
+                    # "this is this one".
+                    "id": str(ts_raw),
                     "channel": channel_name,
                     "is_thread_starter": is_thread_starter,
                 }
