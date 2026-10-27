@@ -39,6 +39,21 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+/**
+ * The user's own calendar.
+ *
+ * The date of an event is read in the zone the user has chosen — so
+ * the browser's own zone is not the rule.
+ */
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, timezone: "America/New_York" },
+    isAuthenticated: true,
+    loading: false,
+    error: null,
+  }),
+}));
+
 // The real dictionary, so a missing key fails the test rather than
 // rendering an empty label.
 vi.mock("@/contexts/LocaleContext", () => ({
@@ -73,6 +88,18 @@ describe("the relationship timeline", () => {
   it("says so when nothing has been recorded", () => {
     render(<RelationshipTimeline personaId={7} />);
     expect(screen.getByText(translate("zh", "relationship.empty"))).toBeInTheDocument();
+  });
+
+  it("shows the date in the user's own calendar", () => {
+    /**
+     * Three in the morning in Greenwich is ten at night the day before
+     * in New York — so the day an event is filed on depends on whose
+     * calendar it is read in.
+     */
+    query.data = { events: [makeEvent({ happenedAt: "2026-01-02T03:00:00.000Z" })] };
+    render(<RelationshipTimeline personaId={7} />);
+
+    expect(screen.getByText("2026/1/1")).toBeInTheDocument();
   });
 
   it("shows what has been recorded, with its kind", () => {

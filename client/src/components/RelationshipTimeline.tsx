@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { formatInstantInZone } from "@/lib/dates";
 import { RELATIONSHIP_EVENT_KINDS, type RelationshipEventKind } from "@shared/user-side";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +25,16 @@ import CrisisCard from "@/components/CrisisCard";
  */
 export default function RelationshipTimeline({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  /**
+   * The user's own calendar.
+   *
+   * The date was read in the browser's zone — so for a user whose
+   * stored zone and browser zone disagreed, the day they recorded an
+   * event on was shown as the day before, on the same page as the
+   * persona's own timeline, which reads the stored zone.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const utils = trpc.useUtils();
 
   const { data, isLoading, isError } = trpc.relationship.list.useQuery({ personaId });
@@ -105,7 +117,7 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                     </p>
                   )}
                   <p className="text-[0.625rem] text-muted-subtle mt-1">
-                    {new Date(event.happenedAt).toLocaleDateString(locale)}
+                    {formatInstantInZone(event.happenedAt, locale, timezone)}
                   </p>
                 </div>
                 <button
