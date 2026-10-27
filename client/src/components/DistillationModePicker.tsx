@@ -38,6 +38,17 @@ export default function DistillationModePicker({ value, onChange, disabled }: Pr
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"];
     if (!keys.includes(event.key)) return;
+    /**
+     * The same guard the click has.
+     *
+     * The buttons are marked unavailable rather than switched off, so
+     * they keep the focus — and so the arrow keys keep working for the
+     * keyboard user. But the arrow keys were not guarded, so a preset
+     * could be changed while a write was still in flight: two quick
+     * presses sent two writes, and the order the database took them in
+     * decided which one won.
+     */
+    if (disabled) return;
     event.preventDefault();
     const index = DISTILLATION_PRESETS.findIndex((preset) => preset.id === value);
     const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
