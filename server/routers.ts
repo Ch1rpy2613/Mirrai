@@ -3972,56 +3972,62 @@ export const appRouter = router({
             message: copy(input.locale, "errors.evalAlreadyRunning"),
           });
         }
-        const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
-        const messages = rows.map((row) => ({
-          id: row.id,
-          role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
-          content: row.content,
-          timestamp: row.timestamp ?? null,
-        }));
-
-        // The stored cases are the ones that get measured. Cutting a
-        // fresh set every time would measure a different question each
-        // time, and the comparison with the last run would be between
-        // two different things.
-        const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
-        const cases = stored.length
-          ? stored
-          : buildEvalCases(messages, { locale: input.locale });
-        if (!cases.length) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: copy(input.locale, "labels.eval.noCases"),
-          });
-        }
-        if (!stored.length) {
-          // There were none stored, so these are new; they are kept, so
-          // that the next run measures the same lines.
-          await saveEvalCases(
-            input.personaId,
-            ctx.user.id,
-            cases.map((item) => ({
-              context: item.context,
-              expected: item.expected,
-              expectedState: item.expectedState,
-              source: "collected",
-              occurredAt: item.expected.timestamp ?? null,
-            })),
-          );
-        }
-
         /**
-         * The run is claimed.
+         * The run is claimed here, before anything is awaited.
          *
-         * It is claimed here and not before — so the checks above,
-         * which can throw, do not leave the run marked as running for
-         * ever. And there is no `await` between the check and the
-         * claim, so two requests cannot both get past it.
+         * It used to be claimed after the checks — so the comment
+         * claimed there was "no `await` between the check and the
+         * claim". There were four: the collected messages, the stored
+         * cases, the saved cases and the run itself. So two requests
+         * could both get past the check, and a double click started two
+         * runs — twelve model calls each, twice the bill, two rows
+         * written, and the comparison with the last run depending on
+         * which of them finished last.
+         *
+         * The claim is here, and everything below is inside the try, so
+         * a check that throws still gives the run back.
          */
         runningEvals.add(runKey);
-        let metrics: Awaited<ReturnType<typeof runEval>>;
         try {
-          metrics = await runEval({
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const messages = rows.map((row) => ({
+            id: row.id,
+            role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: row.content,
+            timestamp: row.timestamp ?? null,
+          }));
+
+          // The stored cases are the ones that get measured. Cutting a
+          // fresh set every time would measure a different question each
+          // time, and the comparison with the last run would be between
+          // two different things.
+          const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
+          const cases = stored.length
+            ? stored
+            : buildEvalCases(messages, { locale: input.locale });
+          if (!cases.length) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: copy(input.locale, "labels.eval.noCases"),
+            });
+          }
+          if (!stored.length) {
+            // There were none stored, so these are new; they are kept, so
+            // that the next run measures the same lines.
+            await saveEvalCases(
+              input.personaId,
+              ctx.user.id,
+              cases.map((item) => ({
+                context: item.context,
+                expected: item.expected,
+                expectedState: item.expectedState,
+                source: "collected",
+                occurredAt: item.expected.timestamp ?? null,
+              })),
+            );
+          }
+
+          const metrics: Awaited<ReturnType<typeof runEval>> = await runEval({
             persona,
             userId: ctx.user.id,
             cases,
@@ -4029,19 +4035,19 @@ export const appRouter = router({
             variant: input.variant,
             locale: input.locale,
           });
+          // The run is always kept. The comparison with the last run is
+          // only meaningful if there is a last run — and the variant is
+          // stored with it, because a run with the rules switched off is
+          // a different persona and must not be compared against one with
+          // them on.
+          await saveEvalRun(input.personaId, ctx.user.id, {
+            ...metrics,
+            variant: input.variant,
+          }, persona.personaData);
+          return { metrics };
         } finally {
           runningEvals.delete(runKey);
         }
-        // The run is always kept. The comparison with the last run is
-        // only meaningful if there is a last run — and the variant is
-        // stored with it, because a run with the rules switched off is
-        // a different persona and must not be compared against one with
-        // them on.
-        await saveEvalRun(input.personaId, ctx.user.id, {
-          ...metrics,
-          variant: input.variant,
-        }, persona.personaData);
-        return { metrics };
       }),
 
     /**
