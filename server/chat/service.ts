@@ -718,7 +718,7 @@ async function* runConversationTurn(
 
   // A weak signal is ordinary distress, not a crisis: the persona still
   // answers normally and checks in afterwards.
-  const gentleCheckIn = crisis.weakSignal ? buildGentleCheckIn(persona.name, locale) : null;
+  let gentleCheckIn: string | null = crisis.weakSignal ? buildGentleCheckIn(persona.name, locale) : null;
 
   /**
    * The distress is written down.
@@ -747,6 +747,20 @@ async function* runConversationTurn(
         type: "distress",
         severity: "info",
       }).catch((e) => console.warn("[Safety] Failed to record the distress event:", e));
+    } else {
+      /**
+       * The words were said once today.
+       *
+       * The record was already made — but the check-in was appended to
+       * the reply every time, so a person who said "我好累" in three
+       * messages in a row was checked on three times in a row, in the
+       * same words. It reads as a script the app is reading out, and it
+       * is the exact opposite of what it means to be checked on.
+       *
+       * The same policy as the care note: once a day, and then it is
+       * the persona's own words that carry the care.
+       */
+      gentleCheckIn = null;
     }
   }
 

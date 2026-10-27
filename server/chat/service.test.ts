@@ -224,6 +224,55 @@ describe("runConversation", () => {
     expect(done).toBeDefined();
   });
 
+  it("checks on the person once, not once per message", async () => {
+    /**
+     * The record was made once a day — but the check-in was appended to
+     * the reply every time, so a person who said "我好累" in three
+     * messages in a row was checked on three times in a row, in the
+     * same words. It reads as a script the app is reading out, and it
+     * is the exact opposite of what it means to be checked on.
+     */
+    hasSafetyEventSince.mockResolvedValue(true);
+
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "我好累",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    const text = events
+      .filter((e) => e.type === "delta")
+      .map((e: any) => e.text)
+      .join("");
+    expect(text).not.toContain("我在这儿");
+    // The persona still answers.
+    expect(text).toContain("在的。");
+  });
+
+  it("checks on the person the first time they say it today", async () => {
+    hasSafetyEventSince.mockResolvedValue(false);
+
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "我好累",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    const text = events
+      .filter((e) => e.type === "delta")
+      .map((e: any) => e.text)
+      .join("");
+    expect(text).toContain("我在这儿");
+  });
+
   it("does not count a turn that failed as a conversation", async () => {
     // A provider that is having a bad day must not walk the user towards
     // the graduation ritual: the message count is one of its gates.
