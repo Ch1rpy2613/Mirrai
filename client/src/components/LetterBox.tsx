@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { PenLine, Send, Trash2, Clock, X } from "lucide-react";
@@ -117,6 +117,23 @@ export default function LetterBox({ personaId }: { personaId: number }) {
     onError: (e) => toast.error(e.message),
   });
 
+  /**
+   * The older pages are dropped when the first page moves.
+   *
+   * The list is paged: the newest fifty, and then the pages before
+   * them. Writing a letter or deleting one shifts the first page — so
+   * the older pages were left pointing at a boundary that had moved,
+   * and a letter fell between the two: it was on neither page, and it
+   * could never be reached again.
+   *
+   * So the pages go when the list changes. The letter that fell in the
+   * gap is then reachable again — the "load older" button asks for the
+   * page before the oldest one *on the screen now*.
+   */
+  useEffect(() => {
+    setOlder([]);
+  }, [data]);
+
   /** Asks for the page before the oldest one on the screen. */
   const loadOlder = async () => {
     const shown = [...(data?.letters ?? []), ...older];
@@ -141,7 +158,24 @@ export default function LetterBox({ personaId }: { personaId: number }) {
     }
   };
 
-  const letters = [...(data?.letters ?? []), ...older].filter((l: any) => l.kind !== "todo");
+  /**
+   * The two pages, without a letter twice.
+   *
+   * The first page and the older pages can overlap for a moment — the
+   * older pages are dropped when the list changes, but the render
+   * before that has both. So a letter that is on both is shown once.
+   */
+  const letters = (() => {
+    const seen = new Set<number>();
+    const all: any[] = [];
+    for (const letter of [...(data?.letters ?? []), ...older]) {
+      if (letter.kind === "todo") continue;
+      if (seen.has(letter.id)) continue;
+      seen.add(letter.id);
+      all.push(letter);
+    }
+    return all;
+  })();
   const todos = todosData?.todos ?? [];
   // How many there are, not how many are shown.
   const total = (data?.total ?? 0) as number;

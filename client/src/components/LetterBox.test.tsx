@@ -19,12 +19,30 @@ let letters: any[] = [];
 let todos: any[] = [];
 /** What the server answered with when the letter was written. */
 let writeResult: any = { success: true, letter: { kind: "letter", status: "private" } };
+/**
+ * The page the list query answers with.
+ *
+ * It is kept as one object, because the component watches it: a new
+ * object on every render would look like a list that changed, and the
+ * older pages would be dropped again and again.
+ */
+let listData: any = { letters: [] };
+/** The page the "load older" button asks for. */
+let olderPage: any[] = [];
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ letter: { list: { invalidate }, todos: { invalidate } } }),
+    useUtils: () => ({
+      letter: {
+        list: {
+          invalidate,
+          fetch: async () => ({ letters: olderPage }),
+        },
+        todos: { invalidate },
+      },
+    }),
     letter: {
-      list: { useQuery: () => ({ data: { letters } }) },
+      list: { useQuery: () => ({ data: listData }) },
       todos: { useQuery: () => ({ data: { todos } }) },
       write: {
         useMutation: (options: any) => ({
@@ -93,6 +111,8 @@ describe("the letters", () => {
     letters = [];
     todos = [];
     writeResult = { success: true, letter: { kind: "letter", status: "private" } };
+    listData = { letters: [] };
+    olderPage = [];
   });
 
   it("shows the date in the user's own calendar", () => {
@@ -100,7 +120,7 @@ describe("the letters", () => {
      * Ten at night in New York is the next day in Shanghai — so the
      * date of a letter depends on whose calendar it is read in.
      */
-    letters = [
+    listData = { letters: [
       {
         id: 1,
         body: "一封信",
@@ -109,7 +129,7 @@ describe("the letters", () => {
         status: "private",
         createdAt: "2026-01-02T03:04:00.000Z",
       },
-    ];
+    ] };
     render(<LetterBox personaId={1} />);
     expect(screen.getByText("2026/1/1")).toBeInTheDocument();
     expect(screen.queryByText("2026/1/2")).toBeNull();
@@ -133,7 +153,7 @@ describe("the letters", () => {
   });
 
   it("does not offer the same letter twice", () => {
-    letters = [{ id: 1, body: "有件事我一直没说。", kind: "letter", status: "waiting" }];
+    listData = { letters: [{ id: 1, body: "有件事我一直没说。", kind: "letter", status: "waiting" }] };
     todos = [{ id: 1, body: "有件事我一直没说。", kind: "todo", status: "private" }];
     render(<LetterBox personaId={1} />);
 
@@ -197,6 +217,83 @@ describe("the letters", () => {
 
     await waitFor(() => {
       expect(screen.getByText("12356")).toBeInTheDocument();
+    });
+  });
+
+  it("does not show a letter twice when the list shifts under it", async () => {
+    /**
+     * The list is paged: the newest fifty, and then the pages before
+     * them.
+     *
+     * Deleting a letter shifts the first page — so the letter that was
+     * on both pages was on the screen twice, with the same key, and the
+     * row under it flickered.
+     */
+    const first = Array.from({ length: 3 }, (_, i) => ({
+      id: 100 + i,
+      body: `信 ${i}`,
+      kind: "letter",
+      status: "private",
+    }));
+    listData = { letters: first, total: 4 };
+    olderPage = [{ id: 99, body: "信 99", kind: "letter", status: "private" }];
+
+    const user = userEvent.setup();
+    const { rerender } = render(<LetterBox personaId={1} />);
+    await user.click(screen.getByText(translate("zh", "letters.loadOlder")));
+    await waitFor(() => {
+      expect(screen.getByText("信 99")).toBeInTheDocument();
+    });
+
+    // The newest letter is deleted: the first page shifts down by one.
+    listData = { letters: [first[1], first[2], olderPage[0]], total: 4 };
+    rerender(<LetterBox personaId={1} />);
+    await waitFor(() => {
+      expect(screen.getAllByText("信 99")).toHaveLength(1);
+    });
+  });
+
+  it("does not lose a letter that falls between the two pages", async () => {
+    /**
+     * Writing a letter shifts the first page — so the letter that was
+     * the oldest of the first page fell between the pages: it was on
+     * neither, and it could never be reached again.
+     */
+    const first = Array.from({ length: 3 }, (_, i) => ({
+      id: 100 + i,
+      body: `信 ${i}`,
+      kind: "letter",
+      status: "private",
+    }));
+    listData = { letters: first, total: 4 };
+    olderPage = [{ id: 97, body: "信 97", kind: "letter", status: "private" }];
+
+    const user = userEvent.setup();
+    const { rerender } = render(<LetterBox personaId={1} />);
+    await user.click(screen.getByText(translate("zh", "letters.loadOlder")));
+    await waitFor(() => {
+      expect(screen.getByText("信 97")).toBeInTheDocument();
+    });
+
+    // A new letter is written: the first page shifts up by one.
+    listData = {
+      letters: [{ id: 101, body: "新的一封", kind: "letter", status: "private" }, ...first],
+      total: 5,
+    };
+    rerender(<LetterBox personaId={1} />);
+    await waitFor(() => {
+      expect(screen.getByText("新的一封")).toBeInTheDocument();
+    });
+    /**
+     * The older pages are dropped when the list changes — so the letter
+     * that fell in the gap is reachable again: the "load older" button
+     * asks for the page before the oldest one *on the screen now*.
+     */
+    expect(screen.queryByText("信 97")).toBeNull();
+    olderPage = [{ id: 99, body: "信 99", kind: "letter", status: "private" }];
+    await user.click(screen.getByText(translate("zh", "letters.loadOlder")));
+    await waitFor(() => {
+      expect(screen.getByText("信 99")).toBeInTheDocument();
     });
   });
 
