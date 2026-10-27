@@ -236,6 +236,26 @@ const MAX_EXTRACTED_CHARS = 500_000;
 const MAX_DISTILLATION_CHARS = 1_000_000;
 
 /**
+ * The lock that guards a persona's own data.
+ *
+ * The persona's fields are one JSON column. So every write to them is a
+ * read of the whole column, a change to one part of it, and a write of
+ * the whole column back — and two of those that overlap lose one of the
+ * two changes.
+ *
+ * They used to take different locks, or none at all: the mining and
+ * the saving of the rules shared one, and the correction and the
+ * imperfection profile had none. So mining the rules while the user
+ * saved an imperfection profile wrote the profile away, and the user
+ * was told it had been saved.
+ *
+ * They all take the same lock now, so they take turns.
+ */
+function withPersonaDataLock<T>(personaId: number, work: () => Promise<T>): Promise<T> {
+  return withKeyLock(`persona-data:${personaId}`, work);
+}
+
+/**
  * Collects the uploaded material for a persona and kicks off the distillation
  * pipeline. Both `persona.triggerAnalysis` and `skillEngine.startPipeline`
  * route through here so there is a single persona-building path.
@@ -922,11 +942,15 @@ export const appRouter = router({
         ),
       }))
       .mutation(async ({ ctx, input }) => {
-        const persona = await getPersonaById(input.id, ctx.user.id);
-        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const merged = { ...((persona.personaData as any) || {}), ...input.personaData };
-        await updatePersona(input.id, ctx.user.id, { personaData: merged });
-        return { success: true };
+        // The persona's fields are one column, so this is a read and a
+        // write of the whole thing — see `withPersonaDataLock`.
+        return await withPersonaDataLock(input.id, async () => {
+          const persona = await getPersonaById(input.id, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const merged = { ...((persona.personaData as any) || {}), ...input.personaData };
+          await updatePersona(input.id, ctx.user.id, { personaData: merged });
+          return { success: true };
+        });
       }),
 
     /**
@@ -1020,106 +1044,111 @@ export const appRouter = router({
         correction: z.string().min(1).max(2000),
       }))
       .mutation(async ({ ctx, input }) => {
-        const persona = await getPersonaById(input.id, ctx.user.id);
-        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        if (!persona.personaData) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotAnalyzed") });
-        }
+        // The persona's fields are one column, so this is a read and a
+        // write of the whole thing — and the correction holds the row
+        // across a model call — see `withPersonaDataLock`.
+        return await withPersonaDataLock(input.id, async () => {
+          const persona = await getPersonaById(input.id, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          if (!persona.personaData) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotAnalyzed") });
+          }
 
-        // The correction is a stage of its own: it changes the persona, and
-        // a consumer of `skill_jobs.pipeline_stage` has to be able to see
-        // that happening.
-        const jobId = (persona as any).skillJobId ?? null;
-        if (jobId) {
-          await updateSkillJob(jobId, ctx.user.id, {
-              pipelineStage: "correcting",
-              stageMessage: copy(ctx.locale, "persona.updating"),
-            })
-            .catch(() => undefined);
-        }
-
-        /**
-         * The user's own model service.
-         *
-         * The correction carries the persona's whole field set and the
-         * user's own words. It was always sent to the operator's
-         * account — the environment-configured provider — even when the
-         * user had a key of their own.
-         */
-        const { provider: correctionProvider, owned: correctionOwned } =
-          await resolveProviderForUserWithOwnership({
-            userId: ctx.user.id,
-            providerName: (persona as any).llmProvider || undefined,
-          });
-
-        const result = await applyPersonaCorrection({
-          name: persona.name,
-          characterFamily: "relationship",
-          personaData: persona.personaData as any,
-          correction: input.correction,
-          provider: (persona as any).llmProvider || undefined,
-          userProvider: correctionProvider,
-          providerOwned: correctionOwned,
-          locale: ctx.locale,
-        });
-
-        if (!result) {
+          // The correction is a stage of its own: it changes the persona, and
+          // a consumer of `skill_jobs.pipeline_stage` has to be able to see
+          // that happening.
+          const jobId = (persona as any).skillJobId ?? null;
           if (jobId) {
-            await updateSkillJob(jobId, ctx.user.id, { pipelineStage: "complete" })
+            await updateSkillJob(jobId, ctx.user.id, {
+                pipelineStage: "correcting",
+                stageMessage: copy(ctx.locale, "persona.updating"),
+              })
               .catch(() => undefined);
           }
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: copy(ctx.locale, "errors.correctionNotUnderstood"),
-          });
-        }
 
-        if (result.needsClarification && result.question) {
-          if (jobId) {
-            await updateSkillJob(jobId, ctx.user.id, { pipelineStage: "complete" })
-              .catch(() => undefined);
+          /**
+           * The user's own model service.
+           *
+           * The correction carries the persona's whole field set and the
+           * user's own words. It was always sent to the operator's
+           * account — the environment-configured provider — even when the
+           * user had a key of their own.
+           */
+          const { provider: correctionProvider, owned: correctionOwned } =
+            await resolveProviderForUserWithOwnership({
+              userId: ctx.user.id,
+              providerName: (persona as any).llmProvider || undefined,
+            });
+
+          const result = await applyPersonaCorrection({
+            name: persona.name,
+            characterFamily: "relationship",
+            personaData: persona.personaData as any,
+            correction: input.correction,
+            provider: (persona as any).llmProvider || undefined,
+            userProvider: correctionProvider,
+            providerOwned: correctionOwned,
+            locale: ctx.locale,
+          });
+
+          if (!result) {
+            if (jobId) {
+              await updateSkillJob(jobId, ctx.user.id, { pipelineStage: "complete" })
+                .catch(() => undefined);
+            }
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: copy(ctx.locale, "errors.correctionNotUnderstood"),
+            });
           }
-          return {
-            applied: false,
-            question: result.question,
+
+          if (result.needsClarification && result.question) {
+            if (jobId) {
+              await updateSkillJob(jobId, ctx.user.id, { pipelineStage: "complete" })
+                .catch(() => undefined);
+            }
+            return {
+              applied: false,
+              question: result.question,
+              changedFields: result.changedFields,
+            };
+          }
+
+          /**
+           * The correction is merged into the persona, not written over it.
+           *
+           * The normalised data carries the fields the correction knows
+           * about. It does not carry `customInstructions` — the user's own
+           * words to the persona — nor `starterQuestions`: they are not in
+           * the type, so the normaliser drops them, and the whole blob was
+           * replaced. So a correction silently deleted what the user had
+           * written.
+           */
+          await updatePersona(input.id, ctx.user.id, {
+            personaData: {
+              ...((persona.personaData as any) || {}),
+              ...(result.personaData as any),
+            },
+          });
+
+          await appendPersonaCorrection(input.id, ctx.user.id, buildCorrectionLog({
+            summary: result.summary,
             changedFields: result.changedFields,
+            correction: input.correction,
+          })).catch((e) => console.warn("[SkillEngine] Failed to log the correction:", e));
+
+          if (jobId) {
+            await updateSkillJob(jobId, ctx.user.id, { pipelineStage: "complete" })
+              .catch(() => undefined);
+          }
+
+          return {
+            applied: true,
+            personaData: result.personaData,
+            changedFields: result.changedFields,
+            summary: result.summary,
           };
-        }
-
-        /**
-         * The correction is merged into the persona, not written over it.
-         *
-         * The normalised data carries the fields the correction knows
-         * about. It does not carry `customInstructions` — the user's own
-         * words to the persona — nor `starterQuestions`: they are not in
-         * the type, so the normaliser drops them, and the whole blob was
-         * replaced. So a correction silently deleted what the user had
-         * written.
-         */
-        await updatePersona(input.id, ctx.user.id, {
-          personaData: {
-            ...((persona.personaData as any) || {}),
-            ...(result.personaData as any),
-          },
         });
-
-        await appendPersonaCorrection(input.id, ctx.user.id, buildCorrectionLog({
-          summary: result.summary,
-          changedFields: result.changedFields,
-          correction: input.correction,
-        })).catch((e) => console.warn("[SkillEngine] Failed to log the correction:", e));
-
-        if (jobId) {
-          await updateSkillJob(jobId, ctx.user.id, { pipelineStage: "complete" })
-            .catch(() => undefined);
-        }
-
-        return {
-          applied: true,
-          personaData: result.personaData,
-          changedFields: result.changedFields,
-          summary: result.summary,
-        };
       }),
 
     /** The correction history for a persona. */
@@ -4148,7 +4177,7 @@ export const appRouter = router({
          * And a save that landed between the mining's read and its
          * write was overwritten the same way.
          */
-        return await withKeyLock(`micro-rules:${input.personaId}`, async () => {
+        return await withPersonaDataLock(input.personaId, async () => {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -4208,7 +4237,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         // The save and the mining take turns — see the note there.
-        return await withKeyLock(`micro-rules:${input.personaId}`, async () => {
+        return await withPersonaDataLock(input.personaId, async () => {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
           const rules = normalizeMicroRules(input.rules);
@@ -4254,18 +4283,24 @@ export const appRouter = router({
         })).max(12),
       }))
       .mutation(async ({ ctx, input }) => {
-        const persona = await getPersonaById(input.personaId, ctx.user.id);
-        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        // The fallback for a state the user left empty is written in the
-        // app's language — which is the user's language, not the app
-        // default's.
-        const profile = normalizeImperfectionProfile(input.profile, ctx.locale);
-        const merged = {
-          ...((persona.personaData as any) || {}),
-          imperfectionProfile: profile,
-        };
-        await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
-        return { profile };
+        // The persona's fields are one column, so this is a read and a
+        // write of the whole thing — see `withPersonaDataLock`. It used
+        // to take no lock at all, so saving the profile while the rules
+        // were being mined wrote the profile away.
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          // The fallback for a state the user left empty is written in the
+          // app's language — which is the user's language, not the app
+          // default's.
+          const profile = normalizeImperfectionProfile(input.profile, ctx.locale);
+          const merged = {
+            ...((persona.personaData as any) || {}),
+            imperfectionProfile: profile,
+          };
+          await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
+          return { profile };
+        });
       }),
   }),
 
