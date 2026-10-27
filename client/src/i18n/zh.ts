@@ -1292,7 +1292,16 @@ export const zh = {
   outbound: {
     title: "带回去的话",
     editLabel: "这句话",
-    dropConfirm: "不说了？这句话会被丢下，没有办法找回来。",
+    /**
+     * What dropping does.
+     *
+     * It said the words would be thrown away with no way to get them
+     * back — but the server only marks the letter, and the text stays
+     * right there in the list. So the promise was false, and the user
+     * had no way back.
+     */
+    dropConfirm: "不说了？这句话会留在列表里，标成「不说了」——你随时可以改主意。",
+    restore: "改主意",
     hint: "这些是你只在这里说过、还没对本人说过的话。系统不代发，只把它们摆在这里，由你决定说不说。",
     empty: "还没有。从你们的对话里找找那些只在这里说过的话。",
     collect: "找一找",

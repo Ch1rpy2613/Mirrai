@@ -19,6 +19,7 @@ const drop = vi.fn();
 const keepForSelf = vi.fn();
 const updateText = vi.fn();
 const markStaleNotified = vi.fn();
+const restore = vi.fn();
 
 let letters: any[] = [];
 
@@ -30,6 +31,7 @@ vi.mock("@/lib/trpc", () => ({
       markSent: { useMutation: () => ({ mutate: markSent, isPending: false }) },
       drop: { useMutation: () => ({ mutate: drop, isPending: false }) },
       keepForSelf: { useMutation: () => ({ mutate: keepForSelf, isPending: false }) },
+      restore: { useMutation: () => ({ mutate: restore, isPending: false }) },
       markStaleNotified: {
         useMutation: () => ({
           mutate: (input: any, options: any) => {
@@ -75,6 +77,22 @@ describe("the way out", () => {
   it("says so when there is nothing to take back", () => {
     render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     expect(screen.getByText(translate("zh", "outbound.empty"))).toBeInTheDocument();
+  });
+
+  it("lets the user change their mind about a letter they said no to", async () => {
+    /**
+     * The confirmation promised the words would be thrown away with no
+     * way to get them back — but the server only marked the letter,
+     * and the text stayed right there in the list with no button to
+     * press. So the promise was false, and the user had no way back.
+     */
+    const user = userEvent.setup();
+    letters = [{ id: 3, status: "dropped", text: "一句话", createdAt: new Date().toISOString() }];
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
+
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.restore") }));
+
+    expect(restore).toHaveBeenCalledWith({ id: 3 });
   });
 
   it("shows the user's own words", () => {

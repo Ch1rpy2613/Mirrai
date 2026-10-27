@@ -1291,7 +1291,16 @@ export const en = {
   outbound: {
     title: "Words to take back",
     editLabel: "These words",
-    dropConfirm: "Drop these words? They will be thrown away, and there is no way to get them back.",
+    /**
+     * What dropping does.
+     *
+     * It said the words would be thrown away with no way to get them
+     * back — but the server only marks the letter, and the text stays
+     * right there in the list. So the promise was false, and the user
+     * had no way back.
+     */
+    dropConfirm: "Not saying it? The words stay in the list, marked as not said — you can change your mind at any time.",
+    restore: "Change my mind",
     hint: "These are things you said here and never said to them. Nothing is sent for you — they are laid out, and you decide.",
     empty: "None yet. We can look through the conversation for the things only said here.",
     collect: "Look for them",

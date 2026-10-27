@@ -57,7 +57,7 @@ import {
   answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes, countWaitingNotes,
   createRelationshipEvent, getRelationshipEvents, countRelationshipEvents, deleteRelationshipEvent,
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
-  getOutboundLetters, setOutboundLetterStatus, updateOutboundLetterText,
+  getOutboundLetters, setOutboundLetterStatus, restoreOutboundLetter, updateOutboundLetterText,
   markOutboundLetterStaleNotified,
   createOutboundLetter,
   getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
@@ -4924,6 +4924,22 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const changed = await setOutboundLetterStatus(input.id, ctx.user.id, "dropped");
+        if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /**
+     * "Actually, I do want to say it."
+     *
+     * The words were never thrown away — the letter stays in the list
+     * with its text — so the decision has to be reversible. Otherwise
+     * the user is shown their own words with no way to act on them
+     * again.
+     */
+    restore: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const changed = await restoreOutboundLetter(input.id, ctx.user.id);
         if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),

@@ -25,6 +25,7 @@ const createOutboundLetter = vi.fn();
 const setOutboundLetterStatus = vi.fn();
 const updateOutboundLetterText = vi.fn();
 const markOutboundLetterStaleNotified = vi.fn();
+const restoreOutboundLetter = vi.fn();
 const getPersonaBehaviorProfile = vi.fn();
 const setPersonaBehaviorProfile = vi.fn();
 const getMessagesByPersonaId = vi.fn();
@@ -44,6 +45,7 @@ vi.mock("./db", () => ({
   setOutboundLetterStatus: (...a: unknown[]) => setOutboundLetterStatus(...a),
   updateOutboundLetterText: (...a: unknown[]) => updateOutboundLetterText(...a),
   markOutboundLetterStaleNotified: (...a: unknown[]) => markOutboundLetterStaleNotified(...a),
+  restoreOutboundLetter: (...a: unknown[]) => restoreOutboundLetter(...a),
   getPersonaBehaviorProfile: (...a: unknown[]) => getPersonaBehaviorProfile(...a),
   setPersonaBehaviorProfile: (...a: unknown[]) => setPersonaBehaviorProfile(...a),
   getMessagesByPersonaId: (...a: unknown[]) => getMessagesByPersonaId(...a),
@@ -159,6 +161,7 @@ beforeEach(() => {
     setOutboundLetterStatus,
     updateOutboundLetterText,
     markOutboundLetterStaleNotified,
+    restoreOutboundLetter,
     getPersonaBehaviorProfile,
     setPersonaBehaviorProfile,
     getMessagesByPersonaId,
@@ -181,6 +184,7 @@ beforeEach(() => {
   setOutboundLetterStatus.mockResolvedValue(true);
   updateOutboundLetterText.mockResolvedValue(true);
   markOutboundLetterStaleNotified.mockResolvedValue(true);
+  restoreOutboundLetter.mockResolvedValue(true);
   getPersonaBehaviorProfile.mockResolvedValue(null);
   getMessagesByPersonaId.mockResolvedValue([]);
   getMessagesByPersonaIdPaged.mockResolvedValue([]);
@@ -487,6 +491,24 @@ describe("the way out", () => {
     const caller = appRouter.createCaller(makeCtx());
     const result = await caller.outbound.markStaleNotified({ id: 7 });
     expect(result).toEqual({ recorded: false });
+  });
+
+  it("lets the user change their mind about a letter they said no to", async () => {
+    /**
+     * The words were never thrown away — the letter stays in the list
+     * with its text — so the decision has to be reversible. Otherwise
+     * the user is shown their own words with no way to act on them
+     * again.
+     */
+    const caller = appRouter.createCaller(makeCtx());
+    await caller.outbound.restore({ id: 7 });
+    expect(restoreOutboundLetter).toHaveBeenCalledWith(7, 1);
+  });
+
+  it("does not say the letter is back when it is not there", async () => {
+    restoreOutboundLetter.mockResolvedValue(false);
+    const caller = appRouter.createCaller(makeCtx());
+    await expect(caller.outbound.restore({ id: 7 })).rejects.toThrow();
   });
 
   it("scopes the write to the user who owns it", async () => {

@@ -4940,6 +4940,27 @@ export async function markOutboundLetterStaleNotified(
   return rows.length > 0;
 }
 
+/**
+ * Brings a letter back from "never mind".
+ *
+ * The words were never thrown away — the letter is recorded as one
+ * the user decided not to say, and it stays in the list with its text
+ * — so the decision has to be reversible. Otherwise the user is shown
+ * their own words with no way to act on them again.
+ */
+export async function restoreOutboundLetter(
+  id: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(outboundLetters)
+    .set({ status: "ready", droppedAt: null, updatedAt: new Date() })
+    .where(and(eq(outboundLetters.id, id), eq(outboundLetters.userId, userId)))
+    .returning({ id: outboundLetters.id });
+  return rows.length > 0;
+}
+
 /** Changes the text of a letter the user is taking back. */
 export async function updateOutboundLetterText(
   id: number,

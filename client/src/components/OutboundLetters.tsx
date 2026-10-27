@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Send, Search, Check, X, Pencil, BookMarked } from "lucide-react";
+import { Send, Search, Check, X, Pencil, BookMarked, Undo2 } from "lucide-react";
 import { daysWaiting, isStale } from "@shared/outbound";
 import { useConfirm } from "@/components/ConfirmDialog";
 
@@ -59,6 +59,18 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
     onError: (e: any) => toast.error(e.message),
   });
   const selfMutation = trpc.outbound.keepForSelf.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  /**
+   * "Actually, I do want to say it."
+   *
+   * The words were never thrown away — the letter stays in the list
+   * with its text — so the decision has to be reversible. Otherwise
+   * the user is shown their own words with no way to act on them
+   * again.
+   */
+  const restoreMutation = trpc.outbound.restore.useMutation({
     onSuccess: () => refetch(),
     onError: (e: any) => toast.error(e.message),
   });
@@ -266,6 +278,26 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                       {t("outbound.drop")}
                     </Button>
                   </>
+                ) : null}
+                {/**
+                 * A letter the user said no to can be said to after all.
+                 *
+                 * The confirmation promised the words would be thrown
+                 * away with no way to get them back — but the server
+                 * only marked the letter, and the text stayed right
+                 * there in the list with no button to press. So the
+                 * promise was false, and the user had no way back.
+                 */}
+                {letter.status === "dropped" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={restoreMutation.isPending}
+                    onClick={() => restoreMutation.mutate({ id: letter.id })}
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    {t("outbound.restore")}
+                  </Button>
                 ) : null}
               </div>
             </div>
