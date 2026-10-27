@@ -6,6 +6,8 @@ const getMemoriesByPersonaId = vi.fn();
 const createMemory = vi.fn();
 const markMemoryExtracted = vi.fn();
 const markMemoryAttempted = vi.fn();
+const claimMemoryExtraction = vi.fn();
+const releaseMemoryExtraction = vi.fn();
 
 vi.mock("../db", () => ({
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
@@ -14,6 +16,8 @@ vi.mock("../db", () => ({
   createMemory: (...a: unknown[]) => createMemory(...a),
   markMemoryExtracted: (...a: unknown[]) => markMemoryExtracted(...a),
   markMemoryAttempted: (...a: unknown[]) => markMemoryAttempted(...a),
+  claimMemoryExtraction: (...a: unknown[]) => claimMemoryExtraction(...a),
+  releaseMemoryExtraction: (...a: unknown[]) => releaseMemoryExtraction(...a),
 }));
 
 const invoke = vi.fn();
@@ -57,6 +61,8 @@ beforeEach(() => {
     createMemory,
     markMemoryExtracted,
     markMemoryAttempted,
+    claimMemoryExtraction,
+    releaseMemoryExtraction,
     invoke,
   ]) {
     fn.mockReset();
@@ -67,9 +73,48 @@ beforeEach(() => {
   createMemory.mockResolvedValue(1);
   markMemoryExtracted.mockResolvedValue(undefined);
   markMemoryAttempted.mockResolvedValue(undefined);
+  claimMemoryExtraction.mockResolvedValue(true);
+  releaseMemoryExtraction.mockResolvedValue(undefined);
 });
 
 describe("the memory extraction", () => {
+  it("refuses to run when another extraction is already running", async () => {
+    /**
+     * The extraction is a read and then a write: the window of
+     * messages is read, the model is asked about it, and what it says
+     * is stored. Two of them running at once read the same window — so
+     * the model was asked the same question twice (the user paid
+     * twice), and both stored what they were told, so the same memory
+     * was in the panel twice.
+     */
+    claimMemoryExtraction.mockResolvedValue(false);
+
+    const result = await extractMemories({ persona, userId: 1, now: NOW });
+
+    // The model was not asked.
+    expect(invoke).not.toHaveBeenCalled();
+    expect(createMemory).not.toHaveBeenCalled();
+    // And the interface is told, so it does not say "no new memories" —
+    // which is a claim about the conversation, and nothing was looked at.
+    expect(result.running).toBe(true);
+  });
+
+  it("gives the claim back when the run is over", async () => {
+    invoke.mockResolvedValue('[]');
+
+    await extractMemories({ persona, userId: 1, now: NOW });
+
+    expect(releaseMemoryExtraction).toHaveBeenCalledWith(1, 1);
+  });
+
+  it("gives the claim back even when the run fails", async () => {
+    invoke.mockRejectedValue(new Error("the provider is down"));
+
+    await extractMemories({ persona, userId: 1, now: NOW });
+
+    expect(releaseMemoryExtraction).toHaveBeenCalledWith(1, 1);
+  });
+
   it("reads the answer when the model writes around the array", async () => {
     // The array used to be taken from the first `[` to the last `]`,
     // so a bracket in the prose before it lost the whole answer.

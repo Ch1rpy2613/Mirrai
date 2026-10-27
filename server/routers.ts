@@ -3843,6 +3843,10 @@ export const appRouter = router({
           readable: result.readable,
           // What the model returned that did not fit.
           trimmed: result.trimmed,
+          // Whether another extraction was already running — so the
+          // interface can say that, instead of "no new memories",
+          // which is a claim about the conversation and was not true.
+          running: result.running === true,
         };
       }),
   }),

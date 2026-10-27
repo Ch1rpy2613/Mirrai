@@ -112,6 +112,14 @@ export interface ExtractResult {
    * so what was left out is counted rather than dropped in silence.
    */
   trimmed: number;
+  /**
+   * Whether another extraction was already running.
+   *
+   * So the interface can say "one is already running" instead of "no
+   * new memories" — which is a claim about the conversation, and it
+   * was not true.
+   */
+  running?: boolean;
 }
 
 /**
@@ -135,6 +143,53 @@ export async function extractMemories(params: {
    * it records what has been read *of the conversation*, and the
    * conversation has not been read.
    */
+  history?: Array<{
+    id: number;
+    role: string;
+    content: string;
+    createdAt: Date;
+  }>;
+}): Promise<ExtractResult> {
+  const { persona, userId } = params;
+  const locale = params.locale ?? "zh";
+  /**
+   * The claim.
+   *
+   * The extraction is a read and then a write: the window of messages
+   * is read, the model is asked about it, and what it says is stored.
+   * Two of them running at once read the same window — so the model
+   * was asked the same question twice (the user paid twice), and both
+   * stored what they were told, so the same memory was in the panel
+   * twice.
+   *
+   * The claim is on the row that already records the extraction, so it
+   * is shared by every process of the app. A set in one process's
+   * memory would not be: two instances of the app would each have
+   * their own, and the user paid for both.
+   *
+   * A run that could not take the claim says so, rather than running
+   * anyway.
+   */
+  const claimed = await db.claimMemoryExtraction(persona.id, userId);
+  if (!claimed) {
+    return { added: [], skipped: 0, readable: true, trimmed: 0, running: true };
+  }
+  try {
+    return await runExtraction(params);
+  } finally {
+    // The claim is given back, so the next run may start.
+    await db.releaseMemoryExtraction(persona.id, userId).catch(() => undefined);
+  }
+}
+
+/**
+ * The extraction itself, once the claim has been taken.
+ */
+async function runExtraction(params: {
+  persona: Persona;
+  userId: number;
+  locale?: "zh" | "en";
+  now?: Date;
   history?: Array<{
     id: number;
     role: string;

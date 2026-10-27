@@ -2379,6 +2379,89 @@ export async function getLastExtractionAttemptAt(
 }
 
 /**
+ * Claims the right to extract a persona's memories.
+ *
+ * The extraction is a read and then a write: the window of messages is
+ * read, the model is asked about it, and what it says is stored. Two of
+ * them running at once read the same window — so the model was asked
+ * the same question twice (the user paid twice), and both stored what
+ * they were told, so the same memory was in the panel twice.
+ *
+ * The claim is on the row that already records the extraction, so it
+ * is shared by every process of the app: a set in one process's memory
+ * would not be.
+ *
+ * The statement is one, so there is no window between "is anybody
+ * running?" and "I am running": the write only happens when nobody
+ * holds the claim, and the database decides which of two callers gets
+ * it.
+ *
+ * A claim that is older than `staleAfterMs` belongs to a process that
+ * has gone — so it does not block the user for ever.
+ */
+export async function claimMemoryExtraction(
+  personaId: number,
+  userId: number,
+  staleAfterMs = 10 * 60_000,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - staleAfterMs);
+  const rows = await db.insert(memoryExtractions)
+    .values({
+      personaId,
+      userId,
+      /**
+       * The window has not moved, and nothing has been tried.
+       *
+       * The row is only here so the claim has something to live on —
+       * the window and the attempt are recorded when the run ends, and
+       * only then: a run that could not be read must leave the window
+       * where it was, so those messages are read again.
+       *
+       * So both are the beginning of time, which is what a row that is
+       * not there at all means as well.
+       */
+      extractedAt: new Date(0),
+      lastAttemptAt: new Date(0),
+      runningAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [memoryExtractions.personaId, memoryExtractions.userId],
+      set: { runningAt: now },
+      // Only when nobody holds the claim.
+      setWhere: or(
+        isNull(memoryExtractions.runningAt),
+        lt(memoryExtractions.runningAt, staleBefore),
+      ),
+    })
+    .returning({ id: memoryExtractions.id });
+  return rows.length > 0;
+}
+
+/**
+ * Gives the claim back, so the next run may start.
+ *
+ * A run that never gives it back — a process that died in the middle
+ * of it — leaves the claim behind, and a claim that is old enough
+ * belongs to a process that has gone.
+ */
+export async function releaseMemoryExtraction(
+  personaId: number,
+  userId: number,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(memoryExtractions)
+    .set({ runningAt: null })
+    .where(and(
+      eq(memoryExtractions.personaId, personaId),
+      eq(memoryExtractions.userId, userId),
+    ));
+}
+
+/**
  * The last time an extraction ran, from the extraction log.
  */
 export async function getLastExtractionAt(personaId: number, userId: number): Promise<Date | null> {

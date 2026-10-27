@@ -577,6 +577,55 @@ describe("the memories", () => {
   });
 });
 
+describe("the extraction's claim", () => {
+  it("is one statement, so two callers cannot both take it", async () => {
+    /**
+     * The claim is on the row that records the extraction, so it is
+     * shared by every process of the app. A set in one process's
+     * memory would not be: two instances of the app would each have
+     * their own, and the user paid for both — and the run that
+     * finished last wrote the memories, so the same memory was in the
+     * panel twice.
+     */
+    registry.returning.memory_extractions = [{ id: 1 }];
+
+    const claimed = await db.claimMemoryExtraction(5, 1);
+
+    expect(claimed).toBe(true);
+    // The write is the whole claim: there is no read before it, so
+    // there is no window between "is anybody running?" and "I am
+    // running".
+    const insert = queries.find((q) => q.operation === "insert");
+    expect(insert).toBeDefined();
+    expect(insert!.table).toBe("memory_extractions");
+    // And it only happens when nobody holds the claim.
+    const conflict = insert!.values?.__conflict;
+    expect(conflict).toBeTruthy();
+    expect(conflict.setWhere).toBeTruthy();
+    const where = dialect.sqlToQuery(conflict.setWhere).sql;
+    expect(where).toContain('"runningAt"');
+  });
+
+  it("is refused when nobody could be given it", async () => {
+    // The database returned no row: the conflict clause did not fire,
+    // so somebody else holds the claim.
+    registry.returning.memory_extractions = [];
+
+    const claimed = await db.claimMemoryExtraction(5, 1);
+
+    expect(claimed).toBe(false);
+  });
+
+  it("is given back, so the next run may start", async () => {
+    await db.releaseMemoryExtraction(5, 1);
+
+    const update = queries.find((q) => q.operation === "update");
+    expect(update).toBeDefined();
+    expect(update!.table).toBe("memory_extractions");
+    expect(update!.values).toEqual({ runningAt: null });
+  });
+});
+
 describe("the safety record", () => {
   it("lists the events newest first", async () => {
     registry.select.safety_events = [{ id: 1 }];

@@ -513,6 +513,25 @@ export const memoryExtractions = pgTable("memory_extractions", {
    * once per interval.
    */
   lastAttemptAt: timestamp("lastAttemptAt").defaultNow().notNull(),
+  /**
+   * When an extraction last *started*.
+   *
+   * The extraction is a read and then a write: the window of messages
+   * is read, the model is asked about it, and what it says is stored.
+   * Two of them running at once read the same window — so the model
+   * was asked the same question twice (the user paid twice), and both
+   * stored what they were told, so the same memory was in the panel
+   * twice.
+   *
+   * The mark is on the row that already records the extraction, so it
+   * is shared by every process: a set in one process's memory would
+   * not be.
+   *
+   * It is cleared when the run ends. A run that never ends — a
+   * process that died in the middle of it — leaves the mark behind,
+   * and a mark that is old enough belongs to a process that has gone.
+   */
+  runningAt: timestamp("runningAt"),
 }, (table) => ({
   /**
    * The index the migration creates.

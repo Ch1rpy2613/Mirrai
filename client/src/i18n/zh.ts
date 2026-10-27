@@ -280,6 +280,14 @@ export const zh = {
       extractedNone: "没有发现新的记忆。",
       extractedKnown: "没有新的记忆（{{count}} 条已经记过了）。",
       extractedUnreadable: "这次没能读取模型的回答，所以没有提取任何记忆。你可以在设置里检查一下模型配置。",
+      /**
+       * Another extraction is running.
+       *
+       * The panel used to say "no new memories were found" — which is
+       * a claim about the conversation, and it was not true: nothing
+       * had been looked at.
+       */
+      extractedRunning: "已经有一轮提取在跑了，等它结束再试。",
       delete: "删除记忆",
       deleteConfirm: "删掉这条记忆？",
       pin: "钉住（每次都会带上）",

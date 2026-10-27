@@ -2177,6 +2177,14 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
        */
       if (data.extracted.length > 0) {
         toast.success(t("chat.memory.extracted", { count: data.extracted.length }));
+      } else if (data.running) {
+        /**
+         * Another extraction is running.
+         *
+         * The panel said "no new memories were found" — which is a
+         * claim about the conversation, and nothing had been looked at.
+         */
+        toast.info(t("chat.memory.extractedRunning"));
       } else if (data.readable === false) {
         toast.error(t("chat.memory.extractedUnreadable"));
       } else if (data.skipped > 0) {

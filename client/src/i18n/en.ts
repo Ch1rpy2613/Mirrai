@@ -281,6 +281,14 @@ export const en = {
       extractedNone: "No new memories were found.",
       extractedKnown: "No new memories ({{count}} were already remembered).",
       extractedUnreadable: "The model's answer could not be read this time, so nothing was extracted. You can check the model settings.",
+      /**
+       * Another extraction is running.
+       *
+       * The panel used to say "no new memories were found" — which is
+       * a claim about the conversation, and it was not true: nothing
+       * had been looked at.
+       */
+      extractedRunning: "An extraction is already running — try again when it has finished.",
       delete: "Delete memory",
       deleteConfirm: "Delete this memory?",
       pin: "Pin it (every prompt)",
