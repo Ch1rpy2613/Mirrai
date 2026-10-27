@@ -23,7 +23,7 @@ import { careBannerText } from "@/lib/care-note";
 import { resolveStarterQuestions } from "@/lib/scene-starters";
 import { useLocale } from "@/contexts/LocaleContext";
 import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone";
-import { formatInstantInZone, formatTimeInZone } from "@/lib/dates";
+import { formatDayKey, formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 
@@ -2080,7 +2080,7 @@ const CATEGORY_LABELS: Record<string, { labelKey: "chat.memory.categories.memory
 };
 
 function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: () => void }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { data: memories, refetch, isError: memoriesFailed, isLoading: memoriesLoading } =
     trpc.memory.list.useQuery({ personaId });
   const memoryItems = memories?.items ?? [];
@@ -2203,7 +2203,18 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-sm ${cat.chip}`}>{t(cat.labelKey)}</span>
-                      {m.date && <span className="text-xs text-muted-foreground ml-2">{m.date}</span>}
+                      {m.date && (
+                        /**
+                         * The day, in the reader's own language.
+                         *
+                         * The stored key was printed as it is — so
+                         * "2024-03-14" sat next to "2024年3月14日" on
+                         * the other screens.
+                         */
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {formatDayKey(m.date, locale)}
+                        </span>
+                      )}
                       <p className="text-sm font-medium text-foreground mt-1">{m.title}</p>
                       {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
                     </div>
@@ -2294,7 +2305,7 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
  * inside a page that is far too large to render in a test.
  */
 export function EmotionReport({ personaId, personaName, onClose }: { personaId: number; personaName: string; onClose: () => void }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [days, setDays] = useState(30);
   const { data: report, isError: reportFailed, isLoading: reportLoading } =
     trpc.emotion.getReport.useQuery({ personaId, days });
@@ -2407,15 +2418,15 @@ export function EmotionReport({ personaId, personaName, onClose }: { personaId: 
                 <p className="text-sm font-medium text-foreground mb-3">{t("chat.report.trend")}</p>
                 <div className="h-40 flex items-end gap-1">
                   {chartData.map((d: any, i: number) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1" title={t("chat.report.barTitle", { date: d.date, label: d.label, count: d.messages })}>
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1" title={t("chat.report.barTitle", { date: formatDayKey(d.date, locale), label: d.label, count: d.messages })}>
                       <div className="w-full rounded-t-sm transition-all hover:opacity-80"
                         style={{ height: `${(d.value / busiest) * 100}%`, backgroundColor: emotionColor(d.state), minHeight: "4px" }} />
                     </div>
                   ))}
                 </div>
                 <div className="flex justify-between mt-1">
-                  <span className="text-[10px] text-muted-foreground">{chartData[0]?.date}</span>
-                  <span className="text-[10px] text-muted-foreground">{chartData[chartData.length - 1]?.date}</span>
+                  <span className="text-[10px] text-muted-foreground">{formatDayKey(chartData[0]?.date ?? "", locale)}</span>
+                  <span className="text-[10px] text-muted-foreground">{formatDayKey(chartData[chartData.length - 1]?.date ?? "", locale)}</span>
                 </div>
               </div>
 
