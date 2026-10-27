@@ -1,97 +1,165 @@
 import { describe, expect, it } from "vitest";
-import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 /**
  * The macOS start script.
  *
- * `set -euo pipefail` ends the shell at the first failing command — so
- * the `if [ $? -ne 0 ]` that used to follow the database initialisation
- * was **dead code**. The Terminal window closed with no message at all:
- * the log was never shown, and the user had no idea that the first
- * launch had failed.
+ * It keeps the session-signing key and the file the user is told to put
+ * their AI provider key in. Both used to be written world-readable into
+ * a world-readable directory — so on a machine with more than one local
+ * account, every one of them could read the signing key, and with it
+ * mint a valid session cookie for the administrator.
  *
- * The script is run here, with a PostgreSQL that fails, so the test is
- * about what the person sees and not about the shape of the code.
+ * And the `.env` was `source`d, which runs it as shell code: a value
+ * with a space in it killed the launch, and an API key with a `$` in it
+ * was silently truncated — a secret that is quietly half a secret.
  */
 
 const ROOT = path.resolve(__dirname, "..");
-const SCRIPT = path.join(ROOT, "scripts/macos/start.sh");
+const START = path.join(ROOT, "scripts/macos/start.sh");
+const LOAD_ENV = path.join(ROOT, "scripts/macos/load-env.sh");
 
-function bash(): string | null {
-  for (const candidate of ["bash", "/bin/bash"]) {
-    try {
-      execFileSync(candidate, ["--version"], { stdio: "ignore" });
-      return candidate;
-    } catch {
-      // Try the next one.
-    }
-  }
-  return null;
+/** Runs a snippet of shell and returns what it printed. */
+function shell(body: string): { status: number; out: string; err: string } {
+  const result = spawnSync("/bin/bash", ["-c", body], { encoding: "utf-8" });
+  return {
+    status: result.status ?? -1,
+    out: result.stdout ?? "",
+    err: result.stderr ?? "",
+  };
 }
 
-const BASH = bash();
+describe("the .env file", () => {
+  it("is read, not run as shell code", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mirrai-env-"));
+    const envPath = path.join(dir, ".env");
+    // A value with a space in it, and a key with a `$` in it — both are
+    // ordinary things for a person to type into a settings file.
+    writeFileSync(
+      envPath,
+      [
+        "# a comment",
+        "DISPLAY_NAME=My App",
+        "OPENAI_API_KEY=sk-proj-abc$xyz123",
+        "export QUOTED=\"a quoted value\"",
+        "SINGLE='single quoted'",
+        "NOT_AN_ASSIGNMENT",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
 
-/**
- * A bundle whose PostgreSQL fails to initialise.
- *
- * The layout is the one the build produces: the script finds
- * PostgreSQL and Node next to itself.
- */
-function bundleWithFailingPostgres(): string {
-  const root = mkdtempSync(path.join(tmpdir(), "mirrai-macos-"));
-  const res = path.join(root, "res");
-  mkdirSync(path.join(res, "pgsql", "bin"), { recursive: true });
-  mkdirSync(path.join(res, "node", "bin"), { recursive: true });
-  mkdirSync(path.join(root, "home"), { recursive: true });
+    const result = shell(`
+      set -euo pipefail
+      source ${JSON.stringify(LOAD_ENV)}
+      load_env_file ${JSON.stringify(envPath)}
+      printf 'NAME=[%s]\\n' "$DISPLAY_NAME"
+      printf 'KEY=[%s]\\n' "$OPENAI_API_KEY"
+      printf 'QUOTED=[%s]\\n' "$QUOTED"
+      printf 'SINGLE=[%s]\\n' "$SINGLE"
+    `);
 
-  const initdb = path.join(res, "pgsql", "bin", "initdb");
-  writeFileSync(
-    initdb,
-    ["#!/bin/bash", 'echo "initdb: could not write to the data directory" >&2', "exit 1", ""].join("\n"),
-  );
-  chmodSync(initdb, 0o755);
-
-  writeFileSync(path.join(res, "node", "bin", "node"), "#!/bin/bash\nexit 0\n");
-  chmodSync(path.join(res, "node", "bin", "node"), 0o755);
-
-  writeFileSync(path.join(res, "start.sh"), readFileSync(SCRIPT, "utf-8"));
-  chmodSync(path.join(res, "start.sh"), 0o755);
-  return root;
-}
-
-describe.skipIf(!BASH)("the macOS start script", () => {
-  it("says what went wrong when the database cannot be initialised", () => {
-    const root = bundleWithFailingPostgres();
-    const result = spawnSync(BASH!, [path.join(root, "res", "start.sh")], {
-      // A fresh home, so the real data directory is not touched.
-      env: { ...process.env, HOME: path.join(root, "home") },
-      encoding: "utf-8",
-      // The script waits for a keypress before it exits.
-      input: "\n",
-      timeout: 30_000,
-    });
-
-    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+    // The reading did not fail.
+    expect(result.status).toBe(0);
+    // The space survived.
+    expect(result.out).toContain("NAME=[My App]");
     /**
-     * The handler is dead code under `set -e`: the shell ends at the
-     * failing command, so the message was never printed and the log was
-     * never shown. The person saw the Terminal window close and nothing
-     * else.
+     * The key survived whole.
+     *
+     * `source`d, it was either truncated to the part before the `$` or
+     * the whole launch died with "unbound variable". Both are silent
+     * corruption of a credential.
      */
-    expect(output).toContain("ERROR: Database init failed");
-    // And the log itself — the only thing that says why.
-    expect(output).toContain("initdb: could not write to the data directory");
+    expect(result.out).toContain("KEY=[sk-proj-abc$xyz123]");
+    // The quotes are quotes, not part of the value.
+    expect(result.out).toContain("QUOTED=[a quoted value]");
+    expect(result.out).toContain("SINGLE=[single quoted]");
   });
 
-  it("has no failure check that `set -e` has already made dead", () => {
-    const source = readFileSync(SCRIPT, "utf-8");
+  it("would have broken the launch, if it were run as shell code", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mirrai-env-"));
+    const envPath = path.join(dir, ".env");
+    writeFileSync(envPath, "DISPLAY_NAME=My App\n", "utf-8");
+
     /**
-     * `cmd` followed by `if [ $? -ne 0 ]` is the pattern that cannot
-     * work: the shell has already ended by the time the check is read.
+     * The reason the file is read and not run.
+     *
+     * This is what the start script used to do with it, and it is the
+     * reason the reading lives in its own file: the launch died with
+     * "App: command not found" and exit 127, and the Terminal window
+     * showed only that one line — so the user had no idea that the app
+     * had failed to start, and no idea why.
      */
-    expect(source).not.toMatch(/\n\s*if \[ \$\? -ne 0 \]/);
+    const sourced = shell(`
+      set -euo pipefail
+      set -a
+      source ${JSON.stringify(envPath)}
+      set +a
+    `);
+    expect(sourced.status).not.toBe(0);
+    expect(sourced.out + sourced.err).toContain("App: command not found");
+
+    // And the way it is read now, the same file is fine.
+    const read = shell(`
+      set -euo pipefail
+      source ${JSON.stringify(LOAD_ENV)}
+      load_env_file ${JSON.stringify(envPath)}
+      printf 'NAME=[%s]\n' "$DISPLAY_NAME"
+    `);
+    expect(read.status).toBe(0);
+    expect(read.out).toContain("NAME=[My App]");
+  });
+
+  it("does not run what is in it", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mirrai-env-"));
+    const envPath = path.join(dir, ".env");
+    const marker = path.join(dir, "ran");
+    writeFileSync(envPath, `EVIL=$(touch ${marker})\n`, "utf-8");
+
+    shell(`
+      set -euo pipefail
+      source ${JSON.stringify(LOAD_ENV)}
+      load_env_file ${JSON.stringify(envPath)}
+    `);
+
+    // The file was read; what was in it was not run.
+    expect(() => statSync(marker)).toThrow();
+  });
+});
+
+describe("the files the start script writes", () => {
+  const start = readFileSync(START, "utf-8");
+
+  it("keeps the signing key for its owner only", () => {
+    // The key is written through a temporary file and moved into place.
+    expect(start).toMatch(/umask 077/);
+    // And the file that holds it is readable by its owner only.
+    expect(start).toMatch(/chmod 600 "\$JWT_SECRET_FILE"/);
+  });
+
+  it("keeps the .env for its owner only", () => {
+    expect(start).toMatch(/chmod 600 "\$ENV_FILE"/);
+  });
+
+  it("does not leave the signing key half-written", () => {
+    /**
+     * It used to be written with `>`, which truncates first: a run
+     * killed between the truncation and the write left an *empty* file,
+     * and the next launch read that as the signing key — so every
+     * session token was forgeable.
+     */
+    expect(start).not.toMatch(/openssl rand -hex 32 > "\$DATA_ROOT\/\.jwt_secret"/);
+    // It is moved into place instead.
+    expect(start).toMatch(/mv -f "\$_jwt_tmp" "\$JWT_SECRET_FILE"/);
+    // And an empty file is treated as no file at all.
+    expect(start).toMatch(/if \[ ! -s "\$JWT_SECRET_FILE" \]/);
+  });
+
+  it("does not read the .env by running it", () => {
+    expect(start).not.toMatch(/^\s*source "\$ENV_FILE"/m);
+    expect(start).toMatch(/load_env_file "\$ENV_FILE"/);
   });
 });

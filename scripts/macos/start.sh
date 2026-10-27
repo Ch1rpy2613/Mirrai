@@ -56,7 +56,18 @@ echo "  ╚═══════════════════════
 echo ""
 
 # ─── Ensure data directories ─────────────────────────────────────────────────
+#
+# The mode is set on the way in.
+#
+# The directory holds the session-signing key and the file the user is told
+# to put their AI provider key in. It used to be made with the default
+# mode — 0755 on a stock macOS — so on a machine with more than one local
+# account, every one of them could read the directory, and the two files
+# inside it.
+mkdir -p "$DATA_ROOT"
+chmod 700 "$DATA_ROOT" 2>/dev/null || true
 mkdir -p "$PG_DATA" "$UPLOADS" "$LOGS"
+chmod 700 "$PG_DATA" "$UPLOADS" 2>/dev/null || true
 
 # ─── PostgreSQL: init if needed ──────────────────────────────────────────────
 if [ ! -f "$PG_DATA/PG_VERSION" ]; then
@@ -158,18 +169,46 @@ export UPLOAD_DIR="$UPLOADS"
 
 ENV_FILE="$DATA_ROOT/.env"
 if [ -f "$ENV_FILE" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
+  # The .env is *read*, not executed.
+  #
+  # It used to be `source`d, which runs it as shell code. It is a file the
+  # user is told to edit, and its values are not shell-safe: a display
+  # name with a space in it (`DISPLAY_NAME=My App`) killed the launch with
+  # "App: command not found" and exit 127, and an API key with a `$` in
+  # it was either truncated to the part before the `$` or killed the
+  # launch with "unbound variable". A secret that is quietly half a
+  # secret is worse than one that fails loudly.
+  #
+  # The reading itself lives in `load-env.sh`, so it can be tested on its
+  # own.
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/load-env.sh"
+  load_env_file "$ENV_FILE"
 fi
 
 if [ -z "${JWT_SECRET:-}" ]; then
-  if [ ! -f "$DATA_ROOT/.jwt_secret" ]; then
-    openssl rand -hex 32 > "$DATA_ROOT/.jwt_secret"
+  JWT_SECRET_FILE="$DATA_ROOT/.jwt_secret"
+  if [ ! -s "$JWT_SECRET_FILE" ]; then
+    # Written to a temporary file and moved into place, and only readable
+    # by its owner.
+    #
+    # It used to be written in place, world-readable, into a world-
+    # readable directory: on a machine with more than one local account,
+    # every one of them could read the session-signing key — and with it
+    # mint a valid session cookie for the administrator, without ever
+    # touching the server.
+    #
+    # It was also written with `>`, which truncates first: a run killed
+    # between the truncation and the write left an *empty* file, and the
+    # next launch read that as the signing key — so every session token
+    # was forgeable.
+    _jwt_tmp="$JWT_SECRET_FILE.tmp.$$"
+    ( umask 077; openssl rand -hex 32 > "$_jwt_tmp" )
+    mv -f "$_jwt_tmp" "$JWT_SECRET_FILE"
+    chmod 600 "$JWT_SECRET_FILE" 2>/dev/null || true
   fi
   export JWT_SECRET
-  JWT_SECRET=$(cat "$DATA_ROOT/.jwt_secret")
+  JWT_SECRET=$(cat "$JWT_SECRET_FILE")
 fi
 
 # ─── Database migration ─────────────────────────────────────────────────────
@@ -232,7 +271,9 @@ fi
 
 # ─── Create .env template for user ──────────────────────────────────────────
 if [ ! -f "$ENV_FILE" ]; then
-  cat > "$ENV_FILE" << 'ENVEOF'
+  # Only its owner may read it: it is the file the user is told to put
+  # their AI provider key in.
+  ( umask 077; cat > "$ENV_FILE" << 'ENVEOF'
 # Mirrai Configuration
 # Edit this file to configure your AI provider.
 # After editing, restart Mirrai for changes to take effect.
@@ -248,6 +289,8 @@ OPENAI_API_KEY=
 # Claude (alternative)
 # CLAUDE_API_KEY=
 ENVEOF
+  )
+  chmod 600 "$ENV_FILE" 2>/dev/null || true
   log "Created config at: $ENV_FILE"
 fi
 
