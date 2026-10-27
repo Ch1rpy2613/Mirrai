@@ -177,16 +177,29 @@ export default function Diary() {
   const [generating, setGenerating] = useState(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null);
 
-  const { data: personas } = trpc.persona.list.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: diaryDates, refetch: refetchDates } = trpc.diary.getDates.useQuery(
+  /**
+   * The four reads, and whether they worked.
+   *
+   * None of them had a failure branch. So a failed request became an
+   * empty page: the page said "you have no persona yet" (the persona
+   * list failed), the recent entries and the dots on the calendar
+   * silently disappeared, and a selected day showed the date with
+   * neither the button to write nor the note that there is nothing to
+   * write about.
+   */
+  const { data: personas, isError: personasFailed, refetch: refetchPersonas } = trpc.persona.list.useQuery(
+    undefined,
+    { enabled: isAuthenticated },
+  );
+  const { data: diaryDates, isError: datesFailed, refetch: refetchDates } = trpc.diary.getDates.useQuery(
     { personaId: selectedPersonaId || 0 },
     { enabled: isAuthenticated && !!selectedPersonaId }
   );
-  const { data: entries, refetch: refetchEntries } = trpc.diary.list.useQuery(
+  const { data: entries, isError: entriesFailed, refetch: refetchEntries } = trpc.diary.list.useQuery(
     { personaId: selectedPersonaId || 0 },
     { enabled: isAuthenticated && !!selectedPersonaId }
   );
-  const { data: dayEntry, refetch: refetchDay } = trpc.diary.getByDate.useQuery(
+  const { data: dayEntry, isError: dayEntryFailed, refetch: refetchDay } = trpc.diary.getByDate.useQuery(
     { personaId: selectedPersonaId || 0, date: selectedDate || "" },
     { enabled: isAuthenticated && !!selectedPersonaId && !!selectedDate }
   );
@@ -197,7 +210,7 @@ export default function Diary() {
    * refused the days without messages — so the user's only feedback was
    * an error toast.
    */
-  const { data: dayMessages } = trpc.diary.hasMessages.useQuery(
+  const { data: dayMessages, isError: dayMessagesFailed } = trpc.diary.hasMessages.useQuery(
     { personaId: selectedPersonaId || 0, date: selectedDate || "" },
     { enabled: isAuthenticated && !!selectedPersonaId && !!selectedDate }
   );
@@ -299,11 +312,17 @@ export default function Diary() {
           <motion.div variants={fadeUp} initial="hidden" animate="visible" className="empty-state">
             <p className="kicker kicker-accent">{t("diary.emptyKicker")}</p>
             <p className="empty-state-title">
-              {(personas || []).length === 0 ? t("diary.emptyNoPersona") : t("diary.emptySelect")}
+              {personasFailed
+                ? t("common.error")
+                : (personas || []).length === 0
+                  ? t("diary.emptyNoPersona")
+                  : t("diary.emptySelect")}
             </p>
-            {(personas || []).length === 0 && (
+            {personasFailed ? (
+              <Button className="mt-3" variant="outline" onClick={() => refetchPersonas()}>{t("common.retry")}</Button>
+            ) : (personas || []).length === 0 ? (
               <Button className="mt-3" onClick={() => navigate("/")}>{t("errors.backHome")}</Button>
-            )}
+            ) : null}
           </motion.div>
         )}
 
@@ -325,6 +344,11 @@ export default function Diary() {
               <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-2">
                 {weekdays.map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
               </div>
+              {datesFailed && (
+                <p className="text-xs text-destructive mb-2" role="alert">
+                  {t("common.error")}
+                </p>
+              )}
               <div className="grid grid-cols-7 gap-1">
                 {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
                 {Array.from({ length: daysInMonth }, (_, i) => {
@@ -403,7 +427,17 @@ export default function Diary() {
                   {!dayEntry && selectedDate <= todayStr && dayMessagesKnown && !dayHasMessages && (
                     <p className="text-xs text-muted-subtle">{t("diary.noMessagesThatDay")}</p>
                   )}
+                  {dayMessagesFailed && (
+                    <p className="text-xs text-destructive" role="alert">
+                      {t("common.error")}
+                    </p>
+                  )}
                 </div>
+                {dayEntryFailed && (
+                  <p className="text-xs text-destructive" role="alert">
+                    {t("common.error")}
+                  </p>
+                )}
                 {dayEntry && (
                   <DiaryCard
                     entry={dayEntry}
@@ -415,6 +449,11 @@ export default function Diary() {
             )}
 
             {/* Recent entries list */}
+            {!selectedDate && entriesFailed && (
+              <motion.section variants={fadeUp} initial="hidden" animate="visible">
+                <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
+              </motion.section>
+            )}
             {!selectedDate && entries && entries.length > 0 && (
               <motion.section variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
                 <div className="flex items-baseline justify-between gap-3">
