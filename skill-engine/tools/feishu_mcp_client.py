@@ -71,17 +71,34 @@ def save_config(config: dict) -> None:
     print(f"配置已保存到 {CONFIG_PATH}")
 
 
+def ask(question: str) -> str:
+    """
+    问一个问题——当真的有人在前面的时候。
+
+    服务器跑采集器的时候没有标准输入，所以 `input()` 抛 EOFError：整个
+    脚本带着一段回溯死掉，死的地方正是需要人在浏览器前面的那一刻。
+
+    所以没有人的时候就不问，脚本带着它已有的东西往下走。
+    """
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return ""
+        return input(question).strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
+
 def setup_config() -> None:
     print("=== 飞书 MCP 配置 ===")
     print("请前往飞书开放平台（open.feishu.cn）创建企业自建应用，获取以下信息：\n")
 
-    app_id = input("App ID (cli_xxx): ").strip()
-    app_secret = input("App Secret: ").strip()
+    app_id = ask("App ID (cli_xxx): ")
+    app_secret = ask("App Secret: ")
 
     print("\n配置方式选择：")
     print("  [1] App Token（应用权限，需要在飞书后台开通对应权限）")
     print("  [2] User Token（个人权限，能访问你本人有权限的所有内容，需要定期刷新）")
-    mode = input("选择 [1/2]，默认 1：").strip() or "1"
+    mode = ask("选择 [1/2]，默认 1：") or "1"
 
     config = {
         "app_id": app_id,
@@ -91,7 +108,7 @@ def setup_config() -> None:
 
     if mode == "2":
         print("\n获取 User Token：飞书开放平台 → OAuth 2.0 → 获取 user_access_token")
-        user_token = input("User Access Token (u-xxx)：").strip()
+        user_token = ask("User Access Token (u-xxx)：")
         config["user_token"] = user_token
         print("注意：User Token 有效期约 2 小时，过期后需要重新配置")
 
@@ -129,16 +146,111 @@ def call_mcp(tool: str, params: dict, config: dict) -> dict:
             input=payload,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env=env,
             timeout=30,
         )
         if result.returncode != 0:
             raise RuntimeError(f"MCP 调用失败：{result.stderr}")
-        return json.loads(result.stdout)
+        return parse_mcp_envelope(result.stdout)
     except FileNotFoundError:
         print("错误：未找到 npx，请先安装 Node.js", file=sys.stderr)
         print("安装 Feishu MCP：npm install -g feishu-mcp", file=sys.stderr)
         sys.exit(1)
+
+
+def parse_mcp_envelope(stdout: str) -> dict:
+    """
+    读出 MCP stdio 的回答。
+
+    MCP 的回答是一层信封：``{"result": {"content": [{"type": "text",
+    "text": ...}], "isError": false}}``。它的内容是一块一块的文字，不是一
+    个列表，也不是一段 JSON。
+
+    它原来被当成 ``{"result": [...]}`` 读——所以文档那一条把整个信封当成
+    了文档本身，而消息那一条数到 0 条。
+
+    信封里也可能带一行日志，所以一行一行地找，找到第一个能解成 JSON 的
+    就行。
+    """
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    for line in reversed(lines):
+        try:
+            parsed = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise RuntimeError(f"MCP 没有返回可读的 JSON：{stdout[:300]}")
+
+
+def mcp_text(result: dict) -> str:
+    """
+    把一次 MCP 调用的结果变成文字。
+
+    结果里的内容是一块一块的：``{"content": [{"type": "text", "text":
+    ...}], "isError": false}``。有些工具把 JSON 放在文字里，所以文字本身
+    也可能是 JSON——那就把它解开。
+    """
+    envelope = result.get("result")
+    if not isinstance(envelope, dict):
+        # 有些回答直接就是内容，不带信封。
+        if isinstance(envelope, list):
+            return _mcp_text_from_blocks(envelope)
+        if isinstance(envelope, str):
+            return envelope
+        return ""
+
+    if envelope.get("isError"):
+        raise RuntimeError(f"MCP 返回错误：{_mcp_text_from_blocks(envelope.get('content'))}")
+
+    text = _mcp_text_from_blocks(envelope.get("content"))
+    if not text:
+        return ""
+    # 有些工具把 JSON 放在文字里。
+    try:
+        parsed = json.loads(text)
+    except (ValueError, TypeError):
+        return text
+    return json.dumps(parsed, ensure_ascii=False, indent=2)
+
+
+def _mcp_text_from_blocks(content) -> str:
+    """把 MCP 的内容块拼成一段文字。"""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(str(item.get("text", "")))
+            elif isinstance(item, str):
+                parts.append(item)
+        return "\n".join(parts)
+    return str(content)
+
+
+def mcp_json(result: dict):
+    """把一次 MCP 调用的结果变成可以当数据用的东西。"""
+    envelope = result.get("result")
+    if isinstance(envelope, dict):
+        if envelope.get("isError"):
+            raise RuntimeError(f"MCP 返回错误：{_mcp_text_from_blocks(envelope.get('content'))}")
+        content = envelope.get("content")
+        if isinstance(content, list):
+            text = _mcp_text_from_blocks(content)
+            if text:
+                try:
+                    return json.loads(text)
+                except (ValueError, TypeError):
+                    return text
+        return content
+    if isinstance(envelope, list):
+        return envelope
+    return envelope
 
 
 def extract_doc_token(url: str) -> tuple[str, str]:
@@ -173,20 +285,43 @@ def fetch_doc_via_mcp(url: str, config: dict) -> str:
     else:
         raise ValueError(f"不支持的文档类型：{doc_type}")
 
-    # 提取 MCP 返回的内容
-    if "result" in result:
-        content = result["result"]
-        if isinstance(content, list):
-            # MCP tool result 格式
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    return item.get("text", "")
-        elif isinstance(content, str):
-            return content
-    elif "error" in result:
+    if "error" in result:
         raise RuntimeError(f"MCP 返回错误：{result['error']}")
 
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    # 提取 MCP 返回的内容
+    return mcp_text(result)
+
+
+#: 飞书 API 单次最多 50 条。
+MCP_PAGE_SIZE = 50
+
+#: 翻页最多翻多少页——免得翻到天荒地老。
+MCP_MAX_PAGES = 200
+
+
+def _mcp_message_page(result: dict) -> tuple[list, str | None]:
+    """一页消息，以及下一页的游标。"""
+    raw = mcp_json(result)
+    messages: list = []
+    cursor: str | None = None
+
+    if isinstance(raw, list):
+        messages = raw
+    elif isinstance(raw, dict):
+        # 有些工具把消息放在一个对象里。
+        for field in ("items", "messages", "data"):
+            if isinstance(raw.get(field), list):
+                messages = raw[field]
+                break
+        else:
+            messages = [raw]
+        for field in ("page_token", "next_page_token", "cursor"):
+            value = raw.get(field)
+            if isinstance(value, str) and value:
+                cursor = value
+                break
+
+    return messages, cursor
 
 
 def fetch_messages_via_mcp(
@@ -196,24 +331,29 @@ def fetch_messages_via_mcp(
     config: dict,
 ) -> str:
     """通过 MCP 读取群聊消息记录"""
-    result = call_mcp(
-        "get_chat_messages",
-        {
+    # 一次最多 50 条——所以要多读几页。
+    #
+    # 它原来只读一页，所以 --limit 500 也就是 50 条：用户要 500 条，
+    # 拿到 50 条，没有任何提示说剩下的没有了。
+    messages: list = []
+    cursor: str | None = None
+    for _page in range(MCP_MAX_PAGES):
+        params: dict = {
             "chat_id": chat_id,
-            "page_size": min(limit, 50),  # 飞书 API 单次最多 50 条
-        },
-        config,
-    )
+            "page_size": min(max(limit - len(messages), 1), MCP_PAGE_SIZE),
+        }
+        if cursor:
+            params["page_token"] = cursor
+        page, cursor = _mcp_message_page(call_mcp("get_chat_messages", params, config))
+        if not page:
+            break
+        messages.extend(page)
+        if len(messages) >= limit:
+            break
+        if not cursor:
+            break
 
-    messages = []
-    raw = result.get("result", [])
-    if isinstance(raw, list):
-        messages = raw
-    elif isinstance(raw, str):
-        try:
-            messages = json.loads(raw)
-        except Exception:
-            return raw
+    messages = messages[:limit]
 
     # 过滤目标人物
     if target_name:
@@ -256,7 +396,7 @@ def fetch_messages_via_mcp(
 def list_wiki_docs(space_id: str, config: dict) -> str:
     """列出知识库空间下的所有文档"""
     result = call_mcp("list_wiki_nodes", {"space_id": space_id}, config)
-    raw = result.get("result", "")
+    raw = mcp_json(result)
     if isinstance(raw, str):
         return raw
     return json.dumps(raw, ensure_ascii=False, indent=2)

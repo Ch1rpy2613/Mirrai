@@ -1196,8 +1196,18 @@ def main() -> None:
     parser.add_argument("--output-dir", default=None, help="输出目录（默认 ./knowledge/{name}）")
     parser.add_argument("--msg-limit", type=int, default=1000, help="最多采集消息条数（默认 1000）")
     parser.add_argument("--doc-limit", type=int, default=20, help="最多采集文档篇数（默认 20）")
-    parser.add_argument("--exchange-code", metavar="CODE", help="用 OAuth 授权码换取 user_access_token 并保存到配置")
-    parser.add_argument("--user-token", metavar="TOKEN", help="直接指定 user_access_token（覆盖配置文件）")
+    parser.add_argument(
+        "--exchange-code",
+        metavar="CODE",
+        help="用 OAuth 授权码换取 user_access_token 并保存到配置"
+        "（也可以用环境变量 FEISHU_EXCHANGE_CODE——命令行在进程列表里是藏不住的）",
+    )
+    parser.add_argument(
+        "--user-token",
+        metavar="TOKEN",
+        help="直接指定 user_access_token（覆盖配置文件）"
+        "（也可以用环境变量 FEISHU_USER_ACCESS_TOKEN——命令行在进程列表里是藏不住的）",
+    )
     parser.add_argument("--p2p-chat-id", metavar="CHAT_ID", help="私聊会话 ID（覆盖配置文件）")
     parser.add_argument("--open-id", metavar="OPEN_ID", help="直接指定目标用户的 open_id（跳过用户搜索）")
     parser.add_argument(
@@ -1238,8 +1248,16 @@ def main() -> None:
     config = load_config()
 
     # 换取 user_access_token
-    if args.exchange_code:
-        token_data = exchange_code_for_token(args.exchange_code, config)
+    #
+    # 凭据可以从环境变量来，也可以从命令行来。
+    #
+    # 命令行是藏不住的：`ps -eo args` 会把整条命令写出来，而这台机器上的
+    # 每一个进程都能看见。所以环境变量是首选，命令行是给手动用的。
+    exchange_code = os.environ.get("FEISHU_EXCHANGE_CODE", "") or args.exchange_code
+    user_token_arg = os.environ.get("FEISHU_USER_ACCESS_TOKEN", "") or args.user_token
+
+    if exchange_code:
+        token_data = exchange_code_for_token(exchange_code, config)
         if token_data:
             config["user_access_token"] = token_data["access_token"]
             config["refresh_token"] = token_data.get("refresh_token", "")
@@ -1261,8 +1279,8 @@ def main() -> None:
         parser.error("请提供 --name 或 --open-id")
 
     # 命令行参数覆盖配置
-    if args.user_token:
-        config["user_access_token"] = args.user_token
+    if user_token_arg:
+        config["user_access_token"] = user_token_arg
     if args.p2p_chat_id:
         config["p2p_chat_id"] = args.p2p_chat_id
 
