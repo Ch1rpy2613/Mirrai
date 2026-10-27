@@ -112,7 +112,19 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
     // trace was the error toast.
     updateMutation.mutate(
       { id, text: trimmed },
-      { onSuccess: () => setEditing(null) },
+      {
+        onSuccess: () => {
+          /**
+           * Only the editor that was saved is closed.
+           *
+           * It used to close *whichever* editor was open — so the user
+           * who saved one letter and then started rewriting another had
+           * their new words thrown away the moment the first save came
+           * back, with no warning and no undo.
+           */
+          setEditing((current) => (current === id ? null : current));
+        },
+      },
     );
   }
 

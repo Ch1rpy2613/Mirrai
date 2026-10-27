@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -31,7 +31,14 @@ vi.mock("@/lib/trpc", () => ({
       drop: { useMutation: () => ({ mutate: drop, isPending: false }) },
       keepForSelf: { useMutation: () => ({ mutate: keepForSelf, isPending: false }) },
       markStaleNotified: { useMutation: () => ({ mutate: markStaleNotified, isPending: false }) },
-      updateText: { useMutation: () => ({ mutate: updateText, isPending: false }) },
+      updateText: {
+        useMutation: () => ({
+          mutate: (input: any, options: any) => {
+            updateText(input, options);
+          },
+          isPending: false,
+        }),
+      },
     },
   },
 }));
@@ -147,6 +154,53 @@ describe("the way out", () => {
     // nagging, and nagging is the one thing this product promises not
     // to do.
     expect(screen.queryByText(/不会自己消失/)).toBeNull();
+  });
+
+  it("keeps the other editor open when a save comes back", async () => {
+    /**
+     * The save of the first letter comes back while the user is
+     * rewriting the second one.
+     */
+    let finishSave: (() => void) | null = null;
+    updateText.mockImplementationOnce((_input: any, options: any) => {
+      finishSave = () => options.onSuccess?.();
+    });
+
+    letters = [
+      { id: 1, status: "ready", text: "第一封", createdAt: new Date().toISOString() },
+      { id: 2, status: "ready", text: "第二封", createdAt: new Date().toISOString() },
+    ];
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
+
+    // Open the first one and rewrite it.
+    const editButtons = screen.getAllByLabelText(translate("zh", "outbound.edit"));
+    await userEvent.click(editButtons[0]);
+    const editors = screen.getAllByLabelText(translate("zh", "outbound.editLabel"));
+    await userEvent.clear(editors[0]);
+    await userEvent.type(editors[0], "改过的第一封");
+    await userEvent.click(screen.getAllByText(translate("zh", "microRules.save"))[0]);
+
+    // Now open the second one and start rewriting it.
+    await userEvent.click(screen.getAllByLabelText(translate("zh", "outbound.edit"))[1]);
+    const editors2 = screen.getAllByLabelText(translate("zh", "outbound.editLabel"));
+    await userEvent.clear(editors2[0]);
+    await userEvent.type(editors2[0], "改过的第二封");
+
+    // The first save comes back.
+    //
+    // The act() is what makes the state change take effect here: without
+    // it the assertion would run before React had painted the change,
+    // and would pass against the old code as well.
+    act(() => {
+      finishSave?.();
+    });
+
+    // The second editor is still open, with what was typed in it.
+    await waitFor(() => {
+      const still = screen.getAllByLabelText(translate("zh", "outbound.editLabel"));
+      expect(still).toHaveLength(1);
+      expect(still[0]).toHaveValue("改过的第二封");
+    });
   });
 
   it("does not mention a letter that was just written", () => {
