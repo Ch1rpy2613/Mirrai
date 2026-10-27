@@ -4,6 +4,7 @@ import {
   dayShiftMinutes,
   localDateKey,
   previousDateKey,
+  shiftDateKey,
   zonedDateKey,
   zonedHour,
   zonedOffsetHours,
@@ -43,6 +44,15 @@ describe("the day before a day", () => {
 
   it("steps over a year boundary", () => {
     expect(previousDateKey("2026-01-01")).toBe("2025-12-31");
+  });
+
+  it("keeps a year below a hundred as it is", () => {
+    // `Date.UTC` maps a year below a hundred onto 1900–1999 — so the
+    // year 99 became 1999, and the day before it came out 1900 years
+    // off.
+    expect(previousDateKey("0099-12-31")).toBe("0099-12-30");
+    expect(previousDateKey("0001-01-01")).toBe("0000-12-31");
+    expect(shiftDateKey("0099-12-31", 1)).toBe("0100-01-01");
   });
 
   it("steps over a leap day", () => {

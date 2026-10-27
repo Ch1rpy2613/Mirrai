@@ -79,7 +79,7 @@ export function zonedOffsetMinutes(date: Date, timeZone?: string | null): number
     }).formatToParts(date);
     const read = (type: string) =>
       Number.parseInt(parts.find((part) => part.type === type)?.value ?? "0", 10);
-    const asUtc = Date.UTC(
+    const asUtc = utcWallClock(
       read("year"),
       read("month") - 1,
       read("day"),
@@ -91,6 +91,27 @@ export function zonedOffsetMinutes(date: Date, timeZone?: string | null): number
   } catch {
     return -date.getTimezoneOffset();
   }
+}
+
+/**
+ * A calendar day, as the number of milliseconds since the epoch.
+ *
+ * `Date.UTC` maps a year below a hundred onto 1900–1999 — so the year
+ * 99 became 1999, and the day before it came out 1900 years off. The
+ * year is set afterwards instead, which does not have that rule.
+ */
+function utcWallClock(
+  year: number,
+  month: number,
+  day: number,
+  hour = 0,
+  minute = 0,
+  second = 0,
+): number {
+  const date = new Date(0);
+  date.setUTCFullYear(year, month, day);
+  date.setUTCHours(hour, minute, second, 0);
+  return date.getTime();
 }
 
 /**
@@ -218,7 +239,7 @@ export function shiftDateKey(key: string, days: number): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!match) return key;
   const date = new Date(
-    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+    utcWallClock(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
   );
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
@@ -251,18 +272,18 @@ export function zonedMidnightForDayKey(dayKey: string, timeZone?: string | null)
    * what the app has always done for a user who has not chosen a zone.
    */
   if (!timeZone) {
-    const start = new Date(Date.UTC(year, month, day));
+    const start = new Date(utcWallClock(year, month, day));
     start.setHours(0, 0, 0, 0);
     return start;
   }
   // The middle of the day, read as if it were UTC.
-  const wallNoon = Date.UTC(year, month, day, 12);
+  const wallNoon = utcWallClock(year, month, day, 12);
   let offset = zonedOffsetMinutes(new Date(wallNoon), timeZone);
   // The offset at the middle of the day is the offset of the day.
   const offsetAtNoon = zonedOffsetMinutes(new Date(wallNoon - offset * 60_000), timeZone);
   if (offsetAtNoon !== offset) offset = offsetAtNoon;
   // And the midnight has an offset of its own — the hour that changes.
-  const wallMidnight = Date.UTC(year, month, day);
+  const wallMidnight = utcWallClock(year, month, day);
   let midnight = wallMidnight - offset * 60_000;
   const offsetAtMidnight = zonedOffsetMinutes(new Date(midnight), timeZone);
   if (offsetAtMidnight !== offset) midnight = wallMidnight - offsetAtMidnight * 60_000;
@@ -306,7 +327,7 @@ export function zonedNoonForDayKey(dayKey: string, timeZone?: string | null): Da
   const year = Number(match[1]);
   const month = Number(match[2]) - 1;
   const day = Number(match[3]);
-  const wallNoon = Date.UTC(year, month, day, 12);
+  const wallNoon = utcWallClock(year, month, day, 12);
   if (!timeZone) return new Date(wallNoon);
   let offset = zonedOffsetMinutes(new Date(wallNoon), timeZone);
   const offsetAtNoon = zonedOffsetMinutes(new Date(wallNoon - offset * 60_000), timeZone);
@@ -333,7 +354,7 @@ export function zonedDayKeySince(
   const key = zonedDateKey(now, timeZone);
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!match) return key;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const date = new Date(utcWallClock(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
   date.setUTCDate(date.getUTCDate() - days);
   return date.toISOString().slice(0, 10);
 }
@@ -349,7 +370,7 @@ export function previousDateKey(key: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!match) return key;
   const date = new Date(
-    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+    utcWallClock(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
   );
   date.setUTCDate(date.getUTCDate() - 1);
   return date.toISOString().slice(0, 10);
@@ -390,7 +411,7 @@ export function isRealDayKey(dayKey: string): boolean {
   const day = Number(match[3]);
   if (month < 1 || month > 12 || day < 1) return false;
   // The last day of the month.
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const lastDay = new Date(utcWallClock(year, month, 0)).getUTCDate();
   return day <= lastDay;
 }
 
