@@ -50,7 +50,15 @@ function LandingNav() {
           <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="text-sm">
             {t("landing.nav.login")}
           </Button>
-          <Button size="sm" onClick={() => navigate("/login?mode=register")} className="hidden sm:inline-flex text-sm rounded-md px-4">
+          {/**
+           * The sign-up button is on every screen.
+           *
+           * It used to be hidden below six hundred and forty pixels —
+           * so on a phone the landing page offered "log in" and nothing
+           * else, and the person who came to sign up had to find the
+           * small link at the bottom of the sign-in form.
+           */}
+          <Button size="sm" onClick={() => navigate("/login?mode=register")} className="text-sm rounded-md px-3 sm:px-4">
             {t("landing.nav.register")}
           </Button>
         </div>

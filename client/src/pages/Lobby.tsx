@@ -251,14 +251,27 @@ function useAnimatedCounter(target: number, duration = 800): number {
     const start = prevTarget.current;
     prevTarget.current = target;
     const startTime = Date.now();
+    /**
+     * The frame is cancelled when the page goes away.
+     *
+     * The chain used to run for ever: it kept calling `setValue` after
+     * the component was unmounted, and a second chain started on every
+     * change of the target — so the hall had several counters ticking
+     * at once, all of them writing to a component that was no longer
+     * on the screen.
+     */
+    let frame = 0;
     const tick = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       setValue(Math.round(start + (target - start) * eased));
-      if (progress < 1) requestAnimationFrame(tick);
+      if (progress < 1) frame = requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
+    frame = requestAnimationFrame(tick);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [target, duration]);
   return value;
 }
