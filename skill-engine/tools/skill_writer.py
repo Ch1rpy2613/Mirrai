@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -194,32 +195,68 @@ def render_persona_skill(meta: dict, persona_content: str) -> str:
     )
 
 
+def write_text_atomic(path: Path, content: str) -> None:
+    """
+    把文件写进去——一次写完。
+
+    先写到一个旁边的临时文件，再把它换到目标名字上。换名是原子的：目标
+    文件要么是旧内容，要么是新内容，不会是半截的。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    temp_path = Path(handle.name)
+    try:
+        with handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
 def write_artifacts(skill_dir: Path, meta: dict, work_content: str, persona_content: str) -> None:
-    """Write all generated artifacts for a skill version."""
+    """
+    把这个版本的产物都写进去。
+
+    它们是一个包：文档、技能、清单、元数据，少一个这个包就是坏的。所以
+    每一次写都只写一半的时候，剩下的那半是旧的——这个包里有一半是新版本
+    一半是旧版本，而读它的人看不出来。
+
+    所以每一次写都是原子的：先写好，再换名。
+    """
     artifacts = meta["artifacts"]
     manifest = build_manifest(meta)
 
-    (skill_dir / artifacts["work_doc"]).write_text(work_content, encoding="utf-8")
-    (skill_dir / artifacts["persona_doc"]).write_text(persona_content, encoding="utf-8")
-    (skill_dir / artifacts["combined_skill"]).write_text(
+    write_text_atomic(skill_dir / artifacts["work_doc"], work_content)
+    write_text_atomic(skill_dir / artifacts["persona_doc"], persona_content)
+    write_text_atomic(
+        skill_dir / artifacts["combined_skill"],
         render_combined_skill(meta, work_content, persona_content),
-        encoding="utf-8",
     )
-    (skill_dir / artifacts["work_skill"]).write_text(
+    write_text_atomic(
+        skill_dir / artifacts["work_skill"],
         render_work_skill(meta, work_content),
-        encoding="utf-8",
     )
-    (skill_dir / artifacts["persona_skill"]).write_text(
+    write_text_atomic(
+        skill_dir / artifacts["persona_skill"],
         render_persona_skill(meta, persona_content),
-        encoding="utf-8",
     )
-    (skill_dir / artifacts["manifest"]).write_text(
+    write_text_atomic(
+        skill_dir / artifacts["manifest"],
         json.dumps(manifest, ensure_ascii=False, indent=2),
-        encoding="utf-8",
     )
-    (skill_dir / "meta.json").write_text(
+    write_text_atomic(
+        skill_dir / "meta.json",
         json.dumps(sync_legacy_fields(meta), ensure_ascii=False, indent=2),
-        encoding="utf-8",
     )
 
 

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -53,6 +55,38 @@ def list_versions(skill_dir: Path) -> list[dict]:
     return versions
 
 
+def write_json_atomic(path: Path, data: dict) -> None:
+    """
+    把 JSON 写进去——一次写完。
+
+    它原来直接写目标文件：写到一半断电，或者写错了，目标文件就是半截的
+    JSON，下一次读它就炸了。而 `meta.json` 是这个技能的全部家当——脚本、
+    元数据、版本号都在里面。
+
+    所以先写到一个旁边的临时文件，再把它换到目标名字上。换名是原子的：
+    目标文件要么是旧的完整内容，要么是新的完整内容，不会是半截的。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    temp_path = Path(handle.name)
+    try:
+        with handle:
+            handle.write(json.dumps(data, ensure_ascii=False, indent=2))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
 def backup_artifacts(skill_dir: Path, backup_dir: Path) -> None:
     """Copy the current generated artifacts into a backup directory."""
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -91,10 +125,7 @@ def rollback(skill_dir: Path, target_version: str) -> bool:
     meta["lifecycle"]["version"] = f"{target_version}_restored"
     meta["lifecycle"]["updated_at"] = now_iso()
     meta["rollback_from"] = current_version
-    meta_path.write_text(
-        json.dumps(sync_legacy_fields(meta), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_atomic(meta_path, sync_legacy_fields(meta))
 
     print(f"rolled back to {target_version}: {', '.join(restored_files)}")
     return True
@@ -166,14 +197,22 @@ def main() -> None:
         return
 
     if args.action == "backup":
-        backup_current_version(skill_dir)
+        if not backup_current_version(skill_dir):
+            # The backup failed — and the script said goodbye with a
+            # success. So the caller believed the version was archived
+            # when it was not.
+            sys.exit(1)
         return
 
     if args.action == "rollback":
         if not args.version:
             print("error: rollback requires --version", file=sys.stderr)
             sys.exit(1)
-        rollback(skill_dir, args.version)
+        if not rollback(skill_dir, args.version):
+            # The rollback failed — and the script said goodbye with a
+            # success. So the caller believed the skill was back to the
+            # old version when it was not.
+            sys.exit(1)
         return
 
     cleanup_old_versions(skill_dir)
