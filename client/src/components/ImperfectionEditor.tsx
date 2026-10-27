@@ -22,6 +22,13 @@ import { mergeImperfectionDefaults, type ImperfectionEntry } from "@shared/imper
  * only used when the persona is in that state, which is what makes it a
  * personality rather than a mood board.
  */
+/**
+ * The limit the server enforces on one deviation.
+ *
+ * The same number as in `server/routers.ts`.
+ */
+const IMPERFECTION_DEVIATION_MAX = 200;
+
 export default function ImperfectionEditor({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
   /**
@@ -170,6 +177,16 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
                 value={(entry?.deviations ?? []).join(locale === "en" ? "; " : "；")}
                 placeholder={t("imperfection.deviationsHint")}
                 onChange={(e) => update(state, e.target.value)}
+                /**
+                 * The server's own limit.
+                 *
+                 * The field had none of its own: so a person wrote
+                 * three hundred characters into a field the server takes
+                 * two hundred, and the save was refused with a message
+                 * about a validation error rather than about their own
+                 * text.
+                 */
+                maxLength={IMPERFECTION_DEVIATION_MAX}
               />
             </div>
           );

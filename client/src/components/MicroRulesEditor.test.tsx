@@ -48,6 +48,25 @@ describe("the rules", () => {
     rules = [];
   });
 
+  it("does not let the user write past what the server takes", async () => {
+    /**
+     * The fields had no limits of their own: so a person wrote six
+     * hundred characters into a field the server takes five hundred,
+     * and the save was refused with a message about a validation error
+     * rather than about their own text.
+     */
+    const user = userEvent.setup();
+    render(<MicroRulesEditor personaId={1} />);
+
+    await user.click(screen.getByRole("button", { name: translate("zh", "microRules.add") }));
+
+    const meaning = screen.getByLabelText(translate("zh", "microRules.meaning")) as HTMLTextAreaElement;
+    expect(meaning.maxLength).toBe(500);
+
+    const rendering = screen.getByLabelText(translate("zh", "microRules.rendering")) as HTMLTextAreaElement;
+    expect(rendering.maxLength).toBe(500);
+  });
+
   it("says so when there are no rules yet", () => {
     render(<MicroRulesEditor personaId={1} />);
     expect(screen.getByText(translate("zh", "microRules.empty"))).toBeInTheDocument();

@@ -37,6 +37,15 @@ function manualId(): string {
   return `manual-${Date.now()}-${manualCounter}`;
 }
 
+/**
+ * The limits the server enforces.
+ *
+ * They are the same numbers as in `server/routers.ts`: the trigger is
+ * forty characters, and the meaning and the rendering are five hundred.
+ */
+const MICRO_RULE_TRIGGER_MAX = 40;
+const MICRO_RULE_TEXT_MAX = 500;
+
 export default function MicroRulesEditor({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
   // The punctuation follows the interface's language: the full-width
@@ -378,6 +387,15 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
               value={triggerText}
               placeholder={t("microRules.triggerHint")}
               onChange={(e) => setTriggerText(e.target.value)}
+              /**
+               * The server's own limits.
+               *
+               * The field had none of its own: so a person wrote six
+               * hundred characters into a field the server takes five
+               * hundred, and the save was refused with a message about
+               * a validation error rather than about their own text.
+               */
+              maxLength={MICRO_RULE_TRIGGER_MAX}
             />
           </div>
           <div className="space-y-1.5">
@@ -386,6 +404,7 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
               id="micro-rule-meaning"
               value={draft.meaning ?? ""}
               onChange={(e) => setDraft({ ...draft, meaning: e.target.value })}
+              maxLength={MICRO_RULE_TEXT_MAX}
             />
           </div>
           <div className="space-y-1.5">
@@ -394,6 +413,7 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
               id="micro-rule-rendering"
               value={draft.rendering ?? ""}
               onChange={(e) => setDraft({ ...draft, rendering: e.target.value })}
+              maxLength={MICRO_RULE_TEXT_MAX}
             />
           </div>
           <div className="flex justify-end gap-2">
