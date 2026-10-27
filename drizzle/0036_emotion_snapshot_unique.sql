@@ -19,7 +19,13 @@ USING "emotion_snapshots" "newer"
 WHERE "old"."personaId" = "newer"."personaId"
   AND "old"."userId" = "newer"."userId"
   AND "old"."date" = "newer"."date"
-  AND "old"."id" > "newer"."id";
+  -- The newest of each day is the one that survives.
+  --
+  -- It was the other way round: the comparison deleted the row with the
+  -- higher id, so the fold kept the *first* snapshot of the day — the
+  -- one written in the morning, before the day's last turn — and threw
+  -- away the day's final emotional state.
+  AND "old"."id" < "newer"."id";
 
 CREATE UNIQUE INDEX IF NOT EXISTS "emotion_snapshots_persona_user_date_idx"
   ON "emotion_snapshots" ("personaId", "userId", "date");

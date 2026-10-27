@@ -16,7 +16,14 @@ USING "diary_entries" "newer"
 WHERE "old"."personaId" = "newer"."personaId"
   AND "old"."userId" = "newer"."userId"
   AND "old"."date" = "newer"."date"
-  AND "old"."id" > "newer"."id";
+  -- The *newer* row is the one that survives.
+  --
+  -- It was the other way round: the comparison deleted the row with the
+  -- higher id, so the fold kept the *oldest* of the two — the first
+  -- summary of that day, not the one that was written afterwards. And
+  -- for the collection sources it kept the *older credentials*, which
+  -- is the exact thing the migration was written to fix.
+  AND "old"."id" < "newer"."id";
 
 CREATE UNIQUE INDEX IF NOT EXISTS "diary_entries_persona_user_date_idx"
   ON "diary_entries" ("personaId", "userId", "date");
@@ -25,7 +32,8 @@ DELETE FROM "collection_sources" "old"
 USING "collection_sources" "newer"
 WHERE "old"."userId" = "newer"."userId"
   AND "old"."source" = "newer"."source"
-  AND "old"."id" > "newer"."id";
+  -- The newer credentials survive — the ones the user re-authenticated.
+  AND "old"."id" < "newer"."id";
 
 CREATE UNIQUE INDEX IF NOT EXISTS "collection_sources_user_source_idx"
   ON "collection_sources" ("userId", "source");
