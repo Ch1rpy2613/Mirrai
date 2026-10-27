@@ -222,7 +222,7 @@ export function collectReminders(params: {
   // round again, the persona has something to say about it.
   for (const photo of params.photos ?? []) {
     const label = photo.originalName?.trim() || copy(locale, "reminders.photoFallbackLabel");
-    const date = extractPhotoDate(photo.dateHint, photo.createdAt);
+    const date = extractPhotoDate(photo.dateHint, photo.createdAt, timezone);
     if (!date) continue;
 
     const matches =
@@ -255,13 +255,27 @@ export function collectReminders(params: {
 export function extractPhotoDate(
   dateHint: string | null | undefined,
   createdAt: Date,
+  timezone?: string | null,
 ): string | null {
   if (dateHint) {
     const match = dateHint.match(/\d{4}-\d{2}-\d{2}|\d{2}-\d{2}/);
     if (match) return match[0];
   }
   if (!(createdAt instanceof Date) || Number.isNaN(createdAt.getTime())) return null;
-  return createdAt.toISOString().slice(0, 10);
+  /**
+   * The day the photo was uploaded, in the reader's own calendar.
+   *
+   * It used to be the *UTC* day — `toISOString().slice(0, 10)` — and the
+   * upload time is a timestamp without a time zone, so it is the
+   * server's own wall clock. On a server that is not on UTC, every
+   * photo uploaded before eight in the morning was filed under the day
+   * before — so the "on this day" reminder for it came a day early.
+   *
+   * The day is read in the reader's calendar because that is the
+   * calendar it is compared against: the anniversary it is matched
+   * with is the reader's day too.
+   */
+  return zonedDateKey(createdAt, timezone);
 }
 
 /**

@@ -242,7 +242,23 @@ describe("extractPhotoDate", () => {
   });
 
   it("falls back to the upload date", () => {
-    expect(extractPhotoDate(null, new Date(Date.UTC(2019, 4, 20)))).toBe(
+    // The upload time is a timestamp without a time zone — it is the
+    // server's own wall clock — so the day is read on that clock. A
+    // date in Greenwich was the previous day for anybody east of it.
+    expect(extractPhotoDate(null, new Date(2019, 4, 20, 12, 0))).toBe(
+      "2019-05-20",
+    );
+  });
+
+  it("files a photo uploaded in the small hours on the day it was uploaded", () => {
+    // Three in the morning in Shanghai. In Greenwich that is the
+    // evening of the day before, so the "on this day" reminder for a
+    // photo the user had just uploaded came a day early.
+    const uploaded = new Date("2019-05-19T19:00:00.000Z");
+
+    expect(extractPhotoDate(null, uploaded, "Asia/Shanghai")).toBe("2019-05-20");
+    // And the same photo, read on the server's own clock.
+    expect(extractPhotoDate(null, new Date(2019, 4, 20, 3, 0))).toBe(
       "2019-05-20",
     );
   });
