@@ -2961,23 +2961,33 @@ export async function restoreMessages(
 ): Promise<number> {
   const db = await getDb();
   if (!db || rows.length === 0) return 0;
-  for (const row of rows) {
-    await db.insert(messages).values({
-      personaId,
-      userId,
-      role: row.role as "user" | "assistant",
-      content: row.content,
-      emotionalState: row.emotionalState,
-      messageType: row.messageType as any,
-      mediaUrl: row.mediaUrl,
-      replyToId: row.replyToId,
-      // The message keeps its own origin: a WeChat message stays a
-      // WeChat message, and a letter's answer stays a letter's answer.
-      ...(row.channel ? { channel: row.channel as any } : {}),
-      ...(row.origin ? { origin: row.origin as any } : {}),
-      createdAt: row.createdAt,
-    });
-  }
+  /**
+   * All of it, or none of it.
+   *
+   * The rows were inserted one at a time, outside a transaction — so a
+   * failure halfway through left a half-restored turn: the user's own
+   * question back and the persona's answer missing. And the caller
+   * swallowed the error, so nobody was told.
+   */
+  await withTransaction(async (tx) => {
+    for (const row of rows) {
+      await tx.insert(messages).values({
+        personaId,
+        userId,
+        role: row.role as "user" | "assistant",
+        content: row.content,
+        emotionalState: row.emotionalState,
+        messageType: row.messageType as any,
+        mediaUrl: row.mediaUrl,
+        replyToId: row.replyToId,
+        // The message keeps its own origin: a WeChat message stays a
+        // WeChat message, and a letter's answer stays a letter's answer.
+        ...(row.channel ? { channel: row.channel as any } : {}),
+        ...(row.origin ? { origin: row.origin as any } : {}),
+        createdAt: row.createdAt,
+      });
+    }
+  });
   return rows.length;
 }
 

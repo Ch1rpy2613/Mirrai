@@ -21,6 +21,17 @@ export const ERRORS = {
     zh: "这次没能重新生成回答，原来的回答还在",
     en: "The reply could not be generated this time — the old one is still there",
   },
+  /**
+   * The turn could not be put back.
+   *
+   * The old turn was taken away before the new one was asked for — so
+   * if it cannot be put back, the user's own words are gone. The app
+   * says so rather than claiming the old answer is still there.
+   */
+  "errors.regenerateRestoreFailed": {
+    zh: "这次没能重新生成回答，而且原来那一轮没能放回来——请刷新页面看看",
+    en: "The reply could not be generated this time, and the previous turn could not be put back — please refresh to see what is there",
+  },
   "errors.personaNotReady": {
     zh: "分身还未准备好，请先完成 AI 解析",
     en: "This persona is not ready yet — finish the analysis first",

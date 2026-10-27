@@ -129,6 +129,25 @@ describe("asking for the same reply again", () => {
     expect(restoreMessages.mock.calls[0][0]).toHaveLength(2);
   });
 
+  it("says so when the old turn could not be put back", async () => {
+    // The restore used to be swallowed — so a database that refused the
+    // write left the user with neither their question nor the answer,
+    // and the interface said the regeneration had failed, as though
+    // nothing else had happened.
+    runConversation.mockImplementation(async function* () {
+      yield { type: "error", message: "the provider is down", partial: false };
+    });
+    restoreMessages.mockRejectedValue(new Error("the database refused the write"));
+
+    await expect(
+      appRouter.createCaller(ctxFor(1)).chat.regenerate({
+        personaId: 5,
+        messageId: 12,
+        locale: "zh",
+      }),
+    ).rejects.toThrow("原来那一轮没能放回来");
+  });
+
   it("does not put the old answer back when the model answers", async () => {
     runConversation.mockImplementation(async function* () {
       yield { type: "delta", text: "在的呀" };

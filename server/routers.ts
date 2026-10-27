@@ -1637,7 +1637,28 @@ export const appRouter = router({
             // Whatever the failed turn wrote is taken away, and the turn
             // it was going to replace is put back.
             await deleteMessagesFrom(previous.id, input.personaId, ctx.user.id).catch(() => 0);
-            await restoreMessages(replaced, input.personaId, ctx.user.id).catch(() => 0);
+            /**
+             * The turn is put back, and the failure is not hidden.
+             *
+             * The restore used to be swallowed — so a database that
+             * refused the write left the user with neither their
+             * question nor the answer, and the interface said the
+             * regeneration had failed, as though nothing else had
+             * happened. It is the one thing in the app that can lose
+             * what the user wrote, so it says so.
+             */
+            try {
+              await restoreMessages(replaced, input.personaId, ctx.user.id);
+            } catch (restoreError) {
+              console.error(
+                "[Chat] The previous turn could not be put back:",
+                restoreError,
+              );
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: copy(ctx.locale, "errors.regenerateRestoreFailed"),
+              });
+            }
             throw new TRPCError({
               code: "INTERNAL_SERVER_ERROR",
               message: copy(ctx.locale, "errors.regenerateFailed"),

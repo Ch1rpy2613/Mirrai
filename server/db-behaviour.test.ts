@@ -158,13 +158,19 @@ class FakeQuery {
   }
 }
 
+/** How many transactions were opened. */
+let transactions = 0;
+
 /** The fake database the module under test gets. */
 const fakeDb = {
   select: () => new FakeQuery("select"),
   insert: (table: any) => new FakeQuery("insert").setTable(table),
   update: (table: any) => new FakeQuery("update").setTable(table),
   delete: (table: any) => new FakeQuery("delete").setTable(table),
-  transaction: async (callback: (tx: any) => Promise<any>) => callback(fakeDb),
+  transaction: async (callback: (tx: any) => Promise<any>) => {
+    transactions++;
+    return callback(fakeDb);
+  },
 };
 
 vi.mock("drizzle-orm/node-postgres", () => ({
@@ -200,6 +206,7 @@ function last(): QueryLog {
 beforeEach(() => {
   registry = { select: {}, returning: {} };
   queries = [];
+  transactions = 0;
 });
 
 describe("the letters", () => {
@@ -501,6 +508,45 @@ describe("the safety record", () => {
     expect(last().values.handled).toBe(true);
     expect(last().values.resolvedAt).toBeInstanceOf(Date);
     expect(whereOf().flatMap((c) => c.params)).toContain(3);
+  });
+});
+
+describe("putting a turn back", () => {
+  it("does it in one transaction, so it is all of it or none of it", async () => {
+    // The rows were inserted one at a time, outside a transaction — so a
+    // failure halfway through left the user's own question back and the
+    // persona's answer missing.
+    await db.restoreMessages(
+      [
+        {
+          role: "user",
+          content: "在吗",
+          emotionalState: "warm",
+          messageType: "text",
+          mediaUrl: null,
+          replyToId: null,
+          channel: "web",
+          origin: null,
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+        },
+        {
+          role: "assistant",
+          content: "在的",
+          emotionalState: "warm",
+          messageType: null,
+          mediaUrl: null,
+          replyToId: null,
+          channel: "web",
+          origin: null,
+          createdAt: new Date("2026-01-01T00:01:00Z"),
+        },
+      ],
+      1,
+      3,
+    );
+
+    expect(transactions).toBe(1);
+    expect(queries.filter((q) => q.operation === "insert")).toHaveLength(2);
   });
 });
 
