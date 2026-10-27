@@ -194,6 +194,29 @@ describe("the packaged app", () => {
     expect(verify).toContain("DATABASE_URL is not set");
   });
 
+  it("does not write the launcher's version down by hand", () => {
+    /**
+     * It was written down in the .csproj — so when the app's version
+     * moved on, the launcher kept the old one, and the app in "Apps &
+     * features" said it was a version that had not been shipped for
+     * months.
+     */
+    const csproj = readFileSync(
+      path.join(ROOT, "scripts/windows/launcher/Mirrai.Launcher.csproj"),
+      "utf-8",
+    );
+    // No version number of the app's own is written in there.
+    const appVersion = (JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf-8")) as {
+      version: string;
+    }).version;
+    expect(csproj).not.toContain(`<Version>${appVersion}</Version>`);
+
+    // And the build passes it in.
+    const build = readFileSync(path.join(ROOT, "scripts/build-windows-app.ps1"), "utf-8");
+    expect(build).toContain("-p:Version=$AppVersion");
+    expect(build).toContain("package.json");
+  });
+
   it("does not tell the channel that the live scripts are an old build", () => {
     /**
      * The version was written down — "1.0.0" — while the app was at

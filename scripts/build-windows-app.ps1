@@ -250,10 +250,27 @@ Copy-Item -Path (Join-Path $ScriptDir "windows\Mirrai.cmd") -Destination (Join-P
 # SDK to build, so it is skipped when that is not available - the bundle is
 # still usable through Mirrai.cmd.
 $LauncherProject = Join-Path $ScriptDir "windows\launcher\Mirrai.Launcher.csproj"
+# The version the launcher reports.
+#
+# It used to be written down in the .csproj by hand — so when the app's
+# version moved on, the launcher kept the old one, and the app in
+# "Apps & features" said it was a version that had not been shipped for
+# months. The app's own package.json is the answer.
+$AppVersion = "0.0.0"
+try {
+    $Pkg = Get-Content (Join-Path $ProjectDir "package.json") -Raw | ConvertFrom-Json
+    if ($Pkg.version) { $AppVersion = $Pkg.version }
+} catch {
+    Log "The app's version could not be read; the launcher will be built without one."
+}
+Log "Building the launcher for version ${AppVersion}."
 if (Get-Command dotnet -ErrorAction SilentlyContinue) {
     Log "Building the GUI launcher..."
     $LauncherOut = Join-Path $BuildDir "launcher-out"
     & dotnet publish $LauncherProject -c Release -r win-x64 --self-contained true `
+        -p:Version=$AppVersion `
+        -p:FileVersion=$AppVersion `
+        -p:InformationalVersion=$AppVersion `
         -p:PublishSingleFile=true `
         -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:EnableCompressionInSingleFile=true `
