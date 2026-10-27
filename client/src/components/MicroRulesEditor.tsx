@@ -46,6 +46,13 @@ function manualId(): string {
  */
 const MICRO_RULE_TRIGGER_MAX = 40;
 const MICRO_RULE_TEXT_MAX = 500;
+/**
+ * The most triggers one rule may have.
+ *
+ * The same number as the server's own: `trigger: z.array(z.string()
+ * .max(40)).min(1).max(12)`.
+ */
+const MICRO_RULE_TRIGGER_COUNT_MAX = 12;
 
 export default function MicroRulesEditor({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
@@ -201,6 +208,22 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
       .filter(Boolean);
     if (!trigger.length || !draft.meaning?.trim() || !draft.rendering?.trim()) {
       toast.error(t("microRules.incomplete"));
+      return;
+    }
+    /**
+     * The server's own limits, checked here.
+     *
+     * So the user is told what is wrong with their own text, rather
+     * than the save being refused with a message about a validation
+     * error.
+     */
+    const tooLong = trigger.find((one) => one.length > MICRO_RULE_TRIGGER_MAX);
+    if (tooLong) {
+      toast.error(t("microRules.triggerTooLong", { count: MICRO_RULE_TRIGGER_MAX }));
+      return;
+    }
+    if (trigger.length > MICRO_RULE_TRIGGER_COUNT_MAX) {
+      toast.error(t("microRules.tooManyTriggers", { count: MICRO_RULE_TRIGGER_COUNT_MAX }));
       return;
     }
     const edited: MicroRule = {
@@ -407,7 +430,18 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
                * hundred, and the save was refused with a message about
                * a validation error rather than about their own text.
                */
-              maxLength={MICRO_RULE_TRIGGER_MAX}
+              /**
+               * The limit is per trigger, not for the whole field.
+               *
+               * The field holds the *list* — the triggers separated by
+               * commas or "、" — and the server's forty is a limit on
+               * each trigger, up to twelve of them. So the field's
+               * limit was far too small: a user typing two long
+               * triggers could not finish the second one, and the
+               * field simply refused the characters. No error, no
+               * explanation — the caret just stopped moving.
+               */
+              maxLength={MICRO_RULE_TRIGGER_MAX * MICRO_RULE_TRIGGER_COUNT_MAX}
             />
           </div>
           <div className="space-y-1.5">

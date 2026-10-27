@@ -203,13 +203,25 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
           <li key={letter.id} className="rounded-xl border border-border/70 p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-[11px]">
+                {/**
+                    The badge says what the letter is.
+
+                    It used to know three states and fall through to the
+                    draft label for everything else — so a letter the
+                    user had kept for themselves (the server's status
+                    "self") was badged 「还在写」 / "Still writing",
+                    which is the opposite of what they had just done.
+                    There was no wording for that state at all.
+                    */}
                 {letter.status === "sent"
                   ? t("outbound.statusSent")
                   : letter.status === "dropped"
                     ? t("outbound.statusDropped")
-                    : letter.status === "ready"
-                      ? t("outbound.statusReady")
-                      : t("outbound.statusDraft")}
+                    : letter.status === "self"
+                      ? t("outbound.statusSelf")
+                      : letter.status === "ready"
+                        ? t("outbound.statusReady")
+                        : t("outbound.statusDraft")}
               </Badge>
               {letter.sourceMessageId ? (
                 <span className="text-[11px] text-muted-subtle">
@@ -217,7 +229,14 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                 </span>
               ) : null}
               <div className="ml-auto flex items-center gap-1">
-                {letter.status !== "sent" && letter.status !== "dropped" ? (
+                {/**
+                    The buttons are for a letter the user still has
+                    something to do with. A letter they kept for
+                    themselves is not one of those: they have already
+                    decided, and the buttons still offered to edit it,
+                    to say they had said it, and to drop it.
+                    */}
+                {letter.status !== "sent" && letter.status !== "dropped" && letter.status !== "self" ? (
                   <>
                     <Button
                       variant="ghost"
