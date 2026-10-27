@@ -78,7 +78,14 @@ export async function exportSkillToHost(
   const skillFile = path.join(skillPath, "SKILL.md");
 
   if (!fs.existsSync(skillPath) || !fs.existsSync(skillFile)) {
-    throw new Error(copy(locale, "errors.skillPackageMissing", { path: skillPath }));
+    /**
+     * The path is not in the message.
+     *
+     * It used to be — and it reaches the browser on the paths that
+     * pass their own error text on. The path says where the server's
+     * files are; the log has it.
+     */
+    throw new Error(copy(locale, "errors.skillPackageMissing"));
   }
 
   const commandName = readCommandName(skillPath);

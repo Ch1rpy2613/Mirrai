@@ -3182,7 +3182,16 @@ export const appRouter = router({
           console.error("[SkillEngine] Skill export failed:", e);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: e instanceof Error ? e.message : copy(ctx.locale, "errors.skillExportFailed"),
+            /**
+             * The message the user gets is not the message the error
+             * had.
+             *
+             * The raw one carries the server's absolute paths, the path
+             * of the Python interpreter and the Python traceback — none
+             * of which belong in a browser, and all of which say where
+             * the server's files are. The log has them.
+             */
+            message: copy(ctx.locale, "errors.skillExportFailed"),
           });
         }
       }),

@@ -53,8 +53,15 @@ export async function runPythonTool(
      * python3" — which says nothing about the fact that the feature
      * needs an interpreter the operating system may not have.
      */
+    /**
+     * The interpreter's path is not in the message.
+     *
+     * It used to be — and this message reaches the browser on the
+     * paths that pass their own error text on. The path says where the
+     * server's files are; the log has it.
+     */
     throw new Error(
-      `Python is not available at "${ENV.pythonPath}", so "${toolName}" cannot run. Install Python 3 and make sure it is on the PATH.`,
+      `Python 3 is not available, so "${toolName}" cannot run. Install Python 3 and make sure it is on the PATH.`,
     );
   }
   return execFileAsync(ENV.pythonPath, [`tools/${toolName}`, ...args], {

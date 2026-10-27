@@ -206,9 +206,16 @@ export const ERRORS = {
     zh: "不支持的文件扩展名：{{ext}}（允许：{{allowed}}）",
     en: "That file extension is not supported: {{ext}} (allowed: {{allowed}})",
   },
+  /**
+   * The export failed.
+   *
+   * It does not say why: the reason is in the server's log, and it
+   * carries the server's own paths — which do not belong in a browser.
+   * So it says what the user can do instead.
+   */
   "errors.skillExportFailed": {
-    zh: "技能导出失败",
-    en: "The skill could not be exported",
+    zh: "技能导出失败。请确认这台机器上装有 Python 3，然后重试；详细原因请看服务端日志。",
+    en: "The skill could not be exported. Make sure Python 3 is installed on this machine and try again — the reason is in the server's log.",
   },
   /**
    * The errors that have no message of their own.
@@ -487,8 +494,8 @@ export const ERRORS = {
 
   /** The skill package could not be installed into a host. */
   "errors.skillPackageMissing": {
-    zh: "技能包不存在或缺少 SKILL.md：{{path}}",
-    en: "The skill package does not exist, or it has no SKILL.md: {{path}}",
+    zh: "技能包不存在或缺少 SKILL.md",
+    en: "The skill package does not exist, or it has no SKILL.md",
   },
   "errors.skillInstallPathMissing": {
     zh: "安装器没有返回安装路径：{{host}}",

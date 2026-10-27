@@ -95,7 +95,10 @@ describe("the packaged app", () => {
     // be missing — so the failure has to say what is missing.
     const runner = readFileSync(path.join(ROOT, "server/skill-engine/runner.ts"), "utf-8");
     expect(runner).toContain("pythonIsAvailable");
-    expect(runner).toMatch(/Python is not available/);
+    // And it says what is missing — without the path of the
+    // interpreter, which used to travel to the browser.
+    expect(runner).toMatch(/Python.*is not available/);
+    expect(runner).not.toMatch(/Python.*not available at \"/);
   });
 
   it("stops when the data migrations fail", () => {
