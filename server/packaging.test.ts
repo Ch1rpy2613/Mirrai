@@ -128,6 +128,17 @@ describe("the packaged app", () => {
     expect(docker).toMatch(/exit 1/);
   });
 
+  it("stops when the schema cannot be synchronised", () => {
+    // `push` applies the difference between the schema and the live
+    // database — so a failure means the two still disagree, and the app
+    // would start on a half-synced schema.
+    const macos = readFileSync(path.join(ROOT, "scripts/macos/start.sh"), "utf-8");
+    expect(macos).toMatch(/push --force[\s\S]{0,400}exit 1/);
+
+    const windows = readFileSync(path.join(ROOT, "scripts/windows/start.ps1"), "utf-8");
+    expect(windows).toMatch(/push --force[\s\S]{0,1200}exit 1/);
+  });
+
   it("stops when the data migrations fail", () => {
     // A failed data migration is exactly the case where the schema and
     // the data disagree. All three entrypoints used to carry on and

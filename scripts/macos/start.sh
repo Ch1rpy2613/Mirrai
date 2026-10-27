@@ -162,9 +162,12 @@ HAS_BINDINGS=$("$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$
 if [ "$HAS_BINDINGS" = "t" ]; then
   MIGRATION="$APP_DIR/drizzle/0002_wechat_clawbot_channel.sql"
   if [ -f "$MIGRATION" ]; then
+    # It is not fatal here, because the same file is applied again by the
+    # data migrations below — and it is that run which decides whether
+    # the app can start. What is not allowed is to say nothing about it.
     "$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" \
       --single-transaction -v ON_ERROR_STOP=1 -f "$MIGRATION" 2>&1 | tee -a "$LOGS/migrate.log" || \
-      log "Migration note (may be OK)"
+      log "The WeChat channel migration did not apply. The data migrations below will report it if it matters."
   fi
 else
   log "No existing bindings table, the schema will be created below."
@@ -175,8 +178,17 @@ fi
 # is not shipped with the app.
 log "Synchronizing the database schema..."
 cd "$APP_DIR"
-"$NODE_BIN" ./node_modules/drizzle-kit/bin.cjs push --force 2>&1 | tee -a "$LOGS/migrate.log" || \
-  log "Schema sync note (may be OK)"
+# The failure is fatal.
+#
+# `push` applies the difference between the schema and the live
+# database — so a failure means the two still disagree, and the app
+# would start on a half-synced schema and serve errors from every
+# corner of it. The failure used to be swallowed with a "may be OK",
+# and the app carried on.
+if ! "$NODE_BIN" ./node_modules/drizzle-kit/bin.cjs push --force 2>&1 | tee -a "$LOGS/migrate.log"; then
+  log "The database schema was not synchronised. The app cannot start on a half-synced database."
+  exit 1
+fi
 
 # `push` only creates the tables — it does not run the hand-written data
 # migrations (for example mapping the old Chinese intimacy levels onto the new

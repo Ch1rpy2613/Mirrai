@@ -190,7 +190,11 @@ listen_addresses = 'localhost'
                     --single-transaction -v ON_ERROR_STOP=1 -f $migration 2>&1 |
                     Tee-Object -FilePath (Join-Path $Logs "migrate.log")
             } catch {
-                Log "Migration note: $($_.Exception.Message)"
+                # It is not fatal here, because the same file is applied
+                # again by the data migrations below - and it is that run
+                # which decides whether the app can start. What is not
+                # allowed is to say nothing about it.
+                Log "The WeChat channel migration did not apply: $($_.Exception.Message)"
             }
         }
     } else {
@@ -205,8 +209,20 @@ listen_addresses = 'localhost'
     try {
         & $NodeBin ".\node_modules\drizzle-kit\bin.cjs" push --force 2>&1 |
             Tee-Object -FilePath (Join-Path $Logs "migrate.log")
+        # The failure is fatal.
+        #
+        # `push` applies the difference between the schema and the live
+        # database - so a failure means the two still disagree, and the
+        # app would start on a half-synced schema and serve errors from
+        # every corner of it. The failure used to be swallowed with a
+        # "note", and the app carried on.
+        if ($LASTEXITCODE -ne 0) {
+            throw "The database schema was not synchronised. The app cannot start on a half-synced database."
+        }
     } catch {
-        Log "Schema sync note: $($_.Exception.Message)"
+        Log "The database schema was not synchronised: $($_.Exception.Message)"
+        Pop-Location
+        exit 1
     }
     Pop-Location
 
