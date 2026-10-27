@@ -1,7 +1,7 @@
 {
   "name": "Mirrai",
   "short_name": "Mirrai",
-  "description": "上传聊天记录，AI 重建 TA 的数字分身。不在身边的时候，TA 还在这里。",
+  "description": "上传聊天记录，AI 重建 TA 的数字分身。不在身边的时候，TA 还在这里。 / Upload your chats and let AI rebuild them as a digital persona. They are here even when you are not.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -32,16 +32,16 @@
   ],
   "shortcuts": [
     {
-      "name": "大厅",
-      "short_name": "大厅",
+      "name": "大厅 / Lobby",
+      "short_name": "大厅 / Lobby",
       "url": "/",
-      "description": "管理你的数字分身"
+      "description": "管理你的数字分身 / Manage your digital personas"
     },
     {
-      "name": "对话日记",
-      "short_name": "日记",
+      "name": "对话日记 / Diary",
+      "short_name": "日记 / Diary",
       "url": "/diary",
-      "description": "回看 AI 生成的对话日记"
+      "description": "回看 AI 生成的对话日记 / Read the diary the app wrote"
     }
   ]
 }

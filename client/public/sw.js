@@ -41,16 +41,31 @@ function isPrivatePath(pathname) {
   );
 }
 
-/** What the browser is shown when there is nothing to show. */
+/**
+ * What the browser is shown when there is nothing to show.
+ *
+ * It was English only — and the app is not. The service worker cannot
+ * read the app's own language setting (it has no access to the
+ * browser's storage), but it does know the browser's language, and that
+ * is what the person is reading.
+ */
 function offlineResponse() {
-  return new Response(
-    '<!doctype html><html lang="en"><meta charset="utf-8">' +
-      "<title>Offline</title>" +
-      '<body style="font-family:system-ui,sans-serif;padding:2rem">' +
-      "<h1>Offline</h1>" +
-      "<p>This page needs the app to be running.</p></body></html>",
-    { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
-  );
+  const chinese = String(self.navigator?.language ?? "").toLowerCase().startsWith("zh");
+  const html = chinese
+    ? '<!doctype html><html lang="zh-CN"><meta charset="utf-8">' +
+        "<title>离线</title>" +
+        '<body style="font-family:system-ui,sans-serif;padding:2rem">' +
+        "<h1>离线</h1>" +
+        "<p>这一页需要 Mirrai 正在运行。</p></body></html>"
+    : '<!doctype html><html lang="en"><meta charset="utf-8">' +
+        "<title>Offline</title>" +
+        '<body style="font-family:system-ui,sans-serif;padding:2rem">' +
+        "<h1>Offline</h1>" +
+        "<p>This page needs Mirrai to be running.</p></body></html>";
+  return new Response(html, {
+    status: 503,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
 }
 
 /**
