@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { COPY, copy, detectLocale, interpolate, isCopyKey } from "./index";
+import { COPY, copy, copyKey, detectLocale, interpolate, isCopyKey } from "./index";
 import { registerSkillPrompts } from "./skill-prompts";
 
 // The skill prompts are added to the table when the pipeline is loaded.
@@ -184,7 +184,9 @@ describe("looking a sentence up", () => {
   it("shows the key itself when the key is unknown", () => {
     // A missing translation should look like a missing translation, not
     // like an empty box.
-    expect(copy("en", "channels.nothingHere")).toBe("channels.nothingHere");
+    // The key is not in the table — so it is looked up at runtime,
+    // where the answer is the key itself.
+    expect(copyKey("en", "channels.nothingHere")).toBe("channels.nothingHere");
     expect(isCopyKey("channels.nothingHere")).toBe(false);
     expect(isCopyKey("channels.noPersonas")).toBe(true);
   });
@@ -229,6 +231,36 @@ describe("the keys the app asks for", () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe("the type of the key", () => {
+  it("is a literal, so a typo in a literal call is a compile error", () => {
+    /**
+     * The key was `CopyKey | string` — which is `string`. So every
+     * typo compiled cleanly, and then showed up as `errors.someKey` in
+     * the interface, or inside a model's prompt where nobody would
+     * ever see it.
+     *
+     * The test cannot check the type — but it can check that the two
+     * functions are what they claim: `copy` takes a key from the
+     * table, and `copyKey` takes one that is not known until it is
+     * built, and answers with the key itself when it is not there.
+     */
+    expect(copy("zh", "channels.noPersonas")).toContain("分身");
+    expect(copyKey("zh", "channels.noPersonas")).toContain("分身");
+    expect(copyKey("zh", "channels.nothingHere")).toBe("channels.nothingHere");
+  });
+
+  it("says which keys the table holds", () => {
+    /**
+     * The keys are the ones the table has — so a key that is added to
+     * the table is a key that can be asked for, and one that is not
+     * there cannot.
+     */
+    const key = "channels.noPersonas" as const;
+    expect(isCopyKey(key)).toBe(true);
+    expect(Object.keys(COPY)).toContain(key);
   });
 });
 

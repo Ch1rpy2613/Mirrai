@@ -59,7 +59,7 @@ import {
   mineMicroRules,
   parseTranscriptMessages,
 } from "./micro-rules";
-import { copy, type Locale } from "@shared/copy";
+import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
 
@@ -365,7 +365,7 @@ function renderPersonaDocument(name: string, personaData: PersonaData, locale: L
    * owns it — so a field cannot be added to the persona and forgotten
    * in the document.
    */
-  const HEADINGS: Partial<Record<keyof PersonaData, string>> = {
+  const HEADINGS: Partial<Record<keyof PersonaData, CopyKey>> = {
     personality: "skillPrompts.document.personality",
     speakingStyle: "skillPrompts.document.speakingStyle",
     catchphrases: "skillPrompts.document.catchphrases",

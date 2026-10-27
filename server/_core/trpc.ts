@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { rateLimiter, resolveRateLimitKey, type RateLimitRule } from "./rate-limit";
-import { copy } from "@shared/copy";
+import { copy, type CopyKey } from "@shared/copy";
 
 /**
  * What the client is told when something goes wrong.
@@ -86,7 +86,7 @@ export function formatErrorForClient({
     if (shape.message && shape.message !== code) return shape;
     return {
       ...shape,
-      message: copy(locale, `errors.code.${codeKey(code)}`),
+      message: copy(locale, codeKey(code)),
     };
   }
   return {
@@ -114,19 +114,25 @@ function isValidationError(cause: unknown): boolean {
  *
  * The code is upper case and joined with underscores; the key is
  * camel case and joined with a dot.
+ *
+ * The result is typed as a copy key, so the table of codes and the
+ * table of sentences cannot drift apart: a code that has no sentence
+ * would be a compile error rather than a key that renders as itself
+ * in the interface.
  */
-function codeKey(code: string): string {
+function codeKey(code: string): CopyKey {
   const known = [
     "NOT_FOUND", "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN", "CONFLICT",
     "PRECONDITION_FAILED", "PAYLOAD_TOO_LARGE", "TOO_MANY_REQUESTS",
     "INTERNAL_SERVER_ERROR", "TIMEOUT",
-  ];
-  if (!known.includes(code)) return "unknown";
-  return code
+  ] as const;
+  if (!known.includes(code as (typeof known)[number])) return "errors.code.unknown";
+  const camel = (code as string)
     .toLowerCase()
     .split("_")
     .map((part, index) => (index === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
     .join("");
+  return `errors.code.${camel}` as CopyKey;
 }
 
 const t = initTRPC.context<TrpcContext>().create({

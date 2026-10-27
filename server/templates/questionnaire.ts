@@ -7,7 +7,7 @@
  * memory anchors, the character card export — works the same way.
  */
 import { normalizePersonaData, type PersonaData } from "../_core/persona-schema";
-import { copy, type Locale } from "@shared/copy";
+import { copy, type CopyKey, type Locale } from "@shared/copy";
 import {
   LOVE_LANGUAGE_BY_ANSWER_KEY,
   normaliseLoveLanguage,
@@ -48,7 +48,7 @@ export interface QuestionnaireAnswers {
  * only, so an English user answered an English questionnaire and got a
  * Chinese person back.
  */
-const COMMUNICATION_STYLE_KEYS: Record<string, string> = {
+const COMMUNICATION_STYLE_KEYS: Record<string, CopyKey> = {
   gentle: "questionnaire.style.gentle",
   direct: "questionnaire.style.direct",
   playful: "questionnaire.style.playful",
@@ -59,7 +59,7 @@ const COMMUNICATION_STYLE_KEYS: Record<string, string> = {
   literary: "questionnaire.style.literary",
 };
 
-const CONFLICT_KEYS: Record<string, string> = {
+const CONFLICT_KEYS: Record<string, CopyKey> = {
   silent: "questionnaire.conflict.silent",
   direct: "questionnaire.conflict.direct",
   forget: "questionnaire.conflict.forget",

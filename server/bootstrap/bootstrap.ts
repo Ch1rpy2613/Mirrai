@@ -16,7 +16,7 @@ import path from "path";
 import { ENV } from "../_core/env";
 import { hashPassword } from "../_core/password";
 import * as db from "../db";
-import { copy } from "@shared/copy";
+import { copy, type CopyKey } from "@shared/copy";
 
 const ADMIN_USERNAME = "admin";
 const PASSWORD_LENGTH = 16;
@@ -32,7 +32,14 @@ const PASSWORD_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ2345
  * it is the product's original voice; `gap` is the number of spaces
  * before the separator, which is what lines the labels up in the console.
  */
-function bilingual(key: string, gap = 1): string {
+/**
+ * The key is typed, so a label that is not in the table is a compile
+ * error.
+ *
+ * It was a plain string — so a typo in a label the operator reads once,
+ * on the console, at first run, rendered as the key itself.
+ */
+function bilingual(key: CopyKey, gap = 1): string {
   const zh = copy("zh", key);
   const en = copy("en", key);
   return `${zh}${" ".repeat(gap)}/ ${en}`;

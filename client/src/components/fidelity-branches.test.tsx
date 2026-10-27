@@ -60,6 +60,7 @@ vi.mock("@/lib/trpc", () => ({
       markSent: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       drop: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       keepForSelf: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      restore: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       markStaleNotified: {
         useMutation: () => ({ mutate: vi.fn(), isPending: false }),
       },

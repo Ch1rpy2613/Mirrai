@@ -16,7 +16,7 @@
  * `realismLevel` keeps its meaning as a global intensity: it scales how
  * strongly the per-state deviations apply.
  */
-import { copy } from "./copy";
+import { copy, type CopyKey } from "./copy";
 
 /** The states a persona can be in. Mirrors `emotional_state` in the schema. */
 export type ImperfectionState =
@@ -145,7 +145,7 @@ export function defaultImperfectionProfile(locale: "zh" | "en" = "zh"): Imperfec
  *
  * They are written out here, one per state, so the test can do its job.
  */
-const IMPERFECTION_STATE_LABEL_KEYS: Record<string, string> = {
+const IMPERFECTION_STATE_LABEL_KEYS: Record<string, CopyKey> = {
   warm: "labels.imperfection.warm",
   playful: "labels.imperfection.playful",
   nostalgic: "labels.imperfection.nostalgic",

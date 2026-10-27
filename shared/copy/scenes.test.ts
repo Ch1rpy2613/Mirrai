@@ -3,7 +3,7 @@ import {
   BUILTIN_SCENE_DEFINITIONS,
   BUILTIN_SCENE_SLUGS,
 } from "./scenes";
-import { localizeScene, copy } from "./index";
+import { localizeScene, copyKey } from "./index";
 
 /**
  * The scenes that come with the app.
@@ -55,12 +55,12 @@ describe("the built-in scenes", () => {
 
   it("has a copy entry for every part of every scene", () => {
     for (const scene of BUILTIN_SCENE_DEFINITIONS) {
-      expect(copy("zh", `scenes.${scene.slug}.name`)).toBe(scene.name);
-      expect(copy("en", `scenes.${scene.slug}.name`)).toBe(scene.nameEn);
-      expect(copy("en", `scenes.${scene.slug}.description`)).toBe(scene.description.en);
-      expect(copy("en", `scenes.${scene.slug}.overlay`)).toBe(scene.overlay.en);
+      expect(copyKey("zh", `scenes.${scene.slug}.name`)).toBe(scene.name);
+      expect(copyKey("en", `scenes.${scene.slug}.name`)).toBe(scene.nameEn);
+      expect(copyKey("en", `scenes.${scene.slug}.description`)).toBe(scene.description.en);
+      expect(copyKey("en", `scenes.${scene.slug}.overlay`)).toBe(scene.overlay.en);
       scene.starters.forEach((starter, index) => {
-        expect(copy("en", `scenes.${scene.slug}.starter${index + 1}`)).toBe(starter.en);
+        expect(copyKey("en", `scenes.${scene.slug}.starter${index + 1}`)).toBe(starter.en);
       });
     }
   });

@@ -2,7 +2,7 @@ import { INTIMACY_LEVELS, normalizeIntimacyLevel } from "@shared/intimacy";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
 import { zonedHour } from "@shared/timezone";
 import { buildReachabilityNote, type Reachability } from "@shared/user-side";
-import { copy } from "@shared/copy";
+import { copy, type CopyKey } from "@shared/copy";
 import { renderMicroRules, type MicroRule } from "@shared/micro-rules";
 import {
   mergeImperfectionDefaults,
@@ -42,7 +42,15 @@ export function computeIntimacy(params: {
  * speaking.
  */
 export function getEmotionalStateDesc(state: string, locale: "zh" | "en" = "zh"): string {
-  const map: Record<string, string> = {
+  /**
+   * The map is typed with the key type, so a key that is not in the
+   * table is a compile error.
+   *
+   * It was `Record<string, string>` — so the lookup lost the key type,
+   * and the call had to accept any string again, which is what let
+   * the typo through in the first place.
+   */
+  const map: Record<string, CopyKey> = {
     warm: "prompt.emotionalWarm",
     playful: "prompt.emotionalPlayful",
     nostalgic: "prompt.emotionalNostalgic",
@@ -95,7 +103,7 @@ export function getTimeOfDay(
   // persona is speaking. "It is 深夜 right now" was a sentence in two
   // languages at once. The key stays the same in both — it identifies the
   // hour, it is not read by anybody.
-  const labels: Record<string, string> = {
+  const labels: Record<string, CopyKey> = {
     lateNight: "prompt.timeLateNight",
     earlyMorning: "prompt.timeEarlyMorning",
     morning: "prompt.timeMorning",
@@ -591,7 +599,7 @@ function buildRealismRules(realismLevel: number, locale: "zh" | "en" = "zh"): st
 
 function buildRelationshipPhase(phase: unknown, locale: "zh" | "en" = "zh"): string {
   if (typeof phase !== "string" || !phase) return "";
-  const map: Record<string, string> = {
+  const map: Record<string, CopyKey> = {
     initial: "prompt.phaseInitial",
     growing: "prompt.phaseGrowing",
     stable: "prompt.phaseStable",

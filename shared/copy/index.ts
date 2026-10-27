@@ -33,6 +33,18 @@ import { SAFETY } from "./safety";
 import { SCENES_COPY, BUILTIN_SCENE_SLUGS, BUILTIN_SCENE_DEFINITIONS } from "./scenes";
 import { USER_SIDE } from "./user-side";
 import { FIDELITY } from "./fidelity";
+/**
+ * The skill prompts, for their keys.
+ *
+ * They live in their own file because they are added to the table when
+ * the pipeline is loaded — so they are not in `COPY` at the time this
+ * module is read. Their keys are part of the key type all the same: a
+ * typo in one of them is as wrong as a typo in any other.
+ *
+ * The import is of the type only, so nothing is read at runtime and
+ * there is no cycle.
+ */
+import type { SKILL_PROMPTS } from "./skill-prompts";
 
 export type CopyEntry = { zh: string; en: string };
 export type CopyTable = Record<string, CopyEntry>;
@@ -46,6 +58,10 @@ export type CopyTable = Record<string, CopyEntry>;
  * a model's prompt. The individual tables are annotated, so the union is
  * still checked entry by entry; it is only the *merged* table that has
  * to keep its literal keys.
+ *
+ * And the key of `copy()` is the literal union, so a typo in a literal
+ * call is a compile error. It was `CopyKey | string` — which is
+ * `string`, so the union bought nothing at all.
  */
 export const COPY = {
   ...ERRORS,
@@ -62,7 +78,7 @@ export const COPY = {
   ...FIDELITY,
 } as const satisfies CopyTable;
 
-export type CopyKey = keyof typeof COPY;
+export type CopyKey = keyof typeof COPY | keyof typeof SKILL_PROMPTS;
 
 export type Locale = "zh" | "en";
 
@@ -74,13 +90,34 @@ export function isCopyKey(key: string): key is Extract<CopyKey, string> {
 /**
  * The sentence, in the language asked for.
  *
- * A key that is not in the table falls back to the key itself, so a
- * missing translation shows up as `errors.someKey` in the interface
- * rather than as an empty box or a crash.
+ * The key is a literal, so a typo is a compile error. It used to be
+ * `CopyKey | string` — which is `string`, so every typo compiled
+ * cleanly and then showed up as `errors.someKey` in the interface, or
+ * inside a model's prompt where nobody would ever see it.
+ *
+ * A key that is built at runtime goes through `copyKey` below.
  */
 export function copy(
   locale: Locale | string | undefined,
-  key: CopyKey | string,
+  key: CopyKey,
+  params?: Record<string, string | number>,
+): string {
+  const entry = (COPY as unknown as Record<string, CopyEntry | undefined>)[key];
+  if (!entry) return key;
+  const lang: Locale = locale === "en" ? "en" : "zh";
+  return interpolate(entry[lang] ?? entry.zh, params);
+}
+
+/**
+ * The sentence for a key that is not known until it is built.
+ *
+ * The key is checked at runtime instead of at compile time, so a key
+ * that is wrong shows up as the key itself — which is how a missing
+ * translation should look.
+ */
+export function copyKey(
+  locale: Locale | string | undefined,
+  key: string,
   params?: Record<string, string | number>,
 ): string {
   const entry = (COPY as unknown as Record<string, CopyEntry | undefined>)[key];
@@ -144,9 +181,13 @@ export function localizeScene<T extends LocalisableScene>(scene: T, locale: Loca
 
   return {
     ...scene,
-    name: copy(locale, `scenes.${slug}.name`),
-    description: copy(locale, `scenes.${slug}.description`),
-    systemPromptOverlay: copy(locale, `scenes.${slug}.overlay`),
+    /**
+     * The keys are built from the slug, so they are looked up at
+     * runtime rather than checked at compile time.
+     */
+    name: copyKey(locale, `scenes.${slug}.name`),
+    description: copyKey(locale, `scenes.${slug}.description`),
+    systemPromptOverlay: copyKey(locale, `scenes.${slug}.overlay`),
     starters: localisedStarters,
   };
 }
