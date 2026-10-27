@@ -372,6 +372,39 @@ function tidyCollectorNote(transcript: string): string | undefined {
 }
 
 /**
+ * A run that found nothing, with the reason the collector gave.
+ */
+function withEmptyNote(result: CollectResult, stderr: string): CollectResult {
+  if (result.messages.length > 0) return result;
+  const note = noteFromStderr(stderr);
+  if (!note) return result;
+  return { ...result, meta: { ...result.meta, note } };
+}
+
+/**
+ * The reason a collector gave, for a run that found nothing.
+ *
+ * The collector writes it to its standard error — "the bot is not in
+ * the chat", "Playwright is not installed", "no mail from x" — and the
+ * two connectors that read their output straight from the standard
+ * output threw it away. So the run was reported as a *success* with
+ * zero messages and no explanation, and the persona was distilled from
+ * nothing with nothing said about why.
+ *
+ * The text is the collector's own, so it is passed through as it was
+ * written — it is a reason for a person, not a stack trace.
+ */
+function noteFromStderr(stderr: string): string | undefined {
+  const lines = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("Traceback"));
+  if (lines.length === 0) return undefined;
+  const note = lines.slice(-6).join("\n");
+  return note.length > 600 ? `${note.slice(0, 600)}…` : note;
+}
+
+/**
  * Runs a collector that writes its transcript into `--output-dir`.
  *
  * The directory is created per run and removed afterwards so a failed run
@@ -503,7 +536,7 @@ async function collectViaOutputDir(
       throw new Error(copy(effective.locale ?? "zh", "errors.collectorNeedsAuthorization"));
     }
     if (credentialFile) args.push("--config", credentialFile);
-    const { stdout, stderr } = await runCollector(connector.tool, args, {
+    const { stdout, stderr, stdoutTruncated } = await runCollector(connector.tool, args, {
       onProgress: input.onProgress,
       signal: input.signal,
       locale: input.locale,
@@ -531,7 +564,19 @@ async function collectViaOutputDir(
           return { ...normalised, meta: { ...normalised.meta, note } };
         }
       }
-      return normalised;
+      /**
+       * The output was cut short.
+       *
+       * The flag was dropped here — so when a collector's output went
+       * past the cap, the JSON was cut in the middle of an object, the
+       * payload could not be parsed, and the code fell back to the
+       * Markdown report — which keeps only a few hundred of the
+       * messages. The result was a *part* of the history, imported and
+       * reported as a complete collection.
+       */
+      return stdoutTruncated
+        ? { ...normalised, meta: { ...normalised.meta, truncated: true } }
+        : normalised;
     }
 
     const transcript = readCollectorTranscript(outputDir);
@@ -668,6 +713,30 @@ const feishuConnector: SourceConnector = {
     setRestoredCredentials("feishu", credentials, userId);
   },
   async collect(input: CollectInput): Promise<CollectResult> {
+    /**
+     * The name is required — or the open id, which the user can have
+     * saved in their credentials.
+     *
+     * The tool needs one of them: without it, it exits with code 2 and
+     * prints nothing useful — so the user saw "the collector
+     * feishu_auto_collector.py did not finish (exit code 2)": an
+     * internal file name and an exit code, with no hint that a name
+     * was what was missing.
+     */
+    const feishuCredentials = collectCredentials(
+      "feishu",
+      input,
+      FEISHU_CREDENTIAL_KEYS,
+      "feishu_config.json",
+      input.userId,
+    );
+    if (!input.target && !feishuCredentials.open_id) {
+      throw new Error(
+        copy(input.locale ?? "zh", "errors.collectorNeedsTarget", {
+          source: sourceLabel(feishuConnector, input.locale ?? "zh"),
+        }),
+      );
+    }
     return collectViaOutputDir(feishuConnector, input);
   },
 };
@@ -771,6 +840,14 @@ const dingtalkConnector: SourceConnector = {
     if (!input.options?.chrome_profile) {
       throw new Error(copy(input.locale ?? "zh", "errors.collectorNeedsChromeProfile"));
     }
+    // The name is required — see the Feishu connector above.
+    if (!input.target) {
+      throw new Error(
+        copy(input.locale ?? "zh", "errors.collectorNeedsTarget", {
+          source: sourceLabel(dingtalkConnector, input.locale ?? "zh"),
+        }),
+      );
+    }
     return collectViaOutputDir(dingtalkConnector, input);
   },
 };
@@ -844,6 +921,14 @@ const slackConnector: SourceConnector = {
     setRestoredCredentials("slack", credentials, userId);
   },
   async collect(input: CollectInput): Promise<CollectResult> {
+    // The name is required — see the Feishu connector above.
+    if (!input.target) {
+      throw new Error(
+        copy(input.locale ?? "zh", "errors.collectorNeedsTarget", {
+          source: sourceLabel(slackConnector, input.locale ?? "zh"),
+        }),
+      );
+    }
     return collectViaOutputDir(slackConnector, input);
   },
 };
@@ -896,18 +981,19 @@ const emailConnector: SourceConnector = {
         copy(input.locale ?? "zh", "errors.collectorNeedsTarget", { source: sourceLabel(emailConnector, input.locale ?? "zh") }),
       );
     }
-    const { stdout, stdoutTruncated } = await runCollector(emailConnector.tool, emailConnector.args(input), {
+    const { stdout, stderr, stdoutTruncated } = await runCollector(emailConnector.tool, emailConnector.args(input), {
       onProgress: input.onProgress,
       signal: input.signal,
       locale: input.locale,
     });
-    return normaliseCollectorOutput(stdout, emailConnector.id, {
+    const result = normaliseCollectorOutput(stdout, emailConnector.id, {
       target: input.target,
       limit: input.limit,
       truncated: stdoutTruncated,
       timeZone: input.timezone,
       locale: input.locale,
     });
+    return withEmptyNote(result, stderr);
   },
 };
 
@@ -957,18 +1043,19 @@ const wechatExportConnector: SourceConnector = {
         copy(input.locale ?? "zh", "errors.collectorNeedsTarget", { source: sourceLabel(wechatExportConnector, input.locale ?? "zh") }),
       );
     }
-    const { stdout, stdoutTruncated } = await runCollector(
+    const { stdout, stderr, stdoutTruncated } = await runCollector(
       wechatExportConnector.tool,
       wechatExportConnector.args(input),
       { onProgress: input.onProgress, signal: input.signal, locale: input.locale },
     );
-    return normaliseCollectorOutput(stdout, wechatExportConnector.id, {
+    const result = normaliseCollectorOutput(stdout, wechatExportConnector.id, {
       target: input.target,
       limit: input.limit,
       truncated: stdoutTruncated,
       timeZone: input.timezone,
       locale: input.locale,
     });
+    return withEmptyNote(result, stderr);
   },
 };
 

@@ -365,7 +365,6 @@ async function runJob(job: CollectorJob): Promise<void> {
 
     const result = await connector.collect(input);
     job.result = result;
-    job.messageCount = result.messages.length;
     // How many there were, and whether the collection was cut short.
     job.foundCount = result.meta?.total ?? result.messages.length;
     job.truncated = result.meta?.truncated === true;
@@ -394,6 +393,19 @@ async function runJob(job: CollectorJob): Promise<void> {
       if (added > 0) {
         console.log(`[Collectors] Imported ${added} message(s) into persona ${personaId}`);
       }
+      /**
+       * The count is what was *written*.
+       *
+       * It was the count the collector returned — which is not the same
+       * thing. The import is idempotent, so collecting the same
+       * history twice writes nothing the second time — and the job
+       * still said "500 messages". So the user was told 500 messages
+       * had been collected into their persona, and their persona had
+       * gained nothing.
+       */
+      job.messageCount = added;
+    } else {
+      job.messageCount = result.messages.length;
     }
 
     /**
