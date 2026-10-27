@@ -115,7 +115,7 @@ import { encryptSecret } from "./_core/crypto";
 import { RATE_LIMITS } from "./_core/rate-limit";
 import { sanitizeFileName, checkFileExtension } from "./_core/filename";
 import { getSetupStatus } from "./bootstrap/setup-status";
-import { getChannelAdapter, listChannels } from "./channels";
+import { getChannelAdapter, listChannels, stopChannelsForUser } from "./channels";
 import { channelLabel } from "./channels/types";
 import { feishuAdapter } from "./channels/feishu";
 import { getBuiltinTemplates } from "./templates";
@@ -779,6 +779,18 @@ export const appRouter = router({
         if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST" });
         const valid = await verifyPassword(input.confirmPassword, user.passwordHash);
         if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: copy(ctx.locale, "errors.passwordWrong") });
+        /**
+         * The channels are stopped first.
+         *
+         * Deleting the rows does not stop the WeChat poll loop or the
+         * Feishu long connection — they keep running until they are
+         * told to stop. So the bot went on answering on WeChat for an
+         * account that no longer existed, the person on the other end
+         * was told to go and set a persona in the web app, and the
+         * messages it wrote carried a user id that no longer had a
+         * user — so the later clean-up never found them.
+         */
+        await stopChannelsForUser(ctx.user.id);
         await deleteUserAccount(ctx.user.id);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

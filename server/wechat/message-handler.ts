@@ -21,6 +21,18 @@ export async function handleWeixinMessage(
   const text = parsed.text?.trim();
   if (!text) return;
 
+  /**
+   * The account has to still be there.
+   *
+   * The channels are stopped when an account is deleted — but a message
+   * that was already on its way still arrives, and the bot answered it
+   * for an account that no longer existed: it told the person to go
+   * and set a persona in the web app, and wrote a row whose user id no
+   * longer had a user.
+   */
+  const account = await db.getUserById(userId).catch(() => null);
+  if (!account) return;
+
   const locale = await db.getUserLocale(userId).catch(() => "zh" as const);
   /**
    * The persona this conversation talks to.

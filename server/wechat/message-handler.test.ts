@@ -7,12 +7,14 @@ const handlePersonaChat = vi.fn();
 const sendWeixinText = vi.fn();
 const getUserLocale = vi.fn();
 const getChannelDefaultPersona = vi.fn();
+const getUserById = vi.fn();
 
 vi.mock("../db", () => ({
   getWechatBindingByUserId: (...a: unknown[]) => getWechatBindingByUserId(...a),
   getChannelDefaultPersona: (...a: unknown[]) => getChannelDefaultPersona(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
+  getUserById: (...a: unknown[]) => getUserById(...a),
 }));
 
 vi.mock("./commands", () => ({
@@ -48,10 +50,13 @@ beforeEach(() => {
   sendWeixinText.mockReset();
   getUserLocale.mockReset();
   getChannelDefaultPersona.mockReset();
+  getUserById.mockReset();
   // The channel's own choice, unless a test says otherwise.
   getChannelDefaultPersona.mockResolvedValue(undefined);
 
   getUserLocale.mockResolvedValue("zh");
+  // The account is still there.
+  getUserById.mockResolvedValue({ id: 1, username: "user-1" });
   getWechatBindingByUserId.mockResolvedValue({ id: 1, personaId: 7, wechatUserId: "wx-user-1" });
   getPersonaById.mockResolvedValue({ id: 7, graduationStatus: null });
   handleCommand.mockResolvedValue({ handled: false });
@@ -60,6 +65,22 @@ beforeEach(() => {
 });
 
 describe("handleWeixinMessage", () => {
+  it("says nothing to an account that has been deleted", async () => {
+    /**
+     * The channels are stopped when an account is deleted — but a
+     * message that was already on its way still arrives, and the bot
+     * answered it for an account that no longer existed: it told the
+     * person to go and set a persona in the web app, and wrote a row
+     * whose user id no longer had a user.
+     */
+    getUserById.mockResolvedValue(null);
+
+    await handleWeixinMessage(1, parsed);
+
+    expect(sendWeixinText).not.toHaveBeenCalled();
+    expect(handlePersonaChat).not.toHaveBeenCalled();
+  });
+
   it("routes a normal message to the persona and replies", async () => {
     await handleWeixinMessage(1, parsed);
     expect(handlePersonaChat).toHaveBeenCalledWith(expect.objectContaining({ personaId: 7, messageText: "在吗" }));

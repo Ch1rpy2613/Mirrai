@@ -53,6 +53,30 @@ export async function stopAllChannels(): Promise<void> {
   }
 }
 
+/**
+ * Stops every channel that is running for one user.
+ *
+ * It is what "delete my account" needs: the account is gone, so
+ * nothing may keep talking on its behalf — not on WeChat, not on
+ * Feishu.
+ *
+ * The WeChat poll loop and the Feishu long connection keep running
+ * until they are told to stop, and deleting the rows does not stop
+ * them: the bot went on answering on WeChat for an account that no
+ * longer existed, and the messages it wrote carried a user id that no
+ * longer had a user.
+ */
+export async function stopChannelsForUser(userId: number): Promise<void> {
+  for (const adapter of listChannels()) {
+    try {
+      await adapter.stop(userId);
+    } catch (e) {
+      // A channel that will not stop must not hold the deletion up.
+      console.warn(`[Channels] Could not stop the ${adapter.id} channel for user ${userId}:`, e);
+    }
+  }
+}
+
 export async function restoreChannels(userIds: number[]): Promise<void> {
   for (const userId of userIds) {
     for (const adapter of listChannels()) {
