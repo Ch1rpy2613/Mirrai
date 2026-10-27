@@ -298,6 +298,17 @@ export const ERRORS = {
    * most likely to hit — they typed too fast — was the one they could
    * read least.
    */
+  /**
+   * The streaming request failed before it began.
+   *
+   * The server used to let the failure out of the route handler — and
+   * Express 4 does not wait for the promise an async handler returns,
+   * so the whole app went down.
+   */
+  "errors.streamServerError": {
+    zh: "这次没能连上服务器，请再试一次。",
+    en: "The server could not be reached — please try again.",
+  },
   "errors.streamUnauthorized": {
     zh: "请先登录。",
     en: "Please sign in first.",

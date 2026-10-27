@@ -150,6 +150,31 @@ describe("POST /api/chat/stream", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
+  it("answers the user when the database fails, instead of ending the process", async () => {
+    /**
+     * Express 4 does not wait for the promise an async handler
+     * returns — so a rejection inside it is an unhandled rejection,
+     * and Node ends the process.
+     *
+     * So the database blinking while somebody was reading a reply took
+     * down the whole app: the sessions, the scheduler, the WeChat and
+     * Feishu channels.
+     */
+    getPersonaById.mockRejectedValue(new Error("the database is not there"));
+
+    const res = await fetch(`${baseUrl}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1, message: "在吗" }),
+    });
+
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toBeTruthy();
+    // And the process is still here.
+    expect(runConversation).not.toHaveBeenCalled();
+  });
+
   it("rejects an unauthenticated request", async () => {
     authenticateRequest.mockRejectedValue(new Error("no session"));
 

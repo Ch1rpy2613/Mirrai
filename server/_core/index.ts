@@ -34,7 +34,35 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+/**
+ * The process does not end because one request failed.
+ *
+ * Node's default is to end the process on an unhandled rejection — and
+ * on a server that is the end of *everything*: the sessions, the
+ * scheduler, the WeChat and Feishu channels, the person's own app.
+ *
+ * The failures that used to end it were ordinary: the database
+ * blinked while somebody was reading a reply, a lock could not be
+ * taken, a channel's socket closed at the wrong moment. Each of them
+ * is now handled where it happens — but a guard here means the next one
+ * costs a line in the log instead of the app.
+ *
+ * The error is printed in full, loudly: this is a net, not a blanket.
+ */
+function installProcessGuards(): void {
+  process.on("unhandledRejection", (reason) => {
+    console.error(
+      "[Server] A promise was rejected and nobody was waiting for it:",
+      reason instanceof Error ? reason.stack ?? reason.message : reason,
+    );
+  });
+  process.on("uncaughtException", (error) => {
+    console.error("[Server] An exception nobody caught:", error?.stack ?? error);
+  });
+}
+
 async function startServer() {
+  installProcessGuards();
   const app = express();
   const server = createServer(app);
 

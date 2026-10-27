@@ -38,7 +38,37 @@ function writeEvent(res: Response, event: string, data: unknown): void {
 }
 
 export function registerChatStreamRoute(app: Express): void {
-  app.post("/api/chat/stream", async (req: Request, res: Response) => {
+  app.post("/api/chat/stream", (req: Request, res: Response) => {
+    /**
+     * The handler's failure is handled here.
+     *
+     * Express 4 does not wait for the promise an async handler
+     * returns — so a rejection inside it is an unhandled rejection,
+     * and Node ends the process. The whole app — the sessions, the
+     * scheduler, the WeChat and Feishu channels — would go down
+     * because the database blinked while somebody was reading a
+     * reply.
+     *
+     * So the handler is a separate function and its failure is
+     * answered here: the user gets an error, and the app keeps
+     * running.
+     */
+    handleChatStream(req, res).catch((error) => {
+      console.error("[ChatStream] The request failed:", error);
+      if (res.headersSent) {
+        if (!res.writableEnded) res.end();
+        return;
+      }
+      const locale = (req.body as { locale?: unknown } | undefined)?.locale === "en" ? "en" : "zh";
+      res.status(500).json({ error: copy(locale, "errors.streamServerError") });
+    });
+  });
+}
+
+/**
+ * The stream request itself.
+ */
+async function handleChatStream(req: Request, res: Response): Promise<void> {
     /**
      * The language the answer is in.
      *
@@ -201,5 +231,4 @@ export function registerChatStreamRoute(app: Express): void {
       res.off("close", onClose);
       res.end();
     }
-  });
 }
