@@ -101,3 +101,31 @@ export function formatTimeInZone(
     return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   }
 }
+
+/**
+ * An instant, as a date and a time in the reader's own calendar.
+ *
+ * The same rule as `formatInstantInZone`: the user's zone, not the
+ * browser's.
+ */
+export function formatDateTimeInZone(
+  value: string | number | Date | null | undefined,
+  locale: string,
+  timeZone?: string | null,
+): string {
+  const date = value instanceof Date ? value : new Date(value ?? NaN);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat(locale || "zh", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(timeZone ? { timeZone } : {}),
+    }).format(date);
+  } catch {
+    // A zone this browser does not know.
+    return date.toLocaleString(locale);
+  }
+}

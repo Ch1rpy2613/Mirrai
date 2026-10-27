@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { formatDateTimeInZone, formatInstantInZone } from "@/lib/dates";
 import { getLoginUrl } from "@/const";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -265,6 +266,14 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
 
 function ProfileTab() {
   const { t, locale } = useLocale();
+  /**
+   * The user's own calendar.
+   *
+   * The dates in the settings were the browser's — so the settings
+   * were in a different calendar from the app they belong to.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const { data: profile, refetch, isError: profileFailed } = trpc.user.getProfile.useQuery();
   const { data: accountStats } = trpc.user.getAccountStats.useQuery();
   /**
@@ -433,7 +442,7 @@ function ProfileTab() {
                     <Calendar className="w-3 h-3" /> {t("settings.profile.joined", { count: memberDays })}
                   </span>
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {t("settings.profile.lastLogin", { date: new Date(profile.lastSignedIn).toLocaleDateString(locale) })}
+                    <Clock className="w-3 h-3" /> {t("settings.profile.lastLogin", { date: formatInstantInZone(profile.lastSignedIn, locale, timezone) })}
                   </span>
                 </div>
                 <Button size="sm" variant="ghost" className="mt-3 -ml-2 text-xs text-primary hover:text-primary/80 rounded-md h-7 px-3"
@@ -1832,6 +1841,11 @@ function fileToBase64(file: File): Promise<string> {
 
 function DataSourcesTab() {
   const { t, locale } = useLocale();
+  /**
+   * The user's own calendar.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const sources = trpc.collector.listSources.useQuery();
   const personas = trpc.persona.list.useQuery();
   const jobs = trpc.collector.listJobs.useQuery(undefined, {
@@ -2196,7 +2210,7 @@ function DataSourcesTab() {
                       {sourceLabelById.get(job.source) ?? job.source}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {job.startedAt ? new Date(job.startedAt).toLocaleString(locale) : t("settings.sources.notStarted")}
+                      {job.startedAt ? formatDateTimeInZone(job.startedAt, locale, timezone) : t("settings.sources.notStarted")}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -2334,6 +2348,8 @@ function DataSourcesTab() {
  */
 export function CollectorPreview({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const { data, isLoading, isError, refetch } = trpc.collector.preview.useQuery(
     { personaId, limit: 30 },
     { enabled: Number.isFinite(personaId) && personaId > 0 },
@@ -2373,7 +2389,7 @@ export function CollectorPreview({ personaId }: { personaId: number }) {
               )}
               {message.timestamp && (
                 <span className="text-[0.6875rem] text-muted-subtle ml-auto">
-                  {new Date(message.timestamp).toLocaleString(locale)}
+                  {formatDateTimeInZone(message.timestamp, locale, timezone)}
                 </span>
               )}
             </div>
@@ -2394,6 +2410,8 @@ export function CollectorPreview({ personaId }: { personaId: number }) {
  */
 export function CollectorJobDetail({ jobId }: { jobId: string }) {
   const { t, locale } = useLocale();
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const { data: job, isError, refetch } = trpc.collector.getJob.useQuery({ jobId });
   /**
    * A failed request is not a request that is still on its way.
@@ -2413,8 +2431,8 @@ export function CollectorJobDetail({ jobId }: { jobId: string }) {
     [t("settings.sources.status"), statusKey ? t(statusKey) : job.status],
     [t("settings.sources.progress"), `${job.progress}%`],
     [t("settings.sources.messageCountLabel"), String(job.messageCount)],
-    [t("settings.sources.startedAt"), job.startedAt ? new Date(job.startedAt).toLocaleString(locale) : "—"],
-    [t("settings.sources.finishedAt"), job.finishedAt ? new Date(job.finishedAt).toLocaleString(locale) : "—"],
+    [t("settings.sources.startedAt"), job.startedAt ? formatDateTimeInZone(job.startedAt, locale, timezone) : "—"],
+    [t("settings.sources.finishedAt"), job.finishedAt ? formatDateTimeInZone(job.finishedAt, locale, timezone) : "—"],
   ];
 
   return (

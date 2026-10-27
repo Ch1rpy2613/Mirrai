@@ -27,6 +27,7 @@ const job: { data: any; isLoading: boolean; isError: boolean; refetch: () => voi
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({}),
     collector: {
       preview: { useQuery: () => preview },
       getJob: { useQuery: () => job },
@@ -36,6 +37,18 @@ vi.mock("@/lib/trpc", () => ({
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+/**
+ * The user's own calendar.
+ */
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, timezone: "America/New_York" },
+    isAuthenticated: true,
+    loading: false,
+    logout: vi.fn(),
+  }),
 }));
 
 vi.mock("@/contexts/LocaleContext", () => ({
@@ -96,6 +109,28 @@ describe("the detail of a collection job", () => {
 
     expect(screen.queryByText("加载中…")).toBeNull();
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("shows the times in the user's own calendar", () => {
+    /**
+     * The times were the browser's — so the settings were in a
+     * different calendar from the app they belong to.
+     */
+    job.data = {
+      id: "job-1",
+      source: "email",
+      status: "completed",
+      progress: 100,
+      messageCount: 12,
+      startedAt: "2026-01-02T03:04:00.000Z",
+      finishedAt: "2026-01-02T03:05:00.000Z",
+    };
+
+    render(<CollectorJobDetail jobId="job-1" />);
+
+    // Ten at night in New York is the next day in Shanghai.
+    expect(screen.getAllByText(/2026\/1\/1/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/2026\/1\/2/)).toBeNull();
   });
 
   it("shows the job when it arrives", () => {
