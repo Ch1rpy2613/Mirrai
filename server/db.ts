@@ -2198,15 +2198,33 @@ export type WechatBotStateUpdate = Partial<{
   lastInboundAt: Date | null;
 }>;
 
+/**
+ * The bot state, written as one statement.
+ *
+ * It used to be a read and then an insert — and nothing stopped two of
+ * them at once. So two concurrent first writes left the user with two
+ * rows, and the read (which took the first row the database felt like
+ * returning) did not necessarily return the one that had the token in
+ * it.
+ *
+ * The consequence was quiet and confusing: the button said "connected"
+ * — the chip comes from the process's memory — and the monitor said
+ * "no credentials, cannot start" and the bot never polled.
+ *
+ * So there is a unique index on the user, and the write is an upsert:
+ * one statement, and the database decides which row it is.
+ */
 export async function upsertWechatBotState(userId: number, data: WechatBotStateUpdate) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const existing = await db.select().from(wechatBotState).where(eq(wechatBotState.userId, userId)).limit(1);
-  if (existing[0]) {
-    await db.update(wechatBotState).set(data as any).where(eq(wechatBotState.id, existing[0].id));
-    return existing[0].id;
-  }
-  const [result] = await db.insert(wechatBotState).values({ userId, ...data } as any).returning({ id: wechatBotState.id });
+  const [result] = await db
+    .insert(wechatBotState)
+    .values({ userId, ...data } as any)
+    .onConflictDoUpdate({
+      target: wechatBotState.userId,
+      set: { ...(data as any), updatedAt: new Date() },
+    })
+    .returning({ id: wechatBotState.id });
   return result.id;
 }
 
@@ -2214,12 +2232,13 @@ export async function upsertWechatBotState(userId: number, data: WechatBotStateU
 export async function saveWechatSyncBuf(userId: number, syncBuf: string) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const existing = await db.select().from(wechatBotState).where(eq(wechatBotState.userId, userId)).limit(1);
-  if (existing[0]) {
-    await db.update(wechatBotState).set({ syncBuf }).where(eq(wechatBotState.id, existing[0].id));
-    return;
-  }
-  await db.insert(wechatBotState).values({ userId, syncBuf } as any);
+  await db
+    .insert(wechatBotState)
+    .values({ userId, syncBuf } as any)
+    .onConflictDoUpdate({
+      target: wechatBotState.userId,
+      set: { syncBuf, updatedAt: new Date() },
+    });
 }
 
 /** Records the timestamp of the last inbound message (24h keep-alive check). */
@@ -4969,14 +4988,30 @@ export async function createOutboundLetter(data: {
 }) {
   const db = await getDb();
   if (!db) return undefined;
-  const [result] = await db.insert(outboundLetters).values({
-    userId: data.userId,
-    personaId: data.personaId,
-    text: data.text,
-    sourceMessageId: data.sourceMessageId ?? null,
-    status: data.status ?? "draft",
-  }).returning({ id: outboundLetters.id });
-  return result.id;
+  /**
+   * The second copy of a sentence is not written.
+   *
+   * The router reads the list first and skips the lines that are
+   * already on it — and a read is a read: two collects at once (a
+   * double-click, two tabs) both read the same list, both decided the
+   * message was new, and both inserted. That list exists so the user
+   * can take their own words back, and twice is not a gift.
+   *
+   * So the database refuses the second copy, and the id comes back
+   * undefined — which is how the caller knows nothing was written.
+   */
+  const [result] = await db
+    .insert(outboundLetters)
+    .values({
+      userId: data.userId,
+      personaId: data.personaId,
+      text: data.text,
+      sourceMessageId: data.sourceMessageId ?? null,
+      status: data.status ?? "draft",
+    })
+    .onConflictDoNothing()
+    .returning({ id: outboundLetters.id });
+  return result?.id;
 }
 
 /** The letters this user is taking back, newest first. */

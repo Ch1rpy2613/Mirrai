@@ -449,7 +449,23 @@ export const wechatBotState = pgTable("wechat_bot_state", {
   /** Timestamp of the last inbound message, used for the 24h keep-alive check. */
   lastInboundAt: timestamp("lastInboundAt"),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * One state row per user.
+   *
+   * The row holds the encrypted bot token and the long-poll cursor, and
+   * it was written by a read-then-insert with nothing to stop two of
+   * them at once: so two concurrent first writes left the user with two
+   * rows — and the read, which took the first row the database felt
+   * like returning, did not necessarily return the one that had the
+   * token in it.
+   *
+   * So the button said "connected" — the chip comes from the process's
+   * memory — and the monitor said "no credentials, cannot start" and
+   * the bot never polled.
+   */
+  userUniqueIdx: uniqueIndex("wechat_bot_state_user_unique_idx").on(table.userId),
+}));
 
 export type WechatBotState = typeof wechatBotState.$inferSelect;
 export type InsertWechatBotState = typeof wechatBotState.$inferInsert;
@@ -1346,6 +1362,24 @@ export const outboundLetters = pgTable("outbound_letters", {
 }, (table) => ({
   personaIdx: index("outbound_letters_persona_idx").on(table.personaId),
   statusIdx: index("outbound_letters_status_idx").on(table.status),
+  /**
+   * The same sentence is offered once.
+   *
+   * The list whose whole purpose is to hand the user back their own
+   * words, without duplicates. The duplicate was prevented by a read —
+   * the router read the list, saw the message was already there, and
+   * skipped it — and a read is a read: two collects at once (a
+   * double-click, two tabs) both read the same list, both decided the
+   * message was new, and both inserted.
+   *
+   * So the database refuses the second copy.
+   *
+   * It is partial: a letter the user wrote themselves has no source
+   * message, and two of those are two different letters.
+   */
+  sourceUniqueIdx: uniqueIndex("outbound_letters_source_unique_idx")
+    .on(table.personaId, table.sourceMessageId)
+    .where(sql`${table.sourceMessageId} IS NOT NULL`),
 }));
 
 export type OutboundLetter = typeof outboundLetters.$inferSelect;

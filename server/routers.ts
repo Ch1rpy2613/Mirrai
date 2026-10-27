@@ -4892,7 +4892,7 @@ export const appRouter = router({
         let saved = 0;
         for (const candidate of candidates.candidates) {
           if (known.has(candidate.messageId)) continue;
-          await createOutboundLetter({
+          const id = await createOutboundLetter({
             userId: ctx.user.id,
             personaId: input.personaId,
             text: candidate.text,
@@ -4900,7 +4900,15 @@ export const appRouter = router({
             status: "ready",
           });
           known.add(candidate.messageId);
-          saved += 1;
+          /**
+           * What was written, not what was tried.
+           *
+           * The database refuses the second copy of a sentence — so in
+           * the concurrent case, the very case the unique index exists
+           * for, nothing was written. And the count is what the
+           * interface shows: "I found three sentences for you".
+           */
+          if (id) saved += 1;
         }
         return { saved, note: candidates.note };
       }),
