@@ -73,7 +73,10 @@ describe("provider names", () => {
     }
     upsertLlmConfig.mockResolvedValue(1);
     setDefaultLlmConfig.mockResolvedValue(undefined);
-    updatePersona.mockResolvedValue(undefined);
+    /**
+     * The write says whether a row was written.
+     */
+    updatePersona.mockResolvedValue(true);
     getPersonaById.mockResolvedValue({
       id: 1,
       userId: 1,

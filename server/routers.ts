@@ -1018,7 +1018,19 @@ export const appRouter = router({
         if (rest.proactiveFrequencyHours !== undefined) {
           data.proactiveFrequencyHours = rest.proactiveFrequencyHours;
         }
-        await updatePersona(id, ctx.user.id, data);
+        /**
+         * Did anything happen?
+         *
+         * Every sibling checks first — the delete, the persona's own
+         * fields, the graduation — and this one did not. So a persona
+         * that had been deleted in another tab, or a stale id in the
+         * URL, answered "saved", and the field the user had just
+         * changed was unchanged.
+         */
+        const written = await updatePersona(id, ctx.user.id, data);
+        if (!written) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
         return { success: true };
       }),
 

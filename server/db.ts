@@ -1151,10 +1151,31 @@ export async function incrementChatCount(id: number, userId: number): Promise<nu
   return rows[0]?.chatCount ?? 0;
 }
 
-export async function updatePersona(id: number, userId: number, data: Partial<InsertPersona>) {
+/**
+ * Writes to a persona.
+ *
+ * It says whether a row was actually written.
+ *
+ * The write is scoped to the persona *and* to its owner, so a caller
+ * who guessed somebody else's persona id wrote nothing — but the
+ * function said nothing about it either, and the procedure answered
+ * "saved". So a persona that had been deleted in another tab, or a
+ * stale id in the URL, produced a green toast and an unchanged
+ * field.
+ */
+export async function updatePersona(
+  id: number,
+  userId: number,
+  data: Partial<InsertPersona>,
+): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.update(personas).set(data).where(and(eq(personas.id, id), eq(personas.userId, userId)));
+  const rows = await db
+    .update(personas)
+    .set(data)
+    .where(and(eq(personas.id, id), eq(personas.userId, userId)))
+    .returning({ id: personas.id });
+  return rows.length > 0;
 }
 
 /**

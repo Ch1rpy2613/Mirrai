@@ -55,7 +55,10 @@ describe("the dates of a relationship", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getPersonaById.mockResolvedValue(persona);
-    updatePersona.mockResolvedValue(undefined);
+    /**
+     * The write says whether a row was written.
+     */
+    updatePersona.mockResolvedValue(true);
   });
 
   it("refuses a start date that is not a date", async () => {

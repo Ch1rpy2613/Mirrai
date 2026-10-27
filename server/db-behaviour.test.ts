@@ -817,6 +817,26 @@ describe("the lobby", () => {
   });
 });
 
+describe("writing to a persona", () => {
+  it("says whether a row was actually written", async () => {
+    registry.returning.personas = [{ id: 5 }];
+    expect(await db.updatePersona(5, 3, { name: "小B" })).toBe(true);
+  });
+
+  it("says no when the row is not there, or is not the caller's", async () => {
+    /**
+     * The write is scoped to the persona *and* to its owner — so a
+     * caller who guessed somebody else's id, or who held a stale id
+     * for a persona deleted in another tab, wrote nothing.
+     *
+     * But the function said nothing about it either, and the procedure
+     * answered "saved".
+     */
+    registry.returning.personas = [];
+    expect(await db.updatePersona(999999, 3, { name: "小B" })).toBe(false);
+  });
+});
+
 describe("the collection jobs", () => {
   it("creates a job and says which row it was", async () => {
     registry.returning.collection_jobs = [{ id: 41 }];
