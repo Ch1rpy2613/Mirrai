@@ -1302,7 +1302,19 @@ async function maybeAssessTrajectory(params: {
   try {
     if (!(await isTrajectoryAssessmentAllowed(params.userId))) return null;
   } catch (e) {
+    /**
+     * The gate fails closed.
+     *
+     * The catch did not return, so when the setting could not be read
+     * the code went on to the assessment anyway — and the assessment
+     * sends a month of the user's private conversation to the model.
+     *
+     * So a read that failed — a database that blinked, a setting that
+     * could not be reached — meant the user's "off" was ignored and
+     * their messages went out.
+     */
     console.warn("[Safety] Could not read the trajectory setting:", (e as Error).message);
+    return null;
   }
 
   try {
@@ -1339,7 +1351,14 @@ async function maybeAssessTrajectory(params: {
  */
 async function isTrajectoryAssessmentAllowed(userId: number): Promise<boolean> {
   const user = await db.getUserById(userId);
-  if (!user) return true;
+  /**
+   * No user row: no permission.
+   *
+   * The read returns nothing when the database is not there — and the
+   * answer used to be "allowed", so a database that blinked meant a
+   * month of the user's private conversation went to the model.
+   */
+  if (!user) return false;
   const setting = (user as any).trajectoryAssessment ?? "auto";
   if (setting === "off") return false;
   if (setting === "on") return true;

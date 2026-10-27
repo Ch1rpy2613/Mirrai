@@ -170,7 +170,15 @@ describe("runConversation", () => {
     getDailyChatCounts.mockResolvedValue([]);
     getSessionStartAt.mockResolvedValue(new Date());
     getUserTimezone.mockResolvedValue(null);
-    getUserById.mockResolvedValue(null);
+    /**
+     * The user, with the trajectory assessment on "auto".
+     *
+     * The read used to answer "nothing" here — and "nothing" used to
+     * mean "allowed", so the gate that decides whether a month of the
+     * user's private conversation may go to the model was open in every
+     * test that used it.
+     */
+    getUserById.mockResolvedValue({ id: 1, trajectoryAssessment: "auto" });
     getRecentUserMood.mockResolvedValue(null);
     getRelationshipEvents.mockResolvedValue([]);
     getUserMessageCountSince.mockResolvedValue(1);
@@ -611,6 +619,82 @@ describe("runConversation", () => {
 
     const done = events.find((e) => e.type === "done");
     expect(done?.graduationSuggested).toBe(true);
+  });
+
+  it("does not assess the trajectory when the user turned it off", async () => {
+    /**
+     * The trajectory is the one place where a month of raw private
+     * conversation goes to the model.
+     */
+    getUserById.mockResolvedValue({ id: 1, trajectoryAssessment: "off" });
+    getMessagesSince.mockResolvedValue(
+      Array.from({ length: 8 }, (_, i) => ({
+        id: i + 1,
+        role: "user",
+        content: "今天天气不错",
+        createdAt: new Date("2026-01-10T12:00:00Z"),
+      })),
+    );
+
+    for await (const _ of runConversation({
+      persona: persona({ chatCount: 25 }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) { /* drain */ }
+
+    expect(createGraduationAssessment).not.toHaveBeenCalled();
+  });
+
+  it("does not assess the trajectory when the setting cannot be read", async () => {
+    /**
+     * The gate failed open.
+     *
+     * The catch did not return, so when the setting could not be read
+     * the code went on to the assessment anyway — and the assessment
+     * sends a month of the user's private conversation to the model.
+     */
+    getUserById.mockRejectedValue(new Error("the database is not there"));
+    getMessagesSince.mockResolvedValue(
+      Array.from({ length: 8 }, (_, i) => ({
+        id: i + 1,
+        role: "user",
+        content: "今天天气不错",
+        createdAt: new Date("2026-01-10T12:00:00Z"),
+      })),
+    );
+
+    for await (const _ of runConversation({
+      persona: persona({ chatCount: 25 }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) { /* drain */ }
+
+    expect(createGraduationAssessment).not.toHaveBeenCalled();
+  });
+
+  it("does not assess the trajectory when there is no user to ask", async () => {
+    // The read answers nothing when the database is not there — and the
+    // answer used to be "allowed".
+    getUserById.mockResolvedValue(undefined);
+    getMessagesSince.mockResolvedValue(
+      Array.from({ length: 8 }, (_, i) => ({
+        id: i + 1,
+        role: "user",
+        content: "今天天气不错",
+        createdAt: new Date("2026-01-10T12:00:00Z"),
+      })),
+    );
+
+    for await (const _ of runConversation({
+      persona: persona({ chatCount: 25 }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) { /* drain */ }
+
+    expect(createGraduationAssessment).not.toHaveBeenCalled();
   });
 
   it("does not assess the trajectory again within a day", async () => {
