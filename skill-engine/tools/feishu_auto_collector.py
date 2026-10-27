@@ -42,6 +42,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 import argparse
@@ -528,6 +529,23 @@ def find_user(name: str, config: dict) -> Optional[dict]:
 
 # ─── 消息记录 ─────────────────────────────────────────────────────────────────
 
+# 最多查多少个群聊的成员。
+#
+# 以前是把**每一个**群聊都查一遍：一个有五百个群的飞书账号，
+# 采集器就要发五百多次请求——于是它要么慢到用户以为卡死了，
+# 要么撞上限流（429），而 429 之后那个群就被**跳过**了，
+# 于是目标用户所在的那个群可能根本没被找到。
+#
+# 查多少个是有限的，而且**查了多少、还剩多少**要说出来。
+MAX_CHATS_TO_CHECK = 200
+
+# 每查一个群之间停多久。
+#
+# 飞书对成员接口有频率限制，连着发会撞上。
+# 停一下慢一点，但每一个群都查到了。
+CHAT_CHECK_DELAY_SECONDS = float(os.environ.get("MIRRAI_CHAT_CHECK_DELAY", "0.1"))
+
+
 def get_chats_with_user(user_open_id: str, config: dict) -> list:
     """找到 bot 和目标用户共同在的群聊"""
     print("  获取群聊列表 ...", file=sys.stderr)
@@ -556,10 +574,25 @@ def get_chats_with_user(user_open_id: str, config: dict) -> list:
 
     # 过滤：目标用户在其中的群
     result = []
+    checked = 0
     for chat in chats:
+        if checked >= MAX_CHATS_TO_CHECK:
+            print(
+                f"  只查了前 {MAX_CHATS_TO_CHECK} 个群聊的成员，"
+                f"还有 {len(chats) - MAX_CHATS_TO_CHECK} 个没查。",
+                file=sys.stderr,
+            )
+            break
+        checked += 1
+
         chat_id = chat.get("chat_id")
         if not chat_id:
             continue
+
+        if checked > 1:
+            # 别把飞书的频率限制撞满——撞上了，那个群的成员就查不到，
+            # 而目标用户所在的群可能正好是那一个。
+            time.sleep(CHAT_CHECK_DELAY_SECONDS)
 
         members_data = api_get(
             f"/im/v1/chats/{chat_id}/members",
