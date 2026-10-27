@@ -291,6 +291,43 @@ def get_access_token(config: dict) -> str:
     return token
 
 
+def decode_response_text(resp) -> str:
+    """
+    读一个回答的正文——不管服务器说它是什么编码。
+
+    `resp.text` 用的是 requests 猜的编码：它看响应头，猜不到就看
+    `ISO-8859-1`。钉钉的文档下载常常没有 charset，所以中文的文档回来是
+    一串乱码，而且它自己看不出来。
+
+    所以先信响应头里的 charset，再试 UTF-8，再试 GB18030，最后用替换
+    字符兜底——一个字是错的，比一整篇读不出来好。
+    """
+    raw = getattr(resp, "content", None)
+    if raw is None:
+        return resp.text
+
+    declared = ""
+    headers = getattr(resp, "headers", None)
+    if headers:
+        content_type = headers.get("Content-Type", "") or headers.get("content-type", "")
+        for part in content_type.split(";"):
+            part = part.strip()
+            if part.lower().startswith("charset="):
+                declared = part.split("=", 1)[1].strip().strip('"').lower()
+
+    candidates = [declared] if declared else []
+    for candidate in ("utf-8", "gb18030"):
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    for candidate in candidates:
+        try:
+            return raw.decode(candidate)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def api_get(path: str, params: dict, config: dict) -> dict:
     token = get_access_token(config)
     resp = requests.get(
@@ -490,7 +527,7 @@ def fetch_doc_content(doc_id: str, space_id: str, config: dict) -> str:
     if dl_url:
         try:
             resp = requests.get(dl_url, timeout=15)
-            return resp.text
+            return decode_response_text(resp)
         except Exception:
             pass
 

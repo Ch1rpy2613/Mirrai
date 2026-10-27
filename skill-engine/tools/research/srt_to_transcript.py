@@ -58,9 +58,31 @@ def clean_subtitle_text(content: str) -> str:
     return "\n\n".join(paragraphs).strip()
 
 
+def read_subtitle(path: Path) -> str:
+    """
+    读字幕文件——不管它是什么编码。
+
+    它原来只读 UTF-8：一份 GB18030 的字幕抛 UnicodeDecodeError，整个转换
+    死了，用户拿到的是"转换失败"，而不是一份字幕。
+
+    字幕文件在中国很常见是 GB18030（Windows 的默认），所以这里按顺序试：
+    UTF-8 先试（它有严格的规则，试不出来的就不是它），然后 GB18030，
+    最后用 latin-1 兜底——它不会失败，代价是错的字。
+    """
+    raw = path.read_bytes()
+    for encoding in ("utf-8-sig", "utf-8", "gb18030", "big5"):
+        try:
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    # latin-1 不会失败——每一个字节都是它的字符。字可能是错的，但字幕
+    # 至少读得出来，用户还能自己看。
+    return raw.decode("latin-1")
+
+
 def convert_file(input_path: Path, output_path: Path) -> Path:
     """Read a subtitle file and write a cleaned transcript."""
-    transcript = clean_subtitle_text(input_path.read_text(encoding="utf-8"))
+    transcript = clean_subtitle_text(read_subtitle(input_path))
     output_path.write_text(transcript + ("\n" if transcript else ""), encoding="utf-8")
     return output_path
 

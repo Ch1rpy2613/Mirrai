@@ -261,6 +261,10 @@ def parse_eml_file(file_path: str, target: str) -> list[dict]:
     }]
 
 
+#: 多少字节用来猜编码。开头就够了——声明在文件的头上。
+_SNIFF_BYTES = 64 * 1024
+
+
 def _text_encoding(file_path: str) -> str:
     """
     The encoding of a mail export.
@@ -273,10 +277,14 @@ def _text_encoding(file_path: str) -> str:
     So the file is tried as UTF-8 first, and then as GB18030, and the
     bytes are decoded with replacement as a last resort: a single odd
     character is better than losing every mail in the file.
+
+    Only the head of the file is read to sniff it. The whole file used
+    to be read — twice, once to sniff and once to parse — so a large
+    export was in memory twice over.
     """
     try:
         with open(file_path, "rb") as f:
-            raw = f.read()
+            raw = f.read(_SNIFF_BYTES)
     except OSError:
         return "utf-8"
 
