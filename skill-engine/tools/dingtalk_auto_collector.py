@@ -215,6 +215,26 @@ def save_config(config: dict) -> None:
         pass
 
 
+def wait_for_enter() -> bool:
+    """
+    Waits for the person to press Enter — when there is a person to press it.
+
+    The server runs the collector with no standard input at all, so
+    `input()` raised EOFError: the collection died with a traceback at
+    the exact moment it needed the person in front of the browser.
+
+    So the wait is skipped when there is nobody there, and the
+    collection carries on with what it has.
+    """
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return False
+        input()
+        return True
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+
 def setup_config() -> None:
     print("=== 钉钉自动采集配置 ===\n")
     print("请前往 https://open-dev.dingtalk.com 创建企业内部应用，开通以下权限：\n")
@@ -726,7 +746,7 @@ def collect_messages_browser(
                     [],
                 )
             print("  请在浏览器中登录钉钉，登录完成后按回车继续...", file=sys.stderr)
-            input()
+            wait_for_enter()
 
         # 搜索目标联系人的消息
         try:
@@ -762,7 +782,7 @@ def collect_messages_browser(
             print(f"  自动导航失败：{e}", file=sys.stderr)
             if not headless:
                 print(f"  请手动打开与「{name}」的对话，然后按回车继续...", file=sys.stderr)
-                input()
+                wait_for_enter()
 
         # 向上滚动加载历史消息
         print("  加载历史消息 ...", file=sys.stderr)
