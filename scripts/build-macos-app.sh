@@ -367,10 +367,19 @@ fi
 
 # ─── Step 6: Launcher + start script ─────────────────────────────────────────
 log "Writing launcher and start scripts..."
-cp "$SCRIPT_DIR/macos/launcher.sh" "$CONTENTS/MacOS/Mirrai"
-chmod +x "$CONTENTS/MacOS/Mirrai"
-cp "$SCRIPT_DIR/macos/start.sh" "$RESOURCES/start.sh"
-chmod +x "$RESOURCES/start.sh"
+# The launcher, the start script and the .env reader.
+#
+# They are copied by a script of their own, so that the test can build
+# the same bundle the build builds — and run it.
+#
+# The .env reader was left out of the bundle once, and the app died on
+# every launch after the first: `source "$SCRIPT_DIR/load-env.sh"`
+# failed, and the start script runs with `set -e`, so it ended there.
+# The first launch worked (there is no .env yet, so the block is
+# skipped) and **every launch after it died** with "No such file or
+# directory". Nothing in the build noticed, because the build only
+# copies files.
+bash "$SCRIPT_DIR/macos/copy-start-scripts.sh" "$SCRIPT_DIR/macos" "$RESOURCES"
 
 # ─── Step 6b: sign the bundle ───────────────────────────────────────────────
 #
