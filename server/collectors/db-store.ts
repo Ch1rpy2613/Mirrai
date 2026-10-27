@@ -68,6 +68,7 @@ async function writeJobSnapshot(job: CollectorJob): Promise<void> {
     progress: job.progress,
     messageCount: job.messageCount,
     foundCount: job.foundCount ?? job.messageCount,
+    keptCount: job.keptCount ?? job.messageCount,
     truncated: job.truncated === true,
     error: job.error ?? null,
     startedAt: job.startedAt ? new Date(job.startedAt) : null,
@@ -136,6 +137,7 @@ export async function listPersistedCollectorJobs(userId: number) {
     progress: job.progress,
     messageCount: job.messageCount,
     foundCount: job.foundCount ?? job.messageCount,
+    keptCount: job.keptCount ?? job.messageCount,
     truncated: job.truncated === true,
     error: job.error ?? undefined,
     startedAt: job.startedAt ?? undefined,
@@ -168,6 +170,7 @@ export async function getPersistedCollectorJob(jobKey: string, userId: number) {
      * and the list beside it said otherwise.
      */
     foundCount: job.foundCount ?? job.messageCount,
+    keptCount: job.keptCount ?? job.messageCount,
     truncated: job.truncated === true,
     error: job.error ?? undefined,
     startedAt: job.startedAt ?? undefined,
@@ -305,8 +308,16 @@ export async function importCollectedMessages(params: {
     });
   }
   if (rows.length === 0) return 0;
-  await db.createCollectedMessages(rows);
-  return rows.length;
+  /**
+   * How many rows were really written.
+   *
+   * It used to be the number of rows it *tried* to write. And the
+   * insert now refuses the second copy of a message — so in the
+   * concurrent case, the very case the unique index exists for, the
+   * second importer's rows were quietly dropped and the count was
+   * wrong.
+   */
+  return await db.createCollectedMessages(rows);
 }
 
 /**

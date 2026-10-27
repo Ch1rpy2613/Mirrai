@@ -4054,8 +4054,9 @@ export async function createCollectedMessages(
   const db = await getDb();
   if (!db || rows.length === 0) return 0;
   // Postgres takes at most a thousand parameters in one statement, and
-  // a row has five of them.
+  // a row has six of them.
   const chunkSize = 200;
+  let written = 0;
   await db.transaction(async (tx) => {
     for (let start = 0; start < rows.length; start += chunkSize) {
       const chunk = rows.slice(start, start + chunkSize);
@@ -4068,11 +4069,19 @@ export async function createCollectedMessages(
        * database refuses the second copy: the unique index on the
        * idempotency key turns "the same sentence stored twice" into
        * "the second copy is quietly dropped".
+       *
+       * The count is what was *written*, not what was tried — so the
+       * caller does not report rows that the database refused.
        */
-      await tx.insert(collectedMessages).values(chunk).onConflictDoNothing();
+      const inserted = await tx
+        .insert(collectedMessages)
+        .values(chunk)
+        .onConflictDoNothing()
+        .returning({ id: collectedMessages.id });
+      written += inserted.length;
     }
   });
-  return rows.length;
+  return written;
 }
 
 

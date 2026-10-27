@@ -170,6 +170,14 @@ export async function composeProactiveMessage(params: {
       name: user?.name,
       addressStyle: user?.addressStyle,
       boundaries: user?.boundaries,
+      /**
+       * Where the user is.
+       *
+       * The block about the user carries the time zone now, and this
+       * path did not pass it — so the same persona was told the user's
+       * time zone in a reply and not in a proactive message.
+       */
+      timezone: user?.timezone ?? null,
     },
     { locale, mood: context.userMood as any },
   );

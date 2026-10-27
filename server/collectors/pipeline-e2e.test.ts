@@ -71,7 +71,10 @@ describe("collecting a chat history into a persona", () => {
     getCollectedMessageKeys.mockResolvedValue([]);
     getCollectedMessageKeys.mockResolvedValue([]);
     createCollectedMessage.mockResolvedValue(1);
-    createCollectedMessages.mockResolvedValue(0);
+    // The count of rows *written* — which is what the importer returns.
+    createCollectedMessages.mockImplementation(
+      async (rows: unknown[]) => (rows as unknown[]).length,
+    );
   });
 
   it("runs the collector, parses its output and stores the messages", async () => {

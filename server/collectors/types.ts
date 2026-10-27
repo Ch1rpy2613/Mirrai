@@ -395,12 +395,39 @@ function withEmptyNote(result: CollectResult, stderr: string): CollectResult {
  * written — it is a reason for a person, not a stack trace.
  */
 function noteFromStderr(stderr: string): string | undefined {
+  /**
+   * The reason, without the traceback.
+   *
+   * The filter only dropped the line that *starts* with "Traceback" —
+   * so the stack frames below it survived, and they are full of the
+   * operator's file paths ("/usr/local/lib/python3.11/site-packages/
+   * requests/api.py"). The note is shown in the browser, and the
+   * neighbouring code refuses to show a traceback for exactly that
+   * reason: "a traceback says where the tool lives on the operator's
+   * machine".
+   *
+   * So the frames are dropped too, and what is left is the last line —
+   * which is the exception, and is the reason.
+   */
   const lines = stderr
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("Traceback"));
-  if (lines.length === 0) return undefined;
-  const note = lines.slice(-6).join("\n");
+    .filter((line) => line.length > 0);
+  // The frames: a line that starts with "File \"" and the source
+  // line under it.
+  const kept: string[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (line.startsWith("Traceback")) continue;
+    if (/^File "[^"]+", line \d+/.test(line)) {
+      // And the source line it points at.
+      if (lines[index + 1] && /^\s{4,}\S/.test(lines[index + 1])) index++;
+      continue;
+    }
+    kept.push(line);
+  }
+  if (kept.length === 0) return undefined;
+  const note = kept.slice(-4).join("\n");
   return note.length > 600 ? `${note.slice(0, 600)}…` : note;
 }
 
@@ -602,6 +629,20 @@ async function collectViaOutputDir(
     return normaliseCollectorOutput(raw, connector.id, {
       target: input.target,
       limit: input.limit,
+      /**
+       * The output was cut short.
+       *
+       * This is the branch the flag belongs to. The JSON was cut in the
+       * middle of an object, so it could not be parsed, and the code
+       * fell back to the Markdown report — which keeps only a few
+       * hundred of the messages. A *part* of the history was imported
+       * and reported as a complete collection.
+       *
+       * The flag used to be applied only to the branch *above* — the
+       * one where the JSON parsed, and where the flag was never
+       * needed.
+       */
+      truncated: stdoutTruncated,
       timeZone: input.timezone,
       locale: input.locale,
     });

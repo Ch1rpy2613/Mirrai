@@ -37,6 +37,15 @@ export interface CollectorJob {
    * many as it kept, and nothing said the rest were left behind.
    */
   foundCount?: number;
+  /**
+   * How many messages were kept out of the ones that were found.
+   *
+   * It is not the same as `messageCount`, which is how many rows were
+   * *newly written*: re-collecting a history the user already imported
+   * writes nothing, and the message count says zero — while the
+   * number kept is the number of messages the collection held.
+   */
+  keptCount?: number;
   /** Whether the collection was cut short. */
   truncated?: boolean;
   error?: string;
@@ -367,6 +376,8 @@ async function runJob(job: CollectorJob): Promise<void> {
     job.result = result;
     // How many there were, and whether the collection was cut short.
     job.foundCount = result.meta?.total ?? result.messages.length;
+    // How many the collection held — which is not how many were *new*.
+    job.keptCount = result.messages.length;
     job.truncated = result.meta?.truncated === true;
     job.progress = 100;
 
@@ -533,6 +544,7 @@ export async function enqueueCollectorJob(
     progress: 0,
     messageCount: 0,
     foundCount: 0,
+    keptCount: 0,
     truncated: false,
   };
 

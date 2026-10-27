@@ -2298,13 +2298,13 @@ function DataSourcesTab() {
                             claiming to know the number it does not
                             know.
                             */}
-                        {job.foundCount != null && job.foundCount > job.messageCount
+                        {job.foundCount != null && job.foundCount > (job.keptCount ?? job.messageCount)
                           ? t("settings.sources.truncatedAt", {
                               count: job.foundCount,
-                              kept: job.messageCount,
+                              kept: job.keptCount ?? job.messageCount,
                             })
                           : t("settings.sources.truncatedAtCap", {
-                              count: job.messageCount,
+                              count: job.keptCount ?? job.messageCount,
                             })}
                       </span>
                     )}

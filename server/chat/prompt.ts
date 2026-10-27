@@ -19,14 +19,20 @@ import type { ImperfectionEntry } from "@shared/imperfection";
  * The user's own time zone, for the parts of the prompt that are about
  * the user's days.
  *
- * The persona's zone is used when it has one; otherwise the user's own.
+ * It is the *user's* zone, and only the user's.
+ *
+ * It used to prefer the persona's — and the persona's zone is "where
+ * this persona lives", which is a different thing entirely. So the
+ * prompt said "they are in the Asia/Shanghai time zone" and filled it
+ * with the persona's zone; and the relative dates, and the rule that a
+ * trigger stops being a trigger after three days, were measured on the
+ * *persona's* calendar whenever the persona had a zone.
+ *
  * A failure to read it is not worth failing a whole prompt over — the
  * dates fall back to the server's own clock, which is what they did
  * before.
  */
-export async function userTimeZone(persona: unknown, userId: number): Promise<string | null> {
-  const personaZone = (persona as { timezone?: string | null } | null)?.timezone;
-  if (personaZone) return personaZone;
+export async function userTimeZone(_persona: unknown, userId: number): Promise<string | null> {
   try {
     return (await db.getUserTimezone(userId)) ?? null;
   } catch {

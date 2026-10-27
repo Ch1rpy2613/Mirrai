@@ -1346,7 +1346,7 @@ def main() -> None:
         records, chat_sources, truncated = collect_message_records(user, args.msg_limit, config)
         msg_content = format_message_report(records, chat_sources, user.get("name", ""))
         msg_path = output_dir / "messages.txt"
-        msg_path.write_text(msg_content, encoding="utf-8")
+        write_text_atomic(msg_path, msg_content)
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
         if args.format == "json":
             print_json_payload(build_json_payload(to_json_messages(records), truncated=truncated))

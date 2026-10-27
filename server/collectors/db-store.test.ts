@@ -76,7 +76,16 @@ describe("importCollectedMessages", () => {
     getCollectedMessages.mockReset();
     getCollectedMessageKeys.mockReset();
     createCollectedMessage.mockResolvedValue(1);
-    createCollectedMessages.mockResolvedValue(0);
+    /**
+     * The count of rows *written*.
+     *
+     * The importer returns what the database wrote — and the database
+     * refuses the second copy of a message, so that number can be
+     * smaller than the number of rows it was given.
+     */
+    createCollectedMessages.mockImplementation(
+      async (rows: unknown[]) => (rows as unknown[]).length,
+    );
     getCollectedMessageKeys.mockResolvedValue([]);
     getCollectedMessageKeys.mockResolvedValue([]);
   });

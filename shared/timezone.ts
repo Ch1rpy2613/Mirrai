@@ -343,9 +343,18 @@ export function zonedNoonForDayKey(dayKey: string, timeZone?: string | null): Da
    * column is on.
    */
   if (!timeZone) {
-    const noon = new Date(utcWallClock(year, month, day));
-    noon.setHours(12, 0, 0, 0);
-    return noon;
+    /**
+     * The server's own noon, on the server's own day.
+     *
+     * It is built with the local constructor — `new Date(year, month,
+     * day, 12)`. The first attempt took the *UTC* midnight of that day
+     * and then set the local hour to twelve: on a server west of
+     * Greenwich the UTC midnight is the *previous* local evening, so
+     * the noon came out on the day before — the very thing the caller
+     * asks not to happen ("not the day before it for anybody west of
+     * Greenwich").
+     */
+    return new Date(year, month, day, 12, 0, 0, 0);
   }
   const wallNoon = utcWallClock(year, month, day, 12);
   let offset = zonedOffsetMinutes(new Date(wallNoon), timeZone);

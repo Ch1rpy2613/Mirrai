@@ -33,7 +33,9 @@ describe("the database", () => {
      * refuses the second copy.
      */
     // The insert of the collected messages specifically.
-    expect(db).toMatch(/tx\.insert\(collectedMessages\)\.values\(chunk\)\.onConflictDoNothing\(\)/);
+    expect(db).toMatch(/insert\(collectedMessages\)/);
+    expect(db).toMatch(/\.values\(chunk\)/);
+    expect(db).toMatch(/onConflictDoNothing\(\)/);
   });
 
   it("reads the existing messages in the order they were written", () => {

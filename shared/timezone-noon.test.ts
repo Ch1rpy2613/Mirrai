@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { zonedMidnightForDayKey, zonedNoonForDayKey } from "./timezone";
 
 /**
@@ -25,12 +25,24 @@ import { zonedMidnightForDayKey, zonedNoonForDayKey } from "./timezone";
  *
  * Without it the test only fails on a machine that is not on UTC — and
  * CI runs on UTC, so a test that passes there proves nothing.
+ *
+ * And it is set to a zone **west** of Greenwich as well as east: the
+ * day the user typed has to be the day they meant on every machine in
+ * the world, and the first version of this fix got it wrong for
+ * everyone west of Greenwich — it landed on the day before.
  */
 const ORIGINAL_TZ = process.env.TZ;
 
-beforeAll(() => {
-  process.env.TZ = "Asia/Shanghai";
-});
+function inZone<T>(zone: string, body: () => T): T {
+  const previous = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    return body();
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+}
 
 afterAll(() => {
   if (ORIGINAL_TZ === undefined) delete process.env.TZ;
@@ -39,25 +51,48 @@ afterAll(() => {
 
 describe("a day the user typed, with no time zone", () => {
   it("is filed at the middle of the server's own day", () => {
-    const noon = zonedNoonForDayKey("2026-03-14", null);
-    // The server's own noon — not UTC's.
-    expect(noon.getHours()).toBe(12);
-    expect(noon.getDate()).toBe(14);
-    expect(noon.getMonth()).toBe(2);
+    inZone("Asia/Shanghai", () => {
+      const noon = zonedNoonForDayKey("2026-03-14", null);
+      // The server's own noon — not UTC's.
+      expect(noon.getHours()).toBe(12);
+      expect(noon.getDate()).toBe(14);
+      expect(noon.getMonth()).toBe(2);
+    });
+  });
+
+  it("is the day the user meant, west of Greenwich too", () => {
+    inZone("America/New_York", () => {
+      const noon = zonedNoonForDayKey("2026-03-14", null);
+      /**
+       * The day the user meant.
+       *
+       * The first version of this fix took the *UTC* midnight of that
+       * day and then set the local hour to twelve — and on a server
+       * west of Greenwich the UTC midnight is the *previous* local
+       * evening, so the noon came out on the day before. That is the
+       * very thing the caller asks not to happen: "not the day before
+       * it for anybody west of Greenwich".
+       */
+      expect(noon.getDate()).toBe(14);
+      expect(noon.getMonth()).toBe(2);
+      expect(noon.getHours()).toBe(12);
+    });
   });
 
   it("agrees with the midnight about what 'no zone' means", () => {
-    const midnight = zonedMidnightForDayKey("2026-03-14", null);
-    const noon = zonedNoonForDayKey("2026-03-14", null);
+    inZone("Asia/Shanghai", () => {
+      const midnight = zonedMidnightForDayKey("2026-03-14", null);
+      const noon = zonedNoonForDayKey("2026-03-14", null);
 
-    // Both are on the server's own clock, and both are on the same
-    // calendar day.
-    expect(midnight.getHours()).toBe(0);
-    expect(midnight.getDate()).toBe(14);
-    expect(noon.getDate()).toBe(14);
-    // And the noon is the middle of that day, on that same clock.
-    const hoursApart = (noon.getTime() - midnight.getTime()) / 3_600_000;
-    expect(hoursApart).toBe(12);
+      // Both are on the server's own clock, and both are on the same
+      // calendar day.
+      expect(midnight.getHours()).toBe(0);
+      expect(midnight.getDate()).toBe(14);
+      expect(noon.getDate()).toBe(14);
+      // And the noon is the middle of that day, on that same clock.
+      const hoursApart = (noon.getTime() - midnight.getTime()) / 3_600_000;
+      expect(hoursApart).toBe(12);
+    });
   });
 
   it("is still the middle of the day when the zone is given", () => {

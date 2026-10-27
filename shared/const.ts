@@ -17,5 +17,6 @@ export const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
  * The interface used to compare the message with these strings to know
  * when the session was over. It cannot do that any more — the message
  * is translated now — so the machine-readable half moved into the
- * error's data, as `UNAUTHORIZED_MARKER` in `server/_core/trpc.ts`.
+ * error's data: `data.code` carries the *name* of the code
+ * ("UNAUTHORIZED", "NOT_FOUND"), and the interface compares that.
  */

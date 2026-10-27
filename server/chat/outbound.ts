@@ -583,12 +583,7 @@ async function collectWithModel(params: {
          * The same value is fenced everywhere else in the app: the
          * memories, the anchors, the summaries, the quoted letter.
          */
-        content: asMaterial(
-          copy(params.locale, "prompts.outboundCandidatesUser", {
-            transcript,
-          }),
-          params.locale,
-        ),
+        content: asMaterial(transcript, params.locale),
       },
     ],
     options: { temperature: 0, maxTokens: 800 },

@@ -950,7 +950,21 @@ export function normaliseCollectorOutput(
   }
 
   const limit = opts.limit && opts.limit > 0 ? opts.limit : undefined;
-  const truncated = limit !== undefined && parsed.length >= limit;
+  /**
+   * Whether the list was cut short.
+   *
+   * The server's own limit cut a list it already had — so exactly as
+   * many as the limit is not a cut at all, and the test is `>` and not
+   * `>=`. The other parser (`parseNormalisedPayload`) says the same
+   * thing, so one collection does not report itself as cut short
+   * through one parser and complete through the other.
+   *
+   * And the output being cut short is a cut short too — the flag the
+   * caller passes, which says the collector's own output went past the
+   * cap.
+   */
+  const truncated =
+    opts.truncated === true || (limit !== undefined && parsed.length > limit);
   const messages = limit !== undefined ? parsed.slice(0, limit) : parsed;
 
   return {

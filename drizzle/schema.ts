@@ -999,6 +999,18 @@ export const collectionJobs = pgTable("collection_jobs", {
    * many as it kept.
    */
   foundCount: integer("foundCount").default(0).notNull(),
+  /**
+   * How many messages the collection held.
+   *
+   * It is not the same as the message count, which is how many rows
+   * were *new*: re-collecting a history the user already imported
+   * writes nothing, and the message count says zero — while the
+   * collection still held every message it found.
+   *
+   * The interface needs both: "how many are in the persona" and "how
+   * many were there".
+   */
+  keptCount: integer("keptCount").default(0).notNull(),
   /** Whether the collection was cut short at the limit. */
   truncated: boolean("truncated").default(false).notNull(),
   error: text("error"),

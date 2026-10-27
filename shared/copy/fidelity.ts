@@ -262,8 +262,4 @@ export const FIDELITY = {
       "Output JSON: {\"items\":[{\"messageId\":123,\"text\":\"the original\"}],\"note\":\"one line\"}",
     ].join("\n"),
   },
-  "prompts.outboundCandidatesUser": {
-    zh: "对话：\n{{transcript}}",
-    en: "The conversation:\n{{transcript}}",
-  },
 } satisfies CopyTable;
