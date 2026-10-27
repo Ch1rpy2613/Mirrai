@@ -8,6 +8,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, PenLine, Trash2, Loader2, Message
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import { translate } from "@/i18n";
 import { EMOTIONS, resolveEmotionKey, type EmotionDefinition } from "@/lib/emotions";
 
 const fadeUp = {
@@ -40,8 +41,22 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 function MoodChip({ mood, small }: { mood: string; small?: boolean }) {
-  const { t } = useLocale();
-  const key = resolveEmotionKey(mood, t as (key: any) => string);
+  const { t, locale } = useLocale();
+  /**
+   * The label in the other language too.
+   *
+   * The diary's arc is stored in the language the diary was written in,
+   * so a Chinese diary holds 「温柔」 — and the label it was matched
+   * against was the *current* interface language's. Switch the
+   * interface to English and the chips fell back to the unstyled grey
+   * one and printed the raw Chinese in an English interface.
+   */
+  const otherLocale = locale === "zh" ? "en" : "zh";
+  const key = resolveEmotionKey(
+    mood,
+    t as (key: any) => string,
+    ((key: any) => translate(otherLocale, key)) as (key: any) => string,
+  );
   const cls = (key ? MOOD_CHIP[key] : undefined) ?? "bg-muted/60 text-muted-foreground border-border/60";
   const definition = key ? (EMOTIONS as Record<string, EmotionDefinition | undefined>)[key] : undefined;
   return (

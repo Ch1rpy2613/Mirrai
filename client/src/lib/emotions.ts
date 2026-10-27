@@ -129,12 +129,35 @@ export const EMOTIONS: Record<EmotionKey, EmotionDefinition> = {
 export function resolveEmotionKey(
   mood: string,
   label: (key: string) => string,
+  /**
+   * The labels in the *other* language.
+   *
+   * The diary's arc is stored as free text, in the language the diary
+   * was written in — the server asks the model for the emotion "in that
+   * language". So a Chinese diary stores 「温柔」.
+   *
+   * And the label it was matched against was the *current* interface
+   * language's. So the match only succeeded while the interface was in
+   * the language the diary was written in: switch the interface to
+   * English and the chips fell back to the unstyled grey one and
+   * printed the raw Chinese 「温柔」 in an English interface.
+   *
+   * So both languages are tried. The one the reader is reading in is
+   * tried first, so a mood that exists in both still lands on the
+   * wording they are looking at.
+   */
+  otherLabel?: (key: string) => string,
 ): string | undefined {
   const table = EMOTIONS as Record<string, EmotionDefinition | undefined>;
   if (table[mood]) return mood;
-  for (const key of Object.keys(table)) {
-    const definition = table[key];
-    if (definition && label(definition.labelKey) === mood) return key;
+  const tryLabels = otherLabel
+    ? [label, otherLabel]
+    : [label];
+  for (const translate of tryLabels) {
+    for (const key of Object.keys(table)) {
+      const definition = table[key];
+      if (definition && translate(definition.labelKey) === mood) return key;
+    }
   }
   return undefined;
 }
