@@ -23,6 +23,7 @@ import { withTimeout } from "../llm/timeout";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import * as db from "../db";
+import { userTimeZone } from "./prompt";
 import {
   buildRelationshipSection,
   resolveRelationshipPhase,
@@ -85,7 +86,14 @@ export async function buildFarewellPrompt(params: {
     summarySection: context.summarySection,
     locale,
     now,
-    relationshipEvents: buildRelationshipSection(events as any, phase, locale, now),
+    relationshipEvents: buildRelationshipSection(
+      events as any,
+      phase,
+      locale,
+      now,
+      // The user's own clock — so "today" is the user's today.
+      await userTimeZone(persona, userId),
+    ),
     relationshipPhase: phase,
   });
 

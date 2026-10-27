@@ -19,6 +19,7 @@
  * conversation; these are what the user says about themselves.
  */
 import { copy } from "./copy";
+import { zonedDateKey } from "./timezone";
 
 export type UserMood = "great" | "okay" | "low" | "down" | "anxious" | "numb";
 
@@ -214,6 +215,13 @@ export function buildRelationshipSection(
   phase: RelationshipEventKind | null,
   locale: "zh" | "en" = "zh",
   now: Date = new Date(),
+  /**
+   * The user's own time zone.
+   *
+   * Without it, "today" and "yesterday" were the server's days — and
+   * the user and the server are not always on the same day.
+   */
+  timeZone?: string | null,
 ): string {
   if (!events || events.length === 0) return "";
 
@@ -221,7 +229,7 @@ export function buildRelationshipSection(
   for (const event of events.slice(0, 8)) {
     const kind = isRelationshipEventKind(event.kind) ? event.kind : null;
     const label = kind ? EVENT_LABELS[kind][locale] : null;
-    const when = event.happenedAt ? formatWhen(event.happenedAt, locale, now) : null;
+    const when = event.happenedAt ? formatWhen(event.happenedAt, locale, now, timeZone) : null;
     // The punctuation follows the language.
     //
     // It was full-width in both: an English persona's system prompt
@@ -263,7 +271,17 @@ export function buildRelationshipSection(
     if (!event.happenedAt) return true;
     const then = new Date(event.happenedAt).getTime();
     if (Number.isNaN(then)) return true;
-    const days = (now.getTime() - then) / 86_400_000;
+    /**
+     * Calendar days, on the user's own clock.
+     *
+     * It was elapsed twenty-four-hour periods: a trigger recorded at
+     * eleven in the evening three days ago was 3.02 days old, so the
+     * instruction — "the user is hurting, acknowledge it and stop
+     * there" — was dropped, while the same trigger recorded at half
+     * past midnight was 2.99 days old and kept it. The rule that says
+     * "three days" did not mean three days.
+     */
+    const days = calendarDaysBetween(new Date(then), now, timeZone);
     return days <= TRIGGER_FRESHNESS_DAYS;
   });
   const restraint = triggered ? copy(locale, "userSide.triggeredRestraint") : "";
@@ -274,6 +292,51 @@ export function buildRelationshipSection(
 
 
 /**
+ * How many calendar days apart two moments are, on the user's own clock.
+ *
+ * It used to be `Math.floor((now - then) / 86_400_000)` — elapsed
+ * twenty-four-hour periods, not calendar days. So an event recorded at
+ * half past eleven in the evening was "yesterday" at half past twelve
+ * that night: the same evening, one hour apart, and the persona was
+ * told the user had been together with them *today* when it had
+ * happened the day before.
+ *
+ * Every event recorded in the evening was mislabelled, and the persona
+ * was told it as a fact it already knows.
+ *
+ * The count is now the distance between the two day keys, on the user's
+ * own clock — so the day a thing happened on is the day it is called.
+ */
+export function calendarDaysBetween(
+  earlier: Date | string,
+  later: Date | string,
+  timeZone?: string | null,
+): number {
+  const from = new Date(earlier);
+  const to = new Date(later);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 0;
+  const fromKey = zonedDateKey(from, timeZone);
+  const toKey = zonedDateKey(to, timeZone);
+  const fromMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromKey);
+  const toMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toKey);
+  if (!fromMatch || !toMatch) return 0;
+  // The keys are calendar days, so the distance between them is a
+  // calendar distance: the day count, done on the Gregorian calendar
+  // rather than on a clock.
+  const fromUtc = Date.UTC(
+    Number(fromMatch[1]),
+    Number(fromMatch[2]) - 1,
+    Number(fromMatch[3]),
+  );
+  const toUtc = Date.UTC(
+    Number(toMatch[1]),
+    Number(toMatch[2]) - 1,
+    Number(toMatch[3]),
+  );
+  return Math.round((toUtc - fromUtc) / 86_400_000);
+}
+
+/**
  * A short, human date for an event.
  *
  * The `now` is the one the caller was given, not the wall clock: the
@@ -281,11 +344,19 @@ export function buildRelationshipSection(
  * `now` — the scheduler's sweeps, the evaluations, the replays — and
  * the same function's freshness check used a different clock than its
  * own date labels.
+ *
+ * The days are calendar days on the user's own clock, not elapsed
+ * twenty-four-hour periods — see `calendarDaysBetween`.
  */
-function formatWhen(value: Date | string, locale: "zh" | "en", now: Date = new Date()): string {
+function formatWhen(
+  value: Date | string,
+  locale: "zh" | "en",
+  now: Date = new Date(),
+  timeZone?: string | null,
+): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const days = Math.floor((now.getTime() - date.getTime()) / 86_400_000);
+  const days = calendarDaysBetween(date, now, timeZone);
   if (days === 0) return copy(locale, "userSide.when.today");
   if (days === 1) return copy(locale, "userSide.when.yesterday");
   if (days < 7) return copy(locale, "userSide.when.daysAgo", { days });

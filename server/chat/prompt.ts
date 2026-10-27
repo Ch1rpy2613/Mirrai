@@ -15,6 +15,25 @@ import { copy } from "@shared/copy";
 import type { MicroRule } from "@shared/micro-rules";
 import type { ImperfectionEntry } from "@shared/imperfection";
 
+/**
+ * The user's own time zone, for the parts of the prompt that are about
+ * the user's days.
+ *
+ * The persona's zone is used when it has one; otherwise the user's own.
+ * A failure to read it is not worth failing a whole prompt over — the
+ * dates fall back to the server's own clock, which is what they did
+ * before.
+ */
+export async function userTimeZone(persona: unknown, userId: number): Promise<string | null> {
+  const personaZone = (persona as { timezone?: string | null } | null)?.timezone;
+  if (personaZone) return personaZone;
+  try {
+    return (await db.getUserTimezone(userId)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface PromptContext {
   persona: Persona;
   userId: number;
@@ -139,7 +158,14 @@ export async function buildPromptForPersona(
      * a prompt built for a turn that happened at 23:59 said a trigger
      * from four days ago was two days old.
      */
-    relationshipEvents: buildRelationshipSection(events as any, phase, locale, now),
+    relationshipEvents: buildRelationshipSection(
+      events as any,
+      phase,
+      locale,
+      now,
+      // The user's own clock — so "today" is the user's today.
+      await userTimeZone(persona, userId),
+    ),
     relationshipPhase: phase,
     reachability: (persona as any).reachability ?? "reachable",
     microRules: context.microRules,
