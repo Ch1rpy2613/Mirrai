@@ -829,19 +829,42 @@ export function parseNormalisedPayload(
   const limited = limit !== undefined ? messages.slice(0, limit) : messages;
   const payloadTruncated = record.meta?.truncated === true;
 
+  /**
+   * How many there were.
+   *
+   * The total was the length of the *kept* list — so a collection that
+   * was cut short said it had found exactly as many messages as it
+   * kept, and nothing said the rest were left behind. The interface
+   * then said "found 1000 in total, this time only some of them were
+   * taken" — a sentence that contradicts itself, because the two
+   * numbers were the same number.
+   *
+   * The collector's own count is used when it is larger: it knows how
+   * many it found before the list was trimmed.
+   */
+  const collectorTotal = Number(record.meta?.total ?? 0);
+  const total = Math.max(messages.length, Number.isFinite(collectorTotal) ? collectorTotal : 0);
+
   return {
     messages: limited,
     meta: {
-      /**
-       * How many there were.
-       *
-       * The total was the length of the *kept* list — so a collection
-       * that was cut short said it had found exactly as many messages
-       * as it kept, and nothing said the rest were left behind.
-       */
-      total: messages.length,
+      total,
       source,
-      truncated: (limit !== undefined && messages.length >= limit) || payloadTruncated,
+      /**
+       * Whether the list was cut short.
+       *
+       * The collector says so when *it* stopped at its own limit —
+       * which the server could not see, because the limit was the
+       * collector's own and the payload claimed to be everything. So a
+       * collection of a thousand messages out of ten thousand was
+       * reported as complete, and the persona was distilled from a
+       * tenth of the history with nothing said about it.
+       *
+       * The server's own limit is a *cut* of a list it already had, so
+       * it is `>` and not `>=`: exactly as many messages as the limit
+       * is not a cut at all.
+       */
+      truncated: payloadTruncated || (limit !== undefined && messages.length > limit),
     },
   };
 }

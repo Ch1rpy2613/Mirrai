@@ -837,6 +837,12 @@ def collect_message_records(
 
     all_messages = []
     chat_sources = []
+    # 这次是不是只拿到了一部分。
+    #
+    # 上限是它自己定的，所以服务器根本看不出来：采集器在自己的上限那里
+    # 停下了，而返回的载荷说"这是全部"。于是用户看到的是一次完整的采集，
+    # 而这个人的人格是从历史的一小部分里蒸馏出来的。
+    truncated = False
 
     report_progress(0.05)
 
@@ -850,6 +856,9 @@ def collect_message_records(
         for m in p2p_msgs:
             m["chat"] = "私聊"
         all_messages.extend(p2p_msgs)
+        # 拿满了上限，就说明后面可能还有。
+        if len(p2p_msgs) >= msg_limit:
+            truncated = True
         chat_sources.append(f"私聊（{len(p2p_msgs)} 条）")
         print(f"    获取 {len(p2p_msgs)} 条私聊消息", file=sys.stderr)
         report_progress(0.15)
@@ -879,12 +888,15 @@ def collect_message_records(
                 for m in msgs:
                     m["chat"] = chat_name
                 all_messages.extend(msgs)
+                # 这个群拿满了它那份上限——后面可能还有。
+                if len(msgs) >= per_chat_limit:
+                    truncated = True
                 chat_sources.append(f"{chat_name}（{len(msgs)} 条）")
                 print(f"    获取 {len(msgs)} 条", file=sys.stderr)
                 report_progress(0.15 + 0.7 * (index + 1) / len(chats))
 
     report_progress(0.9)
-    return all_messages, chat_sources
+    return all_messages, chat_sources, truncated
 
 
 def format_message_report(records: list, chat_sources: list, name: str) -> str:
@@ -948,7 +960,7 @@ def collect_messages(
     config: dict,
 ) -> str:
     """采集目标用户的所有消息记录（群聊 + 私聊）"""
-    records, chat_sources = collect_message_records(user, msg_limit, config)
+    records, chat_sources, _truncated = collect_message_records(user, msg_limit, config)
     return format_message_report(records, chat_sources, user.get("name", ""))
 
 
@@ -1144,14 +1156,14 @@ def collect_all(
     print(f"\n📨 采集消息记录（上限 {msg_limit} 条）...", file=sys.stderr)
     records: list = []
     try:
-        records, chat_sources = collect_message_records(user, msg_limit, config)
+        records, chat_sources, truncated = collect_message_records(user, msg_limit, config)
         msg_content = format_message_report(records, chat_sources, user.get("name", name))
         msg_path = output_dir / "messages.txt"
         msg_path.write_text(msg_content, encoding="utf-8")
         results["messages"] = str(msg_path)
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
         if output_format == "json":
-            print_json_payload(build_json_payload(to_json_messages(records)))
+            print_json_payload(build_json_payload(to_json_messages(records), truncated=truncated))
     except Exception as e:
         print(f"  ⚠️  消息采集失败：{e}", file=sys.stderr)
 
@@ -1308,13 +1320,13 @@ def main() -> None:
 
         # 只采集消息
         print(f"📨 采集消息记录（上限 {args.msg_limit} 条）...", file=sys.stderr)
-        records, chat_sources = collect_message_records(user, args.msg_limit, config)
+        records, chat_sources, truncated = collect_message_records(user, args.msg_limit, config)
         msg_content = format_message_report(records, chat_sources, user.get("name", ""))
         msg_path = output_dir / "messages.txt"
         msg_path.write_text(msg_content, encoding="utf-8")
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
         if args.format == "json":
-            print_json_payload(build_json_payload(to_json_messages(records)))
+            print_json_payload(build_json_payload(to_json_messages(records), truncated=truncated))
         report_progress(1.0)
         return
 

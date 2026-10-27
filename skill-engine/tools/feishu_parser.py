@@ -258,7 +258,10 @@ def to_normalised_json(messages: list[dict], source: str = "wechat_export") -> s
             for msg in messages
             if (msg.get("content") or "").strip()
         ],
-        "meta": {"source": source, "total": len(messages)},
+        # The key is here for the same reason as in the other collectors:
+        # the server reads it to know whether the list was cut short.
+        # This parser has no limit of its own, so it is never cut short.
+        "meta": {"source": source, "total": len(messages), "truncated": False},
     }
     return json.dumps(payload, ensure_ascii=False)
 

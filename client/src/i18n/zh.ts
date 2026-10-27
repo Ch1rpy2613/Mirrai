@@ -852,7 +852,20 @@ export const zh = {
       noJobs: "还没有采集任务。",
       notStarted: "尚未开始",
       messageCount: "{{count}} 条",
-      truncatedAt: "（一共找到了 {{count}} 条，这次只拿了一部分）",
+      /**
+       * The collection was cut short.
+       *
+       * There are two cases, and they are different: the server's own
+       * limit cut a list it already had (so it knows how many were
+       * left behind), and the collector stopped at *its* own limit (so
+       * it knows there were more, but not how many).
+       *
+       * It used to be one sentence for both, saying "found {{count}} in
+       * total" — and the count was the number that was kept, so the
+       * sentence contradicted itself.
+       */
+      truncatedAt: "（这次只拿了一部分：找到了 {{count}} 条，拿到了 {{kept}} 条）",
+      truncatedAtCap: "（这次只拿了一部分：最多 {{count}} 条，后面可能还有）",
       collapse: "收起详情",
       expand: "查看详情",
       jobId: "任务 ID",

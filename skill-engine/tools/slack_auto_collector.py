@@ -690,9 +690,16 @@ def collect_messages(
             f"未找到与 {name} 共同的频道。\n"
             f"请确认 Bot 已被添加到相关频道（/invite @bot）\n",
             [],
+            False,
         )
 
     all_messages: list = []
+    # 这次是不是只拿到了一部分。
+    #
+    # 上限是它自己定的，所以服务器根本看不出来：采集器在自己的上限那里
+    # 停下了，而返回的载荷说"这是全部"。于是用户看到的是一次完整的采集，
+    # 而这个人的人格是从历史的一小部分里蒸馏出来的。
+    truncated = False
     # The limit is the limit.
     #
     # The share per channel had a floor of a hundred — so asking for a
@@ -713,6 +720,9 @@ def collect_messages(
             ch_id, ch_name, user_id, per_channel_limit, client
         )
         all_messages.extend(msgs)
+        # 这个频道拿满了它那份上限——后面可能还有。
+        if len(msgs) >= per_channel_limit:
+            truncated = True
         print(f"    获取 {len(msgs)} 条", file=sys.stderr)
         report_progress(0.1 + 0.7 * (index + 1) / len(channels))
 
@@ -763,7 +773,7 @@ def collect_messages(
     for m in short_msgs[:300]:
         lines.append(f"[{m['time']}] {m['content']}")
 
-    return "\n".join(lines), all_messages
+    return "\n".join(lines), all_messages, truncated
 
 
 def collect_all(
@@ -823,13 +833,13 @@ def collect_all(
     # Step 3: 采集消息
     print(f"\n📨 采集消息记录（上限 {msg_limit} 条）...", file=sys.stderr)
     try:
-        msg_content, records = collect_messages(user, channels, msg_limit, client)
+        msg_content, records, truncated = collect_messages(user, channels, msg_limit, client)
         msg_path = output_dir / "messages.txt"
         msg_path.write_text(msg_content, encoding="utf-8")
         results["messages"] = str(msg_path)
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
         if output_format == "json":
-            print_json_payload(build_json_payload(to_json_messages(records)))
+            print_json_payload(build_json_payload(to_json_messages(records), truncated=truncated))
     except SlackCollectorError as e:
         print(f"  ❌ {e}", file=sys.stderr)
         sys.exit(1)

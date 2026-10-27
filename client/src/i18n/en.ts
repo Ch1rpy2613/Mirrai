@@ -857,7 +857,20 @@ export const en = {
       noJobs: "No collection jobs yet.",
       notStarted: "Not started yet",
       messageCount: "{{count}} messages",
-      truncatedAt: "({{count}} were found — this run took only some of them)",
+      /**
+       * The collection was cut short.
+       *
+       * There are two cases, and they are different: the server's own
+       * limit cut a list it already had (so it knows how many were
+       * left behind), and the collector stopped at *its* own limit (so
+       * it knows there were more, but not how many).
+       *
+       * It used to be one sentence for both, saying "{{count}} were
+       * found" — and the count was the number that was kept, so the
+       * sentence contradicted itself.
+       */
+      truncatedAt: "(only part of it was taken: {{count}} found, {{kept}} kept)",
+      truncatedAtCap: "(only part of it was taken: up to {{count}} — there may be more)",
       collapse: "Hide details",
       expand: "Show details",
       jobId: "Job ID",

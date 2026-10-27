@@ -2287,7 +2287,25 @@ function DataSourcesTab() {
                         */}
                     {job.truncated && (
                       <span className="text-xs text-muted-subtle whitespace-nowrap">
-                        {t("settings.sources.truncatedAt", { count: job.foundCount ?? job.messageCount })}
+                        {/**
+                            Two cases, and they are different.
+
+                            The server's own limit cut a list it already
+                            had, so it knows how many were left behind.
+                            The collector stopped at *its* own limit, so
+                            it knows there were more but not how many —
+                            and saying "found 1000 in total" would be
+                            claiming to know the number it does not
+                            know.
+                            */}
+                        {job.foundCount != null && job.foundCount > job.messageCount
+                          ? t("settings.sources.truncatedAt", {
+                              count: job.foundCount,
+                              kept: job.messageCount,
+                            })
+                          : t("settings.sources.truncatedAtCap", {
+                              count: job.messageCount,
+                            })}
                       </span>
                     )}
                   </div>

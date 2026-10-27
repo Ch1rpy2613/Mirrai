@@ -760,9 +760,17 @@ def collect_messages_browser(
             "⚠️  未安装 Playwright，无法采集消息记录。\n"
             "请运行：pip3 install playwright && playwright install chromium\n",
             [],
+            False,
         )
 
     import re
+
+    # 这次是不是只拿到了一部分。
+    #
+    # 上限是它自己定的，所以服务器根本看不出来：采集器在自己的上限那里
+    # 停下了，而返回的载荷说"这是全部"。于是用户看到的是一次完整的采集，
+    # 而这个人的人格是从历史的一小部分里蒸馏出来的。
+    truncated = False
 
     if not chrome_profile:
         # The browser profile is the credential.
@@ -780,6 +788,7 @@ def collect_messages_browser(
             "浏览器的登录状态就是凭据，所以它必须是你自己的；"
             "服务器不会替你挑一个默认的。\n",
             [],
+            False,
         )
     profile = chrome_profile
     print(f"  启动浏览器抓取钉钉消息（{'无头' if headless else '有界面'}）...", file=sys.stderr)
@@ -916,6 +925,8 @@ def collect_messages_browser(
 
         ctx.close()
         messages = raw_messages or []
+        # 拿满了上限，就说明后面可能还有。
+        truncated = len(messages) >= msg_limit
 
     if not messages:
         return (
@@ -924,6 +935,7 @@ def collect_messages_browser(
             "可能原因：钉钉网页版 DOM 结构变化，或未找到对话。\n"
             "建议手动截图聊天记录后上传。\n",
             [],
+            False,
         )
 
     report_progress(0.7)
@@ -952,7 +964,7 @@ def collect_messages_browser(
 
     report_progress(0.9)
 
-    return "\n".join(lines), messages
+    return "\n".join(lines), messages, truncated
 
 
 # ─── 主流程 ───────────────────────────────────────────────────────────────────
@@ -1008,13 +1020,13 @@ def collect_all(
         print(f"\n📨 采集消息记录（浏览器方案，上限 {msg_limit} 条）...", file=sys.stderr)
         print(f"  ℹ️  钉钉 API 不支持历史消息拉取，自动切换浏览器方案", file=sys.stderr)
         try:
-            msg_content, records = collect_messages_browser(name, msg_limit, chrome_profile, headless)
+            msg_content, records, truncated = collect_messages_browser(name, msg_limit, chrome_profile, headless)
             msg_path = output_dir / "messages.txt"
             msg_path.write_text(msg_content, encoding="utf-8")
             results["messages"] = str(msg_path)
             print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
             if output_format == "json":
-                print_json_payload(build_json_payload(to_json_messages(records)))
+                print_json_payload(build_json_payload(to_json_messages(records), truncated=truncated))
         except Exception as e:
             print(f"  ⚠️  消息采集失败：{e}", file=sys.stderr)
     else:
