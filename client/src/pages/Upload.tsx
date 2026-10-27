@@ -190,7 +190,7 @@ export default function Upload() {
      persona, so a re-run keeps the same choice. */
   const [mode, setMode] = useState<DistillationMode>(DEFAULT_DISTILLATION_MODE);
 
-  const { data: persona, refetch: refetchPersona } = trpc.persona.get.useQuery(
+  const { data: persona, refetch: refetchPersona, isError: personaError } = trpc.persona.get.useQuery(
     { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   const { data: files, refetch: refetchFiles, isLoading: filesLoadingQuery, isError: filesError } = trpc.file.list.useQuery(
@@ -383,7 +383,15 @@ export default function Upload() {
    * is drawn *after* this, so without one the user was stranded on a
    * page with nothing to press but the browser's back button.
    */
-  if (filesError) {
+  /**
+   * The persona could not be read either.
+   *
+   * The title said "…" for ever, and the page still offered a drop
+   * zone and a button to start the analysis — for a persona that could
+   * not be read. So the analysis was started on a persona the page had
+   * never seen.
+   */
+  if (filesError || personaError) {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-40 app-header">
@@ -397,7 +405,11 @@ export default function Upload() {
         <main className="container page-main max-w-3xl">
           <div className="text-center space-y-4 py-16">
             <p className="text-sm text-foreground/80">{t("common.error")}</p>
-            <Button variant="outline" size="sm" onClick={() => refetchFiles()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (personaError ? refetchPersona() : refetchFiles())}
+            >
               {t("common.retry")}
             </Button>
           </div>

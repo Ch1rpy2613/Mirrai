@@ -21,7 +21,7 @@ type Step = "provider" | "persona" | "done";
  */
 export default function Onboarding() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, loading: authLoading, error: authError } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
   const [step, setStep] = useState<"provider" | "persona" | "done">("provider");
@@ -166,10 +166,24 @@ export default function Onboarding() {
           <div className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="provider">{t("onboarding.providerLabel")}</Label>
+              {/**
+               * The list could not be read.
+               *
+               * The dropdown was empty and said nothing — so the user
+               * picked nothing, pressed "save and continue", and was
+               * told to choose a model service, as if their choice had
+               * been wrong rather than never having arrived.
+               */}
+              {(providers.isError || authError) && (
+                <p className="text-xs text-destructive" role="alert">
+                  {t("common.error")}
+                </p>
+              )}
               <select
                 id="provider"
                 value={providerName}
                 onChange={(e) => setProviderName(e.target.value)}
+                disabled={providers.isError || Boolean(authError)}
                 className="w-full h-11 px-3 rounded-md border border-border bg-muted/40 text-foreground"
               >
                 <option value="">{t("onboarding.selectPlaceholder")}</option>
