@@ -194,6 +194,20 @@ describe("the packaged app", () => {
     expect(verify).toContain("DATABASE_URL is not set");
   });
 
+  it("gives the downloads something to check them against", () => {
+    /**
+     * There was no checksum — so the person who downloaded the disk
+     * image or the installer had no way of telling whether it was the
+     * one that was built, or one that somebody else put in its place.
+     */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf-8");
+    expect(workflow).toContain("shasum -a 256");
+    expect(workflow).toContain("Get-FileHash -Algorithm SHA256");
+    // And the checksum is attached to the release, not only left on the
+    // machine that built it.
+    expect(workflow).toContain(".sha256");
+  });
+
   it("builds the macOS app for the machine it is built on", () => {
     /**
      * The architecture was written down — arm64 — so building on an

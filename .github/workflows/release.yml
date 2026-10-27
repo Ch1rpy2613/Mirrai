@@ -57,7 +57,13 @@ jobs:
         run: |
           DMG=$(ls build-macos/Mirrai-macOS-*.dmg | head -1)
           if [ -z "$DMG" ]; then echo "No .dmg was built." >&2; exit 1; fi
-          gh release upload "${{ inputs.tag || github.ref_name }}" "$DMG" --clobber
+          # The checksum.
+          #
+          # There was none — so the person who downloaded the disk image
+          # had no way of telling whether it was the one that was built,
+          # or one that somebody else put in its place.
+          shasum -a 256 "$DMG" > "$DMG.sha256"
+          gh release upload "${{ inputs.tag || github.ref_name }}" "$DMG" "$DMG.sha256" --clobber
 
   windows-app:
     name: Build Windows app
@@ -137,7 +143,16 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ inputs.tag || github.ref_name }}" build-windows/Mirrai-Setup-x64.exe --clobber
+        run: |
+          # The checksum.
+          #
+          # There was none — so the person who downloaded the installer
+          # had no way of telling whether it was the one that was built,
+          # or one that somebody else put in its place.
+          $installer = "build-windows/Mirrai-Setup-x64.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash
+          "$hash  Mirrai-Setup-x64.exe" | Set-Content -Encoding ascii "build-windows/Mirrai-Setup-x64.exe.sha256"
+          gh release upload "${{ inputs.tag || github.ref_name }}" $installer "build-windows/Mirrai-Setup-x64.exe.sha256" --clobber
 
       - name: The smoke test tripped
         # The job goes red, and the installer is already attached — so
