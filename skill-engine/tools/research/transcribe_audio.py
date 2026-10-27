@@ -47,6 +47,14 @@ def _has_cmd(name: str) -> bool:
     return shutil.which(name) is not None
 
 
+# How long the download may take.
+#
+# It had no limit at all: so a stalled connection — or a video the
+# site would not let go of — kept the tool running for ever, and the
+# person watching it had no way to tell whether it was working.
+DOWNLOAD_TIMEOUT_SECONDS = 600
+
+
 def download_audio(url: str, workdir: Path) -> Path:
     """Download best audio from a video URL using yt-dlp."""
     if not _has_cmd("yt-dlp"):
@@ -69,7 +77,12 @@ def download_audio(url: str, workdir: Path) -> Path:
     ]
 
     print(f"[transcribe] downloading audio: {url}", file=sys.stderr)
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True, timeout=DOWNLOAD_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(
+            f"error: yt-dlp did not finish within {DOWNLOAD_TIMEOUT_SECONDS} seconds: {url}"
+        )
 
     audio_files = sorted(workdir.glob("*.mp3"))
     if not audio_files:
