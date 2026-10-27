@@ -467,6 +467,36 @@ describe("runConversation", () => {
     expect(done?.careNote?.text).toContain("We've been talking");
   });
 
+  it("does not send empty lines when the care note was already said today", async () => {
+    // The words are said once a day — and a note that was already said
+    // has no text. The stream used to send two newlines anyway, while
+    // the stored message left them out: so the bubble had two blank
+    // lines at the end and the record did not.
+    hasSafetyEventSince.mockResolvedValue(true);
+    // A long session — so a note is picked, and it has already been
+    // said today.
+    getSessionStartAt.mockResolvedValue(new Date(Date.now() - 3 * 60 * 60 * 1000));
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "在" };
+      yield { text: "的" };
+    });
+
+    const deltas: string[] = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "stream",
+    })) {
+      if (event.type === "delta") deltas.push(event.text);
+    }
+
+    expect(deltas.join("")).not.toContain("\n\n");
+    // And the stored message is the same as what was streamed.
+    const stored = createMessage.mock.calls[1][0].content as string;
+    expect(deltas.join("")).toBe(stored);
+  });
+
   it("adds a gentle check-in when the user sounds exhausted", async () => {
     const events = [];
     for await (const event of runConversation({

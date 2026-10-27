@@ -1171,7 +1171,18 @@ async function* runConversationTurn(
   if (gentleCheckIn) {
     yield { type: "delta", text: `\n\n${gentleCheckIn}` };
   }
-  if (careNote) {
+  /**
+   * The note, when there is one.
+   *
+   * A note that was already said today has no text — the words were
+   * said once, and the banner is not shown again. But the note itself
+   * is still there, so the check was on the note and not on its text:
+   * the stream sent two newlines and nothing else, while the stored
+   * message left them out. So the bubble had two blank lines at the
+   * end and the record did not — and every message of the day was two
+   * lines apart from itself.
+   */
+  if (careNote?.text) {
     yield { type: "delta", text: `\n\n${careNote.text}` };
   }
   if (worsening && !careNote) {
