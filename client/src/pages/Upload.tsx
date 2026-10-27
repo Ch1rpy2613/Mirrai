@@ -167,6 +167,14 @@ function formatFileSize(bytes: number): string {
   return `${(mb / 1024).toFixed(1)} GB`;
 }
 
+/**
+ * The counter the pending rows are named by.
+ *
+ * It is a counter and not the clock, so two files with the same name
+ * uploaded in the same millisecond are two rows.
+ */
+let uploadCounter = 0;
+
 export default function Upload() {
   const params = useParams<{ id: string }>();
   /**
@@ -183,7 +191,15 @@ export default function Upload() {
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
 
-  const [uploadingFiles, setUploadingFiles] = useState<Record<string, "uploading" | "done" | "error">>({});
+  /**
+   * The uploads that are on their way.
+   *
+   * The key is the row's identity, and the name is kept beside it:
+   * the key used to be the name plus the clock, so two files with the
+   * same name uploaded in the same millisecond were **one row** — and
+   * the row of the first one was deleted when the second one finished.
+   */
+  const [uploadingFiles, setUploadingFiles] = useState<Record<string, { name: string; status: "uploading" | "done" | "error" }>>({});
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   /* The distillation preset this run uses. It is remembered on the
@@ -314,7 +330,16 @@ export default function Upload() {
 
   const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     for (const file of Array.from(fileList)) {
-      const key = `${file.name}-${Date.now()}`;
+      /**
+       * The row's own name.
+       *
+       * A counter, not the clock: two files with the same name
+       * uploaded in the same millisecond are two files, and the clock
+       * made them one row — so the first one's row was deleted when the
+       * second one finished, and the first file was left uploading
+       * for ever.
+       */
+      const key = `${file.name}#${uploadCounter++}`;
       const fileType = detectFileType(file);
       if (!fileType) {
         // The kind is checked before the file is read, not after.
@@ -325,7 +350,7 @@ export default function Upload() {
         toast.error(t("upload.fileTooLarge", { name: file.name }));
         continue;
       }
-      setUploadingFiles(prev => ({ ...prev, [key]: "uploading" }));
+      setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "uploading" } }));
       try {
         const content = await fileToBase64(file);
         await uploadMutation.mutateAsync({
@@ -349,7 +374,7 @@ export default function Upload() {
       } catch {
         // The failure is kept, so the row says what happened. It goes
         // when the page is left.
-        setUploadingFiles(prev => ({ ...prev, [key]: "error" }));
+        setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "error" } }));
       }
     }
   }, [personaId, uploadMutation, refetchFiles, t]);
@@ -372,7 +397,7 @@ export default function Upload() {
    * persona's name stayed "...".
    */
   const filesLoading = isAuthenticated && hasPersonaId && filesLoadingQuery;
-  const pendingUploads = Object.entries(uploadingFiles).filter(([, s]) => s !== "done");
+  const pendingUploads = Object.entries(uploadingFiles).filter(([, entry]) => entry.status !== "done");
 
   if (!hasPersonaId) return <NotFound />;
 
@@ -627,12 +652,12 @@ export default function Upload() {
                   </span>
                 </div>
               ))}
-              {pendingUploads.map(([key, status]) => (
+              {pendingUploads.map(([key, entry]) => (
                 <div key={key} className="flex items-center gap-3 py-3 border-t border-border">
                   <span className="text-sm text-muted-foreground flex-1 truncate">
-                    {key.replace(/-\d+$/, "")}
+                    {entry.name}
                   </span>
-                  {status === "uploading" ? (
+                  {entry.status === "uploading" ? (
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
                       <Loader2 className="w-3 h-3 animate-spin" />{t("upload.uploading")}
                     </span>
@@ -649,7 +674,7 @@ export default function Upload() {
                           delete next[key];
                           return next;
                         })}
-                        aria-label={t("upload.dismissFailed", { name: key.replace(/-\d+$/, "") })}
+                        aria-label={t("upload.dismissFailed", { name: entry.name })}
                         className="text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <X className="w-3.5 h-3.5" />
