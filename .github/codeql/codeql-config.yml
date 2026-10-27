@@ -9,7 +9,10 @@
 # a test and was reported as "missing rate limiting" for it.
 name: "CodeQL config"
 
-queries:
+# The queries to leave out.
+#
+# The key is `query-filters`, and it is the CLI's own name for it.
+query-filters:
   # The rule that cannot work here.
   #
   # `js/missing-rate-limiting` recognises five rate limiters and no
@@ -27,6 +30,30 @@ queries:
   # The rule is left out rather than the limit removed.
   - exclude:
       id: js/missing-rate-limiting
+  #
+  # The rule about the old password hash.
+  #
+  # It is right about the hash — SHA-256 is fast, and a stolen copy of
+  # an old hash can be tried against far too many guesses. But the
+  # accounts that carry an old hash are real people's accounts: the old
+  # format has to stay *readable* or every one of them is locked out of
+  # their own history on the day the app was updated.
+  #
+  # So the old format is read and never written: a password that
+  # arrives against an old hash is written again with scrypt the moment
+  # it matches — see `needsRehash` and the sign-in path. An old hash
+  # lives only until the account's owner next signs in.
+  #
+  # The rule is left out because it cannot tell the difference between
+  # "this code hashes a password with something cheap" and "this code
+  # reads a hash that was made with something cheap, once, years ago".
+  #
+  # So something else watches it: `server/password-hash-policy.test.ts`
+  # reads every file in the server and says that the only place a weak
+  # hash may appear is the one legacy function. A new weak hash fails
+  # the test.
+  - exclude:
+      id: js/insufficient-password-hash
 
 paths-ignore:
   - "**/*.test.ts"
