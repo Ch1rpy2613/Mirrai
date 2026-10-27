@@ -2342,12 +2342,17 @@ export const appRouter = router({
             content: exportAsMarkdown(bundle, ctx.locale),
             fileName: `mirrai-${new Date().toISOString().slice(0, 10)}.md`,
             mimeType: "text/markdown",
+            // What the file could not carry. It says so in the file
+            // too — but the person who asked for the export should be
+            // told before they open it.
+            truncated: bundle.truncated,
           };
         }
         return {
           content: exportAsJson(bundle),
           fileName: `mirrai-${new Date().toISOString().slice(0, 10)}.json`,
           mimeType: "application/json",
+          truncated: bundle.truncated,
         };
       }),
   }),

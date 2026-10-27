@@ -895,6 +895,7 @@ export const zh = {
     },
     data: {
       exportSuccess: "数据导出成功",
+      exportTruncated: "导出的不是全部：{{names}} 的内容太多（{{count}} 处），文件里已经写明了。",
       exportFailed: "导出失败：{{message}}",
       accountDeleted: "账户已删除",
       storageTitle: "存储概览",

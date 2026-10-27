@@ -900,6 +900,7 @@ export const en = {
     },
     data: {
       exportSuccess: "Data exported",
+      exportTruncated: "This is not everything: {{names}} had too much of it ({{count}} places). The file says so.",
       exportFailed: "Export failed: {{message}}",
       accountDeleted: "Account deleted",
       storageTitle: "Storage overview",

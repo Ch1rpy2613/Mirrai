@@ -11,6 +11,7 @@ import { exportAsJson, exportAsMarkdown, type ExportBundle } from "./_core/expor
  */
 function bundle(): ExportBundle {
   return {
+    truncated: [],
     user: {
       username: "someone",
       name: "小张",
@@ -95,6 +96,32 @@ function bundle(): ExportBundle {
 }
 
 describe("the export", () => {
+  it("names what it could not carry", () => {
+    /**
+     * The bundle is held in memory and then serialised into one
+     * string, so there is a ceiling on what goes into it.
+     *
+     * It used to be silent. So a persona with thirty thousand messages
+     * got a file that said "all of my data" and held ten thousand of
+     * them — and there was nothing in the file, and nothing on the
+     * screen, to say so.
+     */
+    const full = { ...bundle(), truncated: [{ personaId: 1, personaName: "小A", what: "messages" }] };
+
+    const markdown = exportAsMarkdown(full, "zh");
+    expect(markdown).toContain("小A");
+    expect(markdown).toContain("没有导出");
+
+    // And the JSON says it too.
+    const json = JSON.parse(exportAsJson(full));
+    expect(json.truncated).toEqual([{ personaId: 1, personaName: "小A", what: "messages" }]);
+  });
+
+  it("says nothing about truncation when there was none", () => {
+    const markdown = exportAsMarkdown(bundle(), "zh");
+    expect(markdown).not.toContain("没有导出");
+  });
+
   it("carries the letters in the bundle", () => {
     const b = bundle();
     expect(b.personas[0].letters).toHaveLength(1);

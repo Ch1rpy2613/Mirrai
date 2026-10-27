@@ -1326,6 +1326,25 @@ export function DataManagementTab() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      /**
+       * The export that is not everything.
+       *
+       * The file says "all of my data", and the bundle is held in
+       * memory — so a persona with thirty thousand messages gets a file
+       * with ten thousand of them. That is named in the file, and it is
+       * named here too: a person who believes they have a copy of
+       * everything and does not is worse off than one who was told.
+       */
+      const truncated = (data as any).truncated as Array<{ personaName: string; what: string }> | undefined;
+      if (truncated && truncated.length > 0) {
+        toast.warning(
+          t("settings.data.exportTruncated", {
+            count: truncated.length,
+            names: truncated.map((entry) => entry.personaName).join("、"),
+          }),
+        );
+        return;
+      }
       toast.success(t("settings.data.exportSuccess"));
     },
     onError: (e: any) => toast.error(t("settings.data.exportFailed", { message: e.message })),

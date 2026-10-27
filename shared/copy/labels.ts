@@ -187,6 +187,22 @@ export const LABELS = {
     zh: "导出于 {{date}} · Mirrai",
     en: "Exported on {{date}} · Mirrai",
   },
+  "labels.export.truncatedHeading": {
+    zh: "## 这份导出没有包含全部内容",
+    en: "## This export does not contain everything",
+  },
+  "labels.export.truncatedLine": {
+    zh: "- {{persona}}：{{what}}超过了一万条，超出的部分没有导出。",
+    en: "- {{persona}}: more than ten thousand {{what}} — the ones past that are not here.",
+  },
+  "labels.export.truncatedMessages": {
+    zh: "消息",
+    en: "messages",
+  },
+  "labels.export.truncatedMemories": {
+    zh: "记忆",
+    en: "memories",
+  },
   "labels.export.myState": {
     zh: "我的状态",
     en: "My state",

@@ -110,6 +110,19 @@ export interface ExportBundle {
   }>;
   /** The user's own moods, across every persona's time. */
   moods: Array<{ date: string; mood: UserMood; note: string | null }>;
+  /**
+   * What the export could not carry.
+   *
+   * The bundle is held in memory and then serialised into one string,
+   * so there is a ceiling on what goes into it: ten thousand messages
+   * and ten thousand memories for one persona.
+   *
+   * It used to be silent. So a persona with thirty thousand messages
+   * got a file that said "all of my data" and held ten thousand of
+   * them — and there was nothing in the file, and nothing on the
+   * screen, to say so.
+   */
+  truncated: Array<{ personaId: number; personaName: string; what: string }>;
 }
 
 /**
@@ -128,17 +141,22 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
   const moods = await db.getUserMoods(userId, 3650);
 
   const personas: ExportBundle["personas"] = [];
+  const truncated: ExportBundle["truncated"] = [];
   for (const persona of personaList) {
     const [messageList, memoryList, diaryList, snapshotList, eventList, letterList] = await Promise.all([
       // The export is loaded into memory, put into one object and then
       // serialised into one string. A hundred thousand messages per
       // persona is hundreds of megabytes, and the process that builds it
       // runs out of memory — taking every other request with it.
-      db.getMessagesByPersonaId(persona.id, userId, MAX_EXPORT_MESSAGES),
+      //
+      // One more than the ceiling is asked for, so a persona with more
+      // than the ceiling can be *seen* to have one — and the extra row
+      // is dropped below.
+      db.getMessagesByPersonaId(persona.id, userId, MAX_EXPORT_MESSAGES + 1),
       // All of them. The list used to carry the interface's own limit of
       // two hundred, so the export — which says "all of my data" —
       // silently left out everything past the two hundredth memory.
-      db.getMemoriesByPersonaId(persona.id, userId, MAX_EXPORT_MEMORIES),
+      db.getMemoriesByPersonaId(persona.id, userId, MAX_EXPORT_MEMORIES + 1),
       db.getDiaryEntries(userId, persona.id, 10000),
       db.getEmotionSnapshots(persona.id, userId, 36500),
       db.getRelationshipEvents(persona.id, userId, 1000),
@@ -146,6 +164,21 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
       // *oldest* letters, from a bundle that says "all of my data".
       db.getLetters(persona.id, userId, 10000),
     ]);
+    /**
+     * What did not fit.
+     *
+     * The bundle says "all of my data", so the part that did not fit
+     * has to be named — in the file and on the screen.
+     */
+    if (messageList.length > MAX_EXPORT_MESSAGES) {
+      truncated.push({ personaId: persona.id, personaName: persona.name, what: "messages" });
+      messageList.length = MAX_EXPORT_MESSAGES;
+    }
+    if (memoryList.length > MAX_EXPORT_MEMORIES) {
+      truncated.push({ personaId: persona.id, personaName: persona.name, what: "memories" });
+      memoryList.length = MAX_EXPORT_MEMORIES;
+    }
+
     const intimacyData = await db.getIntimacyData(persona.id, userId);
     const intimacy = computeIntimacy(intimacyData);
 
@@ -209,6 +242,7 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
 
   return {
     locale,
+    truncated,
     user: {
       username: user.username,
       name: user.name,
@@ -268,6 +302,33 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
   lines.push("");
   lines.push(`> ${copy(locale, "labels.export.exportedOn", { date: iso(new Date()) })}`);
   lines.push("");
+
+  /**
+   * What did not fit.
+   *
+   * The file says "all of my data" — so the part that is not here has
+   * to be named in the file itself, and not only on the screen. A
+   * keepsake that quietly lost thirty thousand messages is worse than
+   * one that says it could not carry them.
+   */
+  if (bundle.truncated.length > 0) {
+    lines.push(copy(locale, "labels.export.truncatedHeading"));
+    lines.push("");
+    for (const entry of bundle.truncated) {
+      lines.push(
+        copy(locale, "labels.export.truncatedLine", {
+          persona: entry.personaName,
+          what: copy(
+            locale,
+            entry.what === "memories"
+              ? "labels.export.truncatedMemories"
+              : "labels.export.truncatedMessages",
+          ),
+        }),
+      );
+    }
+    lines.push("");
+  }
 
   if (bundle.moods.length > 0) {
     lines.push(`## ${copy(locale, "labels.export.myState")}`);
