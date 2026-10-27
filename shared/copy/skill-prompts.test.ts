@@ -34,10 +34,7 @@ describe("the skill engine's prompts", () => {
   it("never leaves an English string in the Chinese half", () => {
     // The material fence's markers are the same in both languages on
     // purpose: they are markers, not prose.
-    const sameInBoth = new Set([
-      "skillPrompts.materialFenceHeader",
-      "skillPrompts.materialFenceEnd",
-    ]);
+    const sameInBoth = new Set<string>();
     const offenders = Object.entries(SKILL_PROMPTS)
       .filter(([key, entry]) => !/[一-鿿]/.test(entry.zh) && !sameInBoth.has(key))
       .map(([key]) => key);

@@ -67,8 +67,8 @@ describe("the server's copy", () => {
     // purpose: they are markers, not prose.
     const sameInBoth = new Set([
       "collectors.slack",
-      "skillPrompts.materialFenceHeader",
-      "skillPrompts.materialFenceEnd",
+      "prompt.materialFenceHeader",
+      "prompt.materialFenceEnd",
     ]);
     const offenders = Object.entries(COPY)
       .filter(([key, entry]) => !/[一-鿿]/.test(entry.zh) && !sameInBoth.has(key))
