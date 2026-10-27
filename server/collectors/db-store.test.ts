@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { getTableName } from "drizzle-orm";
 
 const createCollectedMessage = vi.fn();
 const createCollectedMessages = vi.fn();
@@ -10,6 +12,8 @@ const dbState = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[],
   inserted: [] as Record<string, unknown>[],
   updated: [] as Record<string, unknown>[],
+  /** The values the upsert's conflict clause would write. */
+  conflictSet: undefined as Record<string, unknown> | undefined,
 }));
 
 const client = vi.hoisted(() => ({
@@ -30,9 +34,12 @@ const client = vi.hoisted(() => ({
       return {
         // The insert is an upsert now, so it carries the conflict
         // clause with it.
-        onConflictDoUpdate: () => ({
-          then: (resolve: (value: unknown) => unknown) => resolve(undefined),
-        }),
+        onConflictDoUpdate: (config: { set: Record<string, unknown> }) => {
+          dbState.conflictSet = config.set;
+          return {
+            then: (resolve: (value: unknown) => unknown) => resolve(undefined),
+          };
+        },
         then: (resolve: (value: unknown) => unknown) => resolve(undefined),
       };
     },
@@ -52,6 +59,7 @@ vi.mock("../db", () => ({
   getDb: async () => client,
 }));
 
+import { collectionSources as collectionSourcesTable } from "../../drizzle/schema";
 import {
   getPersistedCollectorJob,
   importCollectedMessages,
@@ -248,6 +256,7 @@ describe("collection sources", () => {
     dbState.rows = [];
     dbState.inserted = [];
     dbState.updated = [];
+    dbState.conflictSet = undefined;
     getChannelState.mockReset();
     getChannelState.mockResolvedValue(null);
   });
@@ -332,6 +341,46 @@ describe("collection sources", () => {
 
     expect(loaded?.credentials?.app_id).toBe("cli_x");
     expect(loaded?.credentials?.app_secret).toBe("super-secret");
+  });
+
+  it("does not wipe the stored credentials when the upsert hits a conflict", async () => {
+    /**
+     * The row is not there when the source is read — so the write goes
+     * down the insert path. But another press of the button got there
+     * first, and the upsert's conflict clause decides what is kept.
+     *
+     * It used to write the *new* values over the old ones — so the
+     * call that arrived second, carrying no credentials, wiped the
+     * credentials the first call had just stored.
+     */
+    dbState.rows = [];
+    await saveCollectionSource({
+      userId: 7,
+      source: "feishu",
+      credentials: { app_id: "cli_x", app_secret: "super-secret" },
+    });
+
+    const set = dbState.conflictSet;
+    expect(set).toBeTruthy();
+
+    /**
+     * The clause is turned into the SQL it would send, so the claim
+     * is about the statement and not about the shape of a call.
+     */
+    const dialect = new PgDialect();
+    const table = collectionSourcesTable;
+    const built = dialect.buildUpdateSet(
+      table,
+      Object.fromEntries(
+        Object.entries(set!).map(([key, value]) => [key, value as any]),
+      ) as any,
+    );
+    const sqlText = dialect.sqlToQuery(built as any).sql;
+
+    // The stored credentials are kept when the new ones are empty.
+    expect(sqlText).toContain("coalesce");
+    expect(sqlText).toContain("excluded");
+    expect(sqlText).toContain(getTableName(table));
   });
 
   it("stores the auth state of a connector and its encrypted credentials", async () => {

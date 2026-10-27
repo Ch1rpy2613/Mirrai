@@ -11,7 +11,7 @@
  * a user collects from, its auth state and its credentials — the credentials
  * encrypted, never in plaintext.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { collectionSources } from "../../drizzle/schema";
 import { decryptSecret, encryptSecret } from "../_core/crypto";
 import * as db from "../db";
@@ -392,7 +392,13 @@ export async function saveCollectionSource(params: {
     await client
       .update(collectionSources)
       .set({
-        label: params.label ?? null,
+        /**
+         * The name that is already stored is kept.
+         *
+         * It was written unconditionally — so a call without one wiped
+         * it, and the source was left nameless in the list.
+         */
+        label: params.label ?? existing[0].label,
         /**
          * The authorisation result that is already stored is kept.
          *
@@ -425,6 +431,16 @@ export async function saveCollectionSource(params: {
    * be the row with the older credentials. There is a unique index on
    * `(userId, source)` now, so the second insert would be refused
    * outright; the upsert is what makes it an update instead.
+   *
+   * The conflict clause keeps what is already stored, in the same way
+   * the update above does. It used to write the *new* values over the
+   * old ones — so the call that arrived second, carrying no
+   * credentials, wiped the credentials the first call had just stored,
+   * and the user had to authorise the source again with no
+   * explanation.
+   *
+   * `excluded` is the row this call brought; the table's own column is
+   * the row that is already there.
    */
   await client
     .insert(collectionSources)
@@ -439,10 +455,17 @@ export async function saveCollectionSource(params: {
     .onConflictDoUpdate({
       target: [collectionSources.userId, collectionSources.source],
       set: {
-        label: params.label ?? null,
-        authState: params.authState ?? null,
-        config,
-        status: params.status ?? "stopped",
+        label: sql`coalesce(excluded."label", ${collectionSources.label})`,
+        authState: sql`coalesce(excluded."authState", ${collectionSources.authState})`,
+        config: sql`coalesce(excluded."config", ${collectionSources.config})`,
+        /**
+         * The status is the one thing that is not read from `excluded`:
+         * the insert fills it with "stopped" when the caller did not
+         * say, so `excluded` can never be null — and the row that is
+         * already there would be stopped by a call that changed
+         * nothing.
+         */
+        status: sql`coalesce(${params.status ?? null}, ${collectionSources.status})`,
         lastSyncedAt: new Date(),
       },
     });
