@@ -2276,7 +2276,14 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
 
 // ─── EMOTION REPORT ──────────────────────────────────────────────────────────
 
-function EmotionReport({ personaId, personaName, onClose }: { personaId: number; personaName: string; onClose: () => void }) {
+/**
+ * The emotion report.
+ *
+ * Exported so its behaviour can be tested: the panel is the one place
+ * that says how many days the user talked to their persona, and it is
+ * inside a page that is far too large to render in a test.
+ */
+export function EmotionReport({ personaId, personaName, onClose }: { personaId: number; personaName: string; onClose: () => void }) {
   const { t } = useLocale();
   const [days, setDays] = useState(30);
   const { data: report, isError: reportFailed, isLoading: reportLoading } =
@@ -2351,12 +2358,17 @@ function EmotionReport({ personaId, personaName, onClose }: { personaId: number;
 
         <div className="p-4 space-y-6">
           <div className="grid grid-cols-3 gap-3">
+            {/* The two counts are about the user's own history.
+                A failed request showed them as zero — and the error was
+                only rendered further down, under the chart. So the two
+                big numbers at the top said "0 chat days" and "0
+                messages" about a conversation the user could see. */}
             <div className="bg-muted/40 border border-border rounded-md p-3 text-center">
-              <p className="stat-value">{report?.totalDays || 0}</p>
+              <p className="stat-value">{reportFailed || reportLoading ? "—" : report?.totalDays || 0}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{t("chat.report.chatDays")}</p>
             </div>
             <div className="bg-muted/40 border border-border rounded-md p-3 text-center">
-              <p className="stat-value">{report?.totalMessages || 0}</p>
+              <p className="stat-value">{reportFailed || reportLoading ? "—" : report?.totalMessages || 0}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{t("chat.report.messages")}</p>
             </div>
             <div className="bg-muted/40 border border-border rounded-md p-3 text-center flex flex-col items-center justify-center">
