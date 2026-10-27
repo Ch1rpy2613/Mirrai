@@ -342,3 +342,36 @@ describe("the packaged app", () => {
     expect(dockerfile).toMatch(/corepack prepare pnpm@/);
   });
 });
+
+describe("the container", () => {
+  const dockerfile = readFileSync(path.join(ROOT, "Dockerfile"), "utf-8");
+
+  it("does not run the app as root", () => {
+    /**
+     * It did — so a mistake in the app had the whole container's
+     * privileges instead of none, and the files it writes were owned
+     * by root, so a mounted volume could not be written to by the
+     * person who ran the container.
+     */
+    expect(dockerfile).toMatch(/^USER mirrai$/m);
+    expect(dockerfile).toContain("adduser");
+  });
+
+  it("says whether it is healthy", () => {
+    /**
+     * There was no healthcheck — so a container that had started and
+     * then was serving errors looked exactly as healthy as one that
+     * was working.
+     */
+    expect(dockerfile).toContain("HEALTHCHECK");
+    expect(dockerfile).toContain("system.health");
+  });
+
+  it("does not need the package manager to start", () => {
+    // The package manager's cache lives in the root's own home, and the
+    // app does not run as root.
+    const entrypoint = readFileSync(path.join(ROOT, "scripts/docker-entrypoint.sh"), "utf-8");
+    expect(entrypoint).not.toContain("pnpm db:push");
+    expect(entrypoint).toContain("drizzle-kit/bin.cjs push");
+  });
+});

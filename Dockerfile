@@ -24,7 +24,13 @@ ENV NODE_ENV=production
 # downloaded into a cache on first use, and that cache lives in the
 # build stage. So the container reached for the npm registry on every
 # start, and an air-gapped install could not start at all.
-RUN corepack enable && corepack prepare pnpm@10.33.3 --activate
+#
+# The cache is in a place every user can read: the app does not run as
+# root (see below), and the root's own home cannot be reached by
+# anybody else.
+ENV COREPACK_HOME=/usr/local/lib/corepack
+RUN corepack enable && corepack prepare pnpm@10.33.3 --activate \
+    && chmod -R a+rX /usr/local/lib/corepack
 
 # Redis, so the rate limits mean the same thing in every process and the
 # scheduler does not deliver the same reminder twice. The app finds this
@@ -76,5 +82,38 @@ COPY drizzle.config.ts package.json ./
 COPY scripts/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
+# ── The user the app runs as ──────────────────────────────────────────────────
+#
+# It ran as root.
+#
+# So a mistake in the app — a path built out of something the user
+# typed, a command run with the wrong arguments — had the whole
+# container's privileges instead of none. And the files the app writes
+# (the uploads, the Redis instance record) were owned by root, so a
+# mounted volume could not be written to by the person who ran the
+# container.
+#
+# The directories are made for the user first, and the ownership is
+# given to it.
+RUN addgroup -S mirrai && adduser -S -G mirrai -h /app mirrai \
+    && mkdir -p /app/uploads /app/data \
+    && chown -R mirrai:mirrai /app/uploads /app/data
+
+# Where the app writes: the uploads and the Redis instance record.
+ENV UPLOAD_DIR=/app/uploads \
+    MIRRAI_DATA_ROOT=/app/data
+
+# ── The health of the container ───────────────────────────────────────────────
+#
+# There was no healthcheck — so a container that had started and then
+# was serving errors looked exactly as healthy as one that was
+# working, to the orchestrator and to `docker ps`.
+#
+# The check asks the app itself: the health endpoint is the one that
+# says whether the database is answering.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD node -e "const u='http://127.0.0.1:'+(process.env.PORT||3000)+'/api/trpc/system.health?input='+encodeURIComponent(JSON.stringify({json:{timestamp:0}}));fetch(u).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+USER mirrai
 EXPOSE 3000
 ENTRYPOINT ["./docker-entrypoint.sh"]

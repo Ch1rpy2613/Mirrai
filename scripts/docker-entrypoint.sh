@@ -32,7 +32,12 @@ echo "[Mirrai] Applying database schema..."
 # container then starts on a half-synced schema, serving errors.
 #
 # The desktop builds have used `--force` all along.
-pnpm db:push -- --force
+# The schema is pushed with drizzle-kit directly.
+#
+# It used to go through `pnpm`, and the package manager is not needed
+# to run one script: it wanted a cache in the root's own home, and the
+# app does not run as root.
+node node_modules/drizzle-kit/bin.cjs push --force
 
 echo "[Mirrai] Applying data migrations..."
 # The failure is fatal.
