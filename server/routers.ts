@@ -83,6 +83,7 @@ import {
   isRealDayKey,
   isRealStartKey,
   isValidTimeZone,
+  localDateKey,
   previousDateKey,
   zonedDateKey,
 } from "@shared/timezone";
@@ -2387,7 +2388,17 @@ export const appRouter = router({
         if (input.format === "markdown") {
           return {
             content: exportAsMarkdown(bundle, ctx.locale),
-            fileName: `mirrai-${new Date().toISOString().slice(0, 10)}.md`,
+            /**
+             * The file is named after the day it was made — the *local*
+             * day.
+             *
+             * It used to be the UTC day, while the export's own
+             * contents say the local day. So a keepsake taken at two in
+             * the morning in Shanghai was called `mirrai-2026-10-27.md`
+             * and said "2026-10-28" inside. The keepsake disagreed with
+             * itself.
+             */
+            fileName: `mirrai-${localDateKey(new Date())}.md`,
             mimeType: "text/markdown",
             // What the file could not carry. It says so in the file
             // too — but the person who asked for the export should be
@@ -2397,7 +2408,7 @@ export const appRouter = router({
         }
         return {
           content: exportAsJson(bundle),
-          fileName: `mirrai-${new Date().toISOString().slice(0, 10)}.json`,
+          fileName: `mirrai-${localDateKey(new Date())}.json`,
           mimeType: "application/json",
           truncated: bundle.truncated,
         };

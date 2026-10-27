@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -43,7 +43,10 @@ const BASH = bash();
  * a file left out of that script is left out of the bundle here too,
  * and the test sees what the user would see.
  */
-function bundle(options: { failingPostgres?: boolean } = {}): { root: string; res: string; home: string } {
+function bundle(options: {
+  failingPostgres?: boolean;
+  failingPush?: boolean;
+} = {}): { root: string; res: string; home: string } {
   const root = mkdtempSync(path.join(tmpdir(), "mirrai-macos-"));
   // The layout of a .app bundle: Mirrai.app/Contents/{MacOS,Resources}.
   const contents = path.join(root, "Mirrai.app", "Contents");
@@ -53,6 +56,55 @@ function bundle(options: { failingPostgres?: boolean } = {}): { root: string; re
   mkdirSync(path.join(contents, "MacOS"), { recursive: true });
   const home = path.join(root, "home");
   mkdirSync(home, { recursive: true });
+
+  /**
+   * The app itself.
+   *
+   * The script does `cd "$APP_DIR"` before it synchronises the schema
+   * and runs the data migrations — and the bundle used to have no such
+   * directory. So the `cd` failed, `set -e` ended the script there, and
+   * everything after it — the schema synchronisation, the data
+   * migrations, the `.env` template, the server start, the credentials
+   * — was never executed by this test. On either machine.
+   *
+   * The two commands the script runs there are stubs that leave a mark,
+   * so the test can see that they ran.
+   */
+  const app = path.join(res, "app");
+  mkdirSync(path.join(app, "node_modules", "drizzle-kit"), { recursive: true });
+  mkdirSync(path.join(app, "scripts"), { recursive: true });
+  mkdirSync(path.join(app, "dist"), { recursive: true });
+  const marker = path.join(res, "ran");
+  writeFileSync(
+    path.join(app, "node_modules", "drizzle-kit", "bin.cjs"),
+    [
+      "#!/bin/bash",
+      `echo "push" >> ${JSON.stringify(marker)}`,
+      options.failingPush ? 'echo "push failed" >&2; exit 1' : "exit 0",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    path.join(app, "scripts", "migrate.mjs"),
+    ["#!/bin/bash", `echo "migrate" >> ${JSON.stringify(marker)}`, "exit 0", ""].join("\n"),
+  );
+  /**
+   * The server itself.
+   *
+   * It does what the real one does on a fresh install: it writes the
+   * administrator's credentials, so the script can show them.
+   */
+  writeFileSync(
+    path.join(app, "dist", "index.js"),
+    [
+      "#!/bin/bash",
+      'CRED="$HOME/Library/Application Support/Mirrai/first-run-credentials.txt"',
+      'mkdir -p "$(dirname "$CRED")"',
+      'printf "admin\npassword-from-the-server\n" > "$CRED"',
+      "exit 0",
+      "",
+    ].join("\n"),
+  );
 
   const bin = path.join(res, "pgsql", "bin");
 
@@ -101,8 +153,26 @@ function bundle(options: { failingPostgres?: boolean } = {}): { root: string; re
   writeFileSync(path.join(bin, "createdb"), "#!/bin/bash\nexit 0\n");
   chmodSync(path.join(bin, "createdb"), 0o755);
 
-  writeFileSync(path.join(res, "node", "bin", "node"), "#!/bin/bash\nexit 0\n");
+  /**
+   * The node in the bundle.
+   *
+   * It runs the script it is given — the real one does, and a stub that
+   * just exits would mean the script's `node ./node_modules/drizzle-kit/
+   * bin.cjs push` did nothing at all, which is exactly what the test
+   * is here to see.
+   */
+  writeFileSync(path.join(res, "node", "bin", "node"), "#!/bin/bash\nexec bash \"$@\"\n");
   chmodSync(path.join(res, "node", "bin", "node"), 0o755);
+  /**
+   * And the `curl` the script waits with.
+   *
+   * The script waits for the server to answer before it opens the
+   * browser — twenty times, one second apart. A stub that answers at
+   * once keeps the test quick, and it is the same answer the real
+   * server gives once it is up.
+   */
+  writeFileSync(path.join(res, "node", "bin", "curl"), "#!/bin/bash\nexit 0\n");
+  chmodSync(path.join(res, "node", "bin", "curl"), 0o755);
 
   // The copy the build does.
   const copy = spawnSync(BASH!, [COPY, SCRIPTS, res], { encoding: "utf-8" });
@@ -139,7 +209,7 @@ describe.skipIf(!BASH)("the macOS start script", () => {
     expect(result.output).toContain("ERROR: Database init failed");
     expect(result.output).toContain("initdb: could not write to the data directory");
     expect(result.status).toBe(1);
-  });
+  }, 30_000);
 
   it("has everything it needs in the bundle", () => {
     const { res } = bundle();
@@ -155,7 +225,56 @@ describe.skipIf(!BASH)("the macOS start script", () => {
     expect(() => readFileSync(path.join(res, "load-env.sh"), "utf-8")).not.toThrow();
     expect(() => readFileSync(path.join(res, "start.sh"), "utf-8")).not.toThrow();
     expect(() => readFileSync(path.join(res, "..", "MacOS", "Mirrai"), "utf-8")).not.toThrow();
-  });
+  }, 30_000);
+});
+
+describe.skipIf(!BASH)("the schema and the migrations", () => {
+  it("are run when the app starts", () => {
+    /**
+     * The rest of the launch.
+     *
+     * The bundle had no `Resources/app`, so `cd "$APP_DIR"` failed,
+     * `set -e` ended the script there, and everything after it was
+     * never executed by this test — on either machine. So the schema
+     * synchronisation, the data migrations, the `.env` template and
+     * the credentials were all untested.
+     */
+    const { res, home } = bundle();
+    runStart(res, home);
+
+    const ran = existsSync(path.join(res, "ran"))
+      ? readFileSync(path.join(res, "ran"), "utf-8")
+      : "";
+    expect(ran).toContain("push");
+    expect(ran).toContain("migrate");
+  }, 30_000);
+
+  it("are not skipped when the schema cannot be synchronised", () => {
+    // A failed `push` means the schema and the live database still
+    // disagree — so the app must not start on a half-synced database.
+    const { res, home } = bundle({ failingPush: true });
+    const result = runStart(res, home);
+
+    expect(result.output).toContain("schema was not synchronised");
+    // And the data migrations did not run either — the app must not
+    // carry on.
+    const ran = existsSync(path.join(res, "ran"))
+      ? readFileSync(path.join(res, "ran"), "utf-8")
+      : "";
+    expect(ran).not.toContain("migrate");
+  }, 30_000);
+
+  it("leave the user a .env to fill in", () => {
+    const { res, home } = bundle();
+    runStart(res, home);
+
+    const envFile = path.join(home, "Library/Application Support/Mirrai/.env");
+    expect(existsSync(envFile)).toBe(true);
+    // And only its owner may read it: it is the file the user is told
+    // to put their provider key in.
+    const mode = statSync(envFile).mode & 0o777;
+    expect(mode & 0o077).toBe(0);
+  }, 30_000);
 });
 
 describe.skipIf(!BASH)("the .env in the bundle", () => {
@@ -186,5 +305,5 @@ describe.skipIf(!BASH)("the .env in the bundle", () => {
     expect(second.output).not.toContain("load-env.sh: No such file");
     // And it got past the .env — the migration step comes after it.
     expect(second.output).toContain("Applying the WeChat channel migration");
-  });
+  }, 30_000);
 });

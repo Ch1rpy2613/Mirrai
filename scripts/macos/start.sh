@@ -21,8 +21,20 @@ export PATH="$PG_DIR/bin:$RES/node/bin:$PATH"
 export DYLD_LIBRARY_PATH="$PG_DIR/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 export DYLD_FALLBACK_LIBRARY_PATH="$PG_DIR/lib"
 export PGSHAREDIR="$PG_DIR/share"
-export LC_ALL=C
-export LANG=C
+# The language is UTF-8.
+#
+# It used to be `C` — and a C locale is not merely "no accent": Python's
+# `open()` then encodes with **ASCII**, so writing a file that holds
+# anything else — a Chinese name, an emoji — raises UnicodeEncodeError
+# and the file is written empty. The collectors read and write chat logs,
+# so that is their whole job.
+#
+# The app's own Python subprocesses are given a UTF-8 environment of
+# their own (see `server/_core/subprocess-env.ts`), so this is about
+# everything else that runs inside the app: the tools an operator runs
+# by hand, and anything else that inherits this environment.
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 log() { echo "[Mirrai] $*"; }
