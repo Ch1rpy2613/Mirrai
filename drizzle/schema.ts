@@ -489,7 +489,18 @@ export const emotionSnapshots = pgTable("emotion_snapshots", {
   messageCount: integer("messageCount").default(0).notNull(),
   date: varchar("date", { length: 20 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * One snapshot per persona, user and day.
+   *
+   * The row was written by a read and then a write — so two requests
+   * that passed the read together both wrote, and the day had two
+   * snapshots. The reader took one of them and the other stayed for
+   * ever.
+   */
+  dayUnique: uniqueIndex("emotion_snapshots_persona_user_date_idx")
+    .on(table.personaId, table.userId, table.date),
+}));
 
 export type EmotionSnapshot = typeof emotionSnapshots.$inferSelect;
 export type InsertEmotionSnapshot = typeof emotionSnapshots.$inferInsert;

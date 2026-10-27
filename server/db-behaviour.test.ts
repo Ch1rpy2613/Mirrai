@@ -511,6 +511,30 @@ describe("the safety record", () => {
   });
 });
 
+describe("the emotion snapshot", () => {
+  it("brings the day's row up to date instead of adding a second one", async () => {
+    // The row was written by a read and then a write — so two requests
+    // that looked at the same day together both wrote one, and the day
+    // had two snapshots. The reader took one of them and the other
+    // stayed for ever.
+    registry.returning.emotion_snapshots = [{ id: 1 }];
+    await db.createEmotionSnapshot({
+      personaId: 1,
+      userId: 3,
+      emotionalState: "warm",
+      messageCount: 4,
+      date: "2026-01-15",
+    });
+
+    // The write carries the day's key, so the second writer updates.
+    const conflict = (last().values as any)?.__conflict;
+    expect(conflict).toBeDefined();
+    expect(conflict.target).toHaveLength(3);
+    expect(conflict.set.emotionalState).toBe("warm");
+    expect(conflict.set.messageCount).toBe(4);
+  });
+});
+
 describe("putting a turn back", () => {
   it("does it in one transaction, so it is all of it or none of it", async () => {
     // The rows were inserted one at a time, outside a transaction — so a

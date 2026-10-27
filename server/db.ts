@@ -2258,10 +2258,31 @@ export async function deleteMemory(id: number, userId: number): Promise<boolean>
 
 // ─── Emotion Snapshot helpers ─────────────────────────────────────────────
 
+/**
+ * Writes the day's snapshot — or brings it up to date.
+ *
+ * It used to be a plain insert, and the caller decided whether there
+ * was already a row for the day. So two requests that looked at the
+ * same day together both wrote one, and the day had two snapshots: the
+ * reader took one of them and the other stayed for ever, with the
+ * count it was written with.
+ *
+ * The write is now the decision: the table has one row per persona,
+ * user and day, and the second writer updates it.
+ */
 export async function createEmotionSnapshot(data: InsertEmotionSnapshot) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const [result] = await db.insert(emotionSnapshots).values(data).returning({ id: emotionSnapshots.id });
+  const [result] = await db.insert(emotionSnapshots)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [emotionSnapshots.personaId, emotionSnapshots.userId, emotionSnapshots.date],
+      set: {
+        emotionalState: data.emotionalState,
+        messageCount: data.messageCount,
+      },
+    })
+    .returning({ id: emotionSnapshots.id });
   return result.id;
 }
 
