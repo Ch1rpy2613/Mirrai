@@ -16,6 +16,7 @@ import {
   earliestAnswerAt,
 } from "@shared/letters";
 import { buildUserContextBlock, isUserMood } from "@shared/user-side";
+import { userTimeZone } from "./prompt";
 import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
 import { getEffectivePresence } from "../_core/graduation";
 
@@ -333,6 +334,9 @@ export async function composeLetterReply(params: {
       name: user?.name,
       addressStyle: user?.addressStyle,
       boundaries: user?.boundaries,
+      // The letter path did not pass it at all, so the persona was
+      // never told where the user was.
+      timezone: await userTimeZone(persona, (persona as any).userId),
     },
     {
       locale,

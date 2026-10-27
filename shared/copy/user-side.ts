@@ -31,6 +31,17 @@ export const USER_SIDE = {
     zh: "对方说过不要提起这些：{{boundaries}}。即使话题绕到那里，也避开。",
     en: "They have asked you not to bring up: {{boundaries}}. Respect that even if it comes up.",
   },
+  /**
+   * Where the user is.
+   *
+   * The block had a field for the time zone and never read it — so the
+   * persona was told the time of day but not where the user was, and
+   * could not tell "it is late" from "it is late for you".
+   */
+  "userSide.timezone": {
+    zh: "对方所在的时区是 {{zone}}。",
+    en: "They are in the {{zone}} time zone.",
+  },
   "userSide.mood": {
     zh: "对方最近说自己{{label}}。让这一点影响你的语气——但别把这件事变成一个话题，也别主动给建议，除非对方开口问。",
     en: "They recently said they are feeling {{label}}. Let it colour how you speak — do not make a production of it, and do not offer advice unless they ask.",

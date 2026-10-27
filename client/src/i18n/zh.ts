@@ -1664,7 +1664,6 @@ export const zh = {
     inherit: "跟随全局设置",
     globalTitle: "全局默认",
     globalNote: "没有单独设置的分身都使用这个值；每个分身也可以自己选。",
-    closed: "毕业模式已关闭",
     generateLetter: "生成告别信",
     saved: "毕业模式已保存",
   },

@@ -606,7 +606,28 @@ async function collectViaOutputDir(
       locale: input.locale,
     });
   } finally {
-    rmSync(outputDir, { recursive: true, force: true });
+    /**
+     * The directory is removed — but a failure to remove it does not
+     * take the run's own outcome with it.
+     *
+     * The removal used to be able to throw, and it threw *from inside
+     * the finally*, which replaced whatever the run had already thrown.
+     * So the user saw "EBUSY: operation failed, rmdir" instead of
+     * "已取消" — and the directory, which holds the plaintext
+     * credential file this run wrote, was left on disk.
+     *
+     * On Windows that is the likely path: the child is only *asked* to
+     * stop, and it can still be holding the files open for a moment
+     * after.
+     */
+    try {
+      rmSync(outputDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (error) {
+      console.error(
+        `[Collector] could not remove the run directory ${outputDir}:`,
+        (error as Error).message,
+      );
+    }
   }
 }
 
@@ -700,7 +721,7 @@ const feishuConnector: SourceConnector = {
     }
     return {
       ok: false,
-      message: copy("zh", "collectors.feishuNeedsCredentials"),
+      message: copy(input.locale ?? "zh", "collectors.feishuNeedsCredentials"),
       requiresInteraction: true,
     };
   },
@@ -809,13 +830,13 @@ const dingtalkConnector: SourceConnector = {
     if (!credentials.app_key || !credentials.app_secret) {
       return {
         ok: false,
-        message: copy("zh", "collectors.dingtalkNeedsCredentials"),
+        message: copy(input.locale ?? "zh", "collectors.dingtalkNeedsCredentials"),
         requiresInteraction: true,
       };
     }
     return {
       ok: true,
-      message: copy("zh", "collectors.dingtalkNeedsPlaywright"),
+      message: copy(input.locale ?? "zh", "collectors.dingtalkNeedsPlaywright"),
     };
   },
   async exportCredentials(input: CollectInput): Promise<string | null> {
@@ -906,7 +927,7 @@ const slackConnector: SourceConnector = {
     if (!credentials.bot_token) {
       return {
         ok: false,
-        message: copy("zh", "collectors.slackNeedsToken"),
+        message: copy(input.locale ?? "zh", "collectors.slackNeedsToken"),
         requiresInteraction: true,
       };
     }
@@ -952,10 +973,10 @@ const emailConnector: SourceConnector = {
     if (input.target) argv.push("--target", input.target);
     return argv;
   },
-  async checkAuth(): Promise<CollectorAuthState> {
+  async checkAuth(input: CollectInput): Promise<CollectorAuthState> {
     return {
       ok: true,
-      message: copy("zh", "collectors.emailNeedsNoCredentials"),
+      message: copy(input.locale ?? "zh", "collectors.emailNeedsNoCredentials"),
     };
   },
   async exportCredentials(): Promise<string | null> {
@@ -1028,10 +1049,10 @@ const wechatExportConnector: SourceConnector = {
     if (input.target) argv.push("--target", input.target);
     return argv;
   },
-  async checkAuth(): Promise<CollectorAuthState> {
+  async checkAuth(input: CollectInput): Promise<CollectorAuthState> {
     return {
       ok: true,
-      message: copy("zh", "collectors.wechatNeedsNoCredentials"),
+      message: copy(input.locale ?? "zh", "collectors.wechatNeedsNoCredentials"),
     };
   },
   async collect(input: CollectInput): Promise<CollectResult> {

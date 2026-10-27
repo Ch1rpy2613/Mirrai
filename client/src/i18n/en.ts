@@ -883,8 +883,8 @@ export const en = {
     templates: {
       title: "Template library",
       note: "Built-in templates and your own, all stored on this machine",
-      countLead: "",
-      countTail: "in total",
+      countLead: "Total",
+      countTail: "templates",
       create: "Create template",
       builtinGroup: "Built-in templates",
       mineGroup: "My templates",
@@ -1651,7 +1651,6 @@ export const en = {
     inherit: "Follow the global setting",
     globalTitle: "Global default",
     globalNote: "Every persona without its own setting uses this one; each persona can also pick its own.",
-    closed: "Graduation mode is off",
     generateLetter: "Generate the farewell letter",
     saved: "The graduation mode was saved",
   },

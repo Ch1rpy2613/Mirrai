@@ -67,6 +67,40 @@ describe("the dictionary", () => {
 
     expect(dead).toEqual([]);
   });
+
+  it("have no key the templates cannot reach", () => {
+    /**
+     * The namespaces whose keys are built at runtime.
+     *
+     * The dead-key test has to exempt them — it cannot tell that
+     * `graduationMode.${mode}` only ever produces three names. So the
+     * exemption is blind: a key under one of these namespaces that
+     * nothing reads is invisible.
+     *
+     * There was one: `graduationMode.closed` — a duplicate of
+     * `graduation.statusModeOff`, which is the one that is read. It is
+     * gone, and the reachable names are written down here, so the next
+     * one cannot slip in.
+     */
+    const reachable: Record<string, string[]> = {
+      graduationMode: [
+        "title", "note", "suggest", "suggestNote", "manual", "manualNote",
+        "off", "offNote", "inherit", "globalTitle", "globalNote",
+        "generateLetter", "saved",
+      ],
+    };
+
+    const unreachable: string[] = [];
+    for (const [prefix, names] of Object.entries(reachable)) {
+      for (const key of leaves(zh)) {
+        if (!key.startsWith(prefix + ".")) continue;
+        const name = key.slice(prefix.length + 1);
+        if (!names.includes(name)) unreachable.push(key);
+      }
+    }
+
+    expect(unreachable).toEqual([]);
+  });
 });
 
 /**
@@ -110,10 +144,23 @@ describe("the dictionaries", () => {
   });
 
   it("have no empty strings", () => {
+    /**
+     * Both languages.
+     *
+     * It only looked at the Chinese — so an empty string in the English
+     * went unnoticed. And there was one: `settings.templates.countLead`
+     * was "", so the English read " 3 in total", with a blank where a
+     * word should have been. It happened to be harmless there, because
+     * the English puts the count first — but the same slip in a place
+     * where the word matters renders a blank in the middle of a
+     * sentence, and nothing said so.
+     */
     const empties: string[] = [];
     for (const key of leaves(zh)) {
-      const value = key.split(".").reduce<any>((acc, part) => acc?.[part], zh);
-      if (typeof value === "string" && !value.trim()) empties.push(key);
+      for (const [name, table] of [["zh", zh], ["en", en]] as const) {
+        const value = key.split(".").reduce<any>((acc, part) => acc?.[part], table);
+        if (typeof value === "string" && !value.trim()) empties.push(`${name}:${key}`);
+      }
     }
     expect(empties).toEqual([]);
   });

@@ -129,11 +129,22 @@ export function buildUserContextBlock(
   const name = context.name?.trim();
   const address = context.addressStyle?.trim();
   const boundaries = context.boundaries?.trim();
+  const timeZone = context.timezone?.trim();
 
   if (name) parts.push(copy(locale, "userSide.talkingTo", { name }));
   if (address) parts.push(copy(locale, "userSide.address", { address }));
   if (boundaries) {
     parts.push(copy(locale, "userSide.boundaries", { boundaries }));
+  }
+  /**
+   * Where the user is.
+   *
+   * The block had a field for the time zone and never read it — so the
+   * persona was told the time of day but not where the user was, and
+   * could not tell "it is late" from "it is late for you".
+   */
+  if (timeZone) {
+    parts.push(copy(locale, "userSide.timezone", { zone: timeZone }));
   }
   if (options.mood) {
     const label = USER_MOOD_LABELS[options.mood][locale];
