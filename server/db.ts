@@ -4398,6 +4398,7 @@ export async function getMessagesSince(
   userId: number,
   since: Date,
   limit?: number,
+  role?: "user" | "assistant",
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -4411,11 +4412,52 @@ export async function getMessagesSince(
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       gte(messages.createdAt, since),
+      // The role, when the caller names one.
+      //
+      // The window is read whole otherwise — and the reader that wants
+      // only the user's turns had to fetch the persona's answers too,
+      // only to throw them away.
+      role ? eq(messages.role, role) : undefined,
     ))
     .orderBy(asc(messages.createdAt));
   // The newest messages are the ones that matter when the window is
   // larger than the ceiling.
   return limit === undefined ? query : query.limit(limit);
+}
+
+/**
+ * The newest messages of a persona, oldest first.
+ *
+ * "The last N messages" is a different thing from "the first N
+ * messages of a window": the second is the beginning of the window,
+ * which is old news by the time the reader looks at it. So the window
+ * is read backwards and turned round again.
+ */
+export async function getRecentMessages(
+  personaId: number,
+  userId: number,
+  since: Date,
+  limit: number,
+  role?: "user" | "assistant",
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    id: messages.id,
+    role: messages.role,
+    content: messages.content,
+    createdAt: messages.createdAt,
+  }).from(messages)
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      gte(messages.createdAt, since),
+      role ? eq(messages.role, role) : undefined,
+    ))
+    .orderBy(desc(messages.createdAt))
+    .limit(limit);
+  // The caller reads it as a conversation, so it is turned round.
+  return rows.reverse();
 }
 
 /** The timestamp of the most recent message, used for session-duration checks. */

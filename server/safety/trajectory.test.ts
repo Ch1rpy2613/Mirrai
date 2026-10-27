@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const getMessagesSince = vi.fn();
+const getRecentMessages = vi.fn();
 const createGraduationAssessment = vi.fn();
 const getLatestGraduationAssessment = vi.fn();
 const invoke = vi.fn();
@@ -10,6 +11,7 @@ const invokeWithProvider = vi.fn();
 // ("../db" and "../llm" from server/safety/ → server/db and server/llm).
 vi.mock("../db", () => ({
   getMessagesSince: (...a: unknown[]) => getMessagesSince(...a),
+  getRecentMessages: (...a: unknown[]) => getRecentMessages(...a),
   createGraduationAssessment: (...a: unknown[]) => createGraduationAssessment(...a),
   getLatestGraduationAssessment: (...a: unknown[]) => getLatestGraduationAssessment(...a),
 }));
@@ -27,6 +29,9 @@ import { assessTrajectory, getStoredTrajectory } from "./trajectory";
 const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
 
 let nextId = 1;
+
+/** What the bounded read answers with. */
+let recentRows: any[] = [];
 
 function userMessage(content: string) {
   return { id: nextId++, role: "user", content, createdAt: new Date(NOW) };
@@ -55,7 +60,19 @@ function enoughUserMessages() {
 
 beforeEach(() => {
   nextId = 1;
+  recentRows = [];
   getMessagesSince.mockReset();
+  getRecentMessages.mockReset();
+  /**
+   * The read is bounded now: the fake answers with the messages it was
+   * asked for, newest first, and the user's turns only.
+   */
+  getRecentMessages.mockImplementation(
+    async (_personaId: number, _userId: number, _since: Date, limit: number, role?: string) =>
+      recentRows
+        .filter((row) => !role || row.role === role)
+        .slice(0, limit),
+  );
   createGraduationAssessment.mockReset();
   getLatestGraduationAssessment.mockReset();
   invoke.mockReset();
@@ -65,11 +82,11 @@ beforeEach(() => {
 
 describe("assessTrajectory", () => {
   it("returns null when there are too few user messages", async () => {
-    getMessagesSince.mockResolvedValue([
+    recentRows = [
       userMessage("在吗"),
       assistantMessage("在的"),
       userMessage("今天好累"),
-    ]);
+    ];
 
     const result = await assessTrajectory({ userId: 1, personaId: 1, now: NOW });
 
@@ -79,7 +96,7 @@ describe("assessTrajectory", () => {
   });
 
   it("returns null just below the minimum window", async () => {
-    getMessagesSince.mockResolvedValue(userMessages(7));
+    recentRows = userMessages(7);
 
     const result = await assessTrajectory({ userId: 1, personaId: 1, now: NOW });
 
@@ -88,7 +105,7 @@ describe("assessTrajectory", () => {
   });
 
   it("classifies an improving trajectory and stores it", async () => {
-    getMessagesSince.mockResolvedValue(enoughUserMessages());
+    recentRows = enoughUserMessages();
     invoke.mockResolvedValue(
       JSON.stringify({ trajectory: "improving", regretRatio: 20, gratitudeRatio: 70, note: "遗憾变少了" }),
     );
@@ -111,7 +128,7 @@ describe("assessTrajectory", () => {
   });
 
   it("classifies a worsening trajectory", async () => {
-    getMessagesSince.mockResolvedValue(enoughUserMessages());
+    recentRows = enoughUserMessages();
     invoke.mockResolvedValue(
       JSON.stringify({ trajectory: "worsening", regretRatio: 80, gratitudeRatio: 10, note: "又开始怀念" }),
     );
@@ -127,7 +144,7 @@ describe("assessTrajectory", () => {
   it("falls back to the local keyword ratios when the model fails", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      getMessagesSince.mockResolvedValue(enoughUserMessages());
+      recentRows = enoughUserMessages();
       invoke.mockRejectedValue(new Error("upstream exploded"));
 
       const result = await assessTrajectory({ userId: 1, personaId: 1, now: NOW });
@@ -150,14 +167,20 @@ describe("assessTrajectory", () => {
   });
 
   it("reads the last 28 days and sends only the user's turns to the model", async () => {
-    getMessagesSince.mockResolvedValue([...enoughUserMessages(), assistantMessage("在的")]);
+    recentRows = [...enoughUserMessages(), assistantMessage("在的")];
     invoke.mockResolvedValue(JSON.stringify({ trajectory: "stable" }));
 
     await assessTrajectory({ userId: 7, personaId: 3, now: NOW });
 
-    const [personaId, userId, since] = getMessagesSince.mock.calls[0];
+    const [personaId, userId, since, limit, role] = getRecentMessages.mock.calls[0];
     expect(personaId).toBe(3);
     expect(userId).toBe(7);
+    /**
+     * The read is bounded, and it asks for the user's turns only —
+     * the persona's answers were read and thrown away.
+     */
+    expect(limit).toBe(120);
+    expect(role).toBe("user");
     const windowDays = (NOW - since.getTime()) / 86_400_000;
     expect(windowDays).toBeGreaterThan(27);
     expect(windowDays).toBeLessThan(29);
@@ -172,7 +195,7 @@ describe("assessTrajectory", () => {
     // The assessment has to run on the same credentials as the conversation —
     // otherwise a user who configured their own key silently falls back to the
     // environment one.
-    getMessagesSince.mockResolvedValue(enoughUserMessages());
+    recentRows = enoughUserMessages();
     invokeWithProvider.mockResolvedValue(JSON.stringify({ trajectory: "stable" }));
     const providerInstance = { name: "UserProvider" } as any;
 

@@ -378,6 +378,32 @@ describe("a single message", () => {
     expect(second).toContain('"messages"."id" <');
   });
 
+  it("reads the newest messages of a window, and turns them round", async () => {
+    registry.select.messages = [{ id: 9 }, { id: 8 }, { id: 7 }];
+
+    const rows = await db.getRecentMessages(1, 3, new Date("2026-01-01"), 2);
+
+    /**
+     * The query asks for the newest of them — so the limit takes the
+     * *end* of the window, not its beginning, which would be old news
+     * by the time the reader looks at it.
+     */
+    expect(orderOf()[0].sql).toContain('"messages"."createdAt" desc');
+    expect(last().limit).toBe(2);
+    // And the helper turns them round, so a conversation reads in order.
+    expect(rows.map((r: any) => r.id)).toEqual([8, 9]);
+  });
+
+  it("can be asked for one role only", async () => {
+    registry.select.messages = [];
+
+    await db.getRecentMessages(1, 3, new Date("2026-01-01"), 120, "user");
+
+    const conditions = whereOf().map((c) => c.sql).join(" ");
+    expect(conditions).toContain('"messages"."role"');
+    expect(whereOf().flatMap((c) => c.params)).toContain("user");
+  });
+
   it("says whether there is more of the conversation to load", async () => {
     registry.select.messages = [{ id: 1 }];
     expect(await db.hasOlderMessages(1, 3, 10)).toBe(true);

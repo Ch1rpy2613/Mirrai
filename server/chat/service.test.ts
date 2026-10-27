@@ -21,6 +21,7 @@ const setGraduationStatus = vi.fn();
 const getLatestGraduationAssessment = vi.fn();
 const createGraduationAssessment = vi.fn();
 const getMessagesSince = vi.fn();
+const getRecentMessages = vi.fn();
 const touchMemoryRecalled = vi.fn();
 const createSafetyEvent = vi.fn();
 const hasSafetyEventSince = vi.fn();
@@ -63,6 +64,7 @@ vi.mock("../db", () => ({
   getLatestGraduationAssessment: (...a: unknown[]) => getLatestGraduationAssessment(...a),
   createGraduationAssessment: (...a: unknown[]) => createGraduationAssessment(...a),
   getMessagesSince: (...a: unknown[]) => getMessagesSince(...a),
+  getRecentMessages: (...a: unknown[]) => getRecentMessages(...a),
   touchMemoryRecalled: (...a: unknown[]) => touchMemoryRecalled(...a),
   createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
   hasSafetyEventSince: (...a: unknown[]) => hasSafetyEventSince(...a),
@@ -140,7 +142,7 @@ describe("runConversation", () => {
       getMessagesByPersonaId, getMemoriesByPersonaId, getFilesByPersonaId, getSceneById,
       getLatestChatSummary, createChatSummary, getRecentEmotionTrend,
       getMessageCountInRange, setGraduationStatus, getLatestGraduationAssessment,
-      createGraduationAssessment, getMessagesSince, touchMemoryRecalled, createSafetyEvent,
+      createGraduationAssessment, getMessagesSince, getRecentMessages, touchMemoryRecalled, createSafetyEvent,
       getLastMessageAt, getMessageCountSince, getDailyChatCounts,
       getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
       invoke, invokeWithProvider,
@@ -165,6 +167,7 @@ describe("runConversation", () => {
     getLatestGraduationAssessment.mockResolvedValue(undefined);
     createGraduationAssessment.mockResolvedValue(1);
     getMessagesSince.mockResolvedValue([]);
+    getRecentMessages.mockResolvedValue([]);
     getLastMessageAt.mockResolvedValue(new Date());
     getMessageCountSince.mockResolvedValue(1);
     getDailyChatCounts.mockResolvedValue([]);
@@ -614,7 +617,7 @@ describe("runConversation", () => {
   });
 
   it("assesses the emotional trajectory and lets it suggest graduation earlier", async () => {
-    getMessagesSince.mockResolvedValue(
+    getRecentMessages.mockResolvedValue(
       Array.from({ length: 8 }, (_, i) => ({
         id: i + 1,
         role: "user",

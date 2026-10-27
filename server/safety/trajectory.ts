@@ -61,6 +61,16 @@ function ratioOf(messages: string[], patterns: RegExp[]): number {
   return Math.round((hits / messages.length) * 100);
 }
 
+/**
+ * How many of the user's turns the assessment reads.
+ *
+ * The model is shown the most recent ones, and the keyword ratios —
+ * the ones shown when the model cannot be reached — are counted over
+ * the same turns, so the number on the panel describes the same
+ * conversation the model was asked about.
+ */
+const TRANSCRIPT_MESSAGES = 120;
+
 const REGRET_PATTERNS = [
   /如果当初/, /要是当时/, /后悔/, /可惜/, /没能/, /错过了/, /还在想/, /弥补/,
 ];
@@ -93,12 +103,29 @@ export async function assessTrajectory(params: {
   const since = new Date(now);
   since.setDate(since.getDate() - 28);
 
-  const rows = await db.getMessagesSince(params.personaId, params.userId, since);
-  const userMessages = rows.filter((m) => m.role === "user").map((m) => m.content);
+  /**
+   * The window is read bounded.
+   *
+   * It used to be read whole: twenty-eight days of the user's private
+   * conversation — every turn, the persona's answers included — was
+   * pulled into the heap, and then all but the last hundred and twenty
+   * of the user's turns were thrown away.
+   *
+   * So the read asks the database for the newest messages and for the
+   * user's own turns only, and the rows that are not needed never
+   * leave the database.
+   */
+  const rows = await db.getRecentMessages(
+    params.personaId,
+    params.userId,
+    since,
+    TRANSCRIPT_MESSAGES,
+    "user",
+  );
+  const userMessages = rows.map((m) => m.content);
   if (userMessages.length < 8) return null;
 
   const transcript = userMessages
-    .slice(-120)
     .map((content) => copy(locale, "prompts.trajectoryTranscriptLine", { content }))
     .join("\n");
 
