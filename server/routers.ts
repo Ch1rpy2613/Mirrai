@@ -1880,6 +1880,15 @@ export const appRouter = router({
         let careNote = null;
         let crisis = false;
         let failure: string | null = null;
+        /**
+         * Whether the user's own message is in the transcript.
+         *
+         * The client takes its bubble away when a send fails — so the
+         * transcript and the screen agree — and it says "the server did
+         * not store the message". That is only true when the turn
+         * never started.
+         */
+        let failureStored = false;
 
         /**
          * A persona that has said goodbye.
@@ -1904,7 +1913,10 @@ export const appRouter = router({
           })) {
             if (event.type === "delta") reply += event.text;
             else if (event.type === "emotion") emotionalState = event.state;
-            else if (event.type === "error") failure = event.message;
+            else if (event.type === "error") {
+              failure = event.message;
+              failureStored = event.storedUserMessage === true;
+            }
             else if (event.type === "done") {
               graduationSuggested = event.graduationSuggested;
               careNote = event.careNote;
@@ -1915,7 +1927,23 @@ export const appRouter = router({
           if (e instanceof PersonaAsleepError) {
             throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
           }
-          throw e;
+          /**
+           * The turn failed — and the user's message was stored.
+           *
+           * Everything the generator can throw happens *after* the
+           * user's own message is written (the one before it — a
+           * persona that has said goodbye — has its own notice). So the
+           * message is in the transcript, and the client is told so
+           * rather than being left to guess.
+           */
+          return {
+            reply: "",
+            emotionalState,
+            graduationSuggested,
+            careNote,
+            crisis,
+            failed: true,
+          };
         }
         /**
          * A failure is a failure.
@@ -1927,13 +1955,38 @@ export const appRouter = router({
          * was dropped without a word.
          */
         if (failure) {
+          /**
+           * The failure is reported, and the message is left where it
+           * is.
+           *
+           * The user's own message was stored before the model was
+           * called, and it stays there — the channels depend on it (a
+           * person who wrote a message on WeChat cannot have it put
+           * back in a composer), and the streaming path keeps it too.
+           *
+           * So the answer says the turn failed instead of throwing, and
+           * the client leaves the bubble alone. Throwing made the
+           * client take the bubble away *and* say the server had not
+           * stored the message — and twenty seconds later the poll
+           * brought the message back on its own.
+           */
+          if (failureStored) {
+            return {
+              reply,
+              emotionalState,
+              graduationSuggested,
+              careNote,
+              crisis,
+              failed: true,
+            };
+          }
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: copy(ctx.locale, "errors.replyFailed"),
           });
         }
 
-        return { reply, emotionalState, graduationSuggested, careNote, crisis };
+        return { reply, emotionalState, graduationSuggested, careNote, crisis, failed: false };
       }),
 
     sendImage: protectedProcedure.use(rateLimit(RATE_LIMITS.upload))

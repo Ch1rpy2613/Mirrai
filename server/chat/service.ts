@@ -54,7 +54,27 @@ export type ChatEvent =
       careNote: CareNote | null;
       crisis: boolean;
     }
-  | { type: "error"; message: string; partial: boolean };
+  | {
+      /**
+       * The turn failed.
+       *
+       * `storedUserMessage` says whether the user's own message is in
+       * the transcript.
+       *
+       * The client takes its bubble away when a send fails — so that
+       * the transcript and the screen agree — and it says "the server
+       * did not store the message". That is only true when the turn
+       * never started: once the conversation has begun, the user's
+       * message is stored first, and a failure afterwards leaves it
+       * there (which is what the channels rely on — a person who
+       * wrote a message on WeChat cannot have it put back in a
+       * composer).
+       */
+      type: "error";
+      message: string;
+      partial: boolean;
+      storedUserMessage?: boolean;
+    };
 
 /**
  * The persona has said goodbye and is asleep.
@@ -840,11 +860,30 @@ async function* runConversationTurn(
           .deleteMessage(storedUserMessageId, userId, persona.id)
           .catch(() => false);
       }
-      yield { type: "error", message: "aborted", partial: false };
+      yield {
+        type: "error",
+        message: "aborted",
+        partial: false,
+        // The user's message was taken away again with the half-answer.
+        storedUserMessage: false,
+      };
       return;
     }
     console.error("[Chat] LLM call failed:", e);
-    yield { type: "error", message: failureMessage, partial: replyText.length > 0 };
+    yield {
+      type: "error",
+      message: failureMessage,
+      partial: replyText.length > 0,
+      /**
+       * The user's message is in the transcript.
+       *
+       * It was stored before the model was called, and it stays there:
+       * the channels need it (a person who wrote a message on WeChat
+       * cannot have it put back in a composer), and the streaming path
+       * keeps it too.
+       */
+      storedUserMessage: Boolean(storedUserMessageId),
+    };
     // A turn that failed is not a turn.
     //
     // It used to carry on: the reply was stored as "（沉默）", the

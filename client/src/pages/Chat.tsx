@@ -40,6 +40,26 @@ const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
 // ─── MAIN CHAT ────────────────────────────────────────────────────────────────
 
 
+/**
+ * Whether a failed send left the user's message in the transcript.
+ *
+ * The server says so: the user's own message is stored before the
+ * model is called, so it is in the transcript — and it stays there,
+ * because the channels depend on it (a person who wrote a message on
+ * WeChat cannot have it put back in a composer).
+ *
+ * So when the turn fails the bubble stays and the text does not go
+ * back into the composer. Taking the bubble away *and* saying "the
+ * server did not store the message" was a claim that was simply false
+ * — and twenty seconds later the poll brought the message back on its
+ * own, or the user had retyped it and the transcript had it twice.
+ *
+ * Exported so the test can say what the screen does with it.
+ */
+export function failedSendKeepsTheMessage(result: unknown): boolean {
+  return Boolean((result as { failed?: boolean } | null | undefined)?.failed);
+}
+
 export default function Chat() {
   const params = useParams<{ id: string }>();
   /**
@@ -723,7 +743,28 @@ export default function Chat() {
             replyToId: serverMessageId(replyTo?.id),
           },
           controller.signal,
-        );
+        ) as any;
+        /**
+         * The turn failed — and the message was sent.
+         *
+         * The server says so: the user's own message is in the
+         * transcript, because it is stored before the model is called.
+         * The channels rely on that (a person who wrote a message on
+         * WeChat cannot have it put back in a composer), and the
+         * streaming path keeps it too.
+         *
+         * So the bubble stays and the text does not go back into the
+         * composer. Taking the bubble away *and* saying "the server did
+         * not store the message" was a claim that was simply false —
+         * and twenty seconds later the poll brought the message back on
+         * its own, or the user had retyped it and the transcript had it
+         * twice.
+         */
+        if (failedSendKeepsTheMessage(result)) {
+          toast.error(t("chat.failed", { message: t("errors.replyFailed") }));
+          setMessages(prev => prev.map(m => (m.id === streamId ? { ...m, isStreaming: false } : m)));
+          return;
+        }
         setMessages(prev => prev.map(m => m.id === streamId
           ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
           : m

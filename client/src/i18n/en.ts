@@ -1699,6 +1699,7 @@ export const en = {
   },
 
   errors: {
+    replyFailed: "The reply could not be produced. Please try again.",
     notFound: "This persona could not be found.",
     backHome: "Back to the lobby",
     boundaryTitle: "Something broke",

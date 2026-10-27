@@ -1711,6 +1711,7 @@ export const zh = {
   },
 
   errors: {
+    replyFailed: "回答没有生成成功，请再试一次。",
     notFound: "这里没有找到这个分身。",
     backHome: "回到大厅",
     boundaryTitle: "出了点问题",
