@@ -1,5 +1,11 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:20-alpine AS build
+#
+# The version the app declares in `engines`.
+#
+# It was twenty — so the image ran the app on a Node the app says it
+# does not support, and `pnpm install` refused the image's own engine
+# whenever the check was turned on.
+FROM node:24-alpine AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
@@ -8,7 +14,7 @@ COPY . .
 RUN pnpm build
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 # The package manager is fetched *here*, while the image is being

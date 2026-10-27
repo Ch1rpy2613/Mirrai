@@ -101,6 +101,24 @@ describe("the packaged app", () => {
     expect(runner).not.toMatch(/Python.*not available at \"/);
   });
 
+  it("runs the app on the Node the app asks for", () => {
+    // The image ran Node twenty while the package says the app needs
+    // twenty-four — so the image ran the app on a Node the app says it
+    // does not support, and `pnpm install` refused the image's own
+    // engine whenever the check was turned on.
+    const docker = readFileSync(path.join(ROOT, "Dockerfile"), "utf-8");
+    const packageJson = JSON.parse(
+      readFileSync(path.join(ROOT, "package.json"), "utf-8"),
+    ) as { engines?: { node?: string } };
+    const wanted = (packageJson.engines?.node ?? "").replace(/[^0-9.]/g, "");
+    expect(wanted).not.toBe("");
+    const used = [...docker.matchAll(/^FROM node:([0-9.]+)/gm)].map((m) => m[1]);
+    expect(used.length).toBeGreaterThan(0);
+    for (const version of used) {
+      expect(version.startsWith(wanted.split(".")[0])).toBe(true);
+    }
+  });
+
   it("stops when the data migrations fail", () => {
     // A failed data migration is exactly the case where the schema and
     // the data disagree. All three entrypoints used to carry on and
