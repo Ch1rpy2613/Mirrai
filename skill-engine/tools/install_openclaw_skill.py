@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
+import tempfile
 from pathlib import Path
 
 
@@ -19,13 +21,35 @@ def install_skill(source: Path, destination: Path, force: bool = False, dry_run:
     if dry_run:
         return destination
 
-    if destination.exists():
-        if not force:
-            raise FileExistsError(f"destination already exists: {destination}")
-        shutil.rmtree(destination)
+    if destination.exists() and not force:
+        raise FileExistsError(f"destination already exists: {destination}")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, destination, ignore=IGNORE_NAMES)
+
+    # 先在旁边写好一份，再换上去。
+    #
+    # 原来的写法是先删掉旧的再复制新的：复制到一半失败了（磁盘满了、
+    # 权限不对、进程被杀掉），旧的那份已经没了，而新的那份从来没有
+    # 复制完——用户手里的技能就这么没了。
+    staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.new-", dir=str(destination.parent)))
+    backup = destination.parent / f".{destination.name}.old-{os.getpid()}"
+    try:
+        shutil.copytree(source, staging, ignore=IGNORE_NAMES, dirs_exist_ok=True)
+        if destination.exists():
+            if backup.exists():
+                shutil.rmtree(backup)
+            destination.rename(backup)
+        try:
+            staging.rename(destination)
+        except Exception:
+            if backup.exists() and not destination.exists():
+                backup.rename(destination)
+            raise
+        if backup.exists():
+            shutil.rmtree(backup, ignore_errors=True)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
     return destination
 
 

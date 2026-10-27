@@ -4,14 +4,55 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
+from typing import Callable
 
 from skill_schema import enrich_skill_meta, now_iso
 
 
 FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?", re.DOTALL)
+
+
+def replace_directory(target: Path, populate: Callable[[Path], None]) -> None:
+    """把 `target` 换成一个新目录，失败时旧目录还在。
+
+    原来的写法是先 `shutil.rmtree(target)` 再写新的。写的那一步要是
+    失败了（磁盘满了、权限不对、进程被杀掉），旧的那份已经被删掉了，
+    而新的那份从来没有写出来——用户手里的技能就这么没了，什么都没留下。
+
+    现在是：先在旁边写好一个新的，再换上去。换的那一下坏了，就把旧的
+    换回来。
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.new-", dir=str(target.parent)))
+    backup: Path | None = None
+    try:
+        populate(staging)
+
+        if target.exists():
+            backup = target.parent / f".{target.name}.old-{os.getpid()}"
+            if backup.exists():
+                shutil.rmtree(backup)
+            target.rename(backup)
+
+        try:
+            staging.rename(target)
+        except Exception:
+            # 换不上去——把旧的换回来。
+            if backup is not None and backup.exists() and not target.exists():
+                backup.rename(target)
+            raise
+
+        if backup is not None and backup.exists():
+            shutil.rmtree(backup, ignore_errors=True)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
 
 
 def load_generated_meta(skill_dir: Path) -> dict:
@@ -101,14 +142,14 @@ def install_generated_skill(
     }
 
     if not dry_run:
-        if install_dir.exists():
-            if not force:
-                raise FileExistsError(f"{host} skill already exists: {install_dir}")
-            shutil.rmtree(install_dir)
+        if install_dir.exists() and not force:
+            raise FileExistsError(f"{host} skill already exists: {install_dir}")
 
-        install_dir.mkdir(parents=True, exist_ok=True)
-        install_file.write_text(installed_markdown, encoding="utf-8")
-        write_install_metadata(install_dir, install_record)
+        def populate(staging: Path) -> None:
+            (staging / "SKILL.md").write_text(installed_markdown, encoding="utf-8")
+            write_install_metadata(staging, install_record)
+
+        replace_directory(install_dir, populate)
 
     return {
         "host": host,
