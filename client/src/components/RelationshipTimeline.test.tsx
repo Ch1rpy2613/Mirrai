@@ -128,6 +128,37 @@ describe("the relationship timeline", () => {
     }
   });
 
+  it("says how many entries are not shown", () => {
+    /**
+     * The list is capped at the newest two hundred, and it said
+     * nothing — so a user with three hundred entries saw two hundred
+     * and had no way of knowing that a hundred of the oldest were
+     * behind them. The record of their own relationship looked
+     * complete.
+     */
+    query.data = {
+      events: [makeEvent()],
+      total: 300,
+    };
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
+
+    expect(
+      screen.getByText(translate("zh", "relationship.moreEntries", { count: 299 })),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing about missing entries when there are none", () => {
+    query.data = {
+      events: [makeEvent()],
+      total: 1,
+    };
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
+
+    expect(
+      screen.queryByText(translate("zh", "relationship.moreEntries", { count: 0 })),
+    ).toBeNull();
+  });
+
   it("shows what has been recorded, with its kind", () => {
     query.data = { events: [makeEvent()] };
     render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);

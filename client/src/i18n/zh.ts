@@ -1576,6 +1576,14 @@ export const zh = {
     detail: "细节（可选）",
     detailPlaceholder: "想记多少写多少",
     saved: "记下了",
+    /**
+     * How many entries are not shown.
+     *
+     * The list stops at the newest two hundred and said nothing — so
+     * a user with three hundred entries saw two hundred and had no way
+     * of knowing that a hundred of the oldest were behind them.
+     */
+    moreEntries: "这里只显示最近的 {{count}} 条，更早的记录没有显示。",
     kinds: {
       together: "在一起",
       apart: "暂时分开",

@@ -814,6 +814,28 @@ export async function getRelationshipEvents(
     .limit(limit);
 }
 
+/**
+ * How many events the timeline holds.
+ *
+ * The list is capped, and the cap used to be silent: a user with
+ * three hundred entries saw the newest two hundred with nothing
+ * saying so — so the record of their own relationship looked
+ * complete, and the oldest entries were simply gone.
+ */
+export async function countRelationshipEvents(
+  personaId: number,
+  userId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ c: count() }).from(relationshipEvents)
+    .where(and(
+      eq(relationshipEvents.personaId, personaId),
+      eq(relationshipEvents.userId, userId),
+    ));
+  return result?.c || 0;
+}
+
 export async function deleteRelationshipEvent(id: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");

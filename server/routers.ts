@@ -55,7 +55,7 @@ import {
   upsertUserMood, getUserMoods,
   createLetter, getLetters, countLetters, getDueLetters, getLastLetterReplyAt,
   answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes, countWaitingNotes,
-  createRelationshipEvent, getRelationshipEvents, deleteRelationshipEvent,
+  createRelationshipEvent, getRelationshipEvents, countRelationshipEvents, deleteRelationshipEvent,
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
   getOutboundLetters, setOutboundLetterStatus, updateOutboundLetterText,
   markOutboundLetterStaleNotified,
@@ -4165,12 +4165,25 @@ export const appRouter = router({
         limit: z.number().int().min(1).max(200).optional(),
       }))
       .query(async ({ ctx, input }) => {
+        const limit = input.limit ?? 200;
         const events = await getRelationshipEvents(
           input.personaId,
           ctx.user.id,
-          input.limit ?? 200,
+          limit,
         );
-        return { events, phase: resolveRelationshipPhase(events) };
+        /**
+         * How many there are altogether.
+         *
+         * The list is capped, and the cap used to be silent — so a
+         * user with three hundred entries saw the newest two hundred
+         * with nothing saying so. The record of their own
+         * relationship looked complete, and the oldest entries were
+         * simply gone.
+         */
+        const total = events.length >= limit
+          ? await countRelationshipEvents(input.personaId, ctx.user.id)
+          : events.length;
+        return { events, phase: resolveRelationshipPhase(events), total };
       }),
 
     add: protectedProcedure

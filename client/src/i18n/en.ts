@@ -1563,6 +1563,14 @@ export const en = {
     detail: "Details (optional)",
     detailPlaceholder: "As much as you want to write",
     saved: "Recorded",
+    /**
+     * How many entries are not shown.
+     *
+     * The list stops at the newest two hundred and said nothing — so
+     * a user with three hundred entries saw two hundred and had no way
+     * of knowing that a hundred of the oldest were behind them.
+     */
+    moreEntries: "Only the most recent {{count}} are shown here — the older entries are not.",
     kinds: {
       together: "Together",
       apart: "Apart for a while",

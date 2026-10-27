@@ -19,12 +19,16 @@ const getPersonaById = vi.fn();
 const createRelationshipEvent = vi.fn();
 const updatePersona = vi.fn();
 const createSafetyEvent = vi.fn();
+const getRelationshipEvents = vi.fn();
+const countRelationshipEvents = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   createRelationshipEvent: (...a: unknown[]) => createRelationshipEvent(...a),
   updatePersona: (...a: unknown[]) => updatePersona(...a),
   createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
+  getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
+  countRelationshipEvents: (...a: unknown[]) => countRelationshipEvents(...a),
 }));
 
 import { appRouter } from "./routers";
@@ -68,6 +72,46 @@ describe("the relationship timeline", () => {
     createRelationshipEvent.mockResolvedValue({ id: 1 });
     updatePersona.mockResolvedValue(undefined);
     createSafetyEvent.mockResolvedValue(1);
+    getRelationshipEvents.mockResolvedValue([]);
+    countRelationshipEvents.mockResolvedValue(0);
+  });
+
+  it("says how many entries there are when the list is capped", async () => {
+    /**
+     * The list is capped at the newest two hundred, and it said
+     * nothing — so a user with three hundred entries saw two hundred
+     * and had no way of knowing that a hundred of the oldest were
+     * behind them. The record of their own relationship looked
+     * complete.
+     */
+    const events = Array.from({ length: 200 }, (_, i) => ({
+      id: i + 1,
+      kind: "news",
+      title: `一条 ${i}`,
+      happenedAt: new Date("2026-01-01T00:00:00Z"),
+    }));
+    getRelationshipEvents.mockResolvedValue(events);
+    countRelationshipEvents.mockResolvedValue(300);
+
+    const result = await appRouter
+      .createCaller(ctxFor(1, "Asia/Shanghai"))
+      .relationship.list({ personaId: 5 });
+
+    expect(result.total).toBe(300);
+    expect(countRelationshipEvents).toHaveBeenCalledWith(5, 1);
+  });
+
+  it("does not count again when the list was not capped", async () => {
+    getRelationshipEvents.mockResolvedValue([
+      { id: 1, kind: "news", title: "一条", happenedAt: new Date("2026-01-01T00:00:00Z") },
+    ]);
+
+    const result = await appRouter
+      .createCaller(ctxFor(1, "Asia/Shanghai"))
+      .relationship.list({ personaId: 5 });
+
+    expect(result.total).toBe(1);
+    expect(countRelationshipEvents).not.toHaveBeenCalled();
   });
 
   it("records the breakup on the day the user wrote down", async () => {

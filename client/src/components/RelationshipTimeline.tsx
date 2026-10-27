@@ -90,6 +90,16 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
   const [showForm, setShowForm] = useState(false);
 
   const events = data?.events ?? [];
+  /**
+   * How many are not shown.
+   *
+   * The list is capped at the newest two hundred, and it said nothing
+   * — so a user with three hundred entries saw two hundred and had no
+   * way of knowing that a hundred of the oldest were behind them. The
+   * record of their own relationship looked complete.
+   */
+  const total = data?.total ?? events.length;
+  const hiddenCount = Math.max(0, total - events.length);
 
   return (
     <div className="space-y-4">
@@ -154,6 +164,12 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
           ))}
         </ol>
       )}
+
+      {hiddenCount > 0 ? (
+        <p className="text-xs text-muted-subtle leading-relaxed">
+          {t("relationship.moreEntries", { count: hiddenCount })}
+        </p>
+      ) : null}
 
       {showForm ? (
         <div className="space-y-3 rounded-xl border border-border p-4">
