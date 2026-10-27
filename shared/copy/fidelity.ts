@@ -90,37 +90,6 @@ export const FIDELITY = {
     en: "The records did not contain enough contrasts.",
   },
 
-  // ── The imperfection, in the interface ───────────────────────────────────
-
-  "labels.imperfection.title": {
-    zh: "每种心情下的不完美",
-    en: "Imperfection, per state",
-  },
-  "labels.imperfection.hint": {
-    zh: "没有人是恒定的。同一个人心情好时松散，心情差时短促。分别写，才是真的。",
-    en: "Nobody is constant. The same person is loose when happy and clipped when not. Write them apart and it becomes real.",
-  },
-  "labels.imperfection.state": {
-    zh: "状态",
-    en: "State",
-  },
-  "labels.imperfection.deviations": {
-    zh: "这时候 TA 的不完美长什么样",
-    en: "How they are imperfect here",
-  },
-  "labels.imperfection.deviationsHint": {
-    zh: "用分号分开",
-    en: "Separated by semicolons",
-  },
-  "labels.imperfection.restoreDefaults": {
-    zh: "恢复默认",
-    en: "Restore the defaults",
-  },
-  "labels.imperfection.reset": {
-    zh: "清空",
-    en: "Clear",
-  },
-
   // ── The behaviour, in the interface ──────────────────────────────────────
   //
   // The behaviour panel has its own copy in the interface dictionary.

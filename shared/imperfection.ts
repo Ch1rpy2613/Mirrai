@@ -128,12 +128,31 @@ export function mergeImperfectionDefaults(
 export function defaultImperfectionProfile(locale: "zh" | "en" = "zh"): ImperfectionEntry[] {
   return IMPERFECTION_STATES.map((state) => ({
     state,
-    deviations: copy(locale, `labels.imperfection.${state}`)
+    deviations: copy(locale, IMPERFECTION_STATE_LABEL_KEYS[state])
       .split(/[；;\n]/)
       .map((v) => v.trim())
       .filter(Boolean),
   }));
 }
+
+/**
+ * The sentence that says how a person tends to be imperfect in a state.
+ *
+ * The keys used to be built from the state — the namespace followed by
+ * the state's own name — and that made the *whole namespace* invisible
+ * to the test that looks for entries nobody reads: so seven sentences
+ * under it were dead and the test could not see them.
+ *
+ * They are written out here, one per state, so the test can do its job.
+ */
+const IMPERFECTION_STATE_LABEL_KEYS: Record<string, string> = {
+  warm: "labels.imperfection.warm",
+  playful: "labels.imperfection.playful",
+  nostalgic: "labels.imperfection.nostalgic",
+  melancholy: "labels.imperfection.melancholy",
+  happy: "labels.imperfection.happy",
+  distant: "labels.imperfection.distant",
+};
 
 /**
  * The deviations that apply in one state.
