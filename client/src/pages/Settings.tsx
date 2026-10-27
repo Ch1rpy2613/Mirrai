@@ -2308,15 +2308,32 @@ function DataSourcesTab() {
   );
 }
 
-function CollectorPreview({ personaId }: { personaId: number }) {
+/**
+ * The collector preview.
+ *
+ * Exported so its behaviour can be tested: it makes a claim about what
+ * the user has collected, and it is inside a page that is far too
+ * large to render in a test.
+ */
+export function CollectorPreview({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
-  const { data, isLoading } = trpc.collector.preview.useQuery(
+  const { data, isLoading, isError, refetch } = trpc.collector.preview.useQuery(
     { personaId, limit: 30 },
     { enabled: Number.isFinite(personaId) && personaId > 0 },
   );
 
   if (isLoading) {
     return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
+  }
+  /**
+   * A failed request is not an empty collection.
+   *
+   * The panel said "nothing has been collected for this persona yet" —
+   * a false claim about the user's own data, with no error and no way
+   * to try again.
+   */
+  if (isError) {
+    return <LoadFailure onRetry={() => refetch()} />;
   }
   if (!data || data.total === 0) {
     return <p className="text-xs text-muted-foreground">{t("settings.sources.previewEmpty")}</p>;
@@ -2353,9 +2370,23 @@ function CollectorPreview({ personaId }: { personaId: number }) {
   );
 }
 
-function CollectorJobDetail({ jobId }: { jobId: string }) {
+/**
+ * The detail of one collection job.
+ *
+ * Exported for the same reason as the preview above.
+ */
+export function CollectorJobDetail({ jobId }: { jobId: string }) {
   const { t, locale } = useLocale();
-  const { data: job } = trpc.collector.getJob.useQuery({ jobId });
+  const { data: job, isError, refetch } = trpc.collector.getJob.useQuery({ jobId });
+  /**
+   * A failed request is not a request that is still on its way.
+   *
+   * The panel said "loading…" for ever — the data stays undefined
+   * after a failure, and there was no branch for it.
+   */
+  if (isError) {
+    return <LoadFailure onRetry={() => refetch()} />;
+  }
   if (!job) return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
 
   const statusKey = COLLECTOR_STATUS_LABELS[job.status];
