@@ -276,6 +276,31 @@ export async function importCollectedMessages(params: {
    *
    * It starts at zero: the first "嗯" of the batch is the first "嗯"
    * that was stored, so a re-collected history matches itself.
+   *
+   * A known limit, and it is a real one.
+   *
+   * A message with no time can only be told apart by its text and by
+   * how many times that text has been seen. So when the collector
+   * returns a *window* rather than the whole history — which is what
+   * they all do, since they ask for the most recent messages — the
+   * window has moved, and the first "嗯" of the new window gets the
+   * occurrence number of the first "嗯" that was stored. So a new
+   * untimed message is not imported.
+   *
+   * The other way round is worse: counting from what is already
+   * stored would import a *duplicate* every time the same history was
+   * collected again — and "the same sentence is stored once" is the
+   * promise this whole thing is about.
+   *
+   * So the promise is kept and the narrow loss is accepted. The
+   * messages that have a time — nearly all of them, because the
+   * collectors take the time from the source — are keyed by it, and
+   * they are exact.
+   *
+   * Doing it properly needs the source's own message id carried
+   * through the payload and stored in a column: that is a change to
+   * three collectors, to the payload contract and to the schema, and
+   * it is not a thing to do in passing.
    */
   const batchCounts = new Map<string, number>();
   for (const message of params.messages) {
