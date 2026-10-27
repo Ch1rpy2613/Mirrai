@@ -2340,10 +2340,22 @@ export function EmotionReport({ personaId, personaName, onClose }: { personaId: 
                 event.preventDefault();
                 const index = ranges.indexOf(days);
                 const step = event.key === "ArrowRight" ? 1 : -1;
-                setDays(ranges[(index + step + ranges.length) % ranges.length]);
+                const next = ranges[(index + step + ranges.length) % ranges.length];
+                setDays(next);
+                /**
+                 * The focus moves with the selection.
+                 *
+                 * The buttons are a roving tabindex — so the one the
+                 * focus was on became tabIndex={-1} and aria-checked
+                 * "false", and the newly selected one became tabIndex={0}
+                 * without being focused. The focus ring stayed on the
+                 * old option while the selection moved, and a screen
+                 * reader announced the old option as "not checked".
+                 */
+                document.getElementById(`emotion-range-${next}`)?.focus();
               }}>
               {[7, 30].map(d => (
-                <button key={d} onClick={() => setDays(d)}
+                <button key={d} id={`emotion-range-${d}`} onClick={() => setDays(d)}
                   role="radio"
                   aria-checked={days === d}
                   tabIndex={days === d ? 0 : -1}
