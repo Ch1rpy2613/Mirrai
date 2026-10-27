@@ -128,6 +128,21 @@ describe("the packaged app", () => {
     expect(docker).toMatch(/exit 1/);
   });
 
+  it("type checks the build's own configuration", () => {
+    // The build's configuration was not checked at all — so a change
+    // to the aliases, the bundler or the migration setup could break
+    // the build without anything saying so until the build ran.
+    const tsconfig = JSON.parse(
+      readFileSync(path.join(ROOT, "tsconfig.json"), "utf-8")
+        // The file carries comments, which JSON does not allow.
+        .replace(/^\s*\/\*\*[\s\S]*?\*\//gm, "")
+        .replace(/^\s*\/\/.*$/gm, ""),
+    ) as { include?: string[] };
+    for (const file of ["vite.config.ts", "vitest.config.ts", "drizzle.config.ts"]) {
+      expect(tsconfig.include ?? []).toContain(file);
+    }
+  });
+
   it("stops when the schema cannot be synchronised", () => {
     // `push` applies the difference between the schema and the live
     // database — so a failure means the two still disagree, and the app

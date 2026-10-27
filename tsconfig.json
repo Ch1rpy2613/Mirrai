@@ -1,5 +1,20 @@
 {
-  "include": ["client/src/**/*", "shared/**/*", "server/**/*", "scripts/**/*"],
+  "include": [
+    "client/src/**/*",
+    "shared/**/*",
+    "server/**/*",
+    "scripts/**/*",
+    /**
+     * The build's own configuration.
+     *
+     * It was not checked at all — so a change to the aliases, the
+     * bundler or the migration setup could break the build without
+     * anything saying so until the build itself was run.
+     */
+    "vite.config.ts",
+    "vitest.config.ts",
+    "drizzle.config.ts"
+  ],
   "exclude": ["node_modules", "build", "dist"],
   "compilerOptions": {
     "incremental": true,
