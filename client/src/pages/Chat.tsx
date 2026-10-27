@@ -23,6 +23,7 @@ import { careBannerText } from "@/lib/care-note";
 import { resolveStarterQuestions } from "@/lib/scene-starters";
 import { useLocale } from "@/contexts/LocaleContext";
 import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone";
+import { formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 
@@ -1982,6 +1983,15 @@ function SearchPanel({
   onJumpTo?: (messageId: number) => void;
 }) {
   const { t, locale } = useLocale();
+  /**
+   * The user's own clock.
+   *
+   * The times in the search results were the browser's — so a result
+   * found by its content carried a time from another calendar than
+   * the one the messages around it are in.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2047,7 +2057,7 @@ function SearchPanel({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-foreground line-clamp-2">{highlight(m.content, debouncedQuery)}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {new Date(m.createdAt).toLocaleDateString(locale)} {new Date(m.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
+                      {formatInstantInZone(m.createdAt, locale, timezone)} {formatTimeInZone(m.createdAt, locale, timezone)}
                     </p>
                   </div>
                 </button>

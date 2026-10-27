@@ -12,6 +12,8 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { EMOTIONS, type EmotionDefinition } from "@/lib/emotions";
 import { SAFE_REHYPE_PLUGINS } from "@/lib/safe-markdown";
+import { formatTimeInZone } from "@/lib/dates";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 /**
  * A message in the conversation.
@@ -294,6 +296,15 @@ export function MessageBubble({
   onQuote?: (msg: Message) => void;
 }) {
   const { t, locale } = useLocale();
+  /**
+   * The user's own clock.
+   *
+   * The times on the messages were the browser's — so on a machine
+   * whose zone is not the user's, every message carried a different
+   * time from the dates around it.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const isUser = msg.role === "user";
   const mood = emotionOf(msg.emotionalState);
   const [imgExpanded, setImgExpanded] = useState(false);
@@ -512,7 +523,16 @@ export function MessageBubble({
         </div>
         {msg.createdAt && !msg.isStreaming && (
           <span className="text-[11px] text-muted-subtle px-1 flex items-center gap-1.5">
-            {new Date(msg.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
+            {/**
+             * The time of the message, in the user's own clock.
+             *
+             * It was the browser's — so a message sent at half past nine
+             * at night in Shanghai was stamped half past one in the
+             * afternoon on a machine set to UTC, and the messages on
+             * the screen were in a different clock from the dates
+             * around them.
+             */}
+            {formatTimeInZone(msg.createdAt, locale, timezone)}
             {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-mood-happy/10 text-mood-happy">{t("chat.channelWechat")}</span>}
             {!isUser && msg.messageType !== "voice" && <TTSButton text={msg.content} />}
             {/* A message is the user's own. Being able to fix, repeat or

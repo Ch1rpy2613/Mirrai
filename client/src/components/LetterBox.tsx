@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { USER_MOODS, isUserMood, type UserMood } from "@shared/user-side";
+import { formatInstantInZone } from "@/lib/dates";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 /**
  * The letters.
@@ -24,6 +26,15 @@ import { USER_MOODS, isUserMood, type UserMood } from "@shared/user-side";
  */
 export default function LetterBox({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  /**
+   * The user's own calendar.
+   *
+   * The dates on the letters were the browser's — so a letter written
+   * late in the evening could show the next day, and a machine set to
+   * the wrong city disagreed with the rest of the app.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const utils = trpc.useUtils();
 
   const { data, isLoading, isError } = trpc.letter.list.useQuery({ personaId });
@@ -144,7 +155,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
                 {letter.body}
               </p>
               <div className="flex items-center gap-3 mt-3 text-[0.625rem] text-muted-subtle">
-                <span>{new Date(letter.createdAt).toLocaleDateString(locale)}</span>
+                <span>{formatInstantInZone(letter.createdAt, locale, timezone)}</span>
                 {letter.mood && (
                   /**
                    * The mood is named, not coded.
@@ -197,7 +208,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
                  * tell which letter they were about to throw away.
                  */
                 aria-label={t("letters.removeNamed", {
-                  date: new Date(letter.createdAt).toLocaleDateString(locale),
+                  date: formatInstantInZone(letter.createdAt, locale, timezone),
                   preview: (letter.body ?? "").slice(0, 20),
                 })}
                 // The button is disabled while the removal is in flight:

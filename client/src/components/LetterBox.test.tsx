@@ -43,6 +43,20 @@ vi.mock("@/contexts/LocaleContext", () => ({
   }),
 }));
 
+/**
+ * The user's own calendar.
+ *
+ * The dates on the letters were the browser's.
+ */
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, timezone: "America/New_York" },
+    isAuthenticated: true,
+    loading: false,
+    logout: vi.fn(),
+  }),
+}));
+
 import LetterBox from "./LetterBox";
 
 describe("the letters", () => {
@@ -50,6 +64,26 @@ describe("the letters", () => {
     vi.clearAllMocks();
     letters = [];
     todos = [];
+  });
+
+  it("shows the date in the user's own calendar", () => {
+    /**
+     * Ten at night in New York is the next day in Shanghai — so the
+     * date of a letter depends on whose calendar it is read in.
+     */
+    letters = [
+      {
+        id: 1,
+        body: "一封信",
+        kind: "letter",
+        mood: null,
+        status: "private",
+        createdAt: "2026-01-02T03:04:00.000Z",
+      },
+    ];
+    render(<LetterBox personaId={1} />);
+    expect(screen.getByText("2026/1/1")).toBeInTheDocument();
+    expect(screen.queryByText("2026/1/2")).toBeNull();
   });
 
   it("says so when there is nothing written yet", () => {

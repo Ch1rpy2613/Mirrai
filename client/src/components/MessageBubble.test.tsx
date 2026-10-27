@@ -53,6 +53,22 @@ vi.mock("@/contexts/LocaleContext", () => ({
   }),
 }));
 
+/**
+ * The user's own clock.
+ *
+ * The times on the messages were the browser's — so on a machine whose
+ * zone is not the user's, every message carried a different time from
+ * the dates around it.
+ */
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, timezone: "America/New_York" },
+    isAuthenticated: true,
+    loading: false,
+    logout: vi.fn(),
+  }),
+}));
+
 import { MessageBubble, type Message } from "./MessageBubble";
 
 /** A message, in the shape the chat page builds it. */
@@ -79,6 +95,22 @@ function callbacks() {
 describe("the message bubble", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("shows the time in the user's own clock", () => {
+    /**
+     * Ten at night in New York is three in the morning there, and two
+     * in the afternoon in Shanghai.
+     */
+    render(
+      <MessageBubble
+        msg={makeMessage({ createdAt: new Date("2026-01-02T03:04:00Z") })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    // The interface is in Chinese here, so the clock is a 24-hour one.
+    expect(screen.getByText("22:04")).toBeInTheDocument();
   });
 
   it("shows what was said", () => {

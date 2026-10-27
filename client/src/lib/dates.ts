@@ -74,3 +74,30 @@ export function formatInstantInZone(
     return date.toLocaleDateString(locale);
   }
 }
+
+/**
+ * An instant, as a time in the reader's own calendar.
+ *
+ * The same rule as `formatInstantInZone`: the browser's zone and the
+ * zone the user has chosen are not always the same, and the times on
+ * the messages are read in the zone the user chose like every other
+ * date on the app.
+ */
+export function formatTimeInZone(
+  value: string | number | Date | null | undefined,
+  locale: string,
+  timeZone?: string | null,
+): string {
+  const date = value instanceof Date ? value : new Date(value ?? NaN);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat(locale || "zh", {
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(timeZone ? { timeZone } : {}),
+    }).format(date);
+  } catch {
+    // A zone this browser does not know.
+    return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  }
+}
