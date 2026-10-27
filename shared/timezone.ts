@@ -208,6 +208,113 @@ export function dayShiftMinutes(timeZone?: string | null, now: Date = new Date()
 }
 
 /**
+ * A day key, moved by a number of days.
+ *
+ * Pure arithmetic on the key, with no time zone in it: the key is a
+ * calendar day, so the day before it is a calendar day too. Doing this
+ * with a `Date` would drag the machine's own offset into it.
+ */
+export function shiftDateKey(key: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return key;
+  const date = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  );
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The midnight of a day, in a zone, as an instant.
+ *
+ * The offset of a zone is not the same all year — the clocks go forward
+ * one Sunday and back the next autumn, and the hour that changes is
+ * inside the day. So "the user's midnight" is not "now, shifted by the
+ * offset of the zone now": on the day of a change that shift is an hour
+ * out, and an hour is enough to put a message on the neighbouring day.
+ *
+ * So the midnight is worked out from the day it belongs to. The offset
+ * is read twice: once for the middle of the day — which is never inside
+ * a daylight-saving change — and once for the midnight itself, which is
+ * the hour that does change.
+ */
+export function zonedMidnightForDayKey(dayKey: string, timeZone?: string | null): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  /**
+   * No zone: the server's own midnight.
+   *
+   * The shift was zero then, and the day was the server's — which is
+   * what the app has always done for a user who has not chosen a zone.
+   */
+  if (!timeZone) {
+    const start = new Date(Date.UTC(year, month, day));
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+  // The middle of the day, read as if it were UTC.
+  const wallNoon = Date.UTC(year, month, day, 12);
+  let offset = zonedOffsetMinutes(new Date(wallNoon), timeZone);
+  // The offset at the middle of the day is the offset of the day.
+  const offsetAtNoon = zonedOffsetMinutes(new Date(wallNoon - offset * 60_000), timeZone);
+  if (offsetAtNoon !== offset) offset = offsetAtNoon;
+  // And the midnight has an offset of its own — the hour that changes.
+  const wallMidnight = Date.UTC(year, month, day);
+  let midnight = wallMidnight - offset * 60_000;
+  const offsetAtMidnight = zonedOffsetMinutes(new Date(midnight), timeZone);
+  if (offsetAtMidnight !== offset) midnight = wallMidnight - offsetAtMidnight * 60_000;
+  return new Date(midnight);
+}
+
+/**
+ * The user's midnight, as an instant.
+ *
+ * The day it belongs to is the user's own day — and the midnight is the
+ * offset of the zone *at that midnight*, not at the moment the question
+ * was asked. See `zonedMidnightForDayKey`.
+ */
+export function zonedDayStart(
+  date: Date,
+  timeZone?: string | null,
+  daysAgo = 0,
+): Date {
+  if (!timeZone) {
+    // The server's own midnight, N days back.
+    const start = new Date(date.getTime());
+    start.setHours(0, 0, 0, 0);
+    if (daysAgo) start.setDate(start.getDate() - daysAgo);
+    return start;
+  }
+  const key = zonedDateKey(date, timeZone);
+  const target = daysAgo ? shiftDateKey(key, -daysAgo) : key;
+  return zonedMidnightForDayKey(target, timeZone);
+}
+
+/**
+ * The middle of a day, in a zone, as an instant.
+ *
+ * A day the user typed is a calendar day, not an instant — so it is
+ * filed at the middle of that day *where they are*, and the interface
+ * (which renders it in the reader's own zone) shows the day they meant.
+ */
+export function zonedNoonForDayKey(dayKey: string, timeZone?: string | null): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey);
+  if (!match) return new Date(`${dayKey}T12:00:00Z`);
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const wallNoon = Date.UTC(year, month, day, 12);
+  if (!timeZone) return new Date(wallNoon);
+  let offset = zonedOffsetMinutes(new Date(wallNoon), timeZone);
+  const offsetAtNoon = zonedOffsetMinutes(new Date(wallNoon - offset * 60_000), timeZone);
+  if (offsetAtNoon !== offset) offset = offsetAtNoon;
+  return new Date(wallNoon - offset * 60_000);
+}
+
+/**
  * The day key, `days` days ago, in a given time zone.
  *
  * It is the key of the day that opens the window — the oldest day a

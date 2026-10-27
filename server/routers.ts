@@ -77,7 +77,7 @@ import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
 import { getCrisisResources } from "./safety/resources";
 import {
-  dayShiftMinutes,
+  zonedNoonForDayKey,
   isRealDayKey,
   isRealStartKey,
   isValidTimeZone,
@@ -429,10 +429,18 @@ function assertKnownProvider(providerName: string, locale: "zh" | "en" = "zh"): 
  * (which renders it in the reader's own zone) shows the day they meant.
  */
 function noonInTheUsersZone(dayKey: string, timezone: string | null | undefined): Date {
-  const noonUtc = new Date(`${dayKey}T12:00:00Z`);
-  if (!timezone) return noonUtc;
-  const shift = dayShiftMinutes(timezone, noonUtc);
-  return new Date(noonUtc.getTime() - shift * 60_000);
+  /**
+   * The middle of the day, in the user's own zone.
+   *
+   * It used to be the middle of the day shifted by the difference
+   * between the user's offset and the *server's* — so on a server that
+   * is not on UTC the day was filed at the wrong hour of the user's
+   * day, and the interface showed the day they meant at the wrong time.
+   *
+   * The instant is what matters: the driver writes it as the server's
+   * own wall clock, and the interface renders it in the reader's zone.
+   */
+  return zonedNoonForDayKey(dayKey, timezone);
 }
 
 export const appRouter = router({

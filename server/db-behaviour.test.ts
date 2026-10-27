@@ -511,6 +511,44 @@ describe("the safety record", () => {
   });
 });
 
+describe("the user's own day", () => {
+  it("counts the day from the user's midnight, not the server's", async () => {
+    /**
+     * The shift used to be the difference between the user's offset
+     * *now* and the server's offset *now* — and the offset of a zone is
+     * not the same all year. So on the day the clocks changed, the
+     * first hour of the user's day was counted as the day before.
+     *
+     * The twenty-ninth of March 2026 is the day the clocks go forward
+     * in London: the day is twenty-three hours long, and its midnight
+     * is in Greenwich, not in British Summer Time.
+     */
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-29T12:00:00.000Z"));
+    try {
+      registry.select.personas = [];
+      registry.select.messages = [];
+      registry.select.users = [];
+
+      await db.getUserStats(3, "Europe/London");
+
+      /**
+       * The messages of the day are the ones written since the user's
+       * midnight — which is the instant the condition carries.
+       */
+      const index = queries.findIndex((q) => q.table === "messages");
+      expect(index).toBeGreaterThanOrEqual(0);
+      const conditions = whereOf(index).map((c) => c.sql).join(" ");
+      expect(conditions).toContain('"messages"."createdAt" >=');
+      const params = whereOf(index).flatMap((c) => c.params);
+      // The driver writes the instant as it is.
+      expect(params).toContain("2026-03-29T00:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("the emotion snapshot", () => {
   it("brings the day's row up to date instead of adding a second one", async () => {
     // The row was written by a read and then a write — so two requests

@@ -24,7 +24,7 @@ import {
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeySince } from "@shared/timezone";
 import { userDayColumn, userHourColumn } from "./_core/user-day";
-import { dayShiftMinutes } from "@shared/timezone";
+import { dayShiftMinutes, zonedDayStart } from "@shared/timezone";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -1042,11 +1042,19 @@ export async function getUserStats(userId: number, timezone?: string | null) {
    * gates the "five conversations in a day" achievement, so the
    * achievement could be won with yesterday's conversations.
    */
-  const today = new Date();
-  const shift = dayShiftMinutes(timezone);
-  today.setMinutes(today.getMinutes() + shift);
-  today.setHours(0, 0, 0, 0);
-  today.setMinutes(today.getMinutes() - shift);
+  /**
+   * The user's midnight.
+   *
+   * It was the server's — so "today's chats" on the lobby counted the
+   * wrong day for anybody who was not on the server's clock. It also
+   * gates the "five conversations in a day" achievement, so the
+   * achievement could be won with yesterday's conversations.
+   *
+   * And it was the user's midnight shifted by the offset of the zone
+   * now — so on the day the clocks changed, the first hour of the
+   * user's day was counted as the day before.
+   */
+  const today = zonedDayStart(new Date(), timezone);
   const [todayCount] = await db.select({ c: count() }).from(messages)
     .where(and(eq(messages.userId, userId), gte(messages.createdAt, today)));
   const [userRow] = await db.select({ createdAt: users.createdAt }).from(users).where(eq(users.id, userId));
@@ -3126,13 +3134,16 @@ export async function getRecentEmotionTrend(
  * the day, shift back.
  */
 function startOfUserDay(now: Date, timezone: string | null | undefined, daysAgo: number): Date {
-  const start = new Date(now.getTime());
-  const shift = dayShiftMinutes(timezone, now);
-  start.setMinutes(start.getMinutes() + shift);
-  start.setHours(0, 0, 0, 0);
-  start.setMinutes(start.getMinutes() - shift);
-  start.setDate(start.getDate() - daysAgo);
-  return start;
+  /**
+   * The user's midnight, N days back.
+   *
+   * It used to be the user's midnight shifted by the offset of the zone
+   * *now*, and then moved back by whole days on the *server's* clock.
+   * Both are wrong on the days the clocks change: the offset of a zone
+   * is not the same all year, so the midnight was an hour out, and the
+   * days were counted on the server's calendar rather than the user's.
+   */
+  return zonedDayStart(now, timezone, daysAgo);
 }
 
 export async function getMessageCountInRange(

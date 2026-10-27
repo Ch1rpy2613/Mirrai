@@ -26,7 +26,7 @@ import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } 
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { buildPromptForPersona } from "./prompt";
-import { dayShiftMinutes, localDateKey, zonedDateKey } from "@shared/timezone";
+import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 import { storageToDataUrl } from "../storage";
 
@@ -579,13 +579,19 @@ async function* runConversationTurn(
    * The safety events are filed under the user's own day, so "already
    * said today" means "since the user's midnight" — not the server's.
    */
-  const dayStart = new Date(now.getTime());
-  {
-    const shift = dayShiftMinutes(await db.getUserTimezone(userId), now);
-    dayStart.setMinutes(dayStart.getMinutes() + shift);
-    dayStart.setHours(0, 0, 0, 0);
-    dayStart.setMinutes(dayStart.getMinutes() - shift);
-  }
+  /**
+   * The user's midnight.
+   *
+   * The safety events are filed under the user's own day, so "already
+   * said today" means "since the user's midnight" — not the server's.
+   *
+   * It used to be the user's midnight shifted by the offset of the zone
+   * *now* — and the offset of a zone is not the same all year. So on
+   * the day the clocks changed, the first hour of the user's day was
+   * filed under the day before, and the safety count for the day was
+   * off by an hour's worth of messages.
+   */
+  const dayStart = zonedDayStart(now, await db.getUserTimezone(userId));
 
   // A persona that has said goodbye is asleep. It used to stay perfectly
   // chatable, which meant the "graduation" was only a badge: the app

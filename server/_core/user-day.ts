@@ -31,8 +31,34 @@ import { dayShiftMinutes } from "@shared/timezone";
  * calendar, or the same page shows two different days.
  */
 export function userHourColumn(timezone?: string | null) {
-  const shift = dayShiftMinutes(timezone);
-  return sql<number>`EXTRACT(HOUR FROM ${messages.createdAt} + (${sql.raw(String(shift))} * INTERVAL '1 minute'))::int`;
+  /**
+   * The hour is worked out per row, from the zone names.
+   *
+   * It used to be a fixed shift — the difference between the user's
+   * offset *now* and the server's offset *now*. But the offset of a
+   * zone is not the same all year, so on the days the clocks changed
+   * the hour was an hour out: the chart of the active hours put the
+   * evening's messages in the morning, next to the chart of the days,
+   * which was right.
+   *
+   * Postgres knows the offset of every date, so the zone names are
+   * used and the offset is worked out per row — the same way the day
+   * column does it.
+   */
+  const userZone = safeZoneName(timezone);
+  const serverZone = safeZoneName(serverZoneName()) ?? "UTC";
+  if (!userZone) {
+    /**
+     * The zone is not a name we can write into the SQL.
+     *
+     * The shift is used then — the same shift as before, with its
+     * daylight-saving blind spot. It is the better of the two for a
+     * zone the runtime does not know.
+     */
+    const shift = dayShiftMinutes(timezone);
+    return sql<number>`EXTRACT(HOUR FROM ${messages.createdAt} + (${sql.raw(String(shift))} * INTERVAL '1 minute'))::int`;
+  }
+  return sql<number>`EXTRACT(HOUR FROM ${messages.createdAt} AT TIME ZONE ${sql.raw(`'${serverZone}'`)} AT TIME ZONE ${sql.raw(`'${userZone}'`)})::int`;
 }
 
 /**

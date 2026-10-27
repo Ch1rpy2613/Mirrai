@@ -8,7 +8,7 @@
  */
 import * as db from "../db";
 import { copy } from "@shared/copy";
-import { dayShiftMinutes, zonedDateKey } from "@shared/timezone";
+import { zonedDateKey, zonedDayStart } from "@shared/timezone";
 
 /** A single unbroken conversation longer than this triggers a check-in. */
 export const LONG_SESSION_MS = 2 * 60 * 60 * 1000;
@@ -67,12 +67,18 @@ export interface UsageSignals {
  * other day was looked up under the wrong key.
  */
 function startOfUserDay(now: Date, timezone?: string | null): Date {
-  const start = new Date(now.getTime());
-  const shift = dayShiftMinutes(timezone, now);
-  start.setMinutes(start.getMinutes() + shift);
-  start.setHours(0, 0, 0, 0);
-  start.setMinutes(start.getMinutes() - shift);
-  return start;
+  /**
+   * The user's midnight.
+   *
+   * It used to be the user's midnight shifted by the offset of the zone
+   * *now* — and the offset of a zone is not the same all year. So on
+   * the day the clocks changed, the first hour of the user's day was
+   * filed under the day before: the "five messages a day" limit was
+   * measured over a day that was an hour short, and the dependency
+   * signal was built from a series with an hour's worth of the day
+   * missing.
+   */
+  return zonedDayStart(now, timezone);
 }
 
 /**
