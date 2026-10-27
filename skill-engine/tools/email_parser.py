@@ -161,6 +161,21 @@ def decode_mime_str(s) -> str:
     return "".join(result)
 
 
+def _strip_signature(body: str) -> str:
+    """去掉签名分隔线，但保留分隔线之后的正文。
+
+    原来的写法是 `re.sub(r"\n_{3,}\n.*", "", body, flags=re.DOTALL)`。
+    `DOTALL` 让 `.*` 一直吃到正文末尾，所以只要正文里出现一行三个以上
+    的下划线（Outlook / Foxmail 的签名分隔线就是这么写的），正文的后半
+    段——结论、待办、整个第二段——就被静默地删掉了，而用户什么都不知道。
+
+    现在只去掉那一行分隔线本身，它后面的文字一律保留：宁可多留一点
+    签名噪音，也不能把用户的结论删掉。
+    """
+    # 分隔线：单独一行，三个以上的下划线（允许尾部有空白）。
+    return re.sub(r"\n[ \t]*_{3,}[ \t]*(?=\n|$)", "\n", body)
+
+
 def extract_email_body(msg) -> str:
     """从邮件对象中提取正文文本"""
     body = ""
@@ -175,13 +190,18 @@ def extract_email_body(msg) -> str:
 
             if content_type == "text/plain":
                 payload = part.get_payload(decode=True)
+                if not payload:
+                    # 空的 text/plain 段落——Outlook / Apple Mail 常见。
+                    # 这里不能停：正文往往在后面的 text/html 段落里。
+                    continue
                 charset = part.get_content_charset() or "utf-8"
                 try:
                     body = payload.decode(charset, errors="replace")
-                    break
                 except Exception:
                     body = payload.decode("utf-8", errors="replace")
+                if body.strip():
                     break
+                # 解出来是空的，也继续往下找。
 
             elif content_type == "text/html" and not body:
                 payload = part.get_payload(decode=True)
@@ -205,7 +225,7 @@ def extract_email_body(msg) -> str:
     # 清理引用内容（Re: 时的原文引用）
     body = re.sub(r"\n>.*", "", body)
     body = re.sub(r"\n-{3,}.*?原始邮件.*?\n", "\n", body, flags=re.DOTALL)
-    body = re.sub(r"\n_{3,}\n.*", "", body, flags=re.DOTALL)
+    body = _strip_signature(body)
 
     return body.strip()
 
