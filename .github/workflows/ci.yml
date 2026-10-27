@@ -15,6 +15,34 @@ jobs:
   test:
     name: Typecheck & Test
     runs-on: ubuntu-latest
+    # The database is here for the tests that need one.
+    #
+    # Two test files are about what the *database* refuses to do — the
+    # unique index that stops the same sentence being stored twice, and
+    # the key that stops the same message being collected twice. They
+    # are skipped when there is no database, and they used to be
+    # skipped here: this job had no database of its own, and the
+    # postgres service belonged to the separate schema job, which
+    # never runs the tests.
+    #
+    # So the two guarantees the database is there to provide were
+    # green by skipping — on the machine that has a database, and only
+    # on that machine.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mirrai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mirrai
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -30,6 +58,14 @@ jobs:
 
       - name: Typecheck
         run: pnpm check
+
+      # The schema, before the tests.
+      #
+      # The tests that talk to the database need the tables to be
+      # there. The schema is built from `drizzle/schema.ts` — the same
+      # way a fresh install builds it.
+      - name: Apply schema
+        run: pnpm exec drizzle-kit push --force
 
       - name: Test
         run: pnpm test
