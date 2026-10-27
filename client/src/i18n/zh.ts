@@ -1161,6 +1161,7 @@ export const zh = {
     basicSaved: "基本信息已保存",
     dataSaved: "人设数据已保存",
     tagPlaceholder: "输入后回车添加",
+    addTag: "添加{{label}}",
     kicker: "分身",
     profileKicker: "档案",
     intro: "修改分身的基本信息与人设数据，保存后立即生效。",

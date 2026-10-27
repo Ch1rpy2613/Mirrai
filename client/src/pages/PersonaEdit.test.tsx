@@ -146,6 +146,21 @@ describe("editing a persona", () => {
     expect(unnamed).toEqual([]);
   });
 
+  it("gives the add button a name of its own", () => {
+    /**
+     * The button that adds a tag had the same name as the field beside
+     * it — so a screen reader announced a text field and a button,
+     * both called 「口头禅」, with nothing to say that the button adds
+     * a tag.
+     */
+    render(<PersonaEdit />);
+
+    const names = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"));
+    const duplicates = names.filter((name) => name && names.filter((n) => n === name).length > 1);
+    expect(duplicates).toEqual([]);
+    expect(screen.getAllByRole("button", { name: /添加/ }).length).toBeGreaterThan(0);
+  });
+
   it("shows the persona's own realism level", () => {
     render(<PersonaEdit />);
     const slider = screen.getByRole("slider") as HTMLInputElement;

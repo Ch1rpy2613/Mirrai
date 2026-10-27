@@ -106,7 +106,15 @@ function TagInput({
           onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
           aria-label={label}
           placeholder={t("personaEdit.tagPlaceholder")} className="h-8 text-sm flex-1" />
-        <Button size="sm" variant="ghost" onClick={add} className="h-8 px-2 rounded-md" aria-label={label}>
+        <Button size="sm" variant="ghost" onClick={add} className="h-8 px-2 rounded-md"
+          /**
+           * The button says what it does.
+           *
+           * It had the same name as the field beside it — so a screen
+           * reader announced a text field and a button, both called
+           * 「口头禅」, with nothing to say that the button adds a tag.
+           */
+          aria-label={t("personaEdit.addTag", { label })}>
           <Plus className="w-3.5 h-3.5" />
         </Button>
       </div>

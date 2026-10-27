@@ -1160,6 +1160,7 @@ export const en = {
     basicSaved: "Basic details saved",
     dataSaved: "Persona data saved",
     tagPlaceholder: "Type and press enter to add",
+    addTag: "Add {{label}}",
     kicker: "Persona",
     profileKicker: "Dossier",
     intro: "Change the persona's basic details and data — the changes take effect at once.",
