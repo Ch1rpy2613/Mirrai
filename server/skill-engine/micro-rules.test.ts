@@ -68,7 +68,7 @@ vi.mock("./celebrity", () => ({
 }));
 
 import { copy } from "@shared/copy";
-import { findContrastPairs, mineMicroRules, parseTranscriptMessages } from "./micro-rules";
+import { capPerRole, findContrastPairs, mineMicroRules, parseTranscriptMessages } from "./micro-rules";
 import { runSkillPipeline } from "./pipeline";
 
 /** The answer a model gives when it has found something. */
@@ -1030,6 +1030,49 @@ describe("the mining and the number of speakers", () => {
     const messages: any[] = [];
     for (let speaker = 0; speaker < 50; speaker++) {
       for (let line = 0; line < 400; line++) {
+        messages.push({
+          role: `speaker-${speaker}`,
+          content: `消息 ${speaker}-${line} 一点不一样的话`,
+          timestamp: null,
+        });
+      }
+    }
+
+    const started = Date.now();
+    const pairs = findContrastPairs(messages, { role: undefined, limit: 24 });
+    const elapsed = Date.now() - started;
+
+    expect(Array.isArray(pairs)).toBe(true);
+    // The work is bounded, so it is quick.
+    expect(elapsed).toBeLessThan(5000);
+  });
+
+  it("keeps the candidates inside the budget, however many speakers there are", () => {
+    /**
+     * The floor of ten candidates a speaker used to be the whole
+     * answer — and above a hundred and twenty speakers it made the
+     * budget *larger* rather than smaller: ten a speaker, five
+     * thousand speakers, fifty thousand candidates.
+     *
+     * And the search compares every pair of them, so that is a
+     * billion comparisons on the event loop, in the middle of a
+     * distillation, while the server answers nobody.
+     */
+    const candidates: Array<{ index: number; role: string }> = [];
+    for (let speaker = 0; speaker < 5000; speaker++) {
+      for (let line = 0; line < 10; line++) {
+        candidates.push({ index: speaker * 10 + line, role: `speaker-${speaker}` });
+      }
+    }
+
+    const kept = capPerRole(candidates, 400);
+    expect(kept.length).toBeLessThanOrEqual(1200);
+  });
+
+  it("finishes on a chat with five thousand speakers", () => {
+    const messages: any[] = [];
+    for (let speaker = 0; speaker < 5000; speaker++) {
+      for (let line = 0; line < 20; line++) {
         messages.push({
           role: `speaker-${speaker}`,
           content: `消息 ${speaker}-${line} 一点不一样的话`,

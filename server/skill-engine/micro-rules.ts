@@ -190,8 +190,12 @@ const MAX_CANDIDATES_IN_TOTAL = 1200;
 
 /**
  * Keeps the most recent candidates of each speaker.
+ *
+ * Exported so the test can check the budget itself: a test that only
+ * timed the search would pass while the search was doing a billion
+ * comparisons.
  */
-function capPerRole<T extends { index: number; role: string }>(
+export function capPerRole<T extends { index: number; role: string }>(
   candidates: T[],
   cap: number,
   totalCap: number = MAX_CANDIDATES_IN_TOTAL,
@@ -207,19 +211,39 @@ function capPerRole<T extends { index: number; role: string }>(
    *
    * Everybody gets enough to be worth mining, and nobody gets more
    * than the budget can carry.
+   *
+   * The floor of ten used to be the whole answer — and above a
+   * hundred and twenty speakers it made the budget *larger* rather
+   * than smaller: ten a speaker, five thousand speakers, fifty
+   * thousand candidates. And the search compares every pair of them, so
+   * that is a billion comparisons on the event loop, in the middle of
+   * a distillation, while the server answers nobody.
+   *
+   * So the floor is one — and the total is a ceiling, checked as the
+   * candidates are taken, not hoped for.
    */
   const share = Math.max(
-    10,
+    1,
     Math.min(cap, Math.floor(totalCap / Math.max(1, perRole.size))),
   );
+  /**
+   * The speakers, most recent first.
+   *
+   * So that when the budget runs out, it is the oldest speakers that
+   * are left out — a rule is read off the conversation as it is now.
+   */
+  const lists = Array.from(perRole.values()).sort(
+    (left, right) =>
+      right[right.length - 1].index - left[left.length - 1].index,
+  );
   const kept: T[] = [];
-  for (const list of perRole.values()) {
-    if (list.length <= share) {
-      kept.push(...list);
-      continue;
-    }
+  let budget = totalCap;
+  for (const list of lists) {
+    if (budget <= 0) break;
+    const take = Math.min(share, list.length, budget);
     // The most recent ones: the last ones in the transcript.
-    kept.push(...list.slice(list.length - share));
+    kept.push(...list.slice(list.length - take));
+    budget -= take;
   }
   return kept.sort((a, b) => a.index - b.index);
 }
