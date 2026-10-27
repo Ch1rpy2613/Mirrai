@@ -86,6 +86,34 @@ export const ERRORS = {
     zh: "找不到这个文件",
     en: "That file could not be found",
   },
+  /**
+   * The collector said nothing.
+   *
+   * The messages the collectors fail with were written in English, in
+   * the middle of the code — so a Chinese-first app answered a failure
+   * in the wrong language, and the one sentence that explains what
+   * went wrong was the one sentence the user could not read.
+   */
+  "errors.collectorNoOutput": {
+    zh: "采集器「{{source}}」没有输出任何内容。",
+    en: "The collector \"{{source}}\" produced no output.",
+  },
+  /**
+   * The collector printed more than the cap allows.
+   *
+   * The advice used to be to "raise the limit" — and the limit is a
+   * constant of the program, so there was nothing the user could do.
+   * The advice is to collect a smaller range, which is the thing they
+   * can actually do.
+   */
+  "errors.collectorOutputTruncated": {
+    zh: "采集器「{{source}}」输出的内容超过了上限，在中途被截断，无法读取。请采集更小的时间范围。开头的内容：{{preview}}",
+    en: "The collector \"{{source}}\" printed more than the output limit allows, so it was cut off in the middle and could not be read. Collect a smaller range. The first 200 characters: {{preview}}",
+  },
+  "errors.collectorOutputUnreadable": {
+    zh: "采集器「{{source}}」的输出无法解析成消息。开头的内容：{{preview}}",
+    en: "The output of the collector \"{{source}}\" could not be parsed into messages. The first 200 characters: {{preview}}",
+  },
   "errors.collectorNeedsFile": {
     zh: "这个来源需要一个文件：请先上传要导入的聊天记录或邮件",
     en: "This source needs a file: upload the chat log or the mail export first",

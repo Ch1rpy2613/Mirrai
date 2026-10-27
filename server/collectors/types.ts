@@ -484,6 +484,7 @@ async function collectViaOutputDir(
       target: input.target,
       limit: input.limit,
       timeZone: input.timezone,
+      locale: input.locale,
     });
   } finally {
     rmSync(outputDir, { recursive: true, force: true });
@@ -776,6 +777,7 @@ const emailConnector: SourceConnector = {
       limit: input.limit,
       truncated: stdoutTruncated,
       timeZone: input.timezone,
+      locale: input.locale,
     });
   },
 };
@@ -836,6 +838,7 @@ const wechatExportConnector: SourceConnector = {
       limit: input.limit,
       truncated: stdoutTruncated,
       timeZone: input.timezone,
+      locale: input.locale,
     });
   },
 };

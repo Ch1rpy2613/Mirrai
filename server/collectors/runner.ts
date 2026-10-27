@@ -331,6 +331,13 @@ export interface NormaliseCollectorOptions {
   target?: string;
   /** Hard cap applied after parsing. */
   limit?: number;
+  /**
+   * The reader's language.
+   *
+   * The failures are said to the person who asked for the collection —
+   * and they used to be written in English, in the middle of the code.
+   */
+  locale?: "zh" | "en";
 }
 
 /** A `[PROGRESS] 0.42` line, as the collectors print it. */
@@ -877,8 +884,9 @@ export function normaliseCollectorOutput(
   opts: NormaliseCollectorOptions = {},
 ): CollectResult {
   const text = stripProgressLines(raw ?? "").trim();
+  const locale = opts.locale ?? "zh";
   if (!text) {
-    throw new Error(`Collector "${source}" produced no output`);
+    throw new Error(copy(locale, "errors.collectorNoOutput", { source }));
   }
 
   const normalised = parseNormalisedPayload(text, source, opts);
@@ -887,16 +895,25 @@ export function normaliseCollectorOutput(
   const parsed = parseCollectorMessages(text, source, opts.target, opts.timeZone);
   if (parsed.length === 0) {
     if (opts.truncated) {
+      /**
+       * The advice is what the user can do.
+       *
+       * It used to say "collect a smaller range, or raise the limit" —
+       * and the limit is a constant of the program, so there was
+       * nothing there for the user to raise.
+       */
       throw new Error(
-        `Collector "${source}" printed more than the output limit allows, ` +
-          `so it was cut off in the middle and could not be read. ` +
-          `Collect a smaller range, or raise the limit. ` +
-          `First 200 characters: ${text.slice(0, 200)}`,
+        copy(locale, "errors.collectorOutputTruncated", {
+          source,
+          preview: text.slice(0, 200),
+        }),
       );
     }
     throw new Error(
-      `Collector "${source}" output could not be parsed into messages. ` +
-        `First 200 characters: ${text.slice(0, 200)}`,
+      copy(locale, "errors.collectorOutputUnreadable", {
+        source,
+        preview: text.slice(0, 200),
+      }),
     );
   }
 

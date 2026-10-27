@@ -142,6 +142,35 @@ describe("normaliseCollectorOutput", () => {
     expect(() => normaliseCollectorOutput("", "slack")).toThrow(/slack/);
   });
 
+  it("says the failure in the reader's language", () => {
+    /**
+     * The failures are said to the person who asked for the collection.
+     *
+     * They used to be written in English in the middle of the code — so
+     * a Chinese-first app answered a failure in the wrong language, and
+     * the one sentence that explains what went wrong was the one
+     * sentence the user could not read.
+     */
+    expect(() => normaliseCollectorOutput("", "slack", { locale: "zh" })).toThrow(
+      /采集器/,
+    );
+    expect(() => normaliseCollectorOutput("", "slack", { locale: "en" })).toThrow(
+      /collector/i,
+    );
+  });
+
+  it("tells the user what they can do when the output was cut off", () => {
+    // The advice used to be to "raise the limit" — and the limit is a
+    // constant of the program, so there was nothing there for the user
+    // to raise.
+    expect(() =>
+      normaliseCollectorOutput("这不是任何已知格式", "slack", { truncated: true, locale: "zh" }),
+    ).toThrow(/更小的时间范围/);
+    expect(() =>
+      normaliseCollectorOutput("这不是任何已知格式", "slack", { truncated: true, locale: "en" }),
+    ).toThrow(/smaller range/i);
+  });
+
   it("marks the result as truncated when the limit is reached", () => {
     const raw = JSON.stringify([
       { role: "user", content: "1" },
