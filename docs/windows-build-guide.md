@@ -35,7 +35,9 @@
 powershell -ExecutionPolicy Bypass -File scripts\build-windows-app.ps1
 
 # 生成安装包
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\installer.iss
+# 版本号从 package.json 读取，不要在 installer.iss 里再抄一份
+$version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\installer.iss "/DMyAppVersion=$version"
 ```
 
 在 CI 上两者都由 `.github/workflows/release.yml` 完成：打 `v*` tag 就会构建两个平台并把产物挂到 Release。
@@ -173,6 +175,8 @@ hoisted 之后 `.pnpm` 仍然存在（那是 store），但顶层已经是 npm �
 ### 编译路径里的 `..`
 
 `Source: "..\build-windows\..."` 会把 `..` 原样拼进每一个文件名的中间。**CI 里用 `/D` 传绝对路径**（`/DMyAppBundle=...`），脚本里用 `#ifndef` 保护。
+
+版本号同理：`/DMyAppVersion=...` 由构建脚本从 `package.json` 读取后传入，`installer.iss` 里的兜底值也由测试盯着，不会悄悄过期。
 
 ### Inno Setup 自带的 Setup.ico 缺失
 

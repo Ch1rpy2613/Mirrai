@@ -145,6 +145,36 @@ describe("the packaged app", () => {
     }
   });
 
+  it("builds the Windows installer with the app's own version", () => {
+    // The version was a copy in the installer script — and it went stale
+    // the moment the app was released: the installer said 1.3.0 whatever
+    // the app was.
+    const iss = readFileSync(path.join(ROOT, "installer", "installer.iss"), "utf-8");
+    const packageJson = JSON.parse(
+      readFileSync(path.join(ROOT, "package.json"), "utf-8"),
+    ) as { version?: string };
+    // The version is passed in by the build.
+    expect(iss).toMatch(/#ifndef MyAppVersion/);
+    // And the fallback is the app's own version, so it cannot go stale
+    // without the test saying so.
+    expect(iss).toContain(`#define MyAppVersion "${packageJson.version}"`);
+
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf-8");
+    expect(workflow).toContain("/DMyAppVersion=$version");
+  });
+
+  it("does not point the installer's shortcut at a file that may not be there", () => {
+    // The GUI launcher needs the .NET SDK, and the build skips it when
+    // the SDK is not there. A shortcut to a file that is not there
+    // starts nothing at all.
+    const iss = readFileSync(path.join(ROOT, "installer", "installer.iss"), "utf-8");
+    expect(iss).toContain("Check: LauncherPresent");
+    expect(iss).toContain("Check: not LauncherPresent");
+    // And the build refuses to make an installer from a bundle without it.
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf-8");
+    expect(workflow).toMatch(/Mirrai\.exe[\s\S]{0,400}throw/);
+  });
+
   it("stops when the schema cannot be synchronised", () => {
     // `push` applies the difference between the schema and the live
     // database — so a failure means the two still disagree, and the app

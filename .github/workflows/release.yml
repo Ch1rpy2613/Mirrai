@@ -98,9 +98,22 @@ jobs:
             $iscc = Get-ChildItem -Path $paths -ErrorAction SilentlyContinue | Select-Object -First 1
           }
           if (-not $iscc) { throw "Inno Setup was not found." }
+          # The version is the app's own, out of package.json — not a copy
+          # in the installer script that goes stale the moment the app is
+          # released.
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if (-not $version) { throw "The app's version could not be read from package.json." }
+          # The GUI launcher is what the Start menu shortcut points at, and
+          # it is built with the .NET SDK. If it is not there, the install
+          # would have a shortcut that starts nothing.
+          $launcher = Join-Path $PWD "build-windows\Mirrai-Windows-x64\Mirrai.exe"
+          if (-not (Test-Path $launcher)) {
+            throw "The GUI launcher is missing from the bundle ($launcher), so the installer's shortcut would point at nothing."
+          }
           # Absolute paths, so that no ".." ends up in the middle of the file
           # names the compiler opens.
           & $iscc.FullName installer\installer.iss `
+            "/DMyAppVersion=$version" `
             "/DMyAppBundle=$($PWD.Path)\build-windows\Mirrai-Windows-x64" `
             "/DMyAppOutputDir=$($PWD.Path)\build-windows" `
             "/DMyAppLicense=$($PWD.Path)\LICENSE"

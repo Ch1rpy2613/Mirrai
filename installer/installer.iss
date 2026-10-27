@@ -6,10 +6,20 @@
 ; administrator rights are needed and PostgreSQL is never started elevated.
 
 #define MyAppName "Mirrai"
-#define MyAppVersion "1.3.0"
+; The version is the app's own — it is passed in by the build, out of
+; package.json. The number here was a copy, and it went stale the moment
+; the app was released: the installer said 1.3.0 whatever the app was.
+; The fallback is only for a hand-run of the compiler.
+#ifndef MyAppVersion
+  #define MyAppVersion "1.3.0"
+#endif
 #define MyAppPublisher "Ch1rpy2613"
 #define MyAppURL "https://github.com/Ch1rpy2613/Mirrai"
 #define MyAppExeName "Mirrai.exe"
+; The command script is always in the bundle. It is what starts the app
+; when the GUI launcher could not be built — the build needs the .NET SDK
+; for that, and says so when it is not there.
+#define MyAppCmdName "Mirrai.cmd"
 
 ; The build passes these in as absolute paths. A relative path that climbs out
 ; of the script directory ends up in the middle of every file name the
@@ -67,12 +77,29 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#MyAppBundle}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+; The shortcut points at the GUI launcher when the bundle has one, and at
+; the command script when it does not. It used to point at the launcher
+; either way — and a shortcut to a file that is not there starts nothing
+; at all, so an install built without the .NET SDK could not be started
+; from the Start menu.
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Check: LauncherPresent
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppCmdName}"; Check: not LauncherPresent
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Check: LauncherPresent
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppCmdName}"; Tasks: desktopicon; Check: not LauncherPresent
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent; Check: LauncherPresent
+Filename: "{app}\{#MyAppCmdName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent; Check: not LauncherPresent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\app\node_modules"
+
+[Code]
+{ Whether the bundle has the GUI launcher.
+  The build needs the .NET SDK to make one, and skips it when the SDK is
+  not there — so the installer cannot assume it is there. }
+function LauncherPresent: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}') + '\' + '{#MyAppExeName}');
+end;
