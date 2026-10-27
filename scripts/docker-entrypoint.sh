@@ -2,11 +2,23 @@
 set -e
 
 echo "[Mirrai] Waiting for database..."
+# The wait is bounded.
+#
+# The loop had no limit — so a database that never came up (an address
+# that is wrong, a password that no longer fits, a network that is not
+# there yet) left the container starting for ever, saying "waiting for
+# database" and never saying why.
+attempt=0
 until node -e "
 const { Client } = require('pg');
 const c = new Client({ connectionString: process.env.DATABASE_URL });
 c.connect().then(() => c.end()).then(() => process.exit(0)).catch(() => process.exit(1));
 " 2>/dev/null; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 60 ]; then
+    echo "[Mirrai] The database did not become available after 120 seconds." >&2
+    exit 1
+  fi
   sleep 2
 done
 

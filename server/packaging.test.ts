@@ -119,6 +119,15 @@ describe("the packaged app", () => {
     }
   });
 
+  it("gives up on a database that never comes up", () => {
+    // The wait had no limit — so a database that never came up left
+    // the container starting for ever, saying "waiting for database"
+    // and never saying why.
+    const docker = readFileSync(path.join(ROOT, "scripts/docker-entrypoint.sh"), "utf-8");
+    expect(docker).toMatch(/attempt/);
+    expect(docker).toMatch(/exit 1/);
+  });
+
   it("stops when the data migrations fail", () => {
     // A failed data migration is exactly the case where the schema and
     // the data disagree. All three entrypoints used to carry on and
