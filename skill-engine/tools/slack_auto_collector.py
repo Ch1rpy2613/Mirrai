@@ -634,7 +634,12 @@ def _is_noise(text: str) -> bool:
     # 去掉 Slack 特殊格式后几乎为空
     cleaned = re.sub(r"<[^>]+>", "", text).strip()
     cleaned = re.sub(r":[a-z_]+:", "", cleaned).strip()
-    return len(cleaned) < 2
+    # Empty — and not "short".
+    #
+    # It was "shorter than two characters": so a one-character message
+    # was thrown away. "好", "嗯", "k" — a person wrote them, and the
+    # collector is building the record of what they said.
+    return len(cleaned) == 0
 
 
 def _format_ts(ts: str) -> str:
