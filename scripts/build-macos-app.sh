@@ -37,6 +37,36 @@ DMG_NAME="Mirrai-macOS-${NODE_ARCH}"
 NODE_TARBALL="node-v${NODE_VERSION}-darwin-${NODE_ARCH}.tar.gz"
 NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TARBALL}"
 
+# ─── The checksum of the Node.js archive ──────────────────────────────────────
+#
+# The archive is downloaded and then shipped inside the app, so what it
+# contains ends up on the user's own machine.
+#
+# It was not checked at all: the download went straight into the app.
+# So a changed or substituted archive stopped the build nowhere — it
+# was built, packaged and handed out.
+#
+# The checksum is pinned per architecture, because the two builds are
+# two different files. It comes from the Node.js project's own
+# SHASUMS256.txt.
+case "$NODE_ARCH" in
+  arm64) NODE_SHA256="89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7" ;;
+  x64) NODE_SHA256="d132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035" ;;
+  *) die "No pinned checksum for Node.js on ${NODE_ARCH}" ;;
+esac
+
+# The SHA-256 of a file, on either kind of machine.
+#
+# macOS has `shasum` and no `sha256sum`; Linux has `sha256sum` and
+# maybe no `shasum`. So both are tried.
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
 # ─── Preflight checks ───────────────────────────────────────────────────────
 log "Checking prerequisites..."
 
@@ -78,6 +108,20 @@ mkdir -p "$NODE_TMP"
 if [ ! -f "$BUILD_DIR/$NODE_TARBALL" ]; then
   curl -fSL "$NODE_URL" -o "$BUILD_DIR/$NODE_TARBALL"
 fi
+
+# The archive is checked before it is unpacked.
+#
+# A changed or substituted download stops the build here, rather than
+# being shipped inside somebody's app.
+log "Checking the Node.js archive..."
+NODE_ACTUAL_SHA256="$(sha256_of "$BUILD_DIR/$NODE_TARBALL")"
+if [ "$NODE_ACTUAL_SHA256" != "$NODE_SHA256" ]; then
+  die "The Node.js archive does not match the pinned checksum.
+  expected: $NODE_SHA256
+  actual:   $NODE_ACTUAL_SHA256"
+fi
+log "Node.js archive verified (sha256 $NODE_ACTUAL_SHA256)."
+
 tar -xzf "$BUILD_DIR/$NODE_TARBALL" -C "$NODE_TMP" --strip-components=1
 
 mkdir -p "$RESOURCES/node/bin"

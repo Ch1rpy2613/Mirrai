@@ -22,7 +22,7 @@ import {
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
-import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeySince, zonedDayKeyWindowStart } from "@shared/timezone";
+import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
 import { userDayColumn, userHourColumn } from "./_core/user-day";
 import { dayShiftMinutes, zonedDayStart } from "@shared/timezone";
 
@@ -3455,8 +3455,17 @@ export async function getRecentEmotionTrend(
 ) {
   const db = await getDb();
   if (!db) return [];
-  // The user's own calendar, like the rows themselves.
-  const since = zonedDayKeySince(days, timezone);
+  /**
+   * The user's own calendar, like the rows themselves.
+   *
+   * And the window is the same length as every other one on the page:
+   * `zonedDayKeySince` is the day `days` days back, which opens a
+   * window of N+1 days — so the emotion chart covered one day more
+   * than it said, and one day more than the chart of daily messages
+   * beside it. The two halves of the same page were on two different
+   * ranges.
+   */
+  const since = zonedDayKeyWindowStart(days, timezone);
   return db.select({ emotionalState: emotionSnapshots.emotionalState })
     .from(emotionSnapshots)
     .where(and(

@@ -20,9 +20,19 @@ $NodeVersion = "24.22.1"
 $NodeArch = "x64"
 $NodeZip = "node-v${NodeVersion}-win-${NodeArch}.zip"
 $NodeUrl = "https://nodejs.org/dist/v${NodeVersion}/${NodeZip}"
+# The Node.js archive is checked before it is unpacked.
+#
+# It was not checked at all: the download went straight into the bundle,
+# so a changed or substituted archive stopped the build nowhere — it was
+# built, packaged and handed out. The checksum comes from the Node.js
+# project's own SHASUMS256.txt.
+$NodeSha256 = "d2046d28c2c3dcd211ac5145c0bf30e2047ef9dfb306693c8c6e2eccd8b95fa5"
 
 $PgVersion = "16.4"
 $PgUrl = "https://get.enterprisedb.com/postgresql/postgresql-${PgVersion}-1-windows-x64-binaries.zip"
+# The PostgreSQL archive is checked too, for the same reason: it is
+# unpacked into the bundle and shipped.
+$PgSha256 = "3508d8f085bc3980f38211a82e3f31e5fcae9952105d3dc2f8be67b64a822baa"
 
 # Redis has no official Windows build. This is the community port that has
 # been the Windows Redis for years; the version and the checksum are pinned,
@@ -93,6 +103,14 @@ $NodeZipPath = Join-Path $BuildDir $NodeZip
 if (-not (Test-Path $NodeZipPath)) {
     Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeZipPath
 }
+
+Log "Checking the Node.js archive..."
+$NodeHash = (Get-FileHash -Path $NodeZipPath -Algorithm SHA256).Hash.ToLower()
+if ($NodeHash -ne $NodeSha256) {
+    Die "The Node.js archive does not match the pinned checksum.`n  expected: $NodeSha256`n  actual:   $NodeHash"
+}
+Log "Node.js archive verified (sha256 $NodeHash)."
+
 Expand-Archive -Path $NodeZipPath -DestinationPath (Join-Path $BuildDir "node-tmp") -Force
 # The archive unpacks into a "node-v<version>-win-<arch>" directory; take its
 # contents, not the directory itself.
@@ -111,6 +129,14 @@ $PgZipPath = Join-Path $BuildDir "postgresql-win.zip"
 if (-not (Test-Path $PgZipPath)) {
     Invoke-WebRequest -Uri $PgUrl -OutFile $PgZipPath
 }
+
+Log "Checking the PostgreSQL archive..."
+$PgHash = (Get-FileHash -Path $PgZipPath -Algorithm SHA256).Hash.ToLower()
+if ($PgHash -ne $PgSha256) {
+    Die "The PostgreSQL archive does not match the pinned checksum.`n  expected: $PgSha256`n  actual:   $PgHash"
+}
+Log "PostgreSQL archive verified (sha256 $PgHash)."
+
 Log "Extracting PostgreSQL..."
 Expand-Archive -Path $PgZipPath -DestinationPath (Join-Path $BuildDir "pg-tmp") -Force
 

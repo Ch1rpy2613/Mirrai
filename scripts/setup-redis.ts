@@ -35,7 +35,20 @@ const USUAL_PATHS = [
   "/usr/bin",
   "/usr/local/redis/bin",
   "/opt/local/bin",
+  // Windows, where the installer and the package managers live.
+  "C:\\Program Files\\Redis",
+  "C:\\Program Files (x86)\\Redis",
+  "C:\\ProgramData\\chocolatey\\bin",
 ];
+
+/**
+ * The separator between the directories in `PATH`.
+ *
+ * It is `;` on Windows and `:` everywhere else. It used to be `:` on
+ * every machine — so on Windows the whole `PATH` was treated as one
+ * very long directory name, and the binary was never found.
+ */
+const PATH_SEPARATOR = process.platform === "win32" ? ";" : ":";
 
 /** Whether the script should only report, and not install anything. */
 const CHECK_ONLY = process.argv.includes("--check");
@@ -49,7 +62,7 @@ function say(line: string): void {
 
 /** The `redis-server` binary, if the machine has one. */
 function findRedisServer(): string | null {
-  for (const directory of (process.env.PATH ?? "").split(":").filter(Boolean)) {
+  for (const directory of (process.env.PATH ?? "").split(PATH_SEPARATOR).filter(Boolean)) {
     const candidate = join(directory, "redis-server");
     if (existsSync(candidate)) return candidate;
   }

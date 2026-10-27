@@ -22,13 +22,25 @@ Usage:
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLIENT_SRC = os.path.join(ROOT, "client", "src")
 OUT_DIR = os.path.join(ROOT, "client", "public", "fonts")
 OUT_NAME = "MiSans-subset.woff2"
+
+# Where the interface's words live.
+#
+# It used to be `client/src` only. But the interface reads a good part of
+# its words out of `shared/` — the imperfection profiles, the relationship
+# phases, the user's own moods — and those words have Chinese in them
+# too. So a character that only appears there was not in the subset, and
+# the interface showed a box where the word should have been.
+SOURCE_DIRS = (
+    os.path.join(ROOT, "client", "src"),
+    os.path.join(ROOT, "shared"),
+)
 
 # The font to subset.
 #
@@ -63,14 +75,17 @@ CJK_RE = re.compile(r"[　-〿㐀-䶿一-鿿＀-￯]")
 
 def collect() -> str:
     chars = set(EXTRA)
-    for base, _dirs, files in os.walk(CLIENT_SRC):
-        for name in files:
-            if not name.endswith((".ts", ".tsx", ".html")):
-                continue
-            with open(os.path.join(base, name), encoding="utf-8", errors="ignore") as fh:
-                for ch in fh.read():
-                    if CJK_RE.match(ch):
-                        chars.add(ch)
+    for source_dir in SOURCE_DIRS:
+        if not os.path.isdir(source_dir):
+            continue
+        for base, _dirs, files in os.walk(source_dir):
+            for name in files:
+                if not name.endswith((".ts", ".tsx", ".html")):
+                    continue
+                with open(os.path.join(base, name), encoding="utf-8", errors="ignore") as fh:
+                    for ch in fh.read():
+                        if CJK_RE.match(ch):
+                            chars.add(ch)
     return "".join(sorted(chars))
 
 
@@ -93,8 +108,25 @@ def main() -> int:
     os.makedirs(OUT_DIR, exist_ok=True)
     out = os.path.join(OUT_DIR, OUT_NAME)
 
+    # Where pyftsubset is.
+    #
+    # It was written down — so the script failed with a file-not-found
+    # from the middle of a subprocess, on a machine that had it
+    # somewhere else, or had it under a different name.
+    subsetter = os.environ.get("MIRRAI_PYFTSUBSET", "").strip()
+    if not subsetter:
+        candidate = os.path.join(ROOT, ".live-test", "fontenv", "bin", "pyftsubset")
+        subsetter = candidate if os.path.exists(candidate) else shutil.which("pyftsubset") or ""
+    if not subsetter or not os.path.exists(subsetter):
+        print(
+            "ERROR: pyftsubset was not found — install fonttools, or set "
+            "MIRRAI_PYFTSUBSET to the path of the pyftsubset binary",
+            file=sys.stderr,
+        )
+        return 1
+
     cmd = [
-        os.path.join(ROOT, ".live-test", "fontenv", "bin", "pyftsubset"),
+        subsetter,
         source,
         f"--text={chars}",
         "--flavor=woff2",
