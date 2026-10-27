@@ -51,11 +51,26 @@ function dayLabel(dayKey: string, locale: string): string {
 
 export default function Analytics() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, error: authError } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
   const [days, setDays] = useState(30);
 
-  const { data, isLoading, isError } = trpc.analytics.overview.useQuery({ days }, { enabled: isAuthenticated });
+  const { data, isLoading, isPending, isError } = trpc.analytics.overview.useQuery(
+    { days },
+    { enabled: isAuthenticated },
+  );
+
+  /**
+   * Whether the numbers are known.
+   *
+   * The query is disabled until the sign-in request answers — and if
+   * that request *fails*, it stays disabled for good. React Query then
+   * reports neither "loading" nor "error": there is no data and no
+   * attempt to get any. So the page fell through to the empty state
+   * and said "0 messages" about the user's own history.
+   */
+  const failed = isError || Boolean(authError);
+  const busy = isLoading || (isPending && !failed);
 
   const stats = data?.stats || { totalMessages: 0, activeDays: 0, longestStreak: 0, avgPerDay: 0 };
 
@@ -153,7 +168,7 @@ export default function Analytics() {
             charts while the query was in flight — which is
             indistinguishable from "you have no data". The user
             concluded that their history was gone. */}
-        {isLoading ? (
+        {busy ? (
           <p className="text-sm text-muted-foreground" role="status">
             {t("common.loading")}
           </p>
@@ -165,7 +180,7 @@ export default function Analytics() {
           four empty charts as a person with no history — so the app
           made a false claim about the user's own past.
         */}
-        {isError ? (
+        {failed ? (
           <p className="text-sm text-destructive" role="alert">
             {t("common.error")}
           </p>
@@ -177,10 +192,10 @@ export default function Analytics() {
           animate="visible"
           variants={stagger}
         >
-          <StatCard label={t("analytics.totalMessages")} value={isLoading || isError ? "—" : stats.totalMessages} />
-          <StatCard label={t("analytics.activeDays")} value={isLoading || isError ? "—" : stats.activeDays} />
-          <StatCard label={t("analytics.longestStreak")} value={isLoading || isError ? "—" : t("analytics.streakDays", { count: stats.longestStreak })} />
-          <StatCard label={t("analytics.avgMessages")} value={isLoading || isError ? "—" : stats.avgPerDay} />
+          <StatCard label={t("analytics.totalMessages")} value={busy || failed ? "—" : stats.totalMessages} />
+          <StatCard label={t("analytics.activeDays")} value={busy || failed ? "—" : stats.activeDays} />
+          <StatCard label={t("analytics.longestStreak")} value={busy || failed ? "—" : t("analytics.streakDays", { count: stats.longestStreak })} />
+          <StatCard label={t("analytics.avgMessages")} value={busy || failed ? "—" : stats.avgPerDay} />
         </motion.div>
 
         <ChartCard title={t("analytics.dailyMessages")}>
@@ -225,7 +240,7 @@ export default function Analytics() {
              * user's own past. The failure is said above the charts.
              */
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {isError ? t("common.error") : isLoading ? t("common.loading") : t("analytics.myMoodEmpty")}
+              {failed ? t("common.error") : busy ? t("common.loading") : t("analytics.myMoodEmpty")}
             </p>
           )}
         </ChartCard>
@@ -273,7 +288,7 @@ export default function Analytics() {
             <div className="py-10 text-center">
               {/* Not "no data" when the answer never arrived. */}
               <p className="text-sm text-muted-foreground">
-                {isError ? t("common.error") : isLoading ? t("common.loading") : t("analytics.noData")}
+                {failed ? t("common.error") : busy ? t("common.loading") : t("analytics.noData")}
               </p>
             </div>
           ) : (
