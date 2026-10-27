@@ -156,7 +156,7 @@ function DiaryCard({ entry, onDelete, deleting }: { entry: any; onDelete: (id: n
 
 export default function Diary() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, user } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, user, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
   /**
    * The user's own clock.
@@ -187,7 +187,12 @@ export default function Diary() {
    * neither the button to write nor the note that there is nothing to
    * write about.
    */
-  const { data: personas, isError: personasFailed, refetch: refetchPersonas } = trpc.persona.list.useQuery(
+  const {
+    data: personas,
+    isError: personasFailed,
+    isLoading: personasLoading,
+    refetch: refetchPersonas,
+  } = trpc.persona.list.useQuery(
     undefined,
     { enabled: isAuthenticated },
   );
@@ -312,15 +317,27 @@ export default function Diary() {
           <motion.div variants={fadeUp} initial="hidden" animate="visible" className="empty-state">
             <p className="kicker kicker-accent">{t("diary.emptyKicker")}</p>
             <p className="empty-state-title">
+              {/**
+               * The list is on its way.
+               *
+               * "No personas yet — create one in the lobby first" is a
+               * claim about the user's own data, and it was made while
+               * the list was still being fetched: the query waits for
+               * the sign-in request to answer, so for at least one
+               * network round trip there was nothing on the screen but
+               * that sentence and a button back to the lobby.
+               */}
               {personasFailed
                 ? t("common.error")
-                : (personas || []).length === 0
-                  ? t("diary.emptyNoPersona")
-                  : t("diary.emptySelect")}
+                : personasLoading || authLoading
+                  ? t("common.loading")
+                  : (personas || []).length === 0
+                    ? t("diary.emptyNoPersona")
+                    : t("diary.emptySelect")}
             </p>
             {personasFailed ? (
               <Button className="mt-3" variant="outline" onClick={() => refetchPersonas()}>{t("common.retry")}</Button>
-            ) : (personas || []).length === 0 ? (
+            ) : (personas || []).length === 0 && !personasLoading && !authLoading ? (
               <Button className="mt-3" onClick={() => navigate("/")}>{t("errors.backHome")}</Button>
             ) : null}
           </motion.div>
