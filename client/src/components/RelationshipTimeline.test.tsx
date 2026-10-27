@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -100,6 +100,31 @@ describe("the relationship timeline", () => {
     render(<RelationshipTimeline personaId={7} />);
 
     expect(screen.getByText("2026/1/1")).toBeInTheDocument();
+  });
+
+  it("caps the date at the user's own today", () => {
+    /**
+     * The cap was the UTC day.
+     *
+     * So for a user whose day is ahead of Greenwich, the last
+     * selectable date was yesterday for the first hours of the day —
+     * and an event that happened today could not be recorded on the
+     * day it happened.
+     */
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Two in the morning in Greenwich is ten at night the day before
+    // in New York.
+    vi.setSystemTime(new Date("2026-03-14T02:00:00Z"));
+    try {
+      render(<RelationshipTimeline personaId={7} />);
+      // The form is behind the button that opens it.
+      const open = screen.getByRole("button", { name: translate("zh", "relationship.add") });
+      fireEvent.click(open);
+      const input = screen.getByLabelText(translate("zh", "relationship.happenedAt"));
+      expect(input).toHaveAttribute("max", "2026-03-13");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows what has been recorded, with its kind", () => {

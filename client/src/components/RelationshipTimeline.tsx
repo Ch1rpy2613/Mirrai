@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { formatInstantInZone } from "@/lib/dates";
+import { localDateKey, zonedDateKey } from "@shared/timezone";
 import { RELATIONSHIP_EVENT_KINDS, type RelationshipEventKind } from "@shared/user-side";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -165,7 +166,16 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
               id="relationship-happened-at"
               type="date"
               value={happenedAt}
-              max={new Date().toISOString().slice(0, 10)}
+              /**
+               * The last day is the user's own today.
+               *
+               * It was the UTC day — so for a user whose day is ahead
+               * of Greenwich, the last selectable date was yesterday
+               * for the first hours of the day, and an event that
+               * happened today could not be recorded on the day it
+               * happened.
+               */
+              max={timezone ? zonedDateKey(new Date(), timezone) : localDateKey(new Date())}
               onChange={(e) => setHappenedAt(e.target.value)}
               className="h-9 rounded-md text-sm"
             />
