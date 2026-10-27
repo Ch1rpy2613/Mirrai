@@ -31,12 +31,58 @@ import { defaultRehypePlugins } from "streamdown";
 type RehypePlugin = (typeof defaultRehypePlugins)[keyof typeof defaultRehypePlugins];
 
 /**
+ * A node in the tree the rehype chain works on.
+ *
+ * Only the two things this module needs to know about.
+ */
+type HastNode = {
+  type: string;
+  value?: string;
+  children?: HastNode[];
+};
+
+/**
+ * Raw HTML becomes the text it is.
+ *
+ * Without the raw-HTML parser the HTML in a reply is never turned into
+ * elements — that is the whole defence, and it is a good one. But the
+ * sanitiser that comes after throws the HTML away, so a reply that
+ * contains any HTML at all said *nothing*: the bubble was empty, and
+ * the person on the other side had no idea what had been said.
+ *
+ * So the HTML is turned into text *before* the sanitiser sees it. It
+ * is then shown as the characters it is — which is what a chat bubble
+ * should do — and it can never become an element, because by the time
+ * anything else looks at it, it is text.
+ */
+function rawAsText() {
+  return (tree: HastNode): void => {
+    const walk = (node: HastNode): void => {
+      if (!node.children) return;
+      for (const child of node.children) {
+        if (child.type === "raw") {
+          // A text node carries the characters; a raw node carried the
+          // markup. The value stays; only the kind changes.
+          child.type = "text";
+        } else {
+          walk(child);
+        }
+      }
+    };
+    walk(tree);
+  };
+}
+
+/**
  * The rehype chain, without the raw-HTML parser.
  *
  * Exported so a test can assert that the raw parser really is gone —
  * and so the assertion is about the chain that is actually used, not
  * about a copy of it.
  */
-export const SAFE_REHYPE_PLUGINS: RehypePlugin[] = Object.values(
-  defaultRehypePlugins,
-).filter((plugin) => plugin !== defaultRehypePlugins.raw);
+export const SAFE_REHYPE_PLUGINS: RehypePlugin[] = [
+  rawAsText as unknown as RehypePlugin,
+  ...Object.values(defaultRehypePlugins).filter(
+    (plugin) => plugin !== defaultRehypePlugins.raw,
+  ),
+];
