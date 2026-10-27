@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useId, type CSSProperties, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useId, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -1840,12 +1840,11 @@ export default function Lobby() {
    * order could not be changed at all without a mouse — while the
    * button announced a menu.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!showSort) return;
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(`lobby-sort-${sortBy}`)?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
+    // The layout effect, not the ordinary one: the item is in the
+    // document by then, so the focus moves before the browser paints.
+    document.getElementById(`lobby-sort-${sortBy}`)?.focus();
   }, [showSort, sortBy]);
   /** The graduated personas are folded away by default. */
   const [showGraduated, setShowGraduated] = useState(false);
