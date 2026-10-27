@@ -56,6 +56,18 @@ def load_config() -> dict:
 
 
 def save_config(config: dict) -> None:
+    """
+    写配置——但是**合并**，不是覆盖。
+
+    这个文件和 `feishu_auto_collector.py` 共用。它原来是用一份全新的
+    字典把整个文件盖掉：所以设一次 App ID，就会把另一个采集器放在
+    同一个文件里的 `user_access_token` 和 `p2p_chat_id` 一起删掉——
+    而私聊采集正是靠那两个字段才开得着的。
+
+    而且它盖掉的时候还打印"✅ 配置完成！"。
+    """
+    existing = load_config()
+    merged = {**existing, **{k: v for k, v in config.items() if v not in ("", None)}}
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     # The file holds the app secret and the user token — so it is
     # readable by its owner only. The default mode is 0644, which is
@@ -63,7 +75,7 @@ def save_config(config: dict) -> None:
     #
     # The other three collectors chmod this same file to 0600; this one
     # did not, so running it *downgraded* the file they had protected.
-    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    CONFIG_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
     try:
         CONFIG_PATH.chmod(0o600)
     except OSError:
@@ -94,6 +106,18 @@ def setup_config() -> None:
 
     app_id = ask("App ID (cli_xxx): ")
     app_secret = ask("App Secret: ")
+
+    # 没有人回答，就什么都别写。
+    #
+    # 没有人在前面的时候 `ask()` 返回空——于是这个脚本会把一份
+    # `{"app_id": "", "app_secret": "", "mode": "app"}` 写进去，把原来
+    # 的密钥、用户令牌和私聊 id 全删掉，然后打印"✅ 配置完成！"。之后
+    # 自动采集拿不到 token，私聊采集也永远开不了——而界面上一个字的
+    # 线索都没有。
+    if not app_id and not app_secret:
+        print("没有人在前面，什么都没有改。", file=sys.stderr)
+        print("配置仍然是原来那一份。", file=sys.stderr)
+        return
 
     print("\n配置方式选择：")
     print("  [1] App Token（应用权限，需要在飞书后台开通对应权限）")

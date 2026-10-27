@@ -19,10 +19,31 @@ from pathlib import Path
 from datetime import datetime
 
 
+def read_text_any(path: str) -> str:
+    """
+    读一个导出文件——不管它是什么编码。
+
+    它原来只读 UTF-8：一份 GBK 的导出（中文 Windows 上的微信导出就是
+    这个）会抛 UnicodeDecodeError，整个解析死了，用户拿到的是"采集器
+    「feishu_parser.py」没有跑完（退出码 1）"，而屏幕上一个字也没有说
+    是编码的问题。
+
+    所以这里按顺序试：UTF-8 先试（它有严格的规则，试不出来的就不是
+    它），然后 GB18030，最后用替换字符兜底——一个错字比一份读不出来
+    的导出好。
+    """
+    raw = Path(path).read_bytes()
+    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def parse_feishu_json(file_path: str, target_name: str) -> list[dict]:
     """解析飞书官方导出的 JSON 格式消息"""
-    with open(file_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = json.loads(read_text_any(file_path))
 
     messages = []
 
@@ -92,8 +113,7 @@ def parse_feishu_txt(file_path: str, target_name: str) -> list[dict]:
     """解析手动整理的 TXT 格式消息（格式：时间 发送人：内容）"""
     messages = []
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+    lines = read_text_any(file_path).splitlines()
 
     # 匹配格式：2024-01-01 10:00 张三：消息内容
     pattern = re.compile(
