@@ -3322,7 +3322,21 @@ export const appRouter = router({
       }),
 
     updateExtraConfig: protectedProcedure
-      .input(z.object({ extraConfig: z.record(z.string(), z.any()) }))
+      .input(z.object({
+        /**
+         * Bounded, like the other write path.
+         *
+         * This one accepted any record of any size — so the fifty
+         * megabyte body limit became a fifty megabyte blob in the
+         * user's own configuration, which every read of the settings
+         * brought back and every chat turn read again.
+         */
+        extraConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).refine(
+          (value) => Object.keys(value).length <= 50 &&
+            JSON.stringify(value).length <= 16_000,
+          "The extra configuration is too large",
+        ),
+      }))
       .mutation(async ({ ctx, input }) => {
         const config = await getDefaultLlmConfig(ctx.user.id);
         if (!config) throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.noDefaultProvider") });
