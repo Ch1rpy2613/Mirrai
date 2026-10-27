@@ -1138,6 +1138,14 @@ export const zh = {
     noMessagesThatDay: "这一天没有对话，没有可以写的东西。",
     recent: "最近日记",
     recentKicker: "近期",
+    /**
+     * How many diaries are not on the screen.
+     *
+     * The list is capped at the newest thirty, and it said nothing — so
+     * a persona with two hundred diaries read as if there were thirty,
+     * and the list looked like the whole history.
+     */
+    moreEntries: "这里只显示最近的 {{count}} 篇，更早的没有显示。",
     arc: "情绪弧线",
     deleteConfirm: "删除这篇日记？",
     hasEntry: "有日记",

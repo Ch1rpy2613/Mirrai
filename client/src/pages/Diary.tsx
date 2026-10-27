@@ -477,6 +477,21 @@ export default function Diary() {
                   <h2 className="section-title">{t("diary.recent")}</h2>
                   <span className="kicker">{t("diary.recentKicker")}</span>
                 </div>
+                {/**
+                    How many are not shown.
+
+                    The server caps the page at thirty, and the list said
+                    nothing — so a persona with two hundred diaries read
+                    as if there were thirty, and the list looked like the
+                    whole history.
+                    */}
+                {(entries.total ?? 0) > entries.items.length && (
+                  <p className="text-xs text-muted-subtle">
+                    {t("diary.moreEntries", {
+                      count: (entries.total ?? 0) - entries.items.length,
+                    })}
+                  </p>
+                )}
                 {entries.items.map((entry: any) => (
                   <button key={entry.id} onClick={() => setSelectedDate(entry.date)}
                     className="surface surface-interactive w-full text-left p-5">

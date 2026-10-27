@@ -1137,6 +1137,14 @@ export const en = {
     noMessagesThatDay: "There was no conversation that day, so there is nothing to write about.",
     recent: "Recent entries",
     recentKicker: "Latest",
+    /**
+     * How many diaries are not on the screen.
+     *
+     * The list is capped at the newest thirty, and it said nothing — so
+     * a persona with two hundred diaries read as if there were thirty,
+     * and the list looked like the whole history.
+     */
+    moreEntries: "Only the most recent {{count}} are shown here — the older ones are not.",
     arc: "Emotional arc",
     hasEntry: "Has a diary",
     deleteConfirm: "Delete this entry?",

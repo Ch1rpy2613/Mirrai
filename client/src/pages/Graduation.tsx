@@ -241,6 +241,22 @@ export default function Graduation() {
           >
             <h2 className="section-title mb-4">{t("graduationPage.timeline")}</h2>
             {/**
+             * How many are not shown.
+             *
+             * The server caps the list at the newest two hundred, and
+             * this said nothing — so a user with three hundred
+             * milestones saw two hundred, with no way of knowing that a
+             * hundred of the oldest were behind them. The record of
+             * their own relationship looked complete.
+             */}
+            {(eventsData?.total ?? 0) > events.length && (
+              <p className="text-xs text-muted-subtle mb-3">
+                {t("relationship.moreEntries", {
+                  count: (eventsData?.total ?? 0) - events.length,
+                })}
+              </p>
+            )}
+            {/**
              * The line down the side of the list.
              *
              * It used to be a `<div>` inside the `<ol>`, and only an
