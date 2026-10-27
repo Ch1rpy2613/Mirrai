@@ -3023,6 +3023,12 @@ export const appRouter = router({
         startPersonaDistillation({
           locale: ctx.locale,
           personaId: input.personaId,
+          // The provider the persona is pinned to.
+          //
+          // The other entry point passes it and this one did not — so a
+          // persona set to a local model was distilled with the user's
+          // default provider instead, and the material went there.
+          provider: (persona as any).llmProvider ?? undefined,
           userId: ctx.user.id,
           name: persona.name,
           characterFamily: input.characterFamily,
