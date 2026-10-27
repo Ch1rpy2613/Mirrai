@@ -60,6 +60,7 @@ import {
 } from "./micro-rules";
 import { copy, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
+import { storageToDataUrl } from "../storage";
 
 /**
  * How many lines of the upload are read for the memories.
@@ -249,8 +250,14 @@ export function skillBaseDir(characterFamily: CharacterFamily): string {
   return path.resolve(ENV.skillEngineDir, "skills", characterFamily);
 }
 
-/** Describes uploaded photos so they can contribute to the persona memories. */
-async function describeImages(
+/**
+ * Describes uploaded photos so they can contribute to the persona memories.
+ *
+ * Exported so the test can prove that the pictures are inlined before
+ * they are handed to the model — a test that only looked at the result
+ * would pass while the model was describing photos it had never seen.
+ */
+export async function describeImages(
   name: string,
   imageUrls: string[],
   providerName: string | undefined,
@@ -292,7 +299,40 @@ async function describeImages(
         text: copy(locale, "skillPrompts.pipeline.describeImages", { name }),
       },
     ];
+    /**
+     * The pictures are inlined, the way the chat path inlines them.
+     *
+     * What is stored is a *path* — "/uploads/personas/1/2/photo.png" —
+     * with no host name in it. A provider cannot fetch that: OpenAI
+     * answers "Invalid image URL" and the whole stage fails, and a
+     * local model quietly drops the picture and answers the text. So
+     * the model was asked to describe photos it had never seen, and it
+     * invented a description — which was then stored as a memory of
+     * the persona, shown in the editor and fed back into the prompt.
+     *
+     * Inlining works for every provider, needs no public host name (a
+     * self-hosted app on a home network has none), and keeps the
+     * picture off the internet.
+     */
+    const inlined: string[] = [];
     for (const url of imageUrls.slice(0, maxImages)) {
+      const dataUrl = await storageToDataUrl(url).catch(() => null);
+      if (dataUrl) inlined.push(dataUrl);
+    }
+    /**
+     * A picture that cannot be read is a picture that cannot be
+     * described.
+     *
+     * So the model is not asked about it at all: asking it to
+     * describe a picture it cannot see is how the invention happens.
+     */
+    if (inlined.length === 0) {
+      console.warn(
+        "[SkillEngine] The photos could not be read, so they were not described.",
+      );
+      return "";
+    }
+    for (const url of inlined) {
       content.push({ type: "image_url", url });
     }
 
