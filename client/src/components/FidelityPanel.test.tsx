@@ -63,6 +63,20 @@ vi.mock("@/contexts/LocaleContext", () => ({
   }),
 }));
 
+/**
+ * The user's own calendar.
+ *
+ * The dates on the panel were the browser's.
+ */
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, timezone: "America/New_York" },
+    isAuthenticated: true,
+    loading: false,
+    logout: vi.fn(),
+  }),
+}));
+
 import FidelityPanel from "./FidelityPanel";
 
 describe("the ruler and the timing", () => {

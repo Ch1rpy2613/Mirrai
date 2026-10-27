@@ -103,6 +103,18 @@ vi.mock("@/contexts/LocaleContext", () => ({
 
 import MicroRulesEditor from "./MicroRulesEditor";
 import OutboundLetters from "./OutboundLetters";
+/**
+ * The user's own calendar.
+ */
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, timezone: "America/New_York" },
+    isAuthenticated: true,
+    loading: false,
+    logout: vi.fn(),
+  }),
+}));
+
 import FidelityPanel from "./FidelityPanel";
 
 describe("the branches the interface takes", () => {

@@ -3,6 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
+import { formatInstantInZone } from "@/lib/dates";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 /**
  * What the app noticed.
@@ -17,6 +19,15 @@ import { toast } from "sonner";
  */
 export default function SafetyTransparency() {
   const { t, locale } = useLocale();
+  /**
+   * The user's own calendar.
+   *
+   * The dates on the assessments and on the events were the browser's
+   * — so the record of what the safety layer saw was in a different
+   * calendar from the rest of the app.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
   const utils = trpc.useUtils();
 
   /**
@@ -85,7 +96,7 @@ export default function SafetyTransparency() {
                       morning. */}
                   {assessment.createdAt && (
                     <span className="text-muted-subtle">
-                      {new Date(assessment.createdAt).toLocaleDateString(locale)}
+                      {formatInstantInZone(assessment.createdAt, locale, timezone)}
                     </span>
                   )}
                 </div>
@@ -133,7 +144,7 @@ export default function SafetyTransparency() {
                         `LetterBox` does it this way, so the same app
                         showed two different date formats depending on
                         which panel you were in. */}
-                    {new Date(event.createdAt).toLocaleDateString(locale)}
+                    {formatInstantInZone(event.createdAt, locale, timezone)}
                   </span>
                 </span>
                 {event.handled ? (

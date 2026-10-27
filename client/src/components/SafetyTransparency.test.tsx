@@ -51,6 +51,20 @@ vi.mock("@/contexts/LocaleContext", () => ({
   }),
 }));
 
+/**
+ * The user's own calendar.
+ *
+ * The dates on the panel were the browser's.
+ */
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { id: 1, timezone: "America/New_York" },
+    isAuthenticated: true,
+    loading: false,
+    logout: vi.fn(),
+  }),
+}));
+
 import SafetyTransparency from "./SafetyTransparency";
 
 /** A safety event, in the shape the server sends it. */
@@ -85,6 +99,20 @@ describe("the safety transparency panel", () => {
     expect(screen.getByText(translate("zh", "safetyPanel.events"))).toBeInTheDocument();
     expect(screen.getByText(translate("zh", "safetyPanel.eventTypes.usage"))).toBeInTheDocument();
     expect(screen.getByText(translate("zh", "safetyPanel.eventTypes.crisis"))).toBeInTheDocument();
+  });
+
+  it("shows the date in the user's own calendar", () => {
+    /**
+     * The record of what the safety layer saw was in the browser's
+     * calendar — so it was in a different one from the rest of the app.
+     */
+    events.data = {
+      events: [makeEvent({ id: 1, type: "usage", createdAt: "2026-01-02T03:04:00.000Z" })],
+    };
+    render(<SafetyTransparency />);
+
+    // Ten at night in New York is the next day in Shanghai.
+    expect(screen.getByText("2026/1/1")).toBeInTheDocument();
   });
 
   it("shows the assessments of the relationship", () => {

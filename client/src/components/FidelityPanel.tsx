@@ -4,6 +4,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Gauge, Timer, Play } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 /**
  * The ruler, and the timing.
@@ -48,20 +49,41 @@ function normaliseMetrics(raw: unknown): {
   };
 }
 
-/** The date of a run, in the reader's own calendar. */
-function formatRunDate(value: unknown, locale: string): string {
+/**
+ * The date of a run, in the reader's own calendar.
+ *
+ * The user's zone, not the browser's: the browser's zone and the zone
+ * the user has chosen are not always the same, and every other date on
+ * the app is read in the user's.
+ */
+function formatRunDate(value: unknown, locale: string, timeZone?: string | null): string {
   if (!value) return "";
   const date = new Date(value as string);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(locale === "en" ? "en" : "zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  try {
+    return new Intl.DateTimeFormat(locale === "en" ? "en" : "zh-CN", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      ...(timeZone ? { timeZone } : {}),
+    }).format(date);
+  } catch {
+    // A zone this browser does not know.
+    return date.toLocaleDateString(locale === "en" ? "en" : "zh-CN", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
 }
 
 export default function FidelityPanel({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  /**
+   * The user's own calendar.
+   */
+  const { user } = useAuth();
+  const timezone = (user as any)?.timezone ?? null;
 
   /**
    * What the likelihood gap says, in words.
@@ -249,8 +271,8 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
                 ? "fidelity.lastRunWithoutRules"
                 : "fidelity.lastRunWithRules",
             )}
-            {formatRunDate((latest?.run as any)?.createdAt, locale) && (
-              <> · {formatRunDate((latest?.run as any)?.createdAt, locale)}</>
+            {formatRunDate((latest?.run as any)?.createdAt, locale, timezone) && (
+              <> · {formatRunDate((latest?.run as any)?.createdAt, locale, timezone)}</>
             )}
           </p>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -328,7 +350,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
                           : "fidelity.lastRunWithRules",
                       )}
                     </span>
-                    <span>{formatRunDate(run.createdAt, locale)}</span>
+                    <span>{formatRunDate(run.createdAt, locale, timezone)}</span>
                     <span>
                       {t("fidelity.overlap")} {runMetrics.overlap.toFixed(3)} ·{" "}
                       {t("fidelity.emotion")} {Math.round(runMetrics.emotionAccuracy * 100)}%
