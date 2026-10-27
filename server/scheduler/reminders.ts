@@ -348,19 +348,27 @@ export async function deliverReminder(params: {
       return true;
     } catch (e) {
       console.warn(`[Reminders] Could not deliver on ${params.channel}:`, e);
-      // The claim was for the channel; take it back and let the reminder
-      // surface in the web client instead.
+      /**
+       * The claim moves to the web.
+       *
+       * It used to be given back and claimed again — two writes where
+       * one will do. And if the first write failed (and its error was
+       * swallowed), the second one hit the unique index and did
+       * nothing: so the reminder was neither sent nor shown, and the
+       * old claim stood for the rest of the day.
+       */
+      const moved = await db
+        .moveReminderToWeb(userId, reminder.dedupeKey)
+        .catch((e2) => {
+          console.warn("[Reminders] Could not move the reminder to the web:", e2);
+          return false;
+        });
+      if (moved) return true;
+      // The claim could not be moved, so the slot is given back and the
+      // next tick tries again — a reminder that cannot be delivered is
+      // worth another attempt.
       await db.forgetReminder(userId, reminder.dedupeKey).catch(() => undefined);
-      // And the web record is a new claim.
-      return db.recordReminder({
-        userId,
-        personaId: reminder.personaId,
-        channel: "web",
-        kind: reminder.kind,
-        text: reminder.text,
-        dedupeKey: reminder.dedupeKey,
-        scheduledFor: now,
-      });
+      return false;
     }
   }
 

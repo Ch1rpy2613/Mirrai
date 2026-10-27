@@ -13,6 +13,8 @@ const getPhotoReminderCandidates = vi.fn();
 const getChannelBindingsByUserId = vi.fn();
 const hasReminderDelivery = vi.fn();
 const recordReminder = vi.fn();
+const forgetReminder = vi.fn();
+const moveReminderToWeb = vi.fn();
 
 const getUserLocale = vi.fn();
 const getUserTimezone = vi.fn();
@@ -28,6 +30,8 @@ vi.mock("../db", () => ({
   getChannelBindingsByUserId: (...a: unknown[]) => getChannelBindingsByUserId(...a),
   hasReminderDelivery: (...a: unknown[]) => hasReminderDelivery(...a),
   recordReminder: (...a: unknown[]) => recordReminder(...a),
+  forgetReminder: (...a: unknown[]) => forgetReminder(...a),
+  moveReminderToWeb: (...a: unknown[]) => moveReminderToWeb(...a),
 }));
 
 const send = vi.fn();
@@ -278,6 +282,8 @@ describe("deliverReminder", () => {
       getChannelBindingsByUserId,
       hasReminderDelivery,
       recordReminder,
+      forgetReminder,
+      moveReminderToWeb,
       send,
       getChannelAdapter,
     ]) {
@@ -285,6 +291,8 @@ describe("deliverReminder", () => {
     }
     hasReminderDelivery.mockResolvedValue(false);
     recordReminder.mockResolvedValue(true);
+    forgetReminder.mockResolvedValue(undefined);
+    moveReminderToWeb.mockResolvedValue(true);
     getChannelAdapter.mockReturnValue({ send });
     getUserLocale.mockResolvedValue("zh");
   });
@@ -341,6 +349,54 @@ describe("deliverReminder", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("moves the reminder to the web card when the channel fails", async () => {
+    /**
+     * The claim was made for the channel, and the channel delivery
+     * failed — so the reminder has to surface in the web client
+     * instead.
+     *
+     * It used to give the slot back and claim it again for the web: two
+     * writes where one will do. And if the first write failed (and its
+     * error was swallowed), the second one hit the unique index and did
+     * nothing — so the reminder was neither sent nor shown, and the old
+     * claim stood for the rest of the day.
+     */
+    send.mockRejectedValue(new Error("the channel is down"));
+    moveReminderToWeb.mockResolvedValue(true);
+
+    const delivered = await deliverReminder({
+      userId: 1,
+      reminder,
+      channel: "wechat",
+      targetId: "wx-1",
+      now: new Date(2024, 4, 20, 10, 0),
+    });
+
+    expect(moveReminderToWeb).toHaveBeenCalledWith(1, reminder.dedupeKey);
+    expect(delivered).toBe(true);
+    // And the slot is not given back and claimed again.
+    expect(forgetReminder).not.toHaveBeenCalled();
+    expect(recordReminder).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the slot back when the claim cannot be moved", async () => {
+    // So the next tick tries again — a reminder that cannot be
+    // delivered is worth another attempt.
+    send.mockRejectedValue(new Error("the channel is down"));
+    moveReminderToWeb.mockResolvedValue(false);
+
+    const delivered = await deliverReminder({
+      userId: 1,
+      reminder,
+      channel: "wechat",
+      targetId: "wx-1",
+      now: new Date(2024, 4, 20, 10, 0),
+    });
+
+    expect(forgetReminder).toHaveBeenCalledWith(1, reminder.dedupeKey);
+    expect(delivered).toBe(false);
+  });
+
   it("falls back to the web card when no channel is bound", async () => {
     const delivered = await deliverReminder({
       userId: 1,
@@ -366,6 +422,8 @@ describe("runReminderSweep", () => {
       getChannelBindingsByUserId,
       hasReminderDelivery,
       recordReminder,
+      forgetReminder,
+      moveReminderToWeb,
       send,
       getChannelAdapter,
     ]) {
@@ -373,6 +431,8 @@ describe("runReminderSweep", () => {
     }
     hasReminderDelivery.mockResolvedValue(false);
     recordReminder.mockResolvedValue(true);
+    forgetReminder.mockResolvedValue(undefined);
+    moveReminderToWeb.mockResolvedValue(true);
     getChannelAdapter.mockReturnValue({ send });
     getUserLocale.mockResolvedValue("zh");
     getAnniversaryMemories.mockResolvedValue([]);

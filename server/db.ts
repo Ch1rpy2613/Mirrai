@@ -4062,6 +4062,30 @@ export async function forgetReminder(userId: number, dedupeKey: string): Promise
   ));
 }
 
+/**
+ * Moves a reminder's claim from a channel to the web.
+ *
+ * The claim was made for the channel, and the channel delivery failed —
+ * so the reminder has to surface in the web client instead. It used to
+ * do that by giving the slot back and claiming it again for the web,
+ * which is two writes where one will do — and if the first write failed
+ * (and its error was swallowed), the second one hit the unique index
+ * and did nothing. So the reminder was neither sent nor shown, and the
+ * old claim stood for the rest of the day.
+ */
+export async function moveReminderToWeb(userId: number, dedupeKey: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(reminderDeliveries)
+    .set({ channel: "web" })
+    .where(and(
+      eq(reminderDeliveries.userId, userId),
+      eq(reminderDeliveries.dedupeKey, dedupeKey),
+    ))
+    .returning({ id: reminderDeliveries.id });
+  return rows.length > 0;
+}
+
 /** Whether a reminder with this dedupe key has already been delivered. */
 export async function hasReminderDelivery(userId: number, dedupeKey: string) {
   const db = await getDb();
