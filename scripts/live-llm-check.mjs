@@ -45,5 +45,14 @@ try {
   );
   console.log("reply:", JSON.stringify(out));
 } catch (e) {
+  /**
+   * The check failed.
+   *
+   * It used to print the error and carry on — so the script said
+   * "ERROR" and then said goodbye with a success. A check that cannot
+   * fail is not a check: it says the end-to-end path works when the
+   * end-to-end path is broken.
+   */
   console.log("ERROR:", String(e).slice(0, 300));
+  process.exitCode = 1;
 }

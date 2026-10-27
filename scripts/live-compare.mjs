@@ -6,14 +6,22 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { ROOT, STATE_FILE, ILINK_BUILD_DIR, WECHAT_BUILD_DIR } from "./live-config.mjs";
 
-const ROOT = process.cwd();
-const state = JSON.parse(readFileSync(path.join(ROOT, ".live-wechat-state.json"), "utf-8"));
+/**
+ * The paths come from the shared configuration.
+ *
+ * They were rebuilt here — so the `MIRRAI_LIVE_*` overrides did not
+ * apply to this script, and it read a state file and a build the other
+ * scripts were not using. Two scripts that are supposed to be looking
+ * at the same thing were not.
+ */
+const state = JSON.parse(readFileSync(STATE_FILE, "utf-8"));
 
 const { getUpdates, buildClientVersion, buildBaseInfo } = await import(
-  path.join(ROOT, ".live-test/ilink/client.js")
+  path.join(ILINK_BUILD_DIR, "client.js")
 );
-const { ENV } = await import(path.join(ROOT, ".live-test/wechat/_core/env.js"));
+const { ENV } = await import(path.join(WECHAT_BUILD_DIR, "_core/env.js"));
 
 console.log("=== ENV values the server would use ===");
 console.log("ENV.wechatIlinkBaseUrl :", JSON.stringify(ENV.wechatIlinkBaseUrl));

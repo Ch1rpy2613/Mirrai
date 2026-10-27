@@ -1,11 +1,17 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { APP_VERSION } from "./live-config.mjs";
+import { APP_VERSION, ILINK_BUILD_DIR, STATE_FILE } from "./live-config.mjs";
 
-const ROOT = process.cwd();
-const state = JSON.parse(readFileSync(path.join(ROOT, ".live-wechat-state.json"), "utf-8"));
+/**
+ * The paths come from the shared configuration.
+ *
+ * They were rebuilt here — so the `MIRRAI_LIVE_*` overrides did not
+ * apply to this script, and it wrote the state back to a file the
+ * other scripts were not reading.
+ */
+const state = JSON.parse(readFileSync(STATE_FILE, "utf-8"));
 
-const { buildClientVersion } = await import(path.join(ROOT, ".live-test/ilink/client.js"));
+const { buildClientVersion } = await import(path.join(ILINK_BUILD_DIR, "client.js"));
 
 const apiOptions = {
   baseUrl: state.baseUrl || "https://ilinkai.weixin.qq.com",
@@ -43,7 +49,7 @@ let parsed;
 try { parsed = JSON.parse(text); } catch { parsed = null; }
 if (parsed?.get_updates_buf) {
   state.syncBuf = parsed.get_updates_buf;
-  writeFileSync(path.join(ROOT, ".live-wechat-state.json"), JSON.stringify(state, null, 2));
+  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
   console.log("\ncursor saved");
 }
 if (parsed?.msgs?.length) {

@@ -7,12 +7,18 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { APP_VERSION } from "./live-config.mjs";
+import { APP_VERSION, ILINK_BUILD_DIR, STATE_FILE } from "./live-config.mjs";
 
-const ROOT = process.cwd();
-const state = JSON.parse(readFileSync(path.join(ROOT, ".live-wechat-state.json"), "utf-8"));
+/**
+ * The paths come from the shared configuration.
+ *
+ * They were rebuilt here — so the `MIRRAI_LIVE_*` overrides did not
+ * apply to this script, and it read a state file the other scripts were
+ * not using.
+ */
+const state = JSON.parse(readFileSync(STATE_FILE, "utf-8"));
 
-const { getUpdates } = await import(path.join(ROOT, ".live-test/ilink/client.js"));
+const { getUpdates } = await import(path.join(ILINK_BUILD_DIR, "client.js"));
 
 const opts = {
   baseUrl: state.baseUrl,
@@ -39,7 +45,7 @@ async function attempt(label) {
 }
 
 console.log("=== single poll (control) ===");
-await attempt("single");
+const control = await attempt("single");
 
 console.log("\n=== two concurrent polls on the same token ===");
 const results = await Promise.all([attempt("poll-A"), attempt("poll-B")]);
@@ -49,3 +55,22 @@ console.log(
     ? "=> concurrent polls on one token DO break the connection"
     : "=> concurrent polls survived this time",
 );
+
+/**
+ * The test failed.
+ *
+ * It used to print what happened and carry on — so the script said
+ * "FAILED" and then said goodbye with a success. A test that cannot
+ * fail is not a test.
+ *
+ * The single poll is the control: it says whether the connection works
+ * at all. If the control failed, then the concurrent polls failed for
+ * the same reason and nothing was learned about concurrency — so the
+ * run says that, rather than blaming the wrong thing.
+ */
+if (control === "fail") {
+  console.log("=> the control poll failed too — the concurrent polls failed for the same reason, not because of concurrency");
+  process.exitCode = 1;
+} else if (results.includes("fail")) {
+  process.exitCode = 1;
+}

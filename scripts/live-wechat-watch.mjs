@@ -17,17 +17,21 @@
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { APP_VERSION } from "./live-config.mjs";
-const ROOT = process.cwd();
-const STATE_FILE = path.join(ROOT, ".live-wechat-state.json");
-const QR_PNG = path.join(ROOT, "live-wechat-qr.png");
-const QR_URL_FILE = path.join(ROOT, "live-wechat-qr-url.txt");
+import { APP_VERSION, ILINK_BUILD_DIR, QR_PNG, QR_URL_FILE, STATE_FILE } from "./live-config.mjs";
+
+/**
+ * The paths come from the shared configuration.
+ *
+ * They were rebuilt here — so the `MIRRAI_LIVE_*` overrides did not
+ * apply to this script: the QR image it wrote was not the one the other
+ * scripts read, and the state file was not the one they used.
+ */
 
 const { startQrLogin, pollQrLogin } = await import(
-  path.join(ROOT, ".live-test/ilink/login.js")
+  path.join(ILINK_BUILD_DIR, "login.js")
 );
 const { buildClientVersion } = await import(
-  path.join(ROOT, ".live-test/ilink/client.js")
+  path.join(ILINK_BUILD_DIR, "client.js")
 );
 
 const API_BASE = process.env.WECHAT_ILINK_BASE_URL || "https://ilinkai.weixin.qq.com";

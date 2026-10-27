@@ -15,14 +15,31 @@ import { createServer } from "node:http";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 
-const ROOT = process.cwd();
-const STATE_FILE = path.join(ROOT, ".live-wechat-state.json");
-const PORT = Number(process.argv[2]) || 8898;
+/**
+ * The paths and the port come from the shared configuration.
+ *
+ * They were rebuilt here — so the `MIRRAI_LIVE_*` overrides did not
+ * apply to this script: the page served on a port of its own and wrote
+ * the token into a state file the other scripts were not reading.
+ *
+ * The port on the command line still wins, so the page can be started
+ * twice.
+ */
+import {
+  APP_VERSION,
+  ILINK_BASE_URL,
+  ILINK_APP_ID,
+  ILINK_BOT_TYPE,
+  ILINK_BUILD_DIR,
+  QR_PAGE_PORT,
+  STATE_FILE,
+} from "./live-config.mjs";
 
-const API_BASE = process.env.WECHAT_ILINK_BASE_URL || "https://ilinkai.weixin.qq.com";
-const APP_ID = process.env.WECHAT_ILINK_APP_ID || "bot";
-const BOT_TYPE = process.env.WECHAT_BOT_TYPE || "3";
-import { APP_VERSION } from "./live-config.mjs";
+const PORT = Number(process.argv[2]) || QR_PAGE_PORT;
+
+const API_BASE = ILINK_BASE_URL;
+const APP_ID = ILINK_APP_ID;
+const BOT_TYPE = ILINK_BOT_TYPE;
 
 /**
  * The QR image is the one the backend sends.
@@ -33,10 +50,10 @@ import { APP_VERSION } from "./live-config.mjs";
  * sent, which is the image itself.
  */
 const { startQrLogin, pollQrLogin } = await import(
-  path.join(ROOT, ".live-test/ilink/login.js")
+  path.join(ILINK_BUILD_DIR, "login.js")
 );
 const { buildClientVersion } = await import(
-  path.join(ROOT, ".live-test/ilink/client.js")
+  path.join(ILINK_BUILD_DIR, "client.js")
 );
 
 const apiOptions = (token) => ({

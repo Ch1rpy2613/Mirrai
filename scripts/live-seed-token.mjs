@@ -4,11 +4,16 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { ROOT, STATE_FILE, WECHAT_BUILD_DIR } from "./live-config.mjs";
 
-const ROOT = process.cwd();
-const state = JSON.parse(
-  readFileSync(path.join(ROOT, ".live-wechat-state.json"), "utf-8"),
-);
+/**
+ * The paths come from the shared configuration.
+ *
+ * They were rebuilt here — so the `MIRRAI_LIVE_*` overrides did not
+ * apply to this script, and it seeded a token into a state file the
+ * other scripts were not reading.
+ */
+const state = JSON.parse(readFileSync(STATE_FILE, "utf-8"));
 
 const { default: pg } = await import("pg");
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -16,7 +21,7 @@ await client.connect();
 
 // Encrypt with the same helper the server uses.
 const { encryptSecret } = await import(
-  path.join(ROOT, ".live-test/wechat/_core/crypto.js")
+  path.join(WECHAT_BUILD_DIR, "_core/crypto.js")
 );
 const tokenEnc = await encryptSecret(state.botToken);
 

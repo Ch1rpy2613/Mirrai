@@ -16,11 +16,9 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { APP_VERSION } from "./live-config.mjs";
+import { APP_VERSION, ILINK_BUILD_DIR, QR_PNG, STATE_FILE } from "./live-config.mjs";
 
 const require = createRequire(import.meta.url);
-const ROOT = process.cwd();
-const STATE_FILE = path.join(ROOT, ".live-wechat-state.json");
 
 function loadState() {
   if (!existsSync(STATE_FILE)) return {};
@@ -34,10 +32,10 @@ function saveState(state) {
 // the test exercises the exact code that ships (same sources, compiled).
 async function loadIlink() {
   const { startQrLogin, pollQrLogin } = await import(
-    path.join(ROOT, ".live-test/ilink/login.js")
+    path.join(ILINK_BUILD_DIR, "login.js")
   );
-  const client = await import(path.join(ROOT, ".live-test/ilink/client.js"));
-  const send = await import(path.join(ROOT, ".live-test/ilink/send.js"));
+  const client = await import(path.join(ILINK_BUILD_DIR, "client.js"));
+  const send = await import(path.join(ILINK_BUILD_DIR, "send.js"));
   return { startQrLogin, pollQrLogin, client, send };
 }
 
@@ -47,7 +45,7 @@ const BOT_TYPE = process.env.WECHAT_BOT_TYPE || "3";
 
 
 const { buildClientVersion } = await import(
-  path.join(ROOT, ".live-test/ilink/client.js")
+  path.join(ILINK_BUILD_DIR, "client.js")
 );
 
 function apiOptions(token) {
@@ -93,7 +91,7 @@ if (command === "qr") {
   try {
     const image = await fetch(result.qrcodeImgContent);
     if (!image.ok) throw new Error(`the image could not be fetched (${image.status})`);
-    const out = path.join(ROOT, "live-wechat-qr.png");
+    const out = QR_PNG;
     writeFileSync(out, Buffer.from(await image.arrayBuffer()));
     console.log("PNG    :", out);
   } catch (e) {

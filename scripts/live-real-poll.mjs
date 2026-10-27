@@ -5,21 +5,24 @@
  * client. Nothing about the network peer is faked here.
  */
 import path from "node:path";
-import { APP_VERSION } from "./live-config.mjs";
+import { APP_VERSION, ILINK_BUILD_DIR, STATE_FILE } from "./live-config.mjs";
 
-const ROOT = process.cwd();
+/**
+ * The paths come from the shared configuration.
+ *
+ * They were rebuilt here — so the `MIRRAI_LIVE_*` overrides did not
+ * apply to this script, and it read a state file the other scripts
+ * were not using.
+ */
 const state = JSON.parse(
-  (await import("node:fs")).readFileSync(
-    path.join(ROOT, ".live-wechat-state.json"),
-    "utf-8",
-  ),
+  (await import("node:fs")).readFileSync(STATE_FILE, "utf-8"),
 );
 
 const { getUpdates, buildClientVersion } = await import(
-  path.join(ROOT, ".live-test/ilink/client.js")
+  path.join(ILINK_BUILD_DIR, "client.js")
 );
 const { parseInboundMessage } = await import(
-  path.join(ROOT, ".live-test/ilink/parse.js")
+  path.join(ILINK_BUILD_DIR, "parse.js")
 );
 
 const apiOptions = {
@@ -60,8 +63,8 @@ for (const m of resp.msgs ?? []) {
 // Persist the cursor so the next poll continues from here.
 if (resp.get_updates_buf) {
   const fs = await import("node:fs");
-  const s = JSON.parse(fs.readFileSync(path.join(ROOT, ".live-wechat-state.json"), "utf-8"));
+  const s = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
   s.syncBuf = resp.get_updates_buf;
-  fs.writeFileSync(path.join(ROOT, ".live-wechat-state.json"), JSON.stringify(s, null, 2));
+  fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2));
   console.log("\ncursor saved");
 }

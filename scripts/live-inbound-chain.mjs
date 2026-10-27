@@ -8,9 +8,7 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { APP_VERSION } from "./live-config.mjs";
-
-const ROOT = process.cwd();
+import { APP_VERSION, ILINK_BUILD_DIR, WECHAT_BUILD_DIR } from "./live-config.mjs";
 const received = [];
 
 /** Stub iLink backend. */
@@ -123,7 +121,7 @@ console.log(`userId=${userId} personaId=${personaId}\n`);
 
 // Point the server at the stub and hand it a token.
 const { encryptSecret } = await import(
-  path.join(ROOT, ".live-test/wechat/_core/crypto.js")
+  path.join(WECHAT_BUILD_DIR, "_core/crypto.js")
 );
 const tokenEnc = await encryptSecret("stub-token");
 
@@ -137,13 +135,13 @@ console.log("bot state seeded with stub token\n");
 
 // Now drive the real inbound path: build the monitor against the stub.
 const { getUpdates } = await import(
-  path.join(ROOT, ".live-test/ilink/client.js")
+  path.join(ILINK_BUILD_DIR, "client.js")
 );
 const { parseInboundMessage } = await import(
-  path.join(ROOT, ".live-test/ilink/parse.js")
+  path.join(ILINK_BUILD_DIR, "parse.js")
 );
 const { handleWeixinMessage } = await import(
-  path.join(ROOT, ".live-test/wechat/wechat/message-handler.js")
+  path.join(WECHAT_BUILD_DIR, "wechat/message-handler.js")
 );
 
 console.log("=== inbound: getUpdates (real client → stub server) ===");
