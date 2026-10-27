@@ -207,7 +207,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
         const parsed = parseFrame(frame);
         if (!parsed) continue;
         if (parsed.event === "done" || parsed.event === "error") settled = true;
-        handleEvent(parsed, callbacks);
+        handleEvent(parsed, callbacks, locale);
       }
     }
 
@@ -217,7 +217,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
       const parsed = parseFrame(tail);
       if (parsed) {
         if (parsed.event === "done" || parsed.event === "error") settled = true;
-        handleEvent(parsed, callbacks);
+        handleEvent(parsed, callbacks, locale);
       }
     }
 
@@ -251,6 +251,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
 function handleEvent(
   parsed: { event: string; data: unknown },
   callbacks: StreamChatCallbacks,
+  locale: Locale,
 ): void {
   const data = parsed.data as Record<string, any>;
 
@@ -267,7 +268,18 @@ function handleEvent(
       callbacks.onDone?.(data as StreamDoneInfo);
       break;
     case "error":
-      callbacks.onError?.(data?.message ?? "Unknown error", !!data?.partial);
+      /**
+       * The sentence is the server's own — and when there is none, the
+       * interface's.
+       *
+       * It was a hard-coded English "Unknown error", in a message that
+       * is otherwise in the reader's language: so a Chinese reader saw
+       * "生成中断：Unknown error".
+       */
+      callbacks.onError?.(
+        data?.message || translate(locale, "errors.unknown"),
+        !!data?.partial,
+      );
       break;
     default:
       break;

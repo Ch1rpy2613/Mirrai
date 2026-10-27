@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { streamChat } from "./chat-stream";
+import { translate } from "@/i18n";
 
 /**
  * The frame-parsing helpers are unit-tested elsewhere. What matters here is
@@ -134,6 +135,33 @@ describe("streamChat", () => {
     // The partial text is kept — half an answer is still worth something.
     expect(deltas.join("")).toBe("我");
     expect(errors).toEqual([{ message: "upstream exploded", partial: true }]);
+  });
+
+  it("says the error in the reader's language when there is no sentence", async () => {
+    /**
+     * The fallback was a hard-coded English "Unknown error", in a
+     * message that is otherwise in the reader's language: so a Chinese
+     * reader saw "生成中断：Unknown error".
+     */
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse(['event: error\ndata: {}\n\n']),
+    );
+    globalThis.fetch = fetchMock as any;
+
+    const errors: Array<{ message: string; partial: boolean }> = [];
+    await streamChat({
+      personaId: 1,
+      message: "hi",
+      locale: "zh",
+      callbacks: {
+        onDelta: () => {},
+        onError: (message, partial) => errors.push({ message, partial }),
+      },
+    });
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).not.toContain("Unknown error");
+    expect(errors[0].message).toBe(translate("zh", "errors.unknown"));
   });
 
   it("reports a stream that ends before the reply is finished", async () => {
