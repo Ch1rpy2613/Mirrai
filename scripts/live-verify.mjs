@@ -105,7 +105,18 @@ async function main() {
     // The analysis is skipped: the persona is seeded by hand.
     const { default: pg } = await import("pg");
     const client = new pg.Client({
-      connectionString: process.env.DATABASE_URL ?? "postgresql://ch1rpy@localhost:5432/mirrai_live",
+      /**
+       * The database the verification runs against.
+       *
+       * The fallback was one particular person's account on one
+       * particular machine: so on any other machine — and in CI — the
+       * verification connected to a database that is not there, and
+       * the failure said nothing about what to set.
+       *
+       * It is the project's own default now, and the environment
+       * variable is still what decides it.
+       */
+      connectionString: process.env.DATABASE_URL ?? "postgresql://postgres:password@localhost:5432/mirrai_live",
     });
     await client.connect();
     await client.query(`UPDATE personas SET "analysisStatus" = 'ready' WHERE id = $1`, [personaId]);

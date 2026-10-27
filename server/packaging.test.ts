@@ -175,6 +175,20 @@ describe("the packaged app", () => {
     expect(workflow).toMatch(/Mirrai\.exe[\s\S]{0,400}throw/);
   });
 
+  it("does not hardcode one person's database into the live scripts", () => {
+    /**
+     * The fallback was one particular person's account on one
+     * particular machine: so on any other machine — and in CI — the
+     * verification connected to a database that is not there, and the
+     * failure said nothing about what to set.
+     */
+    const scripts = readdirSync(path.join(ROOT, "scripts")).filter((name) => name.endsWith(".mjs"));
+    for (const name of scripts) {
+      const source = readFileSync(path.join(ROOT, "scripts", name), "utf-8");
+      expect(source, name).not.toContain("postgresql://ch1rpy@");
+    }
+  });
+
   it("does not let a tripped smoke test pass as a healthy release", () => {
     /**
      * The Windows smoke test ran with `continue-on-error: true` — so
