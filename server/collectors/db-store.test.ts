@@ -40,6 +40,7 @@ const client = vi.hoisted(() => ({
 }));
 
 const getChannelState = vi.fn();
+const getCollectionJob = vi.fn();
 
 vi.mock("../db", () => ({
   getChannelState: (...a: unknown[]) => getChannelState(...a),
@@ -47,10 +48,12 @@ vi.mock("../db", () => ({
   createCollectedMessages: (...a: unknown[]) => createCollectedMessages(...a),
   getCollectedMessages: (...a: unknown[]) => getCollectedMessages(...a),
   getCollectedMessageKeys: (...a: unknown[]) => getCollectedMessageKeys(...a),
+  getCollectionJob: (...a: unknown[]) => getCollectionJob(...a),
   getDb: async () => client,
 }));
 
 import {
+  getPersistedCollectorJob,
   importCollectedMessages,
   loadCollectionSource,
   saveCollectionSource,
@@ -348,6 +351,39 @@ describe("collection sources", () => {
     expect(dbState.inserted).toHaveLength(1);
     expect(dbState.inserted[0].authState).toEqual({ ok: false, message: "缺少 bot_token" });
     expect(dbState.inserted[0].config).toEqual({ encrypted: "v1:fake:blob" });
+  });
+});
+
+describe("a persisted collection job", () => {
+  beforeEach(() => {
+    getCollectionJob.mockReset();
+  });
+
+  it("says the same things as the list does", async () => {
+    /**
+     * The truncation flag was missing here — so a job that had been
+     * cut short lost its warning as soon as the server restarted: the
+     * detail panel said the collection was complete when it was not,
+     * and the list beside it said otherwise.
+     */
+    getCollectionJob.mockResolvedValue({
+      jobKey: "feishu:u_1",
+      source: "feishu",
+      status: "done",
+      progress: 100,
+      messageCount: 120,
+      foundCount: 400,
+      truncated: true,
+      error: undefined,
+      startedAt: new Date("2026-01-01T00:00:00Z"),
+      finishedAt: new Date("2026-01-01T00:05:00Z"),
+    });
+
+    const job = await getPersistedCollectorJob("feishu:u_1", 3);
+
+    expect(job?.truncated).toBe(true);
+    expect(job?.foundCount).toBe(400);
+    expect(job?.messageCount).toBe(120);
   });
 });
 

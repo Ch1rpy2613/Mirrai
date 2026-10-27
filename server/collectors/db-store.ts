@@ -158,6 +158,16 @@ export async function getPersistedCollectorJob(jobKey: string, userId: number) {
     status: job.status as CollectorJobStatus,
     progress: job.progress,
     messageCount: job.messageCount,
+    /**
+     * The same shape as the list — and as the live job.
+     *
+     * The truncation flag was missing here, so a job that had been cut
+     * short lost its warning as soon as the server restarted: the
+     * detail panel said the collection was complete when it was not,
+     * and the list beside it said otherwise.
+     */
+    foundCount: job.foundCount ?? job.messageCount,
+    truncated: job.truncated === true,
     error: job.error ?? undefined,
     startedAt: job.startedAt ?? undefined,
     finishedAt: job.finishedAt ?? undefined,
