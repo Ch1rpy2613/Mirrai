@@ -49,13 +49,25 @@ CONFIG_PATH = Path.home() / ".colleague-skill" / "feishu_config.json"
 
 def load_config() -> dict:
     if CONFIG_PATH.exists():
-        return json.loads(CONFIG_PATH.read_text())
+        # The encoding is stated: the default is the machine's, which on
+        # Windows is the ANSI code page, and this file holds Chinese.
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     return {}
 
 
 def save_config(config: dict) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(config, indent=2))
+    # The file holds the app secret and the user token — so it is
+    # readable by its owner only. The default mode is 0644, which is
+    # every local user on the machine.
+    #
+    # The other three collectors chmod this same file to 0600; this one
+    # did not, so running it *downgraded* the file they had protected.
+    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    try:
+        CONFIG_PATH.chmod(0o600)
+    except OSError:
+        pass
     print(f"配置已保存到 {CONFIG_PATH}")
 
 

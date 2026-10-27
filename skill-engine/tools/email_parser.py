@@ -241,6 +241,34 @@ def parse_eml_file(file_path: str, target: str) -> list[dict]:
     }]
 
 
+def _text_encoding(file_path: str) -> str:
+    """
+    The encoding of a mail export.
+
+    UTF-8 is what the app writes, but a mail export saved by a Chinese
+    Outlook or Foxmail is very often GB18030 — and reading that as
+    UTF-8 raises UnicodeDecodeError, so the whole export failed and the
+    user got "the collector did not finish" and no mails at all.
+
+    So the file is tried as UTF-8 first, and then as GB18030, and the
+    bytes are decoded with replacement as a last resort: a single odd
+    character is better than losing every mail in the file.
+    """
+    try:
+        with open(file_path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        return "utf-8"
+
+    for candidate in ("utf-8", "gb18030"):
+        try:
+            raw.decode(candidate)
+            return candidate
+        except UnicodeDecodeError:
+            continue
+    return "utf-8"
+
+
 def parse_mbox_file(file_path: str, target: str) -> list[dict]:
     """解析 .mbox 文件（多封邮件合集）"""
     results = []
@@ -281,7 +309,7 @@ def parse_txt_file(file_path: str, target: str) -> list[dict]:
     """
     results = []
 
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, "r", encoding=_text_encoding(file_path), errors="replace") as f:
         content = f.read()
 
     # 尝试按分隔符切割多封邮件

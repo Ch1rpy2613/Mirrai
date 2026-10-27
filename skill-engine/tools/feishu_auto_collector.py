@@ -182,7 +182,9 @@ def load_config() -> dict:
     if not path.exists():
         print("未找到配置，请先运行：python3 feishu_auto_collector.py --setup", file=sys.stderr)
         sys.exit(1)
-    return json.loads(path.read_text())
+    # The encoding is stated, because the default is the machine's:
+    # on Windows that is the ANSI code page, and the file holds Chinese.
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def save_config(config: dict) -> None:
@@ -191,7 +193,12 @@ def save_config(config: dict) -> None:
     # The file holds a bot token and an app secret — so it is readable
     # by its owner only. The default mode is 0644, which is every local
     # user on the machine.
-    path.write_text(json.dumps(config, indent=2, ensure_ascii=False))
+    #
+    # And the encoding is stated: the default is the machine's, which on
+    # Windows is the ANSI code page — so a value with a Chinese
+    # character in it raised UnicodeEncodeError, and the credential was
+    # never written at all.
+    path.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
     try:
         path.chmod(0o600)
     except OSError:
@@ -1060,9 +1067,24 @@ def collect_all(
         "collected_at": datetime.now(timezone.utc).isoformat(),
         "files": results,
     }
-    (output_dir / "collection_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2)
-    )
+    # ------------------------------------------------------------------
+    # The summary is a note about the run, not the run itself.
+    #
+    # It used to be written without an encoding -- so on the Windows ANSI
+    # code page the Chinese colleague's name raised UnicodeEncodeError
+    # AFTER the messages had been collected and printed. The script exited
+    # non-zero, and the server threw away a perfectly good collection
+    # because a note about it could not be written.
+    #
+    # So it is written as UTF-8, and a failure to write it does not take
+    # the collection down with it.
+    # ------------------------------------------------------------------
+    try:
+        (output_dir / "collection_summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError as e:
+        print(f"  ⚠️  摘要写入失败：{e}", file=sys.stderr)
 
     print(f"\n✅ 采集完成，输出目录：{output_dir}", file=sys.stderr)
     return results

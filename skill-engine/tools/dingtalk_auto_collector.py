@@ -180,7 +180,10 @@ def save_config(config: dict) -> None:
     # The file holds a bot token and an app secret — so it is readable
     # by its owner only. The default mode is 0644, which is every local
     # user on the machine.
-    path.write_text(json.dumps(config, indent=2, ensure_ascii=False))
+    # The encoding is stated: without it a value with a Chinese character
+    # in it raised UnicodeEncodeError on Windows, and the credential was
+    # never written at all.
+    path.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
     try:
         path.chmod(0o600)
     except OSError:
@@ -905,9 +908,24 @@ def collect_all(
         "files": results,
         "notes": "消息记录通过浏览器采集，钉钉 API 不支持历史消息拉取",
     }
-    (output_dir / "collection_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2)
-    )
+    # ------------------------------------------------------------------
+    # The summary is a note about the run, not the run itself.
+    #
+    # It used to be written without an encoding -- so on the Windows ANSI
+    # code page the Chinese colleague's name raised UnicodeEncodeError
+    # AFTER the messages had been collected and printed. The script exited
+    # non-zero, and the server threw away a perfectly good collection
+    # because a note about it could not be written.
+    #
+    # So it is written as UTF-8, and a failure to write it does not take
+    # the collection down with it.
+    # ------------------------------------------------------------------
+    try:
+        (output_dir / "collection_summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError as e:
+        print(f"  ⚠️  摘要写入失败：{e}", file=sys.stderr)
 
     print(f"\n✅ 采集完成 → {output_dir}", file=sys.stderr)
     print(f"   文件：{', '.join(results.keys())}", file=sys.stderr)
