@@ -80,8 +80,25 @@ function toEvidence(value: unknown): MicroRuleEvidence[] {
   return out;
 }
 
+/**
+ * The confidence of a rule, as a number between nothing and one.
+ *
+ * A rule with no confidence stored has an *unknown* confidence — and
+ * that is what the middle of the scale means. It used to come out as
+ * zero: `Number("")` is zero, and zero is a number, so the check for a
+ * number that is not a number never fired. So every rule the app had
+ * not measured was shown as "0% certain" — which reads as "we checked
+ * and it is worthless", and it is not what was known.
+ */
 function toConfidence(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(toText(value));
+  if (value === undefined || value === null) return 0.5;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return 0.5;
+    return Math.max(0, Math.min(1, value));
+  }
+  const text = toText(value);
+  if (!text) return 0.5;
+  const n = Number(text);
   if (!Number.isFinite(n)) return 0.5;
   return Math.max(0, Math.min(1, n));
 }

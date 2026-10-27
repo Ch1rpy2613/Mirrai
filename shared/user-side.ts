@@ -359,8 +359,19 @@ export function parseRecalledIds(value: string | null | undefined): number[] {
   try {
     const parsed = JSON.parse(value);
     if (!Array.isArray(parsed)) return [];
+    /**
+     * Only a number, or a string that is one.
+     *
+     * `Number(null)` is zero — so a list that held a null held the
+     * memory with the id zero, and the id zero is not a memory. A
+     * memory that was never written down must not be looked up.
+     */
     return parsed
-      .map((n) => (typeof n === "number" ? n : Number(n)))
+      .map((n) => {
+        if (typeof n === "number") return n;
+        if (typeof n === "string" && n.trim() !== "") return Number(n);
+        return Number.NaN;
+      })
       .filter((n) => Number.isFinite(n));
   } catch {
     return [];
