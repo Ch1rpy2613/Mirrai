@@ -1874,6 +1874,19 @@ export async function getSkillJobById(id: number, userId: number) {
   return result[0];
 }
 
+/**
+ * Writes to a distillation run.
+ *
+ * The row's `updatedAt` is a *heartbeat*: the guard that stops a
+ * second run from starting reads it to decide whether the first one is
+ * still going.
+ *
+ * It was never written — the column has a default and nothing sets it
+ * again — so it stayed at the moment the run was *created*. The guard
+ * therefore stopped working after ten minutes: the celebrity preset
+ * makes fifteen model calls and easily runs longer than that, and the
+ * user was told the run had started while nothing happened.
+ */
 export async function updateSkillJob(
   id: number,
   userId: number,
@@ -1881,7 +1894,7 @@ export async function updateSkillJob(
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.update(skillJobs).set(data)
+  await db.update(skillJobs).set({ ...data, updatedAt: new Date() })
     .where(and(eq(skillJobs.id, id), eq(skillJobs.userId, userId)));
 }
 

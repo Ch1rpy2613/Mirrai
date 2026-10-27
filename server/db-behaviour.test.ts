@@ -837,6 +837,24 @@ describe("writing to a persona", () => {
   });
 });
 
+describe("the distillation runs", () => {
+  it("writes the heartbeat the guard reads", async () => {
+    /**
+     * The guard that stops a second run from starting reads the row's
+     * `updatedAt` to decide whether the first one is still going.
+     *
+     * It was never written — the column has a default and nothing sets
+     * it again — so it stayed at the moment the run was *created*, and
+     * the guard stopped working after ten minutes. The celebrity preset
+     * makes fifteen model calls and easily runs longer than that, and
+     * the user was told the run had started while nothing happened.
+     */
+    await db.updateSkillJob(41, 3, { pipelineStage: "intake" });
+
+    expect(last().values.updatedAt).toBeInstanceOf(Date);
+  });
+});
+
 describe("the collection jobs", () => {
   it("creates a job and says which row it was", async () => {
     registry.returning.collection_jobs = [{ id: 41 }];
