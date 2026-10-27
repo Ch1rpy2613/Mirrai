@@ -2793,6 +2793,22 @@ export async function createDiaryEntry(data: InsertDiaryEntry) {
   return result.id;
 }
 
+/**
+ * How many diary entries there are.
+ *
+ * The list is capped — and the count used to be the cap: so a persona
+ * with two hundred diaries read as if there were thirty.
+ */
+export async function countDiaryEntries(userId: number, personaId?: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const conditions = [eq(diaryEntries.userId, userId)];
+  if (personaId) conditions.push(eq(diaryEntries.personaId, personaId));
+  const [result] = await db.select({ c: count() }).from(diaryEntries)
+    .where(and(...conditions));
+  return result?.c || 0;
+}
+
 export async function getDiaryEntries(userId: number, personaId?: number, limit = 30) {
   const db = await getDb();
   if (!db) return [];

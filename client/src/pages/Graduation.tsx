@@ -66,6 +66,7 @@ export default function Graduation() {
     { personaId },
     { enabled: isAuthenticated && hasPersonaId },
   );
+  const diaryItems = diaries?.items ?? [];
 
   // The spinner used to spin for ever.
   //
@@ -339,7 +340,7 @@ export default function Graduation() {
           </motion.section>
         )}
 
-        {diaries && diaries.length > 0 && (
+        {diaryItems.length > 0 && (
           <motion.section
             initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
           >
@@ -349,10 +350,18 @@ export default function Graduation() {
                 The page showed five of them and said nothing — so a
                 user with forty diaries read as if there were five. */}
             <p className="text-xs text-muted-subtle mb-3">
-              {t("graduationPage.diariesCount", { count: Math.min(5, diaries.length), total: diaries.length })}
+              {t("graduationPage.diariesCount", {
+                count: Math.min(5, diaryItems.length),
+                // How many there are in all.
+                //
+                // It was the length of the list — and the list is
+                // capped by the query — so a persona with two hundred
+                // diaries read as if there were thirty.
+                total: diaries?.total ?? diaryItems.length,
+              })}
             </p>
             <div className="space-y-3">
-              {diaries.slice(0, 5).map((diary: any) => (
+              {diaryItems.slice(0, 5).map((diary: any) => (
                 <div key={diary.id} className="rounded-xl border border-border/70 p-4">
                   {/* The date was printed raw — "2026-03-01" — while
                       every other date on the page is in the reader's

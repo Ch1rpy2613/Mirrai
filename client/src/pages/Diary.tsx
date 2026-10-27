@@ -471,13 +471,13 @@ export default function Diary() {
                 <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
               </motion.section>
             )}
-            {!selectedDate && entries && entries.length > 0 && (
+            {!selectedDate && entries && entries.items.length > 0 && (
               <motion.section variants={fadeUp} initial="hidden" animate="visible" className="space-y-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="section-title">{t("diary.recent")}</h2>
                   <span className="kicker">{t("diary.recentKicker")}</span>
                 </div>
-                {entries.map((entry: any) => (
+                {entries.items.map((entry: any) => (
                   <button key={entry.id} onClick={() => setSelectedDate(entry.date)}
                     className="surface surface-interactive w-full text-left p-5">
                     <div className="flex items-baseline justify-between gap-3 mb-1.5">

@@ -12,13 +12,16 @@ import { translate } from "@/i18n";
  * them.
  */
 let persona: any;
+/** The diaries the server sends, and how many there are in all. */
+let diaryItems: any[] = [];
+let diaryTotal = 0;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: { get: { useQuery: () => ({ data: persona }) } },
     relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
     memory: { list: { useQuery: () => ({ data: { items: [] } }) } },
-    diary: { list: { useQuery: () => ({ data: [] }) } },
+    diary: { list: { useQuery: () => ({ data: { items: diaryItems, total: diaryTotal } }) } },
   },
 }));
 
@@ -48,6 +51,29 @@ vi.mock("@/components/OutboundLetters", () => ({
 import Graduation from "./Graduation";
 
 describe("the goodbye", () => {
+  beforeEach(() => {
+    diaryItems = [];
+    diaryTotal = 0;
+  });
+
+  it("says how many diaries there are, not how many it fetched", () => {
+    /**
+     * The count was the length of the list — and the list is capped by
+     * the query — so a persona with two hundred diaries read as if
+     * there were thirty.
+     */
+    diaryItems = [
+      { id: 1, date: "2026-03-01", summary: "今天聊了很多。", highlights: [], emotionalArc: null, quotes: [], reflection: null, messageCount: 12, personaName: "小A" },
+    ];
+    diaryTotal = 200;
+
+    render(<Graduation />);
+
+    expect(
+      screen.getByText(translate("zh", "graduationPage.diariesCount", { count: 1, total: 200 })),
+    ).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     persona = {
       id: 1,

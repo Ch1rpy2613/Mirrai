@@ -35,6 +35,7 @@ import {
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
   getUserTimezone,
   createMemory, getMemoriesByPersonaId, countMemories, getMemoryTitles, deleteMemory, updateMemory,
+  countDiaryEntries,
   getFileSummaryTitles,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
   getCollectedMessagesForPersona, getCollectedMessageSources,
@@ -3806,7 +3807,17 @@ export const appRouter = router({
   diary: router({
     list: protectedProcedure
       .input(z.object({ personaId: z.number(), limit: z.number().int().min(1).max(366).default(30) }))
-      .query(async ({ ctx, input }) => getDiaryEntries(ctx.user.id, input.personaId, input.limit)),
+      .query(async ({ ctx, input }) => {
+        const [items, total] = await Promise.all([
+          getDiaryEntries(ctx.user.id, input.personaId, input.limit),
+          // How many there are — so the interface can say that what it
+          // is showing is not everything. The count used to be the
+          // query's own limit, so a persona with two hundred diaries
+          // read as if there were thirty.
+          countDiaryEntries(ctx.user.id, input.personaId),
+        ]);
+        return { items, total };
+      }),
 
     getByDate: protectedProcedure
       .input(z.object({
