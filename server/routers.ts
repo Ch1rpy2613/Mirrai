@@ -477,6 +477,38 @@ async function startPersonaDistillation(params: {
 const runningDistillations = new Set<number>();
 
 /**
+ * Refuses a second distillation of a persona that is already running.
+ *
+ * The check is on the persona's own row, so it holds across every
+ * process: two instances of the app would each have their own set, and
+ * the user would pay twice for the model calls — and the run that
+ * finished *last* would write the persona, so a re-run could be
+ * replaced by the older analysis.
+ *
+ * A run that has not been written to for a while belongs to a process
+ * that has gone, and it must not block the user for ever.
+ */
+async function assertNoRunningDistillation(
+  persona: { analysisStatus?: string | null; skillJobId?: number | null },
+  userId: number,
+  locale: "zh" | "en",
+): Promise<void> {
+  if (persona.analysisStatus !== "analyzing") return;
+  const jobId = persona.skillJobId ?? null;
+  const job = jobId
+    ? await getSkillJobById(jobId, userId).catch(() => undefined)
+    : undefined;
+  const alive = job
+    ? Date.now() - new Date(job.updatedAt as Date).getTime() < 10 * 60_000
+    : false;
+  if (!alive) return;
+  throw new TRPCError({
+    code: "CONFLICT",
+    message: copy(locale, "errors.distillationAlreadyRunning"),
+  });
+}
+
+/**
  * Rejects a provider name that is not registered.
  *
  * A typo would otherwise be stored silently, and every later chat would
@@ -1406,24 +1438,11 @@ export const appRouter = router({
          *
          * The shared state is the persona's own row.
          */
-        if (persona.analysisStatus === "analyzing") {
-          const jobId = (persona as any).skillJobId ?? null;
-          const job = jobId
-            ? await getSkillJobById(jobId, ctx.user.id).catch(() => undefined)
-            : undefined;
-          // A run that was written to recently is alive. One that has
-          // not been touched for a while belongs to a process that has
-          // gone, and it must not block the user for ever.
-          const alive = job
-            ? Date.now() - new Date(job.updatedAt as Date).getTime() < 10 * 60_000
-            : false;
-          if (alive) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: copy(ctx.locale, "errors.distillationAlreadyRunning"),
-            });
-          }
-        }
+        await assertNoRunningDistillation(
+          persona as { analysisStatus?: string | null; skillJobId?: number | null },
+          ctx.user.id,
+          ctx.locale,
+        );
 
         const material = await readDistillationMaterial(input.id, ctx.user.id);
         if (!hasDistillationMaterial(material)) {
@@ -3398,6 +3417,22 @@ export const appRouter = router({
          * person the model invented over the one the user built by
          * hand. The name survives, so nothing looks wrong.
          */
+        /**
+         * One run at a time per persona — across every process.
+         *
+         * This entry point did not have the guard the other one has, so
+         * two runs of one persona could go at once: the user paid for
+         * two full distillations, and the run that finished last wrote
+         * the persona — so the one they had just rebuilt was replaced by
+         * the older analysis, with no error shown (this procedure had
+         * already answered "success").
+         */
+        await assertNoRunningDistillation(
+          persona as { analysisStatus?: string | null; skillJobId?: number | null },
+          ctx.user.id,
+          ctx.locale,
+        );
+
         const material = await readDistillationMaterial(input.personaId, ctx.user.id);
         if (!hasDistillationMaterial(material)) {
           throw new TRPCError({

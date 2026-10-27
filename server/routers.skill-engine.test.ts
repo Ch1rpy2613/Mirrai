@@ -18,12 +18,14 @@ const getPersonaById = vi.fn();
 const getFilesByPersonaId = vi.fn();
 const getCollectedMessagesForPersona = vi.fn();
 const updatePersona = vi.fn();
+const getSkillJobById = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
   updatePersona: (...a: unknown[]) => updatePersona(...a),
+  getSkillJobById: (...a: unknown[]) => getSkillJobById(...a),
 }));
 
 const runSkillPipeline = vi.fn();
@@ -77,6 +79,7 @@ describe("distilling a persona", () => {
     ]);
     getCollectedMessagesForPersona.mockResolvedValue([]);
     updatePersona.mockResolvedValue(undefined);
+    getSkillJobById.mockResolvedValue(undefined);
     runSkillPipeline.mockResolvedValue({ persona: {} });
   });
 
@@ -157,6 +160,54 @@ describe("distilling a persona", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runSkillPipeline).not.toHaveBeenCalled();
+  });
+
+  it("refuses a second run of a persona that is already being distilled", async () => {
+    /**
+     * The persona is being distilled right now, and the run is alive.
+     */
+    getPersonaById.mockResolvedValue({
+      ...persona,
+      analysisStatus: "analyzing",
+      skillJobId: 99,
+    });
+    getSkillJobById.mockResolvedValue({
+      id: 99,
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      appRouter
+        .createCaller(ctxFor(1))
+        .skillEngine.startPipeline({ personaId: 5, characterFamily: "relationship" }),
+    ).rejects.toThrow();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runSkillPipeline).not.toHaveBeenCalled();
+  });
+
+  it("lets a run through when the last one died with its process", async () => {
+    /**
+     * The run has not been written to for a long time — so it belongs
+     * to a process that has gone, and it must not block the user for
+     * ever.
+     */
+    getPersonaById.mockResolvedValue({
+      ...persona,
+      analysisStatus: "analyzing",
+      skillJobId: 99,
+    });
+    getSkillJobById.mockResolvedValue({
+      id: 99,
+      updatedAt: new Date(Date.now() - 60 * 60_000),
+    });
+
+    await appRouter
+      .createCaller(ctxFor(1))
+      .skillEngine.startPipeline({ personaId: 5, characterFamily: "relationship" });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runSkillPipeline).toHaveBeenCalled();
   });
 
   it("will not build a persona out of nothing through the other entry point either", async () => {
