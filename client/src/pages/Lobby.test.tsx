@@ -230,7 +230,16 @@ describe("the lobby", () => {
 
     render(<Lobby />);
 
-    await user.click(screen.getByRole("button", { name: /最近|recent/i }));
+    /**
+     * The sort button, and not another one whose name happens to
+     * contain the same two characters — the persona's quote is one of
+     * twelve, and one of them says 「你最近在想什么呢？」.
+     */
+    const sortButton = screen
+      .getAllByRole("button", { name: /最近|recent/i })
+      .find((button) => button.getAttribute("aria-haspopup") === "menu");
+    expect(sortButton).toBeTruthy();
+    await user.click(sortButton!);
 
     const items = screen.getAllByRole("menuitem");
     expect(items.length).toBeGreaterThan(0);
