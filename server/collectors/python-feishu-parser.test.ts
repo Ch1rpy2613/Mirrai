@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,7 +53,7 @@ print("COUNT:", len(rows))
 for row in rows:
     print("ROW:", json.dumps(row, ensure_ascii=False))
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
 
     // One message, and it carries both lines.
     expect(result.stdout).toContain("COUNT: 1");
@@ -71,7 +72,7 @@ import feishu_parser as m
 rows = m.parse_feishu_txt(${JSON.stringify(file)}, "张三")
 print("COUNT:", len(rows))
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
 
     // Every line is a message of its own.
     expect(result.stdout).toContain("COUNT: 2");

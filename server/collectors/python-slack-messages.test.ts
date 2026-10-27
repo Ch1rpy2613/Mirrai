@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -46,7 +47,7 @@ print("EMPTY:", m._is_noise("<https://example.com>"))
 print("EMOJI:", m._is_noise(":wave:"))
 print("TWO:", m._is_noise("好的"))
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
 
     expect(result.stdout).toContain("ONE: False");
     expect(result.stdout).toContain("EMPTY: True");

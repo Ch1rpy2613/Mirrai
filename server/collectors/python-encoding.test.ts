@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -75,14 +76,14 @@ function runPython(body: string, workDir: string): { status: number; out: string
    * Chinese in it. The environment is unchanged: the collectors still
    * run in a C locale, which is the whole point of the test.
    */
-  const script = path.join(workDir, "snippet.py");
-  writeFileSync(script, body, "utf-8");
-  const result = spawnSync(PYTHON!, [script], {
+  const result = runPythonSnippet(PYTHON!, body, {
     cwd: workDir,
-    env: { ...process.env, LC_ALL: "C", LANG: "C", PYTHONUTF8: "0", PYTHONIOENCODING: "utf-8" },
-    encoding: "utf-8",
+    // The machine's encoding turned all the way down — which is the
+    // whole point of this test. The shared runner's UTF-8 defaults are
+    // replaced by it, not merged with it.
+    env: { LC_ALL: "C", LANG: "C", PYTHONUTF8: "0", PYTHONIOENCODING: "utf-8" },
   });
-  return { status: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? "" };
+  return { status: result.status, out: result.stdout, err: result.stderr };
 }
 
 describe.skipIf(!PYTHON)("the collectors' own files", () => {
@@ -157,11 +158,11 @@ print("ok")
     const workDir = mkdtempSync(path.join(tmpdir(), "mirrai-enc-"));
     const mailPath = path.join(workDir, "mail.txt");
     // A GB18030 export — what a Chinese Outlook or Foxmail writes.
-    execFileSync(PYTHON!, ["-c", `
+    runPythonSnippetSync(PYTHON!, `
 import sys
 text = "From: zhangsan@example.com\\nSubject: 你好\\nDate: Mon, 1 Jan 2026 00:00:00 +0000\\n\\n这是一封中文邮件。\\n"
 open(sys.argv[1], "wb").write(text.encode("gb18030"))
-`, mailPath], { stdio: "ignore" });
+`, { args: [mailPath] });
 
     const body = `
 import json, sys

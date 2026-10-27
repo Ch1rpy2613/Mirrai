@@ -40,6 +40,15 @@ import argparse
 import subprocess
 from pathlib import Path
 from typing import Optional
+# The scripts say UTF-8, whatever the machine's locale is.
+#
+# These print Chinese — their help, their errors, their findings — and
+# a C locale would make the standard streams ASCII, so printing a
+# single Chinese character raises UnicodeEncodeError and the script
+# dies on its own output. Importing the shared module configures the
+# streams, and it has to happen before anything is printed.
+import collector_common  # noqa: F401
+
 
 
 CONFIG_PATH = Path.home() / ".colleague-skill" / "feishu_config.json"

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "path";
 
@@ -73,7 +74,7 @@ with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
     m.get_chats_with_user("open-id", {})
 print("CALLS:", calls["chats"])
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     if (result.stderr) console.error(result.stderr);
 
     const calls = Number(result.stdout.match(/CALLS: (\d+)/)?.[1] ?? "-1");
@@ -129,7 +130,7 @@ with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
     m.get_chats_with_user("open-id", {})
 print("CALLS:", calls["chats"])
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     if (result.stderr) console.error(result.stderr);
 
     const calls = Number(result.stdout.match(/CALLS: (\d+)/)?.[1] ?? "-1");
@@ -188,7 +189,7 @@ with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
     m.get_chats_with_user("open-id", {})
 print("CALLS:", calls["chats"])
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     if (result.stderr) console.error(result.stderr);
 
     // Both pages were read.

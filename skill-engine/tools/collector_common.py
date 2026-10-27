@@ -8,8 +8,44 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
+
+
+def configure_stdio() -> None:
+    """
+    把标准输出和标准错误设成 UTF-8。
+
+    这些脚本打印的是中文——帮助文字、错误说明、采集到的话。标准流的
+    编码默认跟着 locale：C locale 下它是 ASCII，于是**打印一句中文就
+    抛 UnicodeEncodeError**，脚本死在它自己的输出上。
+
+    服务器给子进程设了 PYTHONIOENCODING=utf-8，所以走服务器那条路
+    没事。但运维自己在终端里跑 `--setup`、或者用一条别的命令跑它，
+    就没有这个环境变量——脚本会死在"请先安装 requests"这句话上，
+    而且那句话根本打不出来。
+
+    所以脚本自己说自己的语言。
+
+    `reconfigure` 是 Python 3.7 以后才有的，而且对已经关掉的流会
+    抛异常——所以两样都兜住。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
+# 它在这里就跑一次，而不是等谁去调。
+#
+# 有些消息是在**导入的时候**打的——"请先安装 requests"就是：那一段在
+# 模块顶层，`main()` 还没开始。所以等 `main()` 去配置就太晚了，脚本
+# 会死在它自己的错误说明上，而且那句话根本打不出来。
+#
+# 导入这一份就等于声明"这个脚本说 UTF-8"。
+configure_stdio()
 
 
 def _decoding_score(text: str) -> int:

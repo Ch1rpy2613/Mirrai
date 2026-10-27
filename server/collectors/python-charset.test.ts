@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -36,12 +37,10 @@ const PYTHON = python();
 
 /** Runs a Python snippet with the tools directory on its path. */
 function runPython(body: string): { status: number; out: string; err: string } {
-  const result = spawnSync(PYTHON!, ["-c", body], {
+  const result = runPythonSnippet(PYTHON!, body, {
     cwd: path.resolve(process.cwd(), "skill-engine/tools"),
-    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-    encoding: "utf-8",
   });
-  return { status: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? "" };
+  return { status: result.status, out: result.stdout, err: result.stderr };
 }
 
 describe.skipIf(!PYTHON)("the subtitle files", () => {
@@ -49,11 +48,11 @@ describe.skipIf(!PYTHON)("the subtitle files", () => {
     const workDir = mkdtempSync(path.join(tmpdir(), "mirrai-srt-"));
     const srtPath = path.join(workDir, "movie.srt");
     // A GB18030 subtitle — what Windows writes by default.
-    execFileSync(PYTHON!, ["-c", `
+    runPythonSnippetSync(PYTHON!, `
 import sys
 text = "1\\n00:00:01,000 --> 00:00:03,000\\n这是一句中文字幕。\\n\\n2\\n00:00:04,000 --> 00:00:06,000\\n第二句。\\n"
 open(sys.argv[1], "wb").write(text.encode("gb18030"))
-`, srtPath], { stdio: "ignore" });
+`, { args: [srtPath] });
 
     const body = `
 import json, sys
@@ -74,11 +73,11 @@ print(json.dumps({"text": out.read_text(encoding="utf-8")}, ensure_ascii=False))
   it("still reads one that is UTF-8", () => {
     const workDir = mkdtempSync(path.join(tmpdir(), "mirrai-srt-"));
     const srtPath = path.join(workDir, "movie.srt");
-    execFileSync(PYTHON!, ["-c", `
+    runPythonSnippetSync(PYTHON!, `
 import sys
 text = "1\\n00:00:01,000 --> 00:00:03,000\\n这是 UTF-8 的字幕。\\n"
 open(sys.argv[1], "wb").write(text.encode("utf-8"))
-`, srtPath], { stdio: "ignore" });
+`, { args: [srtPath] });
 
     const body = `
 import json, sys
@@ -165,10 +164,10 @@ describe.skipIf(!PYTHON)("the mail export", () => {
   it("is read once, not once to guess and once to parse", () => {
     const workDir = mkdtempSync(path.join(tmpdir(), "mirrai-mail-"));
     const mailPath = path.join(workDir, "mail.txt");
-    execFileSync(PYTHON!, ["-c", `
+    runPythonSnippetSync(PYTHON!, `
 import sys
 open(sys.argv[1], "wb").write(b"From: a@b.c\\n\\n" + b"x" * 200000)
-`, mailPath], { stdio: "ignore" });
+`, { args: [mailPath] });
 
     const body = `
 import json, sys

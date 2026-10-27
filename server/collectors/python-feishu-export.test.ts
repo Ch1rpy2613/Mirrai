@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -35,12 +36,10 @@ function python(): string | null {
 const PYTHON = python();
 
 function runPython(body: string): { status: number; out: string; err: string } {
-  const result = spawnSync(PYTHON!, ["-c", body], {
+  const result = runPythonSnippet(PYTHON!, body, {
     cwd: path.resolve(process.cwd(), "skill-engine/tools"),
-    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-    encoding: "utf-8",
   });
-  return { status: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? "" };
+  return { status: result.status, out: result.stdout, err: result.stderr };
 }
 
 describe.skipIf(!PYTHON)("the WeChat export parser", () => {
@@ -48,11 +47,11 @@ describe.skipIf(!PYTHON)("the WeChat export parser", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "mirrai-fx-"));
     const file = path.join(dir, "export.json");
     // A GBK export — what a Chinese Windows machine writes.
-    execFileSync(PYTHON!, ["-c", `
+    runPythonSnippetSync(PYTHON!, `
 import sys
 text = '[{"sender": "zhangsan", "content": "\\u4f60\\u597d\\uff0c\\u4e16\\u754c", "timestamp": "2026-03-14T10:00:00"}]'
 open(sys.argv[1], "wb").write(text.encode("gb18030"))
-`, file], { stdio: "ignore" });
+`, { args: [file] });
 
     const body = `
 import json, sys
@@ -71,11 +70,11 @@ sys.stderr.write(json.dumps({"n": len(messages), "content": messages[0]["content
   it("reads a TXT export that is not UTF-8", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "mirrai-fx-"));
     const file = path.join(dir, "export.txt");
-    execFileSync(PYTHON!, ["-c", `
+    runPythonSnippetSync(PYTHON!, `
 import sys
 text = "2026-03-14 10:00 \\u5f20\\u4e09\\uff1a\\u4f60\\u597d\\uff0c\\u4e16\\u754c\\n"
 open(sys.argv[1], "wb").write(text.encode("gb18030"))
-`, file], { stdio: "ignore" });
+`, { args: [file] });
 
     const body = `
 import json, sys

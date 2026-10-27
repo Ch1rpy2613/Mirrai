@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -42,7 +43,7 @@ sys.path.insert(0, ${JSON.stringify(TOOLS)})
 import feishu_browser as b
 print("PROFILE:", b.get_default_chrome_profile())
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
 
     // It is the tool's own folder, inside the app's own data root.
     expect(result.stdout).toContain(dir);
@@ -59,7 +60,7 @@ sys.path.insert(0, ${JSON.stringify(TOOLS)})
 import feishu_browser as b
 print("PROFILE:", b.get_default_chrome_profile())
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
 
     expect(result.stdout).toContain(".mirrai");
     expect(result.stdout).not.toContain("Google/Chrome");

@@ -12,6 +12,15 @@ from pathlib import Path
 from typing import Callable
 
 from skill_schema import enrich_skill_meta, now_iso
+# The scripts say UTF-8, whatever the machine's locale is.
+#
+# These print Chinese — their help, their errors, their findings — and
+# a C locale would make the standard streams ASCII, so printing a
+# single Chinese character raises UnicodeEncodeError and the script
+# dies on its own output. Importing the shared module configures the
+# streams, and it has to happen before anything is printed.
+import collector_common  # noqa: F401
+
 
 
 FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?", re.DOTALL)

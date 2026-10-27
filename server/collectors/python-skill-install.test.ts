@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -81,7 +82,7 @@ print("EXISTS:", (install_dir / "SKILL.md").exists())
 if (install_dir / "SKILL.md").exists():
     print("CONTENT:", (install_dir / "SKILL.md").read_text(encoding="utf-8"))
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     if (result.stderr) console.error(result.stderr);
 
     /**
@@ -129,7 +130,7 @@ m.install_generated_skill(skill_dir, skills_dir, force=True, host="hermes")
 print("CONTENT:", (install_dir / "SKILL.md").read_text(encoding="utf-8"))
 print("METADATA:", (install_dir / ".dot-skill-install.json").exists())
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     if (result.stderr) console.error(result.stderr);
 
     expect(result.stdout).toContain("新内容");

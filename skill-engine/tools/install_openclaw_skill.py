@@ -8,6 +8,15 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+# The scripts say UTF-8, whatever the machine's locale is.
+#
+# These print Chinese — their help, their errors, their findings — and
+# a C locale would make the standard streams ASCII, so printing a
+# single Chinese character raises UnicodeEncodeError and the script
+# dies on its own output. Importing the shared module configures the
+# streams, and it has to happen before anything is printed.
+import collector_common  # noqa: F401
+
 
 
 IGNORE_NAMES = shutil.ignore_patterns(".git", "__pycache__", ".DS_Store", "*.pyc")

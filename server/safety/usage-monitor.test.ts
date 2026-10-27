@@ -17,6 +17,7 @@ import {
   type UsageSignals,
 } from "./usage-monitor";
 import { isQuietHour, collectReminders } from "../scheduler/reminders";
+import { localDateKey } from "@shared/timezone";
 
 function signals(overrides: Partial<UsageSignals> = {}): UsageSignals {
   return {
@@ -28,11 +29,25 @@ function signals(overrides: Partial<UsageSignals> = {}): UsageSignals {
   };
 }
 
-/** The date key the monitor uses for a day relative to `now`. */
+/**
+ * The date key the monitor uses for a day relative to `now`.
+ *
+ * It is the *local* day key — the same function the monitor falls back
+ * to when the user has no time zone of their own.
+ *
+ * It used to be the UTC date of a locally-shifted timestamp: the local
+ * arithmetic, then the UTC calendar. The two agree only while the local
+ * day and the UTC day are the same day — so the fixture and the code
+ * under test would stop seeing the same day on any machine far enough
+ * from UTC, and on any machine in the hours between midnight and
+ * eight in the morning.
+ *
+ * The one thing a test must not do is guess at what the code computes.
+ */
 function dayKey(now: number, daysAgo: number): string {
   const date = new Date(now);
   date.setDate(date.getDate() - daysAgo);
-  return date.toISOString().slice(0, 10);
+  return localDateKey(date);
 }
 
 /** Daily counts for the last 14 days, oldest first. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import { readFileSync } from "node:fs";
@@ -46,11 +47,7 @@ import dingtalk_auto_collector as m
 sys.stdin = open("/dev/null")
 print("WAITED:", m.wait_for_enter())
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], {
-      encoding: "utf-8",
-      // The server's own setting: no standard input.
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const result = runPythonSnippet(PYTHON!, body);
 
     expect(result.stderr).not.toContain("EOFError");
     expect(result.stdout).toContain("WAITED: False");

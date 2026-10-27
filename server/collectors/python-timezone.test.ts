@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -66,7 +67,7 @@ m._TIMEZONE_OFFSET_MINUTES = 480
 tz = m._reader_tz()
 print("offset", tz.utcoffset(None).total_seconds() if tz else None)
 `;
-      const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+      const result = runPythonSnippet(PYTHON!, body);
       /**
        * The old code returned None here — the `except` swallowed the
        * error — and the caller fell back to the machine's clock.
@@ -96,7 +97,7 @@ m._TIMEZONE_OFFSET_MINUTES = 480
 tz = m._reader_tz()
 print("name", getattr(tz, "key", None))
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     expect(result.stdout.trim()).toBe("name UTC");
   });
 

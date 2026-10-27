@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -41,7 +42,7 @@ sys.path.insert(0, ${JSON.stringify(TOOLS)})
 import transcribe_audio as m
 print("LIMIT:", m.DOWNLOAD_TIMEOUT_SECONDS)
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     expect(result.stdout).toContain("LIMIT: 600");
   });
 });

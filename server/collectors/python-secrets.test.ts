@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -78,7 +79,7 @@ print("SAID:", out.getvalue())
 # is the prefix that has to be looked for.
 print("HAS_PREFIX:", SECRET[:20] in out.getvalue())
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
 
     expect(result.stdout).toContain("HAS_PREFIX: False");
     // And the token was saved — only not printed.

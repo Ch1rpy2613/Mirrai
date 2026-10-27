@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -71,7 +72,7 @@ print("CHECKED:", calls["members"])
 print("LIMIT:", m.MAX_CHATS_TO_CHECK)
 print("SAID:", err.getvalue())
 `;
-    const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+    const result = runPythonSnippet(PYTHON!, body);
     if (result.stderr) console.error(result.stderr);
 
     // It is not a thousand.

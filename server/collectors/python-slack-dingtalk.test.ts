@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -32,12 +33,10 @@ function python(): string | null {
 const PYTHON = python();
 
 function runPython(body: string): { status: number; out: string; err: string } {
-  const result = spawnSync(PYTHON!, ["-c", body], {
+  const result = runPythonSnippet(PYTHON!, body, {
     cwd: path.resolve(process.cwd(), "skill-engine/tools"),
-    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-    encoding: "utf-8",
   });
-  return { status: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? "" };
+  return { status: result.status, out: result.stdout, err: result.stderr };
 }
 
 const STUBS = `

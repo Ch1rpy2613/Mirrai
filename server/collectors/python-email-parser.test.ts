@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runPythonSnippet, runPythonSnippetSync } from "./python-runner";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "path";
 
@@ -37,7 +38,7 @@ const PYTHON = python();
 
 /** Runs a snippet with the tools directory on the path. */
 function runPython(body: string): { status: number | null; out: string; err: string } {
-  const result = spawnSync(PYTHON!, ["-c", body], { encoding: "utf-8" });
+  const result = runPythonSnippet(PYTHON!, body);
   return {
     status: result.status,
     out: result.stdout ?? "",
