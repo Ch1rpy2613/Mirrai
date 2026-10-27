@@ -1308,7 +1308,7 @@ function WeChatCommandsSection() {
 export function DataManagementTab() {
   const [, navigate] = useLocation();
   const { logout } = useAuth();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { data: accountStats, isError: accountStatsFailed } = trpc.user.getAccountStats.useQuery();
 
   /* The full export: every persona, every memory, every diary, the
@@ -1340,7 +1340,8 @@ export function DataManagementTab() {
         toast.warning(
           t("settings.data.exportTruncated", {
             count: truncated.length,
-            names: truncated.map((entry) => entry.personaName).join("、"),
+            // The separator follows the interface's language.
+            names: truncated.map((entry) => entry.personaName).join(locale === "en" ? ", " : "、"),
           }),
         );
         return;
