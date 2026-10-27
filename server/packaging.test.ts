@@ -194,6 +194,29 @@ describe("the packaged app", () => {
     expect(verify).toContain("DATABASE_URL is not set");
   });
 
+  it("pins the workflow's actions to the commit they were on", () => {
+    /**
+     * A version tag (`@v4`) can be *moved*: the people who own the
+     * action can point it at new code — and then the workflow runs that
+     * new code, with the repository's secrets, without anybody in this
+     * repository having changed a thing. The commit cannot move.
+     */
+    const dir = path.join(ROOT, ".github/workflows");
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith(".yml")) continue;
+      const source = readFileSync(path.join(dir, name), "utf-8");
+      for (const match of source.matchAll(/uses:\s*([\w.-]+\/[\w.-]+)@([^\s#]+)/g)) {
+        const [, action, reference] = match;
+        // The example in a comment is not an action that runs.
+        if (source.slice(0, match.index).split("\n").pop()?.trim().startsWith("#")) continue;
+        expect(
+          /^[0-9a-f]{40}$/.test(reference),
+          `${name}: ${action} is on "${reference}", not on a commit`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it("gives the downloads something to check them against", () => {
     /**
      * There was no checksum — so the person who downloaded the disk

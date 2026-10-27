@@ -8,6 +8,12 @@
 #
 # See https://semgrep.dev/docs
 
+# The actions are pinned to the exact commit they were on.
+#
+# A version tag (`@v4`) can be **moved**: the people who own the action
+# can point it at new code — and then the workflow runs that new code,
+# with the repository's secrets, without anybody in this repository
+# having changed a thing. The commit cannot move.
 name: Semgrep
 
 on:
@@ -32,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Checkout project source
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Scan code using project's configuration on https://semgrep.dev/manage
       - uses: returntocorp/semgrep-action@fcd5ab7459e8d91cb1777481980d1b18b4fc6735
@@ -43,7 +49,7 @@ jobs:
 
       # Upload SARIF file generated in previous step
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3
         with:
           sarif_file: semgrep.sarif
           # Its own category, so Semgrep's findings and CodeQL's cannot
