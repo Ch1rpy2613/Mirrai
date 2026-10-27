@@ -134,9 +134,11 @@ describe("the packaged app", () => {
     // the build without anything saying so until the build ran.
     const tsconfig = JSON.parse(
       readFileSync(path.join(ROOT, "tsconfig.json"), "utf-8")
-        // The file carries comments, which JSON does not allow.
-        .replace(/^\s*\/\*\*[\s\S]*?\*\//gm, "")
-        .replace(/^\s*\/\/.*$/gm, ""),
+        // The file carries comments, which JSON does not allow, and a
+        // trailing comma, which it does not either.
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "")
+        .replace(/,(\s*[}\]])/g, "$1"),
     ) as { include?: string[] };
     for (const file of ["vite.config.ts", "vitest.config.ts", "drizzle.config.ts"]) {
       expect(tsconfig.include ?? []).toContain(file);
