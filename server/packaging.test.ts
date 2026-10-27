@@ -187,6 +187,18 @@ describe("the packaged app", () => {
     expect(macos).toMatch(/Homebrew paths are still unresolved[\s\S]{0,120}return 1/);
   });
 
+  it("builds the live scripts' modules where the scripts look for them", () => {
+    // esbuild lays the output out relative to the common ancestor of
+    // the entry points, so without a base directory the llm bundle
+    // ended up at `.live-test/llm/llm/providers/claude.js` instead of
+    // `.live-test/llm/providers/claude.js` — and every script that
+    // imported it failed with "cannot find the module".
+    const build = readFileSync(path.join(ROOT, "scripts/live-build.mjs"), "utf-8");
+    expect(build).toContain("--outbase=");
+    // And the old layout is not left behind to be imported by mistake.
+    expect(build).toContain("rmSync");
+  });
+
   it("stops when the schema cannot be synchronised", () => {
     // `push` applies the difference between the schema and the live
     // database — so a failure means the two still disagree, and the app
