@@ -209,7 +209,10 @@ function getMilestone(chatCount: number) {
   return MILESTONES.find(m => chatCount >= m.threshold);
 }
 
-function getDaysUntilAnniversary(togetherFrom: string): number | null {
+export function getDaysUntilAnniversary(
+  togetherFrom: string,
+  timeZone?: string | null,
+): number | null {
   const startMs = dayStart(togetherFrom);
   if (startMs === null) return null;
   const start = new Date(startMs);
@@ -220,14 +223,45 @@ function getDaysUntilAnniversary(togetherFrom: string): number | null {
    * midnight of that day is *before* now, and the year was rolled
    * forward. So the banner never appeared on the day it was about,
    * and the "anniversary today" wording could never be reached.
+   *
+   * And "today" is the *user's* today.
+   *
+   * It used to be the browser's — while the very same card used the
+   * user's stored zone for the heatmap, the streak, the calendar and
+   * the graduation date. So a user in Asia/Shanghai on a machine set to
+   * UTC was told the anniversary was a day early between midnight and
+   * eight in the morning, and on the day itself the count rolled
+   * forward a year and the banner disappeared.
    */
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const thisYear = new Date(startOfToday.getFullYear(), start.getMonth(), start.getDate());
-  let diff = Math.round((thisYear.getTime() - startOfToday.getTime()) / 86400000);
+  const todayKey = zonedDateKey(new Date(), timeZone);
+  const todayMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(todayKey);
+  if (!todayMatch) return null;
+  const todayYear = Number(todayMatch[1]);
+  const thisYear = new Date(
+    todayYear,
+    start.getMonth(),
+    start.getDate(),
+  );
+  let diff = Math.round(
+    (Date.UTC(thisYear.getFullYear(), thisYear.getMonth(), thisYear.getDate()) -
+      Date.UTC(
+        Number(todayMatch[1]),
+        Number(todayMatch[2]) - 1,
+        Number(todayMatch[3]),
+      )) /
+      86_400_000,
+  );
   if (diff < 0) {
     thisYear.setFullYear(thisYear.getFullYear() + 1);
-    diff = Math.round((thisYear.getTime() - startOfToday.getTime()) / 86400000);
+    diff = Math.round(
+      (Date.UTC(thisYear.getFullYear(), thisYear.getMonth(), thisYear.getDate()) -
+        Date.UTC(
+          Number(todayMatch[1]),
+          Number(todayMatch[2]) - 1,
+          Number(todayMatch[3]),
+        )) /
+        86_400_000,
+    );
   }
   return diff <= 30 ? diff : null;
 }
@@ -1065,7 +1099,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
    */
   const anniversary =
     persona.togetherFrom && !persona.togetherTo && !isGraduated
-      ? getDaysUntilAnniversary(persona.togetherFrom)
+      ? getDaysUntilAnniversary(persona.togetherFrom, timezone)
       : null;
   const catchphrases: string[] = pd.catchphrases || [];
   /**
