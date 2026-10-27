@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from collector_common import decode_text
 
 
 TIMESTAMP_PATTERN = re.compile(
@@ -70,14 +75,15 @@ def read_subtitle(path: Path) -> str:
     最后用 latin-1 兜底——它不会失败，代价是错的字。
     """
     raw = path.read_bytes()
-    for encoding in ("utf-8-sig", "utf-8", "gb18030", "big5"):
-        try:
-            return raw.decode(encoding)
-        except (UnicodeDecodeError, LookupError):
-            continue
-    # latin-1 不会失败——每一个字节都是它的字符。字可能是错的，但字幕
-    # 至少读得出来，用户还能自己看。
-    return raw.decode("latin-1")
+    # 挨个试不够。
+    #
+    # GB18030 几乎什么字节都收，所以它永远不报错——一份 Big5 的繁体
+    # 字幕会被"成功"地解成一串乱码，而字幕看起来是读出来了的。把它
+    # 放到 GB18030 前面也不行：那样 GB18030 的文件会被解成 Big5，一样
+    # 是乱码，一样不报错。
+    #
+    # 所以交给那个会打分的解码器：它挨个解一遍，挑最像样的那一种。
+    return decode_text(raw)
 
 
 def convert_file(input_path: Path, output_path: Path) -> Path:

@@ -32,6 +32,8 @@ import time
 import argparse
 import platform
 from pathlib import Path
+
+from collector_common import write_text_atomic
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional
@@ -240,6 +242,26 @@ def wait_for_enter() -> bool:
         return False
 
 
+
+def ask_secret(question: str) -> str:
+    """
+    问一个秘密——而且不回显。
+
+    它原来用的是普通的 `input()`，所以那个 App Secret 一个字一个字地
+    打在终端上：它留在那个终端窗口的滚屏里，也留在任何一次录屏里。
+    `getpass` 不回显。
+
+    没有人（或者没有终端）的时候，它返回空——和在别处一样。
+    """
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return ""
+        import getpass
+
+        return getpass.getpass(question).strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
 def setup_config() -> None:
     print("=== 钉钉自动采集配置 ===\n")
     print("请前往 https://open-dev.dingtalk.com 创建企业内部应用，开通以下权限：\n")
@@ -259,7 +281,7 @@ def setup_config() -> None:
     print()
 
     app_key = input("AppKey (ding_xxx): ").strip()
-    app_secret = input("AppSecret: ").strip()
+    app_secret = ask_secret("AppSecret: ")
 
     config = {"app_key": app_key, "app_secret": app_secret}
     save_config(config)
@@ -1039,7 +1061,7 @@ def collect_all(
     try:
         doc_content = collect_docs(user, doc_limit, config)
         doc_path = output_dir / "docs.txt"
-        doc_path.write_text(doc_content, encoding="utf-8")
+        write_text_atomic(doc_path, doc_content)
         results["docs"] = str(doc_path)
         print(f"  ✅ 文档 → {doc_path}", file=sys.stderr)
     except Exception as e:
@@ -1050,7 +1072,7 @@ def collect_all(
     try:
         bitable_content = collect_bitables(user, config)
         bt_path = output_dir / "bitables.txt"
-        bt_path.write_text(bitable_content, encoding="utf-8")
+        write_text_atomic(bt_path, bitable_content)
         results["bitables"] = str(bt_path)
         print(f"  ✅ 多维表格 → {bt_path}", file=sys.stderr)
     except Exception as e:
@@ -1063,7 +1085,7 @@ def collect_all(
         try:
             msg_content, records, truncated = collect_messages_browser(name, msg_limit, chrome_profile, headless)
             msg_path = output_dir / "messages.txt"
-            msg_path.write_text(msg_content, encoding="utf-8")
+            write_text_atomic(msg_path, msg_content)
             results["messages"] = str(msg_path)
             print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
             if output_format == "json":
@@ -1098,8 +1120,9 @@ def collect_all(
     # the collection down with it.
     # ------------------------------------------------------------------
     try:
-        (output_dir / "collection_summary.json").write_text(
-            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        write_text_atomic(
+            output_dir / "collection_summary.json",
+            json.dumps(summary, ensure_ascii=False, indent=2),
         )
     except OSError as e:
         print(f"  ⚠️  摘要写入失败：{e}", file=sys.stderr)

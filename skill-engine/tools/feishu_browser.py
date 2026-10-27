@@ -82,6 +82,23 @@ def make_context(playwright, chrome_profile: Optional[str], headless: bool):
         sys.exit(1)
 
 
+def wait_for_enter() -> None:
+    """
+    等一个人按回车——如果真的有人在前面。
+
+    服务器跑采集器的时候没有标准输入，所以 `input()` 抛 EOFError：整个
+    脚本带着一段回溯死掉，死的地方正是需要人在浏览器前面的那一刻。
+
+    别的采集器都改过了，这个还没有。
+    """
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return
+        input()
+    except (EOFError, KeyboardInterrupt):
+        return
+
+
 def detect_page_type(url: str) -> str:
     """根据 URL 判断飞书页面类型"""
     if "/wiki/" in url:
@@ -220,7 +237,7 @@ def fetch_messages(page, chat_name: str, target_name: str, limit: int = 500) -> 
     except Exception as e:
         print(f"⚠️  自动搜索群聊失败：{e}", file=sys.stderr)
         print(f"   请手动导航到「{chat_name}」群聊，然后按回车继续...", file=sys.stderr)
-        input()
+        wait_for_enter()
 
     # 向上滚动加载历史消息
     print(f"正在加载消息历史...", file=sys.stderr)
@@ -358,7 +375,7 @@ def main() -> None:
             if headless:
                 print("   提示：请用 --show-browser 参数显示浏览器窗口以完成登录", file=sys.stderr)
                 sys.exit(1)
-            input()
+            wait_for_enter()
 
         # 根据任务类型执行
         if args.url:

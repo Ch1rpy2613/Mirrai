@@ -162,7 +162,7 @@ print(json.dumps({
 });
 
 describe.skipIf(!PYTHON)("the mail export", () => {
-  it("does not read the whole file to guess the encoding", () => {
+  it("is read once, not once to guess and once to parse", () => {
     const workDir = mkdtempSync(path.join(tmpdir(), "mirrai-mail-"));
     const mailPath = path.join(workDir, "mail.txt");
     execFileSync(PYTHON!, ["-c", `
@@ -176,11 +176,7 @@ sys.path.insert(0, ${JSON.stringify(TOOLS)})
 import email_parser as m
 from pathlib import Path
 
-# How much was read to sniff the encoding?
-#
-# Every read of the file is counted — the old code read it with
-# \`open(...)\`, not with Path.read_bytes, so patching only one of them
-# would have missed it.
+# Every read of the file is counted.
 read_bytes = {"n": 0}
 import builtins
 real_open = builtins.open
@@ -208,7 +204,7 @@ def counting_open(path, mode="r", *args, **kwargs):
 
 builtins.open = counting_open
 try:
-    m._text_encoding(${JSON.stringify(mailPath)})
+    m.read_text_any(${JSON.stringify(mailPath)})
 finally:
     builtins.open = real_open
 
@@ -218,12 +214,11 @@ print(json.dumps({"read": read_bytes["n"]}, ensure_ascii=False))
     expect(result.err).toBe("");
     const read = JSON.parse(result.out.trim()).read as number;
     /**
-     * Only the head of the file is read.
+     * The file is read once.
      *
-     * The whole file used to be read — twice, once to sniff the
-     * encoding and once to parse it — so a large export was in memory
-     * twice over.
+     * It used to be read twice — once to sniff the encoding and once
+     * to parse it — so a large export was in memory twice over.
      */
-    expect(read).toBeLessThan(100_000);
+    expect(read).toBeLessThan(300_000);
   });
 });

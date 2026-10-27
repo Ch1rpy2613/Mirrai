@@ -37,6 +37,8 @@ import sys
 import time
 import argparse
 from pathlib import Path
+
+from collector_common import write_text_atomic
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional
@@ -260,6 +262,26 @@ def save_config(config: dict) -> None:
         pass
 
 
+
+def ask_secret(question: str) -> str:
+    """
+    问一个秘密——而且不回显。
+
+    它原来用的是普通的 `input()`，所以那个 App Secret 一个字一个字地
+    打在终端上：它留在那个终端窗口的滚屏里，也留在任何一次录屏里。
+    `getpass` 不回显。
+
+    没有人（或者没有终端）的时候，它返回空——和在别处一样。
+    """
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return ""
+        import getpass
+
+        return getpass.getpass(question).strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
 def setup_config() -> None:
     print("=== Slack 自动采集配置 ===\n")
     print("步骤 1：前往 https://api.slack.com/apps 创建新 App")
@@ -284,7 +306,7 @@ def setup_config() -> None:
     print("步骤 3：Install to Workspace → 复制 Bot User OAuth Token（xoxb-...）")
     print("步骤 4：将 Bot 加入目标频道（/invite @your-bot-name）\n")
 
-    token = input("Bot User OAuth Token (xoxb-...): ").strip()
+    token = ask_secret("Bot User OAuth Token (xoxb-...): ")
     if not token.startswith("xoxb-"):
         print("警告：Token 格式不对，应以 xoxb- 开头", file=sys.stderr)
 
@@ -909,7 +931,7 @@ def collect_all(
     try:
         msg_content, records, truncated = collect_messages(user, channels, msg_limit, client)
         msg_path = output_dir / "messages.txt"
-        msg_path.write_text(msg_content, encoding="utf-8")
+        write_text_atomic(msg_path, msg_content)
         results["messages"] = str(msg_path)
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
         if output_format == "json":
@@ -949,8 +971,9 @@ def collect_all(
     # the collection down with it.
     # ------------------------------------------------------------------
     try:
-        summary_path.write_text(
-            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        write_text_atomic(
+            summary_path,
+            json.dumps(summary, ensure_ascii=False, indent=2),
         )
     except OSError as e:
         print(f"  ⚠️  摘要写入失败：{e}", file=sys.stderr)

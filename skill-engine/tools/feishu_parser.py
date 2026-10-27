@@ -18,6 +18,8 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
+from collector_common import decode_text
+
 
 def read_text_any(path: str) -> str:
     """
@@ -33,12 +35,7 @@ def read_text_any(path: str) -> str:
     的导出好。
     """
     raw = Path(path).read_bytes()
-    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
-        try:
-            return raw.decode(encoding)
-        except (UnicodeDecodeError, LookupError):
-            continue
-    return raw.decode("utf-8", errors="replace")
+    return decode_text(raw)
 
 
 def parse_feishu_json(file_path: str, target_name: str) -> list[dict]:

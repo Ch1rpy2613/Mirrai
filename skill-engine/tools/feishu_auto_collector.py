@@ -47,6 +47,8 @@ import sys
 import time
 import argparse
 from pathlib import Path
+
+from collector_common import write_text_atomic
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional
@@ -231,6 +233,26 @@ def save_config(config: dict) -> None:
         pass
 
 
+
+def ask_secret(question: str) -> str:
+    """
+    问一个秘密——而且不回显。
+
+    它原来用的是普通的 `input()`，所以那个 App Secret 一个字一个字地
+    打在终端上：它留在那个终端窗口的滚屏里，也留在任何一次录屏里。
+    `getpass` 不回显。
+
+    没有人（或者没有终端）的时候，它返回空——和在别处一样。
+    """
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return ""
+        import getpass
+
+        return getpass.getpass(question).strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
 def setup_config() -> None:
     print("=== 飞书自动采集配置 ===\n")
     print("请前往 https://open.feishu.cn 创建企业自建应用，开通以下权限：")
@@ -264,12 +286,12 @@ def setup_config() -> None:
     print()
 
     app_id = input("App ID (cli_xxx): ").strip()
-    app_secret = input("App Secret: ").strip()
+    app_secret = ask_secret("App Secret: ")
 
     config = {"app_id": app_id, "app_secret": app_secret}
 
     print("\n是否配置 user_access_token？（用于私聊消息采集，可跳过）")
-    user_token = input("user_access_token (留空跳过): ").strip()
+    user_token = ask_secret("user_access_token (留空跳过): ")
     if user_token:
         config["user_access_token"] = user_token
     p2p_chat_id = input("私聊 chat_id (留空跳过): ").strip()
@@ -1159,7 +1181,7 @@ def collect_all(
         records, chat_sources, truncated = collect_message_records(user, msg_limit, config)
         msg_content = format_message_report(records, chat_sources, user.get("name", name))
         msg_path = output_dir / "messages.txt"
-        msg_path.write_text(msg_content, encoding="utf-8")
+        write_text_atomic(msg_path, msg_content)
         results["messages"] = str(msg_path)
         print(f"  ✅ 消息记录 → {msg_path}", file=sys.stderr)
         if output_format == "json":
@@ -1172,7 +1194,7 @@ def collect_all(
     try:
         doc_content = collect_docs(user, doc_limit, config)
         doc_path = output_dir / "docs.txt"
-        doc_path.write_text(doc_content, encoding="utf-8")
+        write_text_atomic(doc_path, doc_content)
         results["docs"] = str(doc_path)
         print(f"  ✅ 文档内容 → {doc_path}", file=sys.stderr)
     except Exception as e:
@@ -1200,8 +1222,9 @@ def collect_all(
     # the collection down with it.
     # ------------------------------------------------------------------
     try:
-        (output_dir / "collection_summary.json").write_text(
-            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        write_text_atomic(
+            output_dir / "collection_summary.json",
+            json.dumps(summary, ensure_ascii=False, indent=2),
         )
     except OSError as e:
         print(f"  ⚠️  摘要写入失败：{e}", file=sys.stderr)

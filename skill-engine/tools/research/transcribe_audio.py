@@ -297,7 +297,17 @@ def main() -> None:
             output_path = Path(tempfile.gettempdir()) / f"{audio_path.stem}_transcript.txt"
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        # 只有主人能读。
+        #
+        # 它原来是 0644，在 /tmp 下一个**猜得到**的名字：而这个文件是
+        # 一段播客或者访谈的**逐字稿**——这个工具自己的说明就写着它
+        # 绝对不能进技能目录（版权）。所以它最该藏起来的那份文件，反而
+        # 是全世界都能读的。
         output_path.write_text(transcript + "\n", encoding="utf-8")
+        try:
+            output_path.chmod(0o600)
+        except OSError:
+            pass
 
         print(f"\n[transcribe] wrote: {output_path}", file=sys.stderr)
         print(

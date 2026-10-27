@@ -23,6 +23,8 @@ import re
 import sys
 import argparse
 from pathlib import Path
+
+from collector_common import decode_text
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
@@ -261,65 +263,60 @@ def parse_eml_file(file_path: str, target: str) -> list[dict]:
     }]
 
 
-#: 多少字节用来猜编码。开头就够了——声明在文件的头上。
-_SNIFF_BYTES = 64 * 1024
-
-
-def _text_encoding(file_path: str) -> str:
+def read_text_any(file_path: str) -> str:
     """
-    The encoding of a mail export.
+    读一个邮件导出——不管它是什么编码。
 
-    UTF-8 is what the app writes, but a mail export saved by a Chinese
-    Outlook or Foxmail is very often GB18030 — and reading that as
-    UTF-8 raises UnicodeDecodeError, so the whole export failed and the
-    user got "the collector did not finish" and no mails at all.
+    UTF-8 是这个 app 写出来的，但中文 Outlook 或者 Foxmail 存下来的
+    导出**常常**是 GB18030——按 UTF-8 读会抛 UnicodeDecodeError，于是
+    整个导出失败，用户看到的是"采集器没有跑完"，一封邮件也没有。
 
-    So the file is tried as UTF-8 first, and then as GB18030, and the
-    bytes are decoded with replacement as a last resort: a single odd
-    character is better than losing every mail in the file.
+    所以交给那个会打分的解码器：它挨个试，挑最像样的那一种。挨个试
+    是不够的——GB18030 几乎什么字节都收，所以它永远不报错，一份 Big5
+    的繁体导出就被"成功"地解成一串乱码，而采集器报告一切正常。
 
-    Only the head of the file is read to sniff it. The whole file used
-    to be read — twice, once to sniff and once to parse — so a large
-    export was in memory twice over.
+    读一次就好：整个文件原来读了两遍（一遍猜编码，一遍解析），所以一
+    份大的导出在内存里待了两份。
     """
     try:
         with open(file_path, "rb") as f:
-            raw = f.read(_SNIFF_BYTES)
+            raw = f.read()
     except OSError:
-        return "utf-8"
-
-    for candidate in ("utf-8", "gb18030"):
-        try:
-            raw.decode(candidate)
-            return candidate
-        except UnicodeDecodeError:
-            continue
-    return "utf-8"
+        return ""
+    return decode_text(raw)
 
 
 def parse_mbox_file(file_path: str, target: str) -> list[dict]:
     """解析 .mbox 文件（多封邮件合集）"""
     results = []
+    # 档案要关上。
+    #
+    # 它原来从不关——句柄只靠垃圾回收释放。所以在出错的那条路上（或者
+    # 在不是 CPython 的解释器上），文件在整个进程的生命里都是开着的；
+    # 在 Windows 上那会让这个档案一直被锁着，之后再读写同一个文件就
+    # 失败了。
     mbox = mailbox.mbox(file_path)
+    try:
+        for msg in mbox:
+            from_field = msg.get("From", "")
+            if not is_from_target(from_field, target):
+                continue
 
-    for msg in mbox:
-        from_field = msg.get("From", "")
-        if not is_from_target(from_field, target):
-            continue
+            subject = decode_mime_str(msg.get("Subject", ""))
+            date = str(msg.get("Date", ""))
+            body = extract_email_body(msg)
 
-        subject = decode_mime_str(msg.get("Subject", ""))
-        date = str(msg.get("Date", ""))
-        body = extract_email_body(msg)
+            if not body:
+                continue
 
-        if not body:
-            continue
-
-        results.append({
-            "from": decode_mime_str(from_field),
-            "subject": subject,
-            "date": date,
-            "body": body,
-        })
+            results.append({
+                "from": decode_mime_str(from_field),
+                "subject": subject,
+                "date": date,
+                "body": body,
+            })
+    finally:
+        mbox.close()
 
     return results
 
@@ -337,8 +334,7 @@ def parse_txt_file(file_path: str, target: str) -> list[dict]:
     """
     results = []
 
-    with open(file_path, "r", encoding=_text_encoding(file_path), errors="replace") as f:
-        content = f.read()
+    content = read_text_any(file_path)
 
     # 尝试按分隔符切割多封邮件
     emails_raw = re.split(r"\n={3,}\n|\n-{3,}\n(?=From:)", content)
