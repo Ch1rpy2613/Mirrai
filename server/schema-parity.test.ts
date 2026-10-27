@@ -161,9 +161,42 @@ function schemaIndexes(): Map<string, Set<string>> {
   return result;
 }
 
+/**
+ * The columns each index in the schema covers, by table name.
+ *
+ * The names alone are not enough: an index on the wrong column is no
+ * better than no index at all.
+ */
+function schemaIndexColumns(): Map<string, Array<{ name: string; columns: string[] }>> {
+  const source = readSchema();
+  const result = new Map<string, Array<{ name: string; columns: string[] }>>();
+  const pattern = /pgTable\(\s*"([^"]+)"/g;
+  for (const match of source.matchAll(pattern)) {
+    const open = source.indexOf("(", match.index);
+    let depth = 1;
+    let index = open + 1;
+    while (index < source.length && depth > 0) {
+      const character = source[index];
+      if (character === "(") depth++;
+      else if (character === ")") depth--;
+      index++;
+    }
+    const body = source.slice(open, index);
+    const declared: Array<{ name: string; columns: string[] }> = [];
+    // index("name").on(table.a, table.b)
+    for (const found of body.matchAll(
+      /\b(?:index|uniqueIndex)\(\s*"([^"]+)"\s*\)\s*\.on\s*\(([^)]*)\)/g,
+    )) {
+      const columns = Array.from(found[2].matchAll(/\.(\w+)/g)).map((c) => c[1]);
+      declared.push({ name: found[1], columns });
+    }
+    result.set(match[1], declared);
+  }
+  return result;
+}
+
 /** The indexes the migrations create, by table name. */
-function migrationIndexes(): Map<string, Set<string>> {
-  const source = readMigrations();
+function migrationIndexes(): Map<string, Set<string>> {  const source = readMigrations();
   const result = new Map<string, Set<string>>();
   const ensure = (name: string) => {
     if (!result.has(name)) result.set(name, new Set());
@@ -301,6 +334,50 @@ describe("the schema and the migrations", () => {
         missing,
         `the table "${name}" has columns the migrations never add`,
       ).toEqual([]);
+    }
+  });
+
+  it("give the tables every turn touches an index", () => {
+    /**
+     * The tables that are read on every turn had **no index at all**.
+     *
+     * `messages` is the one every turn reads and writes — loading a
+     * conversation, paging back through it, the daily counts, the
+     * streak — and it is the largest table in the instance. The
+     * collected history (twenty thousand rows a persona, read by every
+     * distillation), the uploaded files, the memories, the personas,
+     * the distillation runs, the conversation summary and the safety
+     * record were all the same.
+     *
+     * So the app got slower and slower as the instance accumulated
+     * history, and on a shared database each user's queries scanned
+     * every other user's rows too.
+     */
+    const hot: Record<string, string[]> = {
+      messages: ["personaId", "userId"],
+      personas: ["userId"],
+      memories: ["personaId", "userId"],
+      collected_messages: ["personaId", "userId"],
+      persona_files: ["personaId", "userId"],
+      skill_jobs: ["personaId", "userId"],
+      chat_summaries: ["personaId", "userId"],
+      safety_events: ["userId"],
+    };
+
+    const schema = schemaIndexColumns();
+    for (const [table, columns] of Object.entries(hot)) {
+      const declared = schema.get(table);
+      expect(declared, `the table "${table}" is not declared`).toBeTruthy();
+      /**
+       * The index has to lead with the column the query filters on.
+       */
+      const found = declared!.some((index) =>
+        columns.every((column) => index.columns.includes(column)),
+      );
+      expect(
+        found,
+        `the table "${table}" has no index on ${columns.join(", ")}`,
+      ).toBe(true);
     }
   });
 });

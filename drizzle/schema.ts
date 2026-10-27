@@ -242,7 +242,15 @@ export const personas = pgTable("personas", {
   distillationMode: varchar("distillationMode", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The user's own personas.
+   *
+   * The lobby, the statistics and the account page all read them by
+   * their owner, and the table had no index for it.
+   */
+  userIdx: index("personas_user_idx").on(table.userId),
+}));
 
 export type Persona = typeof personas.$inferSelect;
 export type InsertPersona = typeof personas.$inferInsert;
@@ -259,7 +267,16 @@ export const personaFiles = pgTable("persona_files", {
   extractedMemory: text("extractedMemory"),
   processStatus: processStatusEnum().default("uploaded").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The uploaded files of one persona.
+   *
+   * Every distillation reads them — including the extracted text, which
+   * is the largest thing the app holds for one persona — and the table
+   * had no index.
+   */
+  personaUserIdx: index("persona_files_persona_user_idx").on(table.personaId, table.userId),
+}));
 
 export type PersonaFile = typeof personaFiles.$inferSelect;
 export type InsertPersonaFile = typeof personaFiles.$inferInsert;
@@ -303,7 +320,32 @@ export const messages = pgTable("messages", {
   origin: varchar("origin", { length: 16 }),
   channel: channelEnum().default("web").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The conversations of one persona.
+   *
+   * The table had **no index at all** — and it is the one every turn
+   * reads and writes. So loading a conversation, paging back through
+   * it, and the daily counts were all sequential scans over every
+   * message of every user on the instance.
+   */
+  personaUserCreatedIdx: index("messages_persona_user_created_idx").on(
+    table.personaId,
+    table.userId,
+    table.createdAt,
+  ),
+  /**
+   * The user's own messages, in the order they were said.
+   *
+   * The charts and the streak read them that way, and the "when did
+   * the user last speak" question is asked on every lobby load.
+   */
+  userRoleCreatedIdx: index("messages_user_role_created_idx").on(
+    table.userId,
+    table.role,
+    table.createdAt,
+  ),
+}));
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = typeof messages.$inferInsert;
@@ -353,7 +395,15 @@ export const skillJobs = pgTable("skill_jobs", {
   retryCount: integer("retryCount").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The distillation runs of one persona.
+   *
+   * The upload page polls the run that is happening, and the table
+   * had no index to find it by.
+   */
+  personaUserIdx: index("skill_jobs_persona_user_idx").on(table.personaId, table.userId),
+}));
 
 export type SkillJob = typeof skillJobs.$inferSelect;
 export type InsertSkillJob = typeof skillJobs.$inferInsert;
@@ -432,7 +482,15 @@ export const memories = pgTable("memories", {
    */
   subject: varchar("subject", { length: 8 }).default("them").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The memories of one persona.
+   *
+   * The table had no index, and every turn reads it — the retrieval,
+   * the memory panel and the anchors.
+   */
+  personaUserIdx: index("memories_persona_user_idx").on(table.personaId, table.userId),
+}));
 
 /**
  * When the memories were last extracted.
@@ -735,7 +793,19 @@ export const chatSummaries = pgTable("chat_summaries", {
   fromMessageId: integer("fromMessageId"),
   toMessageId: integer("toMessageId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The summary of one conversation.
+   *
+   * It is read on every turn — it is the part of the conversation the
+   * model does not see — and the table had no index.
+   */
+  personaUserCreatedIdx: index("chat_summaries_persona_user_created_idx").on(
+    table.personaId,
+    table.userId,
+    table.createdAt,
+  ),
+}));
 
 export type ChatSummary = typeof chatSummaries.$inferSelect;
 export type InsertChatSummary = typeof chatSummaries.$inferInsert;
@@ -940,7 +1010,16 @@ export const collectedMessages = pgTable("collected_messages", {
   content: text("content").notNull(),
   timestamp: timestamp("timestamp"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  /**
+   * The collected history of one persona.
+   *
+   * The table holds up to twenty thousand rows a persona, and every
+   * distillation reads all of them — with no index, that was a
+   * sequential scan of every row of every user on the instance.
+   */
+  personaUserIdx: index("collected_messages_persona_user_idx").on(table.personaId, table.userId),
+}));
 
 export type CollectedMessage = typeof collectedMessages.$inferSelect;
 export type InsertCollectedMessage = typeof collectedMessages.$inferInsert;
@@ -1071,7 +1150,15 @@ export const safetyEvents = pgTable("safety_events", {
   handled: boolean("handled").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   resolvedAt: timestamp("resolvedAt"),
-});
+}, (table) => ({
+  /**
+   * The safety record of one user, newest first.
+   *
+   * The panel reads it and the lobby counts it, and the table had no
+   * index.
+   */
+  userCreatedIdx: index("safety_events_user_created_idx").on(table.userId, table.createdAt),
+}));
 
 export type SafetyEvent = typeof safetyEvents.$inferSelect;
 export type InsertSafetyEvent = typeof safetyEvents.$inferInsert;
