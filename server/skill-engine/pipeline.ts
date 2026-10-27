@@ -37,6 +37,7 @@ import { normalizeMicroRules, type MicroRule } from "@shared/micro-rules";
 import { normalizeImperfectionProfile } from "@shared/imperfection";
 import { ENV } from "../_core/env";
 import { safeErrorMessage } from "../_core/safe-error";
+import { withPersonaDataLock } from "../_core/lock";
 import * as db from "../db";
 import {
   resolveCelebrityProfile,
@@ -1315,61 +1316,6 @@ async function runSkillPipelineOnce(
         : copy(locale, "labels.microRules.minedNone"),
     );
 
-    const previous = await (async () => {
-      try {
-        const persona = await db.getPersonaById(personaId, userId);
-        return (persona?.personaData as Partial<PersonaData>) || {};
-      } catch {
-        // A persona that cannot be read is a persona whose own decisions
-        // are unknown. The distillation still runs; it just cannot carry
-        // anything over.
-        return {};
-      }
-    })();
-
-    /**
-     * The persona is read again, right before the write.
-     *
-     * Between the read above and the write there is a model call — so
-     * a correction typed in the persona editor in that window ("she
-     * actually says X, not Y") was written, the toast said it was
-     * applied, and a minute later the distillation finished and put
-     * the persona back exactly as it was before the correction. The
-     * correction log kept the record; the persona did not.
-     *
-     * So the persona is read again, and if it has changed, the user's
-     * own words win.
-     */
-    const changedWhileRunning = await (async () => {
-      try {
-        const persona = await db.getPersonaById(personaId, userId);
-        const latest = (persona?.personaData as Partial<PersonaData>) || {};
-        return JSON.stringify(latest) !== JSON.stringify(previous);
-      } catch {
-        return false;
-      }
-    })();
-
-    const personaData = changedWhileRunning
-      ? {
-          ...enrichedData,
-          ...(await (async () => {
-            try {
-              const persona = await db.getPersonaById(personaId, userId);
-              return (persona?.personaData as Partial<PersonaData>) || {};
-            } catch {
-              return {};
-            }
-          })()),
-        }
-      : mergeUserDecisions(enrichedData, previous, microRules, locale);
-
-    if (changedWhileRunning) {
-      console.warn(
-        "[SkillEngine] The persona was changed while the run was going — the newer version was kept.",
-      );
-    }
-
     /**
      * The facts in the upload become memories.
      *
@@ -1422,14 +1368,94 @@ async function runSkillPipelineOnce(
       }
     }
 
-    // ── Stage 5: persist ───────────────────────────────────────────────────
-    await db.updatePersona(personaId, userId, {
-      personaData,
-      analysisStatus: "ready",
-      analysisProgress: 100,
-      analysisMessage: copy(locale, "skillPrompts.pipeline.personaReady", { name }),
-      // Only link the job when one was actually created.
-      ...(jobId ? { skillJobId: jobId } : {}),
+    /**
+     * The read and the write are under the persona's lock.
+     *
+     * The persona's own fields are one column, so writing them is a
+     * read and a write of the whole thing — and every other path that
+     * writes them (the correction, the imperfection profile, the
+     * rules) takes the same lock.
+     *
+     * The distillation did not: so a correction typed in the persona
+     * editor while the run was going was written, the toast said it
+     * was applied, and a minute later the run finished and put the
+     * persona back exactly as it was before the correction. The
+     * correction log kept the record; the persona did not.
+     */
+    let personaData: PersonaData = enrichedData;
+    await withPersonaDataLock(personaId, async () => {
+      const previous = await (async () => {
+        try {
+          const persona = await db.getPersonaById(personaId, userId);
+          return (persona?.personaData as Partial<PersonaData>) || {};
+        } catch {
+          // A persona that cannot be read is a persona whose own decisions
+          // are unknown. The distillation still runs; it just cannot carry
+          // anything over.
+          return {};
+        }
+      })();
+
+      /**
+       * The persona is read again, right before the write.
+       *
+       * Between the read above and the write there is a model call — so
+       * a correction typed in the persona editor in that window ("she
+       * actually says X, not Y") was written, the toast said it was
+       * applied, and a minute later the distillation finished and put
+       * the persona back exactly as it was before the correction. The
+       * correction log kept the record; the persona did not.
+       *
+       * So the persona is read again, and if it has changed, the user's
+       * own words win.
+       */
+      const changedWhileRunning = await (async () => {
+        try {
+          const persona = await db.getPersonaById(personaId, userId);
+          const latest = (persona?.personaData as Partial<PersonaData>) || {};
+          return JSON.stringify(latest) !== JSON.stringify(previous);
+        } catch {
+          return false;
+        }
+      })();
+
+      personaData = (changedWhileRunning
+        ? {
+            ...enrichedData,
+            ...(await (async () => {
+              try {
+                const persona = await db.getPersonaById(personaId, userId);
+                return (persona?.personaData as Partial<PersonaData>) || {};
+              } catch {
+                return {};
+              }
+            })()),
+          }
+        : mergeUserDecisions(enrichedData, previous, microRules, locale)) as PersonaData;
+
+      if (changedWhileRunning) {
+        console.warn(
+          "[SkillEngine] The persona was changed while the run was going — the newer version was kept.",
+        );
+      }
+
+      // ── Stage 5: persist ───────────────────────────────────────────────────
+      /**
+       * The write is inside the lock.
+       *
+       * The lock was taken before the read, and it is released after the
+       * write — so nothing can slip in between: a correction typed in the
+       * persona editor while the run was going is either before the read
+       * (and is carried over) or after the write (and is not touched).
+       */
+      await db.updatePersona(personaId, userId, {
+        personaData,
+        analysisStatus: "ready",
+        analysisProgress: 100,
+        analysisMessage: copy(locale, "skillPrompts.pipeline.personaReady", { name }),
+        // Only link the job when one was actually created.
+        ...(jobId ? { skillJobId: jobId } : {}),
+      });
     });
 
     if (jobId) {

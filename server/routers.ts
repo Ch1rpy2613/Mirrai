@@ -3,7 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { createSessionToken } from "./_core/auth";
 import { isUniqueViolation } from "./_core/auth";
 import { detectCrisis } from "./safety/crisis";
-import { withKeyLock } from "./_core/lock";
+import { withPersonaDataLock } from "./_core/lock";
 import { requestAbortSignal } from "./_core/context";
 import { extractMemories } from "./chat/memory-extract";
 import { systemRouter } from "./_core/systemRouter";
@@ -254,10 +254,6 @@ const MAX_DISTILLATION_CHARS = 1_000_000;
  *
  * They all take the same lock now, so they take turns.
  */
-function withPersonaDataLock<T>(personaId: number, work: () => Promise<T>): Promise<T> {
-  return withKeyLock(`persona-data:${personaId}`, work);
-}
-
 /**
  * The material a distillation reads.
  *
