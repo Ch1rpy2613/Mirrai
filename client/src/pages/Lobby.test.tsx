@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { useSyncExternalStore } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
@@ -17,8 +18,26 @@ import { translate } from "@/i18n";
 const update = vi.fn();
 const listRefetch = vi.fn();
 
-/** The personas the server sends back. */
+/**
+ * The personas the server sends back.
+ *
+ * The list is a store of its own, so a test can change it and have
+ * the page notice — the way the server's answer changes it.
+ */
 let personas: any[];
+let personasVersion = 0;
+const personaListeners = new Set<() => void>();
+function subscribePersonas(listener: () => void) {
+  personaListeners.add(listener);
+  return () => {
+    personaListeners.delete(listener);
+  };
+}
+function setPersonas(next: any[]) {
+  personas = next;
+  personasVersion += 1;
+  for (const listener of personaListeners) listener();
+}
 /** Whether the list is still on its way. */
 let personasLoading = false;
 /** Whether the list could not be read. */
@@ -29,12 +48,16 @@ vi.mock("@/lib/trpc", () => ({
     setup: { useQuery: () => ({ data: { hasLlmProvider: true, hasUserProvider: false } }) },
     persona: {
       list: {
-        useQuery: () => ({
-          data: personas,
-          refetch: listRefetch,
-          isLoading: personasLoading,
-          isError: personasFailed,
-        }),
+        useQuery: () => {
+          // The page notices when the list changes.
+          useSyncExternalStore(subscribePersonas, () => personasVersion);
+          return {
+            data: personas,
+            refetch: listRefetch,
+            isLoading: personasLoading,
+            isError: personasFailed,
+          };
+        },
       },
       stats: { useQuery: () => ({ data: { totalPersonas: 2, totalChats: 10, todayChats: 1 } }) },
       update: { useMutation: () => ({ mutate: update, isPending: false }) },
@@ -287,6 +310,45 @@ describe("the lobby", () => {
       else process.env.TZ = machineZone;
       vi.useRealTimers();
     }
+  });
+
+  it("keeps a tab stop in the filter list when the chosen filter disappears", async () => {
+    /**
+     * A filter whose count fell to zero stopped being drawn — and the
+     * selection stayed on it. So no drawn tab had a tab stop, the whole
+     * list was skipped by the Tab key, and the directory below showed
+     * nothing with no tab looking selected.
+     */
+    const user = userEvent.setup();
+    personas = [
+      makePersona({ id: 1, analysisStatus: "analyzing" }),
+      makePersona({ id: 2, analysisStatus: "ready" }),
+      makePersona({ id: 3, analysisStatus: "ready" }),
+    ];
+
+    render(<Lobby />);
+
+    const analysing = screen.getByRole("tab", { name: /解析中/ });
+    await user.click(analysing);
+
+    // The one analysing persona is done, so the tab is gone.
+    setPersonas([
+      makePersona({ id: 1, analysisStatus: "ready" }),
+      makePersona({ id: 2, analysisStatus: "ready" }),
+      makePersona({ id: 3, analysisStatus: "ready" }),
+    ]);
+    /**
+     * The selection falls back to a tab that is still there — so the
+     * list has a tab stop, and the directory below is not empty with
+     * no tab looking selected.
+     */
+    await waitFor(() => {
+      const all = screen
+        .getAllByRole("tab")
+        .find((tab) => /全部/.test(tab.textContent ?? ""));
+      expect(all?.getAttribute("aria-selected")).toBe("true");
+      expect(all?.getAttribute("tabindex")).toBe("0");
+    });
   });
 
   it("folds the graduated ones away until they are asked for", async () => {

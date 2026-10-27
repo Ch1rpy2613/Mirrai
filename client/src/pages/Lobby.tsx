@@ -1886,6 +1886,21 @@ export default function Lobby() {
 
   const { data: stats } = trpc.persona.stats.useQuery(undefined, { enabled: isAuthenticated });
 
+  /**
+   * The filter that is on, is a filter that exists.
+   *
+   * A filter whose count fell to zero stopped being drawn — and the
+   * selection stayed on it. So no drawn tab had a tab stop, the whole
+   * list was skipped by the Tab key, and the directory below showed
+   * nothing with no tab looking selected.
+   */
+  useEffect(() => {
+    const shown = FILTER_TABS.filter(
+      (tab) => tab.key === "all" || (personas ?? []).some((p: any) => p.analysisStatus === tab.key),
+    );
+    if (!shown.some((tab) => tab.key === filterTab)) setFilterTab("all");
+  }, [personas, filterTab]);
+
   const updateMutation = trpc.persona.update.useMutation({
     onSuccess: () => { refetch(); },
     onError: (e: any) => toast.error(e.message),
