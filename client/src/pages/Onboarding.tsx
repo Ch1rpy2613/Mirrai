@@ -183,7 +183,16 @@ export default function Onboarding() {
                 id="provider"
                 value={providerName}
                 onChange={(e) => setProviderName(e.target.value)}
-                disabled={providers.isError || Boolean(authError)}
+                /**
+                 * The list of providers is still on its way.
+                 *
+                 * The dropdown was enabled then — so on a slow
+                 * connection the user pressed "save and continue" and
+                 * was told "please choose a provider", as if their
+                 * choice had been wrong, when no choice had ever been
+                 * offered.
+                 */
+                disabled={providers.isLoading || providers.isError || Boolean(authError)}
                 className="w-full h-11 px-3 rounded-md border border-border bg-muted/40 text-foreground"
               >
                 <option value="">{t("onboarding.selectPlaceholder")}</option>
