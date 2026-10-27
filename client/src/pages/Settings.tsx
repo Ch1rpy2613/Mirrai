@@ -2255,6 +2255,25 @@ function DataSourcesTab() {
                     </StatusChip>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {t("settings.sources.messageCount", { count: job.messageCount })}
+                      {/**
+                          How many the collection held.
+
+                          The count is how many were *new* — the import
+                          is idempotent, so collecting a history the user
+                          already imported writes nothing. And the
+                          collection still held every message it found,
+                          so when the two differ the user is told both:
+                          otherwise "0 条" reads as "the collection found
+                          nothing", which is a different thing from
+                          "nothing was added".
+                          */}
+                      {(job.keptCount ?? job.messageCount) > job.messageCount && (
+                        <span className="ml-1">
+                          {t("settings.sources.messageCountHeld", {
+                            count: job.keptCount ?? job.messageCount,
+                          })}
+                        </span>
+                      )}
                     </span>
                     {/**
                         * The stop button.
@@ -2480,6 +2499,19 @@ export function CollectorJobDetail({ jobId }: { jobId: string }) {
     [t("settings.sources.status"), statusKey ? t(statusKey) : job.status],
     [t("settings.sources.progress"), `${job.progress}%`],
     [t("settings.sources.messageCountLabel"), String(job.messageCount)],
+    /**
+     * How many the collection held.
+     *
+     * The count above is how many rows were *new* — the import is
+     * idempotent, so collecting a history the user already imported
+     * writes nothing. The collection still held every message it found,
+     * so when the two differ the user is told both: otherwise "0" reads
+     * as "the collection found nothing", which is a different thing from
+     * "nothing was added".
+     */
+    ...(job.keptCount ?? job.messageCount) > job.messageCount
+      ? [[t("settings.sources.messagesHeldLabel"), String(job.keptCount ?? job.messageCount)] as [string, string]]
+      : [],
     [t("settings.sources.startedAt"), job.startedAt ? formatDateTimeInZone(job.startedAt, locale, timezone) : "—"],
     [t("settings.sources.finishedAt"), job.finishedAt ? formatDateTimeInZone(job.finishedAt, locale, timezone) : "—"],
   ];

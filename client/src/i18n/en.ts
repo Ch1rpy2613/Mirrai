@@ -858,6 +858,17 @@ export const en = {
       notStarted: "Not started yet",
       messageCount: "{{count}} messages",
       /**
+       * How many the collection held, when that is more than it added.
+       *
+       * The count is how many rows were *new* — the import is
+       * idempotent, so collecting a history the user already imported
+       * writes nothing. The collection still held every message it
+       * found, so both numbers are shown: otherwise "0 messages" reads
+       * as "the collection found nothing", which is a different thing.
+       */
+      messageCountHeld: "({{count}} in the collection)",
+      messagesHeldLabel: "Collected this time",
+      /**
        * The collection was cut short.
        *
        * There are two cases, and they are different: the server's own
