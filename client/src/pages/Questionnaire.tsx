@@ -374,12 +374,23 @@ export default function Questionnaire() {
 
           {step === 3 && (
             <div className="flex flex-wrap gap-2">
-              {COMMUNICATION_STYLES.map((style) => {
+              {COMMUNICATION_STYLES.map((style, index) => {
                 const active = answers.communicationStyles.includes(style.key);
                 return (
                   <button
                     key={style.key}
                     type="button"
+                    /**
+                     * The focus comes here.
+                     *
+                     * Every other step has a field, and the field takes
+                     * the focus when the step arrives. This step has
+                     * chips — so the focus stayed on the button the user
+                     * had just pressed, and that button was gone: the
+                     * focus fell back to the page, and a keyboard user
+                     * had to start again from the top.
+                     */
+                    autoFocus={index === 0}
                     // The chips are toggles, and they said nothing
                     // about their state: a screen-reader user heard a
                     // row of unlabelled buttons with no feedback that a

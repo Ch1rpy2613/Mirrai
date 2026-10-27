@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
 /**
@@ -86,6 +87,30 @@ describe("the questionnaire", () => {
     vi.clearAllMocks();
     localStorage.clear();
     authUser = { id: 7 };
+  });
+
+  it("moves the focus to the chips when it gets to that step", async () => {
+    /**
+     * Every other step has a field, and the field takes the focus when
+     * the step arrives. The chip step has chips — so the focus stayed
+     * on the button the user had just pressed, and that button was
+     * gone: the focus fell back to the page, and a keyboard user had
+     * to start again from the top.
+     */
+    const user = userEvent.setup();
+    render(<Questionnaire />);
+
+    // Through the steps to the chips.
+    await user.type(screen.getByLabelText(translate("zh", "questionnaire.fieldName")), "小张");
+    await user.click(screen.getByText(translate("zh", "common.next")));
+    await user.type(screen.getByLabelText(translate("zh", "questionnaire.relationshipLabel")), "同事");
+    await user.click(screen.getByText(translate("zh", "common.next")));
+    await user.click(screen.getByText(translate("zh", "common.next")));
+
+    await waitFor(() => {
+      const chip = screen.getByRole("button", { name: translate("zh", "questionnaire.communicationStyles.gentle") });
+      expect(document.activeElement).toBe(chip);
+    });
   });
 
   it("reads back the answers the user saved", async () => {
