@@ -31,11 +31,14 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
+/** The language the editor is read in. */
+let locale: "zh" | "en" = "zh";
+
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
-    t: (key: any, params?: any) => translate("zh", key, params),
-    locale: "zh",
-    localeName: "中文",
+    t: (key: any, params?: any) => translate(locale, key, params),
+    locale,
+    localeName: locale === "en" ? "English" : "中文",
     setLocale: () => {},
   }),
 }));
@@ -46,6 +49,37 @@ describe("the rules", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     rules = [];
+    locale = "zh";
+  });
+
+  it("does not put Chinese punctuation into the English interface", async () => {
+    /**
+     * The confirmation joined the triggers with the Chinese separator —
+     * in every language. So an English reader was asked to delete a
+     * rule whose triggers were listed as "a、b".
+     */
+    locale = "en";
+    rules = [
+      {
+        id: "r1",
+        trigger: [" raining", "rain"],
+        meaning: "talks about the weather",
+        rendering: "answers with the forecast",
+        verified: true,
+        source: "manual",
+      },
+    ];
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<MicroRulesEditor personaId={1} />);
+
+    await user.click(screen.getByLabelText(translate("en", "microRules.delete")));
+
+    expect(confirm).toHaveBeenCalled();
+    const message = confirm.mock.calls[0][0] as string;
+    expect(message).toContain(", ");
+    expect(message).not.toContain("、");
   });
 
   it("does not let the user write past what the server takes", async () => {

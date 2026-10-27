@@ -138,7 +138,7 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
    * persona.
    */
   function remove(rule: MicroRule) {
-    if (!window.confirm(t("microRules.removeConfirm", { trigger: rule.trigger.join("、") }))) {
+    if (!window.confirm(t("microRules.removeConfirm", { trigger: rule.trigger.join(triggerSeparator) }))) {
       return;
     }
     save(rules.filter((r) => r.id !== rule.id));
