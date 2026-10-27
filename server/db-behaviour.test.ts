@@ -51,6 +51,8 @@ interface QueryLog {
   values?: any;
   /** Whether it asked for the written rows back. */
   returned: boolean;
+  /** The columns a `DISTINCT ON` asked for. */
+  distinctOn?: any[];
 }
 
 let queries: QueryLog[] = [];
@@ -71,6 +73,17 @@ class FakeQuery {
   }
 
   select(..._args: any[]) {
+    return this;
+  }
+
+  /**
+   * A `DISTINCT ON`.
+   *
+   * The columns it was given are recorded, because "one row per
+   * persona" and "every row" are told apart by exactly this.
+   */
+  distinctOn(columns: any[]) {
+    this.log.distinctOn = columns;
     return this;
   }
 
@@ -110,8 +123,8 @@ class FakeQuery {
     return this;
   }
 
-  orderBy(expression: any) {
-    this.log.orderBy.push(expression);
+  orderBy(...expressions: any[]) {
+    this.log.orderBy.push(...expressions);
     return this;
   }
 
@@ -179,6 +192,8 @@ let transactions = 0;
 /** The fake database the module under test gets. */
 const fakeDb = {
   select: () => new FakeQuery("select"),
+  selectDistinct: () => new FakeQuery("select"),
+  selectDistinctOn: (on: any[]) => new FakeQuery("select").distinctOn(on),
   insert: (table: any) => new FakeQuery("insert").setTable(table),
   update: (table: any) => new FakeQuery("update").setTable(table),
   delete: (table: any) => new FakeQuery("delete").setTable(table),
@@ -764,6 +779,42 @@ describe("the collected material", () => {
     expect(sql).toContain("asc");
   });
 
+});
+
+describe("the lobby", () => {
+  it("asks for one message per persona, not for the whole history", async () => {
+    registry.select.personas = [{ id: 5, userId: 3, updatedAt: new Date() }];
+    registry.select.messages = [{ personaId: 5, content: "在吗", createdAt: new Date() }];
+    registry.select.persona_files = [];
+    registry.select.wechat_bindings = [];
+
+    await db.getPersonasWithStats(3);
+
+    /**
+     * The newest message of each persona.
+     *
+     * It used to be a `selectDistinct` over (personaId, content,
+     * createdAt) — a plain `SELECT DISTINCT`, and a plain `DISTINCT`
+     * over three columns that differ on every row removes nothing. So
+     * the query returned **every message the user has ever sent**, with
+     * the full text of each one — on the first screen of the app, on
+     * every visit.
+     */
+    const messageQuery = queries.findIndex((q) => q.table === "messages");
+    expect(messageQuery).toBeGreaterThanOrEqual(0);
+    expect(queries[messageQuery].distinctOn).toBeTruthy();
+    const on = queries[messageQuery].distinctOn!.map((c: any) => c.name);
+    expect(on).toContain("personaId");
+    /**
+     * And Postgres insists that the ordering starts with the
+     * distinct-on columns — so the newest message is the one that
+     * survives.
+     */
+    const orders = queries[messageQuery].orderBy;
+    expect(orders.length).toBe(2);
+    expect((orders[0] as any).name).toBe("personaId");
+    expect(sqlOf(orders[1]).sql).toContain('"messages"."createdAt" desc');
+  });
 });
 
 describe("the collection jobs", () => {

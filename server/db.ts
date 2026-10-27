@@ -986,9 +986,24 @@ export async function getPersonasWithStats(userId: number) {
   if (list.length === 0) return [];
   const ids = list.map((p) => p.id);
 
-  // The newest message of each persona.
+  /**
+   * The newest message of each persona.
+   *
+   * It used to be a `selectDistinct` over (personaId, content,
+   * createdAt) — which is a plain `SELECT DISTINCT`, and a plain
+   * `DISTINCT` over three columns that are different on every row
+   * removes nothing. So the query returned **every message the user
+   * has ever sent**, with the full text of each one, and the loop
+   * below kept the first row per persona.
+   *
+   * The lobby is the first screen of the app, so this happened on every
+   * visit: the whole history went into the heap of the server process.
+   *
+   * `DISTINCT ON` is the statement that was meant — one row per
+   * persona, the newest.
+   */
   const lastMessages = await db
-    .selectDistinct({
+    .selectDistinctOn([messages.personaId], {
       personaId: messages.personaId,
       content: messages.content,
       createdAt: messages.createdAt,
@@ -998,7 +1013,9 @@ export async function getPersonasWithStats(userId: number) {
       eq(messages.userId, userId),
       inArray(messages.personaId, ids),
     ))
-    .orderBy(desc(messages.createdAt));
+    // Postgres insists that the ordering starts with the distinct-on
+    // columns.
+    .orderBy(messages.personaId, desc(messages.createdAt));
 
   // The number of files of each persona.
   const fileCounts = await db.select({
