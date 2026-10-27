@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, existsSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -52,8 +52,32 @@ function runPython(body: string, workDir: string): { status: number; out: string
    *
    * The *output* is still UTF-8, because that is the console, not the
    * files: the bug is about what `open()` writes.
+   *
+   * The snippet is written to a file and run from there, rather than
+   * passed on the command line.
+   *
+   * It used to be passed on the command line — and the command line is
+   * decoded with the *filesystem* encoding, so under a C locale the
+   * Chinese in the snippet became surrogate characters and Python
+   * could not even read its own instructions:
+   *
+   *   UnicodeEncodeError: 'utf-8' codec can't encode characters in
+   *   position 672-677: surrogates not allowed
+   *
+   * So the test failed on the machine it was written for — Linux — and
+   * passed on the machine it was written on — a Mac, where the
+   * filesystem encoding is UTF-8 whatever the locale says. And it
+   * failed for a reason that has nothing to do with what it is about:
+   * the collectors' own files.
+   *
+   * A source *file* is always decoded as UTF-8, whatever the locale
+   * says — so the file is the right way to run a snippet that has
+   * Chinese in it. The environment is unchanged: the collectors still
+   * run in a C locale, which is the whole point of the test.
    */
-  const result = spawnSync(PYTHON!, ["-c", body], {
+  const script = path.join(workDir, "snippet.py");
+  writeFileSync(script, body, "utf-8");
+  const result = spawnSync(PYTHON!, [script], {
     cwd: workDir,
     env: { ...process.env, LC_ALL: "C", LANG: "C", PYTHONUTF8: "0", PYTHONIOENCODING: "utf-8" },
     encoding: "utf-8",

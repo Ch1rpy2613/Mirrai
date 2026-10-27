@@ -18,8 +18,35 @@ export function subprocessEnvironment(): NodeJS.ProcessEnv {
     PATH: process.env.PATH ?? "",
     HOME: process.env.HOME ?? "",
     USERPROFILE: process.env.USERPROFILE,
-    LANG: process.env.LANG ?? "C.UTF-8",
-    LC_ALL: process.env.LC_ALL ?? process.env.LANG ?? "C.UTF-8",
+    /**
+     * The language is UTF-8, and it is *ours*.
+     *
+     * It used to be inherited from the server's own environment — so
+     * an app started with `LC_ALL=C` (a minimal container, a systemd
+     * unit with a stripped environment) handed its scripts a C locale.
+     *
+     * And a C locale is not merely "no accent": Python's `open()`
+     * then encodes with **ASCII**, so writing a file that holds
+     * anything else — a Chinese name, an emoji — raises
+     * `UnicodeEncodeError` and the file is written empty. The
+     * collectors read and write chat logs, so that is their whole
+     * job.
+     *
+     * The app's own language is none of the scripts' business: they
+     * are given one that can carry what they are asked to carry.
+     */
+    LANG: "C.UTF-8",
+    LC_ALL: "C.UTF-8",
+    /**
+     * And Python's own default too.
+     *
+     * `PYTHONIOENCODING` says how the standard streams are encoded;
+     * `PYTHONUTF8` says how the *filesystem* is — and the filesystem
+     * is where the chat logs and the credentials live. It was not
+     * set, so the filesystem encoding followed the locale, and a C
+     * locale made `open()` an ASCII one.
+     */
+    PYTHONUTF8: "1",
     PYTHONIOENCODING: "utf-8",
     TEMP: process.env.TEMP,
     TMP: process.env.TMP,
