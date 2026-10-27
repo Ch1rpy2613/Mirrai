@@ -102,7 +102,19 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
   }
   const [variant, setVariant] = useState<"default" | "withoutRules">("default");
 
-  const { data: behavior, refetch: refetchBehavior } = trpc.behavior.get.useQuery({ personaId });
+  /**
+   * The behaviour profile.
+   *
+   * The failure was not read: so a query that could not answer left
+   * the panel saying "not measured yet — import more of the
+   * conversation and it can be". That is a claim about the persona's
+   * own history, and it was made because the request failed.
+   */
+  const {
+    data: behavior,
+    isError: behaviorFailed,
+    refetch: refetchBehavior,
+  } = trpc.behavior.get.useQuery({ personaId });
   const measureMutation = trpc.behavior.measure.useMutation({
     onSuccess: (result) => {
       if (!result.profile) {
@@ -197,7 +209,16 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
           </dl>
         ) : (
           <p className="text-xs text-muted-foreground">
-            {t("fidelity.behavior.notMeasured")}
+            {/**
+             * The request failed.
+             *
+             * The panel said "not measured yet" — a claim about the
+             * persona's own history — when the truth was that the
+             * history could not be read. The evaluation section right
+             * below it says so plainly when it fails; this one did
+             * not, so the panel contradicted itself.
+             */}
+            {behaviorFailed ? t("common.error") : t("fidelity.behavior.notMeasured")}
           </p>
         )}
       </div>

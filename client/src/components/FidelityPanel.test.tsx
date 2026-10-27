@@ -18,6 +18,8 @@ const run = vi.fn();
 
 let profile: any = null;
 let lastRun: any = null;
+/** Whether the behaviour query failed. */
+let behaviorFailed = false;
 
 const invalidate = vi.fn();
 
@@ -28,7 +30,7 @@ vi.mock("@/lib/trpc", () => ({
       eval: { latest: { invalidate: (...a: unknown[]) => invalidate(...a) } },
     }),
     behavior: {
-      get: { useQuery: () => ({ data: { profile }, refetch: vi.fn() }) },
+      get: { useQuery: () => ({ data: { profile }, isError: behaviorFailed, refetch: vi.fn() }) },
       measure: { useMutation: () => ({ mutate: measure, isPending: false }) },
     },
     eval: {
@@ -80,7 +82,24 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 import FidelityPanel from "./FidelityPanel";
 
 describe("the ruler and the timing", () => {
+  it("does not claim the persona was never measured when the request failed", () => {
+    /**
+     * "Not measured yet — import more of the conversation and it can
+     * be" is a claim about the persona's own history, and it was made
+     * because the request failed. The evaluation section right below
+     * it says so plainly when it fails; this one did not, so the panel
+     * contradicted itself.
+     */
+    behaviorFailed = true;
+
+    render(<FidelityPanel personaId={1} />);
+
+    expect(screen.queryByText(translate("zh", "fidelity.behavior.notMeasured"))).toBeNull();
+    expect(screen.getAllByText(translate("zh", "common.error")).length).toBeGreaterThan(0);
+  });
+
   beforeEach(() => {
+    behaviorFailed = false;
     vi.clearAllMocks();
     profile = null;
     lastRun = null;
