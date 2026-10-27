@@ -331,6 +331,8 @@ export function MessageBubble({
    */
   const lightboxRef = useDialogFocus<HTMLDivElement>(imgExpanded, () => setImgExpanded(false));
   const [editing, setEditing] = useState(false);
+  /** Whether the edit is on its way to the server. */
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(msg.content);
 
   const renderContent = () => {
@@ -490,7 +492,7 @@ export function MessageBubble({
                   type="button"
                   onClick={async () => {
                     const text = draft.trim();
-                    if (!text) return;
+                    if (!text || saving) return;
                     /**
                      * The editor stays open until the server has taken
                      * the text.
@@ -500,10 +502,24 @@ export function MessageBubble({
                      * getting them back — the only trace was the error
                      * toast.
                      */
-                    await onEdit?.(msg, text);
-                    setEditing(false);
+                    setSaving(true);
+                    try {
+                      await onEdit?.(msg, text);
+                      setEditing(false);
+                    } finally {
+                      setSaving(false);
+                    }
                   }}
-                  disabled={!draft.trim()}
+                  /**
+                   * The button is not disabled while the save is on its
+                   * way.
+                   *
+                   * So a double click sent the same edit twice — and a
+                   * second one that arrived after the first was written
+                   * was a second write of the same words, with the
+                   * editor's own state behind it.
+                   */
+                  disabled={!draft.trim() || saving}
                   className="text-xs px-2.5 py-1 rounded-md bg-primary text-primary-foreground disabled:opacity-50"
                 >
                   {t("common.save")}

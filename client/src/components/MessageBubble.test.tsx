@@ -231,6 +231,39 @@ describe("the message bubble", () => {
     );
   });
 
+  it("does not send the same edit twice", async () => {
+    /**
+     * The button was not disabled while the save was on its way: so a
+     * double click sent the same edit twice.
+     */
+    const user = userEvent.setup();
+    const releases: Array<() => void> = [];
+    const onEdit = vi.fn(() => new Promise<void>((resolve) => { releases.push(resolve); }));
+
+    render(
+      <MessageBubble
+        msg={makeMessage({ role: "user", content: "在吗" })}
+        personaName="小A"
+        showMood={false}
+        onEdit={onEdit}
+      />,
+    );
+
+    await user.click(screen.getByLabelText(translate("zh", "chat.edit")));
+    const box = screen.getByRole("textbox");
+    await user.clear(box);
+    await user.type(box, "在吗？");
+
+    const save = screen.getByText(translate("zh", "common.save")) as HTMLButtonElement;
+    await user.click(save);
+    // The second click lands while the first is still on its way.
+    expect(save.disabled).toBe(true);
+    await user.click(save);
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    for (const release of releases) release();
+  });
+
   it("gives up the edit when the user changes their mind", async () => {
     const user = userEvent.setup();
     const handlers = callbacks();
