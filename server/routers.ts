@@ -2626,12 +2626,19 @@ export const appRouter = router({
         // card carried a Chinese prompt.
         const systemPrompt = buildSystemPrompt(persona, { locale: ctx.locale });
 
-        // The opening lines come from the persona's scene, so the card starts
-        // the conversation the way the app does.
+        /**
+         * The opening lines come from the persona's own scene, so the
+         * card starts the conversation the way the app does.
+         *
+         * It took the first scene that had any opening lines — and the
+         * built-in scenes are listed first, so every card opened with a
+         * generic built-in scene's lines and never with the persona's.
+         */
         const scenes = await getScenes(ctx.user.id);
-        const scene = scenes.find(
-          (s) => Array.isArray(s.starters) && (s.starters as string[]).length > 0,
-        );
+        const activeSceneId = (persona as any).activeSceneId ?? null;
+        const scene = activeSceneId
+          ? scenes.find((s) => s.id === activeSceneId)
+          : undefined;
 
         const card = personaDataToCard({
           name: persona.name,
