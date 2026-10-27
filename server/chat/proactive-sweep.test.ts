@@ -61,7 +61,8 @@ vi.mock("../llm/user-provider", () => ({
 
 const send = vi.fn();
 vi.mock("../channels", () => ({
-  getChannelAdapter: (id: string) => (id === "wechat" ? { id, send } : undefined),
+  getChannelAdapter: (id: string) =>
+    id === "wechat" || id === "feishu" ? { id, send } : undefined,
 }));
 
 import { runProactiveSweep } from "./proactive-sweep";
@@ -173,6 +174,39 @@ describe("the sweep that lets the persona speak first", () => {
     }));
     // And the channel it went out on is recorded afterwards.
     expect(updateMessageChannel).toHaveBeenCalledWith(expect.any(Number), 1, "wechat");
+  });
+
+  it("always uses the same channel when there is more than one", async () => {
+    /**
+     * The order the bindings come back in is the database's.
+     *
+     * So a user with the same persona bound on two channels had the
+     * message go to one of them and then, on the next sweep, to the
+     * other. The choice is now the same every time.
+     */
+    getProactivePersonas.mockResolvedValue([{
+      id: 1,
+      userId: 1,
+      name: "小A",
+      lastChatAt: new Date("2026-05-01T12:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      proactiveFrequencyHours: 24,
+    }]);
+    // The database's order: the wechat binding comes first.
+    getChannelBindingsByUserId.mockResolvedValue([
+      {
+        id: 1, userId: 1, channel: "wechat", targetId: "chat-42", personaId: 1, isActive: true,
+      },
+      {
+        id: 2, userId: 1, channel: "feishu", targetId: "oc-1", personaId: 1, isActive: true,
+      },
+    ]);
+
+    await runProactiveSweep(new Date("2026-06-01T12:00:00Z"));
+
+    // The feishu binding sorts first, so the message goes there.
+    expect(send).toHaveBeenCalledWith(1, "oc-1", "今天怎么样？", "zh");
   });
 
   it("stays quiet in the quiet hours", async () => {

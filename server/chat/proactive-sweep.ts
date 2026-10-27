@@ -33,7 +33,22 @@ async function deliverProactive(params: {
     .catch(() => []);
   const locale = params.locale ?? (await db.getUserLocale(params.userId).catch(() => "zh" as const));
 
-  for (const binding of bindings) {
+  /**
+   * The bindings, in a fixed order.
+   *
+   * The order the rows came back in is the database's, not the app's —
+   * so a user with the same persona bound on two channels had the
+   * message go to one of them and then, on the next sweep, to the
+   * other. The reminder sweep already sorts its bindings; this one now
+   * does the same, so the choice is the same every time.
+   */
+  const orderedBindings = [...bindings].sort((a, b) => {
+    if (a.personaId !== b.personaId) return a.personaId - b.personaId;
+    if (a.channel !== b.channel) return a.channel < b.channel ? -1 : 1;
+    return a.targetId < b.targetId ? -1 : a.targetId > b.targetId ? 1 : 0;
+  });
+
+  for (const binding of orderedBindings) {
     if (!binding.isActive) continue;
     // The channel carries a persona of its own; a message from a
     // different one would arrive in the wrong conversation.
