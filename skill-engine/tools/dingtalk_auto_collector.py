@@ -403,17 +403,33 @@ def search_users_by_dept(name: str, config: dict, dept_id: int = 1, depth: int =
     results = []
 
     # 获取部门用户列表
-    data = api_post(
-        "/v1.0/contact/users/simplelist",
-        {"deptId": dept_id, "cursor": 0, "size": 100},
-        config,
-    )
-    users = data.get("list", [])
-    for u in users:
-        if name in u.get("name", ""):
-            # 获取详细信息
-            detail = api_get(f"/v1.0/contact/users/{u.get('userId')}", {}, config)
-            results.append(detail.get("result", u))
+    #
+    # 一次只有 100 个，所以要翻页。
+    #
+    # 它原来只取一页：一个有一百多人的部门里，排在第一百零一个以后的人
+    # 根本没被看过——用户说"没有找到"，而人就站在他旁边。
+    cursor = 0
+    while True:
+        data = api_post(
+            "/v1.0/contact/users/simplelist",
+            {"deptId": dept_id, "cursor": cursor, "size": 100},
+            config,
+        )
+        users = data.get("list", []) or data.get("result", {}).get("list", [])
+        for u in users:
+            if name in u.get("name", ""):
+                # 获取详细信息
+                detail = api_get(f"/v1.0/contact/users/{u.get('userId')}", {}, config)
+                results.append(detail.get("result", u))
+
+        if not users or len(users) < 100:
+            break
+        next_cursor = data.get("nextCursor")
+        if next_cursor is None:
+            next_cursor = data.get("result", {}).get("nextCursor")
+        if next_cursor is None or next_cursor == cursor:
+            break
+        cursor = next_cursor
 
     # 获取子部门
     sub_data = api_get(
@@ -631,12 +647,29 @@ def fetch_bitable_content(base_id: str, config: dict) -> str:
         fields = [f.get("name", "") for f in fields_data.get("fields", [])]
 
         # 获取记录
-        records_data = api_get(
-            f"/v1.0/bitable/bases/{base_id}/sheets/{sheet_id}/records",
-            {"maxResults": 200},
-            config,
-        )
-        records = records_data.get("records", []) or records_data.get("result", {}).get("records", [])
+        #
+        # 一次只有 200 条，所以要翻页。
+        #
+        # 它原来只取一页：一张有五百条记录的表，剩下三百条就没了——而且
+        # 导出来的表看起来是完整的，因为表头在，只是后面没有行。
+        records = []
+        page_token = None
+        while True:
+            params = {"maxResults": 200}
+            if page_token:
+                params["pageToken"] = page_token
+            records_data = api_get(
+                f"/v1.0/bitable/bases/{base_id}/sheets/{sheet_id}/records",
+                params,
+                config,
+            )
+            page = records_data.get("records", []) or records_data.get("result", {}).get("records", [])
+            records.extend(page)
+
+            next_token = records_data.get("pageToken") or records_data.get("result", {}).get("pageToken")
+            if not page or not next_token or next_token == page_token:
+                break
+            page_token = next_token
 
         lines.append(f"### 表：{sheet_name}")
         lines.append("")

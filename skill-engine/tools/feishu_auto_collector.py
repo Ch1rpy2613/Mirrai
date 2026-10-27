@@ -424,10 +424,17 @@ def _find_user_by_department(name: str, config: dict) -> Optional[dict]:
     print(f"  通过部门遍历查找 {name} ...", file=sys.stderr)
 
     # 递归获取所有部门 ID
+    #
+    # 每问一次都要停一下。
+    #
+    # 聊天那一边等 0.1 秒，部门这一边不等：飞书对通讯录的接口有频率限
+    # 制，问得太快就会被拒——一个部门树有几百个部门的时候，遍历到一半
+    # 就被限了，剩下的部门根本没看，而用户看到的只是"没有找到"。
     dept_ids = ["0"]  # 0 = 根部门
     queue = ["0"]
     while queue:
         parent_id = queue.pop(0)
+        time.sleep(CONTACT_RATE_DELAY_SECONDS)
         data = api_get(
             f"/contact/v3/departments/{parent_id}/children",
             {"page_size": 50, "fetch_child": False},
@@ -459,6 +466,7 @@ def _find_user_by_department(name: str, config: dict) -> Optional[dict]:
             if page_token:
                 params["page_token"] = page_token
 
+            time.sleep(CONTACT_RATE_DELAY_SECONDS)
             data = api_get("/contact/v3/users/find_by_department", params, config)
             if data.get("code") != 0:
                 break
@@ -574,6 +582,12 @@ MAX_CHATS_TO_CHECK = 200
 # 飞书对成员接口有频率限制，连着发会撞上。
 # 停一下慢一点，但每一个群都查到了。
 CHAT_CHECK_DELAY_SECONDS = float(os.environ.get("MIRRAI_CHAT_CHECK_DELAY", "0.1"))
+
+# 问一次通讯录要停多久。
+#
+# 飞书对通讯录的接口有频率限制。聊天那一边等 0.1 秒，部门这一边原来
+# 一点都不等——所以一个大的部门树会被限掉，而用户只看到"没有找到"。
+CONTACT_RATE_DELAY_SECONDS = float(os.environ.get("MIRRAI_CONTACT_RATE_DELAY", "0.1"))
 
 
 def get_chats_with_user(user_open_id: str, config: dict) -> list:

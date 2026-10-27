@@ -489,9 +489,10 @@ def get_channels_with_user(
     user_id: str,
     channel_limit: int,
     client: RateLimitedClient,
-) -> list:
+) -> tuple[list, int]:
     """
-    返回 Bot 已加入、且目标用户也在其中的所有频道。
+    返回 Bot 已加入、且目标用户也在其中的所有频道——以及有多少频道没看。
+
     策略：先列出 Bot 的所有频道，再逐个检查成员列表。
     """
     print("  获取频道列表 ...", file=sys.stderr)
@@ -512,9 +513,17 @@ def get_channels_with_user(
     bot_channels = [c for c in channels if c.get("is_member")]
     print(f"  Bot 已加入 {len(bot_channels)} 个频道，检查成员 ...", file=sys.stderr)
 
+    # 频道太多的时候只看前面几个——每个频道都要问一次成员。
+    #
+    # 但只看了前面几个，答案就不是"没有共同的频道"，而是"没看完"。所以
+    # 没看的那些要记下来：目标在第 51 个频道里的时候，用户看到的是"没
+    # 有共同的频道"，而实际上有——他连自己在哪个频道里都找不到了。
+    unchecked = 0
     if len(bot_channels) > channel_limit:
+        unchecked = len(bot_channels) - channel_limit
         print(
-            f"  频道数超过上限 {channel_limit}，只检查前 {channel_limit} 个",
+            f"  频道数超过上限 {channel_limit}，只检查前 {channel_limit} 个"
+            f"（还有 {unchecked} 个没看）",
             file=sys.stderr,
         )
         bot_channels = bot_channels[:channel_limit]
@@ -545,7 +554,11 @@ def get_channels_with_user(
             result.append(ch)
             print(f"    ✓ #{ch_name}", file=sys.stderr)
 
-    return result
+    # 第二个数是有多少频道没看。
+    #
+    # 只看了前面几个，答案就不是"没有共同的频道"，而是"没看完"——所以
+    # 没看的那些要一起交上去，调用的人才知道这个答案是不是完整的。
+    return result, unchecked
 
 
 # ─── 消息采集 ──────────────────────────────────────────────────────────────────
@@ -794,8 +807,18 @@ def collect_all(
 
     # Step 2: 找共同频道
     print(f"\n📡 查找与 {real_name} 共同的频道（上限 {channel_limit} 个）...", file=sys.stderr)
-    channels = get_channels_with_user(user_id, channel_limit, client)
+    channels, unchecked_channels = get_channels_with_user(user_id, channel_limit, client)
     print(f"  共同频道：{len(channels)} 个", file=sys.stderr)
+    if unchecked_channels:
+        # 答案不完整，所以说出来。
+        #
+        # 目标在没看的那几个频道里的话，用户看到的是"没有共同的频道"——
+        # 一个关于他同事的假话，而他连同事在哪个频道里都找不到了。
+        print(
+            f"  ⚠️  还有 {unchecked_channels} 个频道没有检查，"
+            f"所以这份结果可能不完整",
+            file=sys.stderr,
+        )
 
     # Step 3: 采集消息
     print(f"\n📨 采集消息记录（上限 {msg_limit} 条）...", file=sys.stderr)
@@ -825,6 +848,8 @@ def collect_all(
         "collected_at": datetime.now(timezone.utc).isoformat(),
         "files": results,
         "note": "免费版 Workspace 仅保留最近 90 天消息",
+        # 有多少频道没看。零就是全都看了。
+        "channels_unchecked": unchecked_channels,
     }
     summary_path = output_dir / "collection_summary.json"
     # ------------------------------------------------------------------
