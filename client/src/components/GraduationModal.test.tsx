@@ -95,6 +95,25 @@ describe("the window that offers the farewell", () => {
     await waitFor(() => expect(decline).toHaveBeenCalledWith({ id: 1 }));
   });
 
+  it("does not record a refusal when the backdrop is clicked", async () => {
+    /**
+     * A click on the backdrop is not a considered "no, thank you": it
+     * is a mis-aimed click, or a click meant for something behind the
+     * window. And the refusal is *recorded* — the persona is marked as
+     * "declined", and the offer does not come back for a while.
+     */
+    const user = userEvent.setup();
+    const { container } = renderModal();
+
+    // The dimmed area behind the window.
+    const backdrop = container.querySelector(".absolute.inset-0") as HTMLElement;
+    expect(backdrop).toBeTruthy();
+    await user.click(backdrop);
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(decline).not.toHaveBeenCalled();
+  });
+
   it("does not record a refusal after the letter has been written", async () => {
     const user = userEvent.setup();
     renderModal();

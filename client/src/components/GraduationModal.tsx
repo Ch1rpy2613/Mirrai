@@ -151,7 +151,27 @@ export default function GraduationModal({ personaId, personaName, open, onClose,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={dismiss} />
+      {/**
+       * The backdrop closes the window; it does not refuse.
+       *
+       * The ✕ and the backdrop used to close the window without telling
+       * anybody — and that was fixed, so that both of them recorded the
+       * refusal.
+       *
+       * But a click on the backdrop is not a considered "no, thank you":
+       * it is a mis-aimed click, or a click meant for something behind
+       * the window. And the refusal is *recorded* — the persona is
+       * marked as "declined", and the offer does not come back for a
+       * while.
+       *
+       * So the explicit button and the ✕ are the refusal, and the
+       * backdrop is just a way out.
+       */}
+      <div
+        className="absolute inset-0 bg-black/40"
+        data-testid="graduation-backdrop"
+        onClick={() => { onClose(); }}
+      />
       <div
         ref={dialogRef}
         role="dialog"
