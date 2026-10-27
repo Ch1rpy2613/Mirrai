@@ -350,6 +350,34 @@ describe("a single message", () => {
     expect(rows.map((r: any) => r.id)).toEqual([7, 8, 9]);
   });
 
+  it("pages by the time *and* the id, so two messages in the same millisecond are both read", async () => {
+    /**
+     * The time alone was the cursor — so two messages written in the
+     * same millisecond (the reply and the letter that went with it, a
+     * batch written by the collector) were on both sides of the
+     * boundary, and the ones that fell on the wrong side of it were
+     * **never read**: the page ended at the first of them and the next
+     * page started after the last of them.
+     */
+    const at = new Date("2026-01-01T00:00:00.000Z");
+    registry.select.messages = [
+      { id: 3, createdAt: at },
+      { id: 2, createdAt: at },
+      { id: 1, createdAt: at },
+    ];
+
+    await db.getMessagesByPersonaIdPaged(1, 3, { pageSize: 2, max: 10 });
+
+    // The order says which of two messages with the same time comes
+    // first.
+    expect(orderOf().map((o) => o.sql).join(" ")).toContain('"messages"."id" desc');
+
+    // And the cursor of the second page says "older than this time, or
+    // the same time and a smaller id".
+    const second = whereOf(1).map((c) => c.sql).join(" ");
+    expect(second).toContain('"messages"."id" <');
+  });
+
   it("says whether there is more of the conversation to load", async () => {
     registry.select.messages = [{ id: 1 }];
     expect(await db.hasOlderMessages(1, 3, 10)).toBe(true);

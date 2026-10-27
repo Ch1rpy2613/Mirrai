@@ -1574,19 +1574,43 @@ export async function getMessagesByPersonaIdPaged(
   const pageSize = Math.max(1, Math.min(1000, options.pageSize ?? 500));
   const max = Math.max(pageSize, Math.min(20_000, options.max ?? 5000));
   const collected: (typeof messages.$inferSelect)[] = [];
-  let before: Date | undefined;
+  let before: { createdAt: Date; id: number } | undefined;
+  /**
+   * The cursor: the time *and* the id of the last row of the page.
+   *
+   * The time alone was the cursor — so two messages written in the same
+   * millisecond (the reply and the letter that went with it, a batch
+   * written by the collector) were on both sides of the boundary, and
+   * the ones that fell on the wrong side of it were **never read**:
+   * the page ended at the first of them and the next page started
+   * after the last of them.
+   *
+   * The id is the tie-breaker: it never repeats, and it says which of
+   * two messages with the same time comes first.
+   */
   while (collected.length < max) {
     const rows = await db.select().from(messages)
       .where(and(
         eq(messages.personaId, personaId),
         eq(messages.userId, userId),
-        ...(before ? [lt(messages.createdAt, before)] : []),
+        ...(before
+          ? [
+              or(
+                lt(messages.createdAt, before.createdAt),
+                and(
+                  eq(messages.createdAt, before.createdAt),
+                  lt(messages.id, before.id),
+                ),
+              ),
+            ]
+          : []),
       ))
-      .orderBy(desc(messages.createdAt))
+      .orderBy(desc(messages.createdAt), desc(messages.id))
       .limit(Math.min(pageSize, max - collected.length));
     if (rows.length === 0) break;
     collected.push(...rows);
-    before = rows[rows.length - 1].createdAt;
+    const last = rows[rows.length - 1];
+    before = { createdAt: last.createdAt, id: last.id };
     if (rows.length < pageSize) break;
   }
   return collected.reverse();
