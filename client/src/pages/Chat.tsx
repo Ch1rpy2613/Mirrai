@@ -1399,7 +1399,23 @@ export default function Chat() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
-                <p className="app-nav-title truncate">{persona?.name || "..."}</p>
+                {/**
+                    The page's heading.
+
+                    The chat page has no `<h1>` — the name in the header
+                    is what says what the page is, and the focus has to
+                    land on it when the route changes. It says so
+                    itself, so a screen reader announces it as the
+                    heading and not as a stray line of text.
+                    */}
+                <p
+                  className="app-nav-title truncate"
+                  data-route-heading
+                  role="heading"
+                  aria-level={1}
+                >
+                  {persona?.name || "..."}
+                </p>
                 {/* The user should always know what they are talking to.
                     The label lives in the interface, not in the model's
                     discretion. */}
