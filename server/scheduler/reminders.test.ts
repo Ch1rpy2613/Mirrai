@@ -183,6 +183,18 @@ describe("collectReminders", () => {
     expect(reminders).toHaveLength(1);
   });
 
+  it("does not announce an anniversary that has not happened yet", () => {
+    // The month and the day are what a yearly anniversary is matched
+    // on — but the year was never looked at, so an anniversary dated
+    // next year was announced a year early.
+    const reminders = collectReminders({
+      persona: persona(),
+      anniversaries: [{ id: 4, title: "我们的婚礼", date: "2027-05-20" }],
+      now,
+    });
+    expect(reminders).toEqual([]);
+  });
+
   it("does not match an anniversary on another day", () => {
     const reminders = collectReminders({
       persona: persona(),

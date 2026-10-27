@@ -157,11 +157,25 @@ export function collectReminders(params: {
     for (const anniversary of params.anniversaries) {
       if (!anniversary.date) continue;
       const date = anniversary.date.trim();
+      /**
+       * A date that has not happened yet is not an anniversary.
+       *
+       * The month and the day are what a yearly anniversary is matched
+       * on — so an anniversary written as a full date is celebrated
+       * every year, which is the point of it. But the year was never
+       * looked at: so an anniversary dated in the future (a wedding
+       * next year, a date the user typed ahead of time) was announced
+       * a year early — and then every year after, because the year is
+       * still never compared.
+       */
+      const year = date.length >= 10 ? Number(date.slice(0, 4)) : Number.NaN;
+      const hasHappened = !Number.isFinite(year) || year <= Number(dayKey.slice(0, 4));
       // Either "MM-DD" (a yearly anniversary) or a full date.
       const matches =
-        date === monthDay ||
-        (date.length >= 10 && date.slice(5, 10) === monthDay) ||
-        date === dayKey;
+        hasHappened &&
+        (date === monthDay ||
+          (date.length >= 10 && date.slice(5, 10) === monthDay) ||
+          date === dayKey);
       if (!matches) continue;
 
       reminders.push({
