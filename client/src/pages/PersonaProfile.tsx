@@ -10,6 +10,7 @@ import NotFound from "@/pages/NotFound";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import FidelityPanel from "@/components/FidelityPanel";
+import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeMicroRules } from "@shared/micro-rules";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
@@ -129,8 +130,22 @@ export default function PersonaProfile() {
   const portrait: Array<{ label: string; value: string; icon?: any }> = [];
   if (data.personality) portrait.push({ label: t("profile.personality"), value: data.personality });
   if (data.speakingStyle) portrait.push({ label: t("profile.speakingStyle"), value: data.speakingStyle });
-  if (data.attachmentStyle) portrait.push({ label: t("profile.attachmentStyle"), value: data.attachmentStyle });
-  if (data.loveLanguage) portrait.push({ label: t("profile.loveLanguage"), value: data.loveLanguage });
+  /**
+   * The attachment style and the love language.
+   *
+   * What is stored is a Chinese *identifier* — "安全型", "肯定的言辞" —
+   * and it was printed as it was: so an English user read "肯定的言辞"
+   * under "Love language", while the same persona's lobby card read
+   * "Words of affirmation".
+   *
+   * The localisers were already there — the lobby uses them.
+   */
+  if (data.attachmentStyle) {
+    portrait.push({ label: t("profile.attachmentStyle"), value: attachmentStyleLabel(data.attachmentStyle, t) });
+  }
+  if (data.loveLanguage) {
+    portrait.push({ label: t("profile.loveLanguage"), value: loveLanguageLabel(data.loveLanguage, t) });
+  }
   if (data.conflictStyle) portrait.push({ label: t("profile.conflictStyle"), value: data.conflictStyle });
   if (data.memories) portrait.push({ label: t("profile.memories"), value: data.memories });
   if (data.touchingMoments) portrait.push({ label: t("profile.touchingMoments"), value: data.touchingMoments });

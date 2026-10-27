@@ -47,11 +47,14 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/persona/1", vi.fn()],
 }));
 
+/** The language the page is read in. */
+let locale: "zh" | "en" = "zh";
+
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
-    t: (key: any, params?: any) => translate("zh", key, params),
-    locale: "zh",
-    localeName: "中文",
+    t: (key: any, params?: any) => translate(locale, key, params),
+    locale,
+    localeName: locale === "en" ? "English" : "中文",
     setLocale: () => {},
   }),
 }));
@@ -64,6 +67,39 @@ vi.mock("@/components/FidelityPanel", () => ({
 import PersonaProfile from "./PersonaProfile";
 
 describe("the portrait", () => {
+  beforeEach(() => {
+    locale = "zh";
+  });
+
+  it("does not print a Chinese identifier in the English interface", () => {
+    /**
+     * What is stored is a Chinese *identifier* — "安全型", "肯定的言辞" —
+     * and it was printed as it was. So an English user read
+     * "肯定的言辞" under "Love language", while the same persona's
+     * lobby card read "Words of affirmation".
+     */
+    locale = "en";
+    persona = {
+      id: 1,
+      userId: 1,
+      name: "小A",
+      analysisStatus: "ready",
+      emotionalState: "warm",
+      personaData: {
+        attachmentStyle: "安全型",
+        loveLanguage: "肯定的言辞",
+        personality: "温柔",
+      },
+    };
+
+    render(<PersonaProfile />);
+
+    expect(screen.getByText("Words of affirmation")).toBeInTheDocument();
+    expect(screen.getByText("Secure")).toBeInTheDocument();
+    expect(screen.queryByText("肯定的言辞")).toBeNull();
+    expect(screen.queryByText("安全型")).toBeNull();
+  });
+
   it("does not spin for ever when the persona cannot be read", () => {
     // The sign-in request failed, so the persona query stayed disabled:
     // no persona, no error, and the loader the page showed for ever.
