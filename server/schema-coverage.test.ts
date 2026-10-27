@@ -136,6 +136,26 @@ describe("the migrations cover the schema", () => {
     ).toEqual([]);
   });
 
+  it("gives every down section something to do", () => {
+    // A down section that is only a comment undoes nothing — and the
+    // rollback then says it has rolled back, and changes nothing.
+    for (const name of readdirSync(path.join(ROOT, "drizzle")).filter((n) =>
+      n.endsWith(".sql"),
+    )) {
+      const sql = readFileSync(path.join(ROOT, "drizzle", name), "utf-8");
+      if (!sql.includes("mirrai: idempotent-migration")) continue;
+      if (Number.parseInt(name, 10) < 20) continue;
+      // Everything after the marker line.
+      const down = sql.slice(sql.indexOf("\n", sql.indexOf("mirrai: down")));
+      // The statements, without the comments and the blank lines.
+      const statements = down
+        .split("\n")
+        .filter((line) => line.trim() && !line.trim().startsWith("--"))
+        .join("\n");
+      expect(statements.trim(), `${name}'s down section does nothing`).not.toBe("");
+    }
+  });
+
   it("puts the down section after the up one", () => {
     // The up half is everything before the down marker, so a down
     // section that came first would undo the migration as it was
