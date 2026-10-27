@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -192,6 +192,30 @@ describe("the packaged app", () => {
     // And the verification says what to set when it is not told.
     const verify = readFileSync(path.join(ROOT, "scripts", "live-verify.mjs"), "utf-8");
     expect(verify).toContain("DATABASE_URL is not set");
+  });
+
+  it("does not keep a patch that was never applied", () => {
+    /**
+     * There was a patch for wouter that collected the app's routes into
+     * a global — and it was never applied, and nothing read the global.
+     * It was a file that looked like it did something and did not.
+     */
+    const patchDir = path.join(ROOT, "patches");
+    if (!existsSync(patchDir)) return;
+    for (const name of readdirSync(patchDir)) {
+      const source = readFileSync(path.join(patchDir, name), "utf-8");
+      // Whatever it changes has to be read somewhere, or it is not worth
+      // carrying.
+      const marker = source.match(/window\.(\__[A-Z_]+__)/)?.[1];
+      if (!marker) continue;
+      const used = readdirSync(path.join(ROOT, "client/src"), { recursive: true } as any).some(
+        (file: any) => {
+          if (!String(file).endsWith(".ts") && !String(file).endsWith(".tsx")) return false;
+          return readFileSync(path.join(ROOT, "client/src", String(file)), "utf-8").includes(marker);
+        },
+      );
+      expect(used, `${name} changes ${marker}, and nothing reads it`).toBe(true);
+    }
   });
 
   it("pins the workflow's actions to the commit they were on", () => {
