@@ -7,12 +7,21 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 
-/** Repository root — defaults to the parent of this script's directory. */
+/**
+ * Repository root — defaults to the parent of this script's directory.
+ *
+ * The path came from `new URL(...).pathname`, which is not a path: it
+ * keeps the percent-encoding (so a checkout in a folder with a space in
+ * its name pointed at nothing), and on Windows it begins with a slash
+ * in front of the drive letter (so every path built from it was wrong).
+ * `fileURLToPath` gives the path the URL means.
+ */
 export const ROOT = path.resolve(
-  process.env.MIRRAI_ROOT ?? path.join(path.dirname(new URL(import.meta.url).pathname), ".."),
+  process.env.MIRRAI_ROOT ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."),
 );
 
 /** Scratch directory for compiled bundles and runtime state. */

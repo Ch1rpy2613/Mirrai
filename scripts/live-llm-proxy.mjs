@@ -10,17 +10,27 @@
  * Usage: node scripts/live-llm-proxy.mjs [port]
  */
 import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
+
+import { LLM_API_KEY, LLM_BASE_URL } from "./live-config.mjs";
 
 const PORT = Number(process.argv[2]) || 8899;
 // Mirrai's ClaudeProvider appends "/v1/messages" to the base URL, so the
 // upstream base must stop at ".../llm" for the forwarded path to line up.
-const UPSTREAM = "https://agent.minimax.cn/mavis/api/v1/llm";
+const UPSTREAM = LLM_BASE_URL || "https://agent.minimax.cn/mavis/api/v1/llm";
 
-const auth = JSON.parse(
-  readFileSync("/Users/ch1rpy/.minimax/auth/prod/cn/mcode-public/auth.json", "utf-8"),
-);
-const KEY = Object.values(auth.records)[0].accessToken;
+/**
+ * The key comes from the environment.
+ *
+ * It was read out of a file in the maintainer's own home directory, and
+ * the path was written into the script — so the proxy could only run on
+ * that one machine, and the file it read was nobody else's business to
+ * have in a repository.
+ */
+const KEY = LLM_API_KEY;
+if (!KEY) {
+  console.error("Set MIRRAI_LIVE_LLM_API_KEY first.");
+  process.exit(1);
+}
 
 const server = createServer(async (req, res) => {
   const chunks = [];

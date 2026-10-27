@@ -4,7 +4,11 @@
  * Covers: default-persona binding, the slash commands, and the graduation
  * flow — everything that does not require a completed QR scan.
  */
-const BASE = "http://localhost:3111";
+import path from "node:path";
+
+import { WECHAT_BUILD_DIR } from "./live-config.mjs";
+
+const BASE = process.env.MIRRAI_LIVE_BASE_URL ?? "http://localhost:3111";
 let cookie = "";
 
 async function trpc(path, input, opts = {}) {
@@ -85,7 +89,7 @@ async function main() {
 
   console.log("\n=== 3. commands module (pure, no LLM) ===");
   const { handleCommand, matchPersonaByName } = await import(
-    "/Users/ch1rpy/Desktop/Mirrai/.live-test/wechat/wechat/commands.js"
+    path.join(WECHAT_BUILD_DIR, "wechat/commands.js")
   );
   const all = (await client.query(`SELECT id, name, "analysisStatus" FROM personas ORDER BY id`)).rows;
   const match = matchPersonaByName(all, "小B");

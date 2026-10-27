@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -197,6 +197,30 @@ describe("the packaged app", () => {
     expect(build).toContain("--outbase=");
     // And the old layout is not left behind to be imported by mistake.
     expect(build).toContain("rmSync");
+  });
+
+  it("keeps one machine's paths out of the scripts", () => {
+    // The scripts carried the maintainer's own home directory — a file
+    // with an access token in it, and a checkout path. So they could
+    // only run on that one machine, and the repository said where the
+    // maintainer's files were.
+    const scripts = readdirSync(path.join(ROOT, "scripts"));
+    for (const name of scripts) {
+      if (!/\.(mjs|ts|js|py|sh)$/.test(name)) continue;
+      const source = readFileSync(path.join(ROOT, "scripts", name), "utf-8");
+      expect(source, `${name} has a hard-coded home directory`).not.toMatch(
+        /\/Users\/[^/\s"']+/,
+      );
+    }
+
+    // And the root of the checkout is worked out from the script's own
+    // address — with `new URL(...).pathname` the path keeps its
+    // percent-encoding (so a checkout in a folder with a space in its
+    // name pointed at nothing), and on Windows it begins with a slash
+    // in front of the drive letter.
+    const config = readFileSync(path.join(ROOT, "scripts/live-config.mjs"), "utf-8");
+    expect(config).toContain("fileURLToPath");
+    expect(config).not.toMatch(/new URL\(import\.meta\.url\)\.pathname/);
   });
 
   it("stops when the schema cannot be synchronised", () => {

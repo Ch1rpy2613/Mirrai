@@ -30,7 +30,13 @@ CLIENT_SRC = os.path.join(ROOT, "client", "src")
 OUT_DIR = os.path.join(ROOT, "client", "public", "fonts")
 OUT_NAME = "MiSans-subset.woff2"
 
-DEFAULT_SOURCE = "/Users/ch1rpy/Desktop/MiSans/可变字体/MiSansVF.ttf"
+# The font to subset.
+#
+# It is not in the repository — it is a large file with its own licence —
+# so its place is given on the command line or in the environment. The
+# path that was written here was the maintainer's own home directory, so
+# the script could only run on that one machine.
+DEFAULT_SOURCE = os.environ.get("MIRRAI_MISANS_SOURCE", "")
 
 # Characters the features substitute in. Without these, switching a feature
 # on would swap a glyph for one that was not in the subset.
@@ -70,6 +76,13 @@ def collect() -> str:
 
 def main() -> int:
     source = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SOURCE
+    if not source:
+        print(
+            "ERROR: no font to subset — pass the font as the first argument, "
+            "or set MIRRAI_MISANS_SOURCE",
+            file=sys.stderr,
+        )
+        return 1
     if not os.path.exists(source):
         print(f"ERROR: {source} not found", file=sys.stderr)
         return 1

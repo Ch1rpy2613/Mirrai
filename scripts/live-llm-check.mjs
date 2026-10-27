@@ -2,25 +2,36 @@
  * Verifies Mirrai's own ClaudeProvider against the configured endpoint,
  * so the end-to-end test exercises the shipped LLM path.
  */
-import { readFileSync } from "node:fs";
+import path from "node:path";
 
-const key = (() => {
-  const j = JSON.parse(
-    readFileSync("/Users/ch1rpy/.minimax/auth/prod/cn/mcode-public/auth.json", "utf-8"),
+import { LLM_API_KEY, LLM_BASE_URL, LLM_BUILD_DIR, LLM_MODEL } from "./live-config.mjs";
+
+/**
+ * The key comes from the environment.
+ *
+ * It was read out of a file in the maintainer's own home directory, and
+ * the path was written into the script — so the check could only run on
+ * that one machine, and the file it read was nobody else's business to
+ * have in a repository.
+ */
+const key = LLM_API_KEY;
+if (!key) {
+  console.error(
+    "Set MIRRAI_LIVE_LLM_API_KEY (and MIRRAI_LIVE_LLM_BASE_URL, MIRRAI_LIVE_LLM_MODEL) first.",
   );
-  return Object.values(j.records)[0].accessToken;
-})();
+  process.exit(1);
+}
 
 // Mirrai's ClaudeProvider appends "/v1/messages" to baseUrl, so baseUrl must
 // end at ".../llm" to reach ".../llm/v1/messages".
 const { ClaudeProvider } = await import(
-  "/Users/ch1rpy/Desktop/Mirrai/.live-test/llm/providers/claude.js"
+  path.join(LLM_BUILD_DIR, "providers/claude.js")
 );
 
 const provider = new ClaudeProvider(
   key,
-  "MiniMax-M3.1-Flash",
-  "https://agent.minimax.cn/mavis/api/v1/llm",
+  LLM_MODEL || "MiniMax-M3.1-Flash",
+  LLM_BASE_URL || "https://agent.minimax.cn/mavis/api/v1/llm",
 );
 
 console.log("isConfigured:", provider.isConfigured());
