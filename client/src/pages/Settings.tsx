@@ -1289,11 +1289,18 @@ function WeChatCommandsSection() {
 
 // ─── DATA MANAGEMENT TAB ─────────────────────────────────────────────────────
 
-function DataManagementTab() {
+/**
+ * The data tab.
+ *
+ * Exported so its behaviour can be tested: it is the one place where
+ * the app says what it is about to destroy, and it is inside a page
+ * that is far too large to render in a test.
+ */
+export function DataManagementTab() {
   const [, navigate] = useLocation();
   const { logout } = useAuth();
   const { t } = useLocale();
-  const { data: accountStats } = trpc.user.getAccountStats.useQuery();
+  const { data: accountStats, isError: accountStatsFailed } = trpc.user.getAccountStats.useQuery();
 
   /* The full export: every persona, every memory, every diary, the
      farewell letter, the relationship events and the user's own moods —
@@ -1446,11 +1453,21 @@ function DataManagementTab() {
           <div className="space-y-4 py-2">
             <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/15">
               <p className="text-xs text-destructive leading-relaxed">
-                {t("settings.data.confirmBody", {
-                  personas: accountStats?.totalPersonas || 0,
-                  messages: accountStats?.totalMessages || 0,
-                  files: accountStats?.totalFiles || 0,
-                })}
+                {/**
+                 * What is about to be destroyed.
+                 *
+                 * A failed request used to be read as three zeros — so
+                 * the one dialog that must not lie about what it is
+                 * about to destroy said "0 personas, 0 messages, 0
+                 * files" about the user's own history.
+                 */
+                accountStatsFailed
+                  ? t("settings.data.confirmBodyUnknown")
+                  : t("settings.data.confirmBody", {
+                    personas: accountStats?.totalPersonas || 0,
+                    messages: accountStats?.totalMessages || 0,
+                    files: accountStats?.totalFiles || 0,
+                  })}
               </p>
             </div>
             <div className="space-y-1.5">

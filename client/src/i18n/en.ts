@@ -920,6 +920,7 @@ export const en = {
       deleteDescription: "Permanently delete your account and all related data — every persona, conversation and uploaded file. This cannot be undone.",
       confirmTitle: "Confirm account deletion",
       confirmBody: "This permanently deletes your account and all data — {{personas}} personas, {{messages}} messages and {{files}} files. It cannot be undone.",
+      confirmBodyUnknown: "This permanently deletes your account and all data. It cannot be undone.",
       passwordLabel: "Enter your password to confirm",
       passwordPlaceholder: "Enter your sign-in password",
       phraseLabel: "Type \"{{phrase}}\" to confirm",

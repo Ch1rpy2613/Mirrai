@@ -915,6 +915,7 @@ export const zh = {
       deleteDescription: "永久删除你的账户和所有相关数据，包括所有分身、对话记录和上传文件。此操作不可撤销。",
       confirmTitle: "确认删除账户",
       confirmBody: "此操作将永久删除你的账户及所有数据，包括 {{personas}} 个分身、{{messages}} 条消息和 {{files}} 个文件。此操作不可撤销。",
+      confirmBodyUnknown: "此操作将永久删除你的账户及所有数据。此操作不可撤销。",
       passwordLabel: "输入密码确认",
       passwordPlaceholder: "输入你的登录密码",
       phraseLabel: "输入 \"{{phrase}}\" 确认",
