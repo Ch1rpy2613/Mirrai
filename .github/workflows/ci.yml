@@ -68,8 +68,22 @@ jobs:
       # `drizzle-kit push` is used rather than `generate && migrate`: the
       # migration journal lives in `drizzle/meta/`, which is gitignored, so
       # `migrate` cannot work on a fresh checkout.
+      #
+      # The two paths have to end up with the same schema: a fresh install
+      # builds it from `drizzle/schema.ts`, and an existing install applies
+      # the hand-written SQL files. So the SQL files are applied *on top of*
+      # the schema built from `schema.ts` — and the schema is then checked
+      # against `schema.ts` again.
+      #
+      # It used to be checked before the SQL files ran, so the database was
+      # compared with the thing it had just been built from: it could not
+      # fail, and the one thing worth checking — that the two paths agree —
+      # was never checked.
       - name: Apply schema
         run: pnpm exec drizzle-kit push --force
+
+      - name: Apply the SQL migrations on top of it
+        run: pnpm db:migrate
 
       - name: Verify the schema is in sync
         run: |
@@ -84,7 +98,10 @@ jobs:
 
       # The hand-written migrations must be idempotent — re-running them
       # against an already-migrated database has to be a no-op.
+      #
+      # It used to run the script twice, which was not a test of that at
+      # all: the second run read the journal, saw the work was done, and
+      # did nothing. The claim is about the SQL, so the SQL is what runs
+      # again — `--replay` ignores the journal and re-runs every file.
       - name: Verify the SQL migrations are idempotent
-        run: |
-          pnpm db:migrate
-          pnpm db:migrate
+        run: pnpm db:replay

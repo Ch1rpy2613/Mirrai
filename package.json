@@ -40,6 +40,7 @@
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
+    "db:replay": "node scripts/migrate.mjs --replay",
     "audit:i18n": "tsx scripts/audit-cn.ts",
     "eval": "tsx scripts/eval-run.ts",
     "fidelity:gate": "tsx scripts/fidelity-gate.ts",

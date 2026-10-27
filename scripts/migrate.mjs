@@ -27,7 +27,14 @@
  * script says so rather than half undoing a chain — a rollback that
  * stops halfway is worse than one that refuses to start.
  *
- * Usage: node scripts/migrate.mjs [--dry-run] [--rollback [n]]
+ * `--replay` re-runs the up half of every migration, whether the
+ * journal says it has been applied or not. It is how the claim that the
+ * migrations are idempotent is checked: running the script twice is
+ * not a test of that at all, because the second run reads the journal,
+ * sees the work is done, and does nothing. The claim is about the SQL,
+ * so the SQL is what runs again.
+ *
+ * Usage: node scripts/migrate.mjs [--dry-run] [--rollback [n]] [--replay]
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -106,6 +113,7 @@ function loadMigrationFiles() {
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
+  const replay = process.argv.includes("--replay");
   const rollbackIndex = process.argv.indexOf("--rollback");
   const rollbackCount =
     rollbackIndex === -1
@@ -191,7 +199,7 @@ async function main() {
     }
 
     for (const file of applicable) {
-      if (applied.has(file.version)) {
+      if (!replay && applied.has(file.version)) {
         log(`skip ${file.name} (already applied)`);
         continue;
       }
@@ -217,6 +225,7 @@ async function main() {
     }
 
     if (dryRun) log("dry run complete — nothing was written");
+    else if (replay) log(`replayed ${applicable.length} migration(s) — all of them ran again`);
     else log("all migrations applied");
   } finally {
     await client.end();
