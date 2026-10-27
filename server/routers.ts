@@ -257,6 +257,57 @@ function withPersonaDataLock<T>(personaId: number, work: () => Promise<T>): Prom
 }
 
 /**
+ * The material a distillation reads.
+ *
+ * It is read once and handed to the run, because the extracted text of
+ * the uploaded files is the largest thing the app holds for one
+ * persona — half a million characters a file — and reading it twice
+ * for one run is reading it twice for nothing.
+ */
+type DistillationMaterial = {
+  files: Awaited<ReturnType<typeof getFilesByPersonaId>>;
+  collected: Awaited<ReturnType<typeof getCollectedMessagesForPersona>>;
+};
+
+/**
+ * The material for a persona: the uploaded files and the collected
+ * messages.
+ */
+async function readDistillationMaterial(
+  personaId: number,
+  userId: number,
+): Promise<DistillationMaterial> {
+  const files = await getFilesByPersonaId(personaId, userId, {
+    withExtractedMemory: true,
+  });
+  const collected = await getCollectedMessagesForPersona(personaId, userId);
+  return { files, collected };
+}
+
+/**
+ * Whether there is anything at all to distil.
+ *
+ * The pipeline can run on nothing: it then writes a person the model
+ * invented over the person the user built by hand — the name stays, so
+ * nothing looks wrong, and the personality, the memories and the
+ * catchphrases are the model's.
+ *
+ * The check has to be in front of *both* entry points — the upload
+ * page's "re-analyse" and the settings page's "import into the
+ * persona" — because a guard that lands on one of them leaves the
+ * other as a way to lose a persona.
+ */
+function hasDistillationMaterial(material: DistillationMaterial): boolean {
+  const uploadedText = material.files
+    .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
+    .map((f) => f.extractedMemory || "")
+    .join("\n")
+    .trim();
+  const hasPhotos = material.files.some((f) => f.fileType === "image" && f.fileUrl);
+  return Boolean(uploadedText) || hasPhotos || material.collected.length > 0;
+}
+
+/**
  * Collects the uploaded material for a persona and kicks off the distillation
  * pipeline. Both `persona.triggerAnalysis` and `skillEngine.startPipeline`
  * route through here so there is a single persona-building path.
@@ -292,6 +343,13 @@ async function startPersonaDistillation(params: {
    * for it. The material went somewhere else.
    */
   provider?: string;
+  /**
+   * The material, read by the caller.
+   *
+   * The caller has to read it anyway — to decide whether there is
+   * anything to distil — so it is handed over rather than read twice.
+   */
+  material?: DistillationMaterial;
 }): Promise<void> {
   const { personaId, userId, name } = params;
   const locale = params.locale ?? "zh";
@@ -314,9 +372,8 @@ async function startPersonaDistillation(params: {
 
   try {
     // The distillation needs the extracted text of every file.
-    const files = await getFilesByPersonaId(personaId, userId, {
-      withExtractedMemory: true,
-    });
+    const material = params.material ?? (await readDistillationMaterial(personaId, userId));
+    const files = material.files;
     const chatContent = files
       .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
       .map((f) => f.extractedMemory || "")
@@ -328,7 +385,7 @@ async function startPersonaDistillation(params: {
       .filter(Boolean);
 
     // Messages pulled in by the collectors are part of the history too.
-    const collected = await getCollectedMessagesForPersona(personaId, userId);
+    const collected = material.collected;
     /**
      * The collected transcript has a ceiling too.
      *
@@ -344,6 +401,22 @@ async function startPersonaDistillation(params: {
           .join("\n")
           .slice(0, MAX_DISTILLATION_CHARS)
       : "";
+
+    /**
+     * Nothing to read.
+     *
+     * The pipeline runs on empty material and invents a person — and
+     * then writes that person over the one the user built. Both entry
+     * points check for material before they get here; this is the
+     * net under them, because the check is a database read and the
+     * material can be deleted between the check and the run.
+     */
+    if (!chatContent && imageUrls.length === 0 && !collectedTranscript) {
+      console.warn(
+        `[SkillEngine] Persona ${personaId} has no material to distil — nothing was written.`,
+      );
+      return;
+    }
 
     await updatePersona(personaId, userId, {
       analysisStatus: "analyzing",
@@ -1269,23 +1342,13 @@ export const appRouter = router({
           }
         }
 
-        const material = await getFilesByPersonaId(input.id, ctx.user.id, {
-          withExtractedMemory: true,
-        });
-        const uploadedText = material
-          .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
-          .map((f) => f.extractedMemory || "")
-          .join("\n")
-          .trim();
-        const hasPhotos = material.some((f) => f.fileType === "image" && f.fileUrl);
-        const collected = await getCollectedMessagesForPersona(input.id, ctx.user.id);
-        if (!uploadedText && !hasPhotos && collected.length === 0) {
+        const material = await readDistillationMaterial(input.id, ctx.user.id);
+        if (!hasDistillationMaterial(material)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: copy(ctx.locale, "errors.nothingToDistil"),
           });
         }
-
         startPersonaDistillation({
           locale: ctx.locale,
           personaId: input.id,
@@ -1297,6 +1360,7 @@ export const appRouter = router({
           characterFamily: input.characterFamily,
           researchProfile: input.researchProfile ?? null,
           mode: input.mode ?? null,
+          material,
         }).catch((e) => console.error("[triggerAnalysis] error:", e));
         return { success: true };
       }),
@@ -3185,6 +3249,22 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
+        /**
+         * There has to be something to read.
+         *
+         * The other entry point checks this; this one did not — and the
+         * pipeline is happy to run on nothing, in which case it writes a
+         * person the model invented over the one the user built by
+         * hand. The name survives, so nothing looks wrong.
+         */
+        const material = await readDistillationMaterial(input.personaId, ctx.user.id);
+        if (!hasDistillationMaterial(material)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.nothingToDistil"),
+          });
+        }
+
         startPersonaDistillation({
           locale: ctx.locale,
           personaId: input.personaId,
@@ -3199,6 +3279,7 @@ export const appRouter = router({
           characterFamily: input.characterFamily,
           researchProfile: input.researchProfile ?? null,
           mode: input.mode ?? null,
+          material,
         }).catch((e) => console.error("[SkillEngine] Pipeline error:", e));
 
         return { success: true };

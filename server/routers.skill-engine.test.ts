@@ -135,4 +135,41 @@ describe("distilling a persona", () => {
 
     expect(runSkillPipeline.mock.calls[0][0].provider).toBeUndefined();
   });
+
+  it("will not build a persona out of nothing", async () => {
+    /**
+     * The pipeline is happy to run on no material at all: it then writes
+     * a person the model invented over the one the user built by hand.
+     * The name survives, so nothing looks wrong.
+     *
+     * The other entry point said no — but this one did not, so the
+     * "import into the persona" button was a way to lose a persona. A
+     * guard that lands on one entry point leaves the other open.
+     */
+    getFilesByPersonaId.mockResolvedValue([]);
+    getCollectedMessagesForPersona.mockResolvedValue([]);
+
+    await expect(
+      appRouter
+        .createCaller(ctxFor(1))
+        .skillEngine.startPipeline({ personaId: 5, characterFamily: "relationship" }),
+    ).rejects.toThrow();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runSkillPipeline).not.toHaveBeenCalled();
+  });
+
+  it("will not build a persona out of nothing through the other entry point either", async () => {
+    getFilesByPersonaId.mockResolvedValue([]);
+    getCollectedMessagesForPersona.mockResolvedValue([]);
+
+    await expect(
+      appRouter
+        .createCaller(ctxFor(1))
+        .persona.triggerAnalysis({ id: 5, characterFamily: "relationship" }),
+    ).rejects.toThrow();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runSkillPipeline).not.toHaveBeenCalled();
+  });
 });
