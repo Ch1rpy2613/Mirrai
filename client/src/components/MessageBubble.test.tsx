@@ -44,11 +44,14 @@ vi.mock("streamdown", () => ({
 
 // The real dictionary, so a missing key fails the test rather than
 // rendering an empty label.
+/** The language the interface is read in. */
+let locale: "zh" | "en" = "zh";
+
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
-    t: (key: any, params?: any) => translate("zh", key, params),
-    locale: "zh",
-    localeName: "中文",
+    t: (key: any, params?: any) => translate(locale, key, params),
+    locale,
+    localeName: locale === "en" ? "English" : "中文",
     setLocale: () => {},
   }),
 }));
@@ -95,6 +98,33 @@ function callbacks() {
 describe("the message bubble", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    locale = "zh";
+  });
+
+  it("does not show a picture's placeholder from another language", () => {
+    /**
+     * The picture's own text is a placeholder — "[图片]" — and it was
+     * compared with the *current* language's copy of it. So a person
+     * who sent a picture in Chinese and then changed the interface to
+     * English saw "[图片]" under their own picture, in an English
+     * conversation.
+     */
+    locale = "en";
+
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          role: "user",
+          content: "[图片]",
+          messageType: "image",
+          mediaUrl: "/uploads/chat/1/2/a.png",
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+
+    expect(screen.queryByText("[图片]")).toBeNull();
   });
 
   it("shows the time in the user's own clock", () => {

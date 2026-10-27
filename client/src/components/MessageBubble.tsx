@@ -357,7 +357,22 @@ export function MessageBubble({
             <img src={msg.mediaUrl} alt={t("chat.imageAlt")}
               className="max-w-[200px] max-h-[200px] rounded-md" />
           </button>
-          {msg.content !== t("chat.imageMessage") && <p className="mt-1.5 text-sm">{msg.content}</p>}
+          {/**
+           * The caption under the picture.
+           *
+           * The picture's own text is a placeholder — "[图片]" — and it
+           * was compared with the *current* language's copy of it. So a
+           * person who sent a picture in Chinese and then changed the
+           * interface to English saw "[图片]" under their own picture,
+           * in an English conversation.
+           *
+           * The message's own kind says what it is, so the caption is
+           * hidden for a picture — whatever language the placeholder was
+           * written in.
+           */}
+          {msg.messageType !== "image" && msg.content !== t("chat.imageMessage") && (
+            <p className="mt-1.5 text-sm">{msg.content}</p>
+          )}
           {/* Portal：祖先的 animate-fade-in-up 以 forwards 保留 transform，会把 fixed 定位锚定到气泡上 */}
           {/**
            * The enlarged picture is a dialog.
