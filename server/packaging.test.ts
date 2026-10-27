@@ -175,6 +175,24 @@ describe("the packaged app", () => {
     expect(workflow).toMatch(/Mirrai\.exe[\s\S]{0,400}throw/);
   });
 
+  it("does not let a tripped smoke test pass as a healthy release", () => {
+    /**
+     * The Windows smoke test ran with `continue-on-error: true` — so
+     * the step was green, the release was green, and the app it points
+     * at does not start. The policy of shipping anyway is fine; a
+     * silent one is not.
+     *
+     * So the failure is recorded, the build carries on, and the job
+     * fails at the end.
+     */
+    const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf-8");
+
+    // The smoke test is identified, so a later step can ask about it.
+    expect(workflow).toMatch(/id:\s*smoke/);
+    // And something acts on the failure.
+    expect(workflow).toMatch(/steps\.smoke\.outcome\s*==\s*['"]failure['"]/);
+  });
+
   it("does not ship a macOS bundle that cannot run", () => {
     // A binary that still points at Homebrew does not run on any other
     // machine, and an unsigned binary does not run on an Apple Silicon

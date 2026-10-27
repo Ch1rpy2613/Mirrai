@@ -78,6 +78,14 @@ jobs:
       - name: Smoke test the bundle
         # The bundle is worth shipping even if the smoke test trips: a failure
         # here is a signal to investigate, not a reason to withhold the build.
+        #
+        # But it was *silent*: `continue-on-error: true` makes the step
+        # green, so the release looked healthy while the app it points at
+        # does not start. The failure is recorded, the build carries on,
+        # and the job fails at the end — the installer is still attached to
+        # the release, and the release is red, which is what a human needs
+        # to see.
+        id: smoke
         continue-on-error: true
         shell: pwsh
         run: |
@@ -124,3 +132,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ inputs.tag || github.ref_name }}" build-windows/Mirrai-Setup-x64.exe --clobber
+
+      - name: The smoke test tripped
+        # The job goes red, and the installer is already attached — so
+        # the failure can be investigated, and the release cannot be
+        # mistaken for a healthy one.
+        if: steps.smoke.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Write-Error "The Windows bundle did not pass its smoke test. The installer has been attached so that the failure can be investigated, but this release is not a healthy one."
+          exit 1
