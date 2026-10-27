@@ -954,6 +954,15 @@ export const zh = {
     toUpload: "上传聊天记录",
     backToProvider: "回去设置模型服务",
     providerRequired: "请选择一个 AI 提供商",
+    /**
+     * The list of providers could not be read.
+     *
+     * It used to say "error" — a word that says nothing about what
+     * went wrong or what to do about it, on the one screen a new
+     * user has to get through.
+     */
+    providersFailed: "读取模型服务列表失败，请重试。",
+    retryProviders: "重试",
     providerSaved: "AI 提供商已保存",
     saveFailed: "保存失败：{{message}}",
     nameRequired: "给 TA 起个名字吧",

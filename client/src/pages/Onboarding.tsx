@@ -183,11 +183,40 @@ export default function Onboarding() {
                * picked nothing, pressed "save and continue", and was
                * told to choose a model service, as if their choice had
                * been wrong rather than never having arrived.
+               *
+               * And there was no way to try again: the dropdown was
+               * disabled and stayed disabled, so a single failed
+               * request left the first screen of the app unusable
+               * until it was reloaded.
                */}
               {(providers.isError || authError) && (
-                <p className="text-xs text-destructive" role="alert">
-                  {t("common.error")}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-xs text-destructive" role="alert">
+                    {t("onboarding.providersFailed")}
+                  </p>
+                  {/**
+                   * The way out.
+                   *
+                   * The list is read again, so a request that failed
+                   * because the network was down — or because the
+                   * server was not up yet — does not need the whole
+                   * app to be reloaded.
+                   */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={providers.isFetching}
+                    onClick={() => {
+                      providers.refetch();
+                    }}
+                  >
+                    {providers.isFetching ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    {t("onboarding.retryProviders")}
+                  </Button>
+                </div>
               )}
               <select
                 id="provider"
@@ -238,7 +267,26 @@ export default function Onboarding() {
               </div>
             </div>
 
-            <Button onClick={handleSaveProvider} disabled={upsertConfig.isPending || setDefault.isPending} className="w-full">
+            {/**
+             * The button waits for the list.
+             *
+             * The list of providers could not be read, so there is
+             * nothing to pick — and pressing the button said "please
+             * choose a provider", which blamed the user for the
+             * server's failure. So the button is not offered while
+             * there is no choice to make.
+             */}
+            <Button
+              onClick={handleSaveProvider}
+              disabled={
+                upsertConfig.isPending
+                || setDefault.isPending
+                || providers.isLoading
+                || providers.isError
+                || Boolean(authError)
+              }
+              className="w-full"
+            >
               {upsertConfig.isPending || setDefault.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : (

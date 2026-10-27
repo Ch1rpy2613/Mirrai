@@ -959,6 +959,15 @@ export const en = {
     toUpload: "Upload a chat log",
     backToProvider: "Back to the model service",
     providerRequired: "Choose an AI provider",
+    /**
+     * The list of providers could not be read.
+     *
+     * It used to say "error" — a word that says nothing about what
+     * went wrong or what to do about it, on the one screen a new
+     * user has to get through.
+     */
+    providersFailed: "The list of model services could not be read. Please try again.",
+    retryProviders: "Try again",
     providerSaved: "AI provider saved",
     saveFailed: "Could not save: {{message}}",
     nameRequired: "Give them a name first",

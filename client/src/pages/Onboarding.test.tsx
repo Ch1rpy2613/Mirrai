@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
 /**
@@ -11,11 +12,21 @@ import { translate } from "@/i18n";
  * offered yet.
  */
 
-const providers: { data: any; isLoading: boolean; isError: boolean } = {
+const providers: {
+  data: any;
+  isLoading: boolean;
+  isError: boolean;
+  isFetching?: boolean;
+  refetch?: () => void;
+} = {
   data: undefined,
   isLoading: false,
   isError: false,
+  isFetching: false,
+  refetch: () => {},
 };
+
+const refetchProviders = vi.fn();
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -24,7 +35,15 @@ vi.mock("@/lib/trpc", () => ({
     }),
     setup: { useQuery: () => ({ data: { hasLlmProvider: false, hasUserProvider: false } }) },
     llmConfig: {
-      listProviders: { useQuery: () => providers },
+      listProviders: {
+        useQuery: () => ({
+          ...providers,
+          refetch: () => {
+            refetchProviders();
+            providers.refetch?.();
+          },
+        }),
+      },
       list: { useQuery: () => ({ data: [] }) },
       upsert: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       setDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -74,6 +93,7 @@ describe("the onboarding", () => {
     providers.data = undefined;
     providers.isLoading = false;
     providers.isError = false;
+    providers.isFetching = false;
   });
 
   it("does not offer a choice while the list of providers is on its way", () => {
@@ -90,6 +110,44 @@ describe("the onboarding", () => {
     const select = screen.getByLabelText(translate("zh", "onboarding.providerLabel"))
       ?? screen.getByRole("combobox");
     expect(select).toBeDisabled();
+  });
+
+  it("offers a way to try again when the list could not be read", async () => {
+    /**
+     * The dropdown was disabled and stayed disabled, so a single failed
+     * request left the first screen of the app unusable until it was
+     * reloaded.
+     */
+    providers.isError = true;
+
+    render(<Onboarding />);
+
+    const retry = screen.getByRole("button", {
+      name: translate("zh", "onboarding.retryProviders"),
+    });
+    expect(retry).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      translate("zh", "onboarding.providersFailed"),
+    );
+
+    await userEvent.click(retry);
+    expect(refetchProviders).toHaveBeenCalled();
+  });
+
+  it("does not offer to save when there is no provider to pick", () => {
+    /**
+     * The button said "please choose a provider" — which blamed the
+     * user for the server's failure, when no choice had ever been
+     * offered.
+     */
+    providers.isError = true;
+
+    render(<Onboarding />);
+
+    const save = screen.getByRole("button", {
+      name: translate("zh", "onboarding.saveAndContinue"),
+    });
+    expect(save).toBeDisabled();
   });
 
   it("offers the providers once they are there", () => {
