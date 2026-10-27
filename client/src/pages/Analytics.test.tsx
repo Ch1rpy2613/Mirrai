@@ -120,6 +120,35 @@ describe("the statistics page", () => {
     expect(screen.getByText("42")).toBeInTheDocument();
   });
 
+  it("says how many of the user's own states are not shown", () => {
+    /**
+     * The row of states stops at fourteen, and it said nothing — so
+     * the user saw a short row of their own states and had no way of
+     * knowing that there were more, or how many. It looked like the
+     * whole of their history.
+     */
+    const moods = Array.from({ length: 20 }, (_, i) => ({
+      date: `2026-01-${String(i + 1).padStart(2, "0")}`,
+      mood: "great",
+      note: "",
+    }));
+    overview.data = {
+      stats: { totalMessages: 20, activeDays: 20, longestStreak: 20, avgPerDay: 1 },
+      messageVolume: [],
+      emotionTimeline: [],
+      moods,
+    };
+
+    render(<Analytics />);
+
+    // Fourteen are shown.
+    expect(screen.getAllByText("很好")).toHaveLength(14);
+    // And the six that are not are counted.
+    expect(
+      screen.getByText(translate("zh", "analytics.myMoodMore", { count: 6 })),
+    ).toBeInTheDocument();
+  });
+
   it("plots every hour of the day, not every other one", () => {
     /**
      * Messages sent at 1am, 3am and 5am.

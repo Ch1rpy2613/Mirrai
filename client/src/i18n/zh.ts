@@ -1134,6 +1134,14 @@ export const zh = {
     myMoodTrend: "我的状态",
     myMoodNote: "这些是你自己记下来的。只有你看得到——但它决定了分身怎么跟你说话。",
     myMoodEmpty: "还没有记录过。在首页花五秒记一下，曲线就会出现在这里。",
+    /**
+     * How many are not shown.
+     *
+     * The row of states stops at fourteen and said nothing — so the
+     * user could not tell that it was the whole of their history or
+     * only the latest of it.
+     */
+    myMoodMore: "还有 {{count}} 条更早的记录",
     hourlyDistribution: "聊天时段分布",
     personaRanking: "分身互动排名",
     avgMessages: "日均消息",

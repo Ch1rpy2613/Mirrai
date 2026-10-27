@@ -1133,6 +1133,14 @@ export const en = {
     myMoodTrend: "How you have been",
     myMoodNote: "These are the ones you recorded. Only you see them — but they are what shapes how the persona talks to you.",
     myMoodEmpty: "Nothing recorded yet. Five seconds on the home screen and the curve shows up here.",
+    /**
+     * How many are not shown.
+     *
+     * The row of states stops at fourteen and said nothing — so the
+     * user could not tell that it was the whole of their history or
+     * only the latest of it.
+     */
+    myMoodMore: "{{count}} earlier entries are not shown",
     hourlyDistribution: "Time of day",
     personaRanking: "Persona activity",
     avgMessages: "Messages per day",

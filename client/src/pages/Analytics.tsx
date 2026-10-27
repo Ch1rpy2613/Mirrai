@@ -20,6 +20,14 @@ const stagger = {
   visible: { transition: { staggerChildren: 0.08 } },
 };
 
+/**
+ * How many of the user's own states are shown in the row.
+ *
+ * The rest are counted, and the count is shown — so the row is not
+ * mistaken for the whole of the user's history.
+ */
+const MOOD_ROWS_SHOWN = 14;
+
 const TOOLTIP_STYLE = {
   background: "var(--color-elevated)",
   border: "1px solid var(--color-border)",
@@ -93,6 +101,16 @@ export default function Analytics() {
     mood: m.mood,
     note: m.note,
   }));
+  /**
+   * The newest states, and how many are not shown.
+   *
+   * The row of states stops at fourteen so it does not push the rest
+   * of the page off the screen — but it said nothing, so the user
+   * could not tell that the row was the whole of their history or
+   * only the latest of it.
+   */
+  const recentMoods = userMoodChartData.slice().reverse().slice(0, MOOD_ROWS_SHOWN);
+  const hiddenMoodCount = Math.max(0, userMoodChartData.length - recentMoods.length);
 
   const messageVolumeData = (data?.messageVolume || []).map((row: any) => ({
     ...row,
@@ -216,7 +234,7 @@ export default function Analytics() {
           {userMoodChartData.length > 0 ? (
             <>
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {userMoodChartData.slice().reverse().slice(0, 14).map((m: any) => (
+                {recentMoods.map((m: any) => (
                   <span
                     key={m.date}
                     title={m.note || m.date}
@@ -227,6 +245,19 @@ export default function Analytics() {
                   </span>
                 ))}
               </div>
+              {/**
+               * How many are not shown.
+               *
+               * The list stops at fourteen, and it said nothing — so
+               * the user saw a short row of their own states and had
+               * no way of knowing that there were more, or how many.
+               * It looked like the whole of their history.
+               */}
+              {hiddenMoodCount > 0 ? (
+                <p className="text-[0.625rem] text-muted-subtle mb-3">
+                  {t("analytics.myMoodMore", { count: hiddenMoodCount })}
+                </p>
+              ) : null}
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {t("analytics.myMoodNote")}
               </p>
