@@ -360,6 +360,27 @@ export function zonedDayKeySince(
 }
 
 /**
+ * The day key that opens a window of "the last N days".
+ *
+ * `zonedDayKeySince(days)` is the day `days` days back — which opens a
+ * window of N+1 days, today included. A "last thirty days" chart has
+ * thirty days in it: the chart of daily messages draws exactly thirty
+ * bars, and the chart of the user's own moods right beside it drew
+ * thirty-one, starting a day earlier.
+ *
+ * So the two charts on the analytics page started on different days,
+ * and the one the reader's eye lands on last was the one that was
+ * wrong.
+ */
+export function zonedDayKeyWindowStart(
+  days: number,
+  timeZone?: string | null,
+  now: Date = new Date(),
+): string {
+  return zonedDayKeySince(Math.max(0, days - 1), timeZone, now);
+}
+
+/**
  * The day before a "YYYY-MM-DD" key.
  *
  * Pure arithmetic on the key, with no time zone in it: the key is a

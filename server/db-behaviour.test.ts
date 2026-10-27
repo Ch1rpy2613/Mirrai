@@ -80,6 +80,21 @@ class FakeQuery {
   }
 
   /**
+   * A join.
+   *
+   * The table the query is read from stays the one it started at — the
+   * join is a second table, and the conditions that follow are still
+   * the ones of the query.
+   */
+  innerJoin(_table: any, _condition: any) {
+    return this;
+  }
+
+  leftJoin(_table: any, _condition: any) {
+    return this;
+  }
+
+  /**
    * The table a write is against.
    *
    * A write does not call `from` — it is given the table when the write
@@ -543,6 +558,84 @@ describe("the user's own day", () => {
       const params = whereOf(index).flatMap((c) => c.params);
       // The driver writes the instant as it is.
       expect(params).toContain("2026-03-29T00:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("the charts of the analytics page", () => {
+  /**
+   * They are one answer, so they are one calendar.
+   *
+   * The page says "the last thirty days" and draws four charts side by
+   * side. The daily-messages chart drew exactly thirty bars in the
+   * reader's own calendar; the moods chart drew thirty-one, starting a
+   * day earlier; and the emotion timeline and the per-persona list were
+   * in the *server's* calendar — so a reader on the other side of the
+   * world saw a day the reader's calendar had already closed.
+   */
+  it("reads the emotion timeline by the reader's own day", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-14T12:00:00.000Z"));
+    try {
+      registry.select.emotion_snapshots = [];
+      await db.getEmotionTimeline(3, 30, "Asia/Shanghai");
+
+      const conditions = whereOf().map((c) => c.sql).join(" ");
+      /**
+       * The rows of this chart are filed under the reader's day — the
+       * `date` column is their day key — so the window has to be a day
+       * key in the same calendar. It was the instant the row was
+       * written, against the server's clock.
+       */
+      expect(conditions).toContain('"emotion_snapshots"."date" >=');
+      expect(conditions).not.toContain('"emotion_snapshots"."createdAt"');
+      const params = whereOf().flatMap((c) => c.params);
+      // The reader's day is the fourteenth of March in Shanghai, so
+      // thirty days ending today open on the thirteenth of February.
+      expect(params).toContain("2026-02-13");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens the per-persona list at the reader's own midnight", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-14T12:00:00.000Z"));
+    try {
+      registry.select.messages = [];
+      await db.getPersonaEngagement(3, 30, "Asia/Shanghai");
+
+      const index = queries.findIndex((q) => q.table === "messages");
+      expect(index).toBeGreaterThanOrEqual(0);
+      const conditions = whereOf(index).map((c) => c.sql).join(" ");
+      expect(conditions).toContain('"messages"."createdAt" >=');
+      const params = whereOf(index).flatMap((c) => c.params);
+      /**
+       * The reader's midnight, twenty-nine days back. The thirteenth of
+       * February at midnight in Shanghai is the twelfth at four in the
+       * afternoon in Greenwich — and the server's clock, which is what
+       * it used to be, was four hours off that.
+       */
+      expect(params).toContain("2026-02-12T16:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives the moods chart the same number of days as the chart beside it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-14T12:00:00.000Z"));
+    try {
+      registry.select.user_moods = [];
+      await db.getUserMoods(3, 30, "Asia/Shanghai");
+
+      const params = whereOf().flatMap((c) => c.params);
+      // Thirty days, ending today. It opened on the twelfth of
+      // February — thirty-one days.
+      expect(params).toContain("2026-02-13");
+      expect(params).not.toContain("2026-02-12");
     } finally {
       vi.useRealTimers();
     }

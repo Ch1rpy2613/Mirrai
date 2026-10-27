@@ -4725,8 +4725,8 @@ export const appRouter = router({
           // two different calendars.
           getAnalyticsStats(ctx.user.id, input.days, ctx.user.timezone),
           getMessageVolume(ctx.user.id, input.days, ctx.user.timezone),
-          getEmotionTimeline(ctx.user.id, input.days),
-          getPersonaEngagement(ctx.user.id, input.days),
+          getEmotionTimeline(ctx.user.id, input.days, ctx.user.timezone),
+          getPersonaEngagement(ctx.user.id, input.days, ctx.user.timezone),
           getHourlyDistribution(ctx.user.id, input.days, ctx.user.timezone),
           // The user's own states. The emotion timeline above is the
           // *persona's* mood, and the two are not the same thing.

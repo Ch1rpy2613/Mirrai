@@ -22,7 +22,7 @@ import {
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
-import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeySince } from "@shared/timezone";
+import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeySince, zonedDayKeyWindowStart } from "@shared/timezone";
 import { userDayColumn, userHourColumn } from "./_core/user-day";
 import { dayShiftMinutes, zonedDayStart } from "@shared/timezone";
 
@@ -715,8 +715,13 @@ export async function getUserMoods(
    *
    * The window is in the user's own calendar too, so the days it names
    * are the days the moods are filed under.
+   *
+   * And it is the same length as the chart beside it: "the last thirty
+   * days" is thirty days, ending today. It was thirty-one — so the
+   * moods chart started a day before the daily-messages chart, and the
+   * two did not line up.
    */
-  const since = zonedDayKeySince(days, timezone);
+  const since = zonedDayKeyWindowStart(days, timezone);
   return db.select().from(userMoods)
     .where(and(eq(userMoods.userId, userId), gte(userMoods.date, since)))
     .orderBy(asc(userMoods.date));
@@ -2343,7 +2348,7 @@ export async function getEmotionSnapshots(
    * server's clock — so a "last thirty days" chart showed thirty-one
    * days, and the left-most label fell outside the window it claimed.
    */
-  const since = zonedDayKeySince(days, timezone);
+  const since = zonedDayKeyWindowStart(days, timezone);
   return db.select().from(emotionSnapshots)
     .where(and(
       eq(emotionSnapshots.personaId, personaId),
@@ -2363,7 +2368,7 @@ export async function getEmotionReport(
   if (!db) return { snapshots: [], distribution: [], totalDays: 0, totalMessages: 0 };
   // The window is the user's own calendar — the same one the rows are
   // filed under.
-  const since = zonedDayKeySince(days, timezone);
+  const since = zonedDayKeyWindowStart(days, timezone);
   const snapshots = await db.select().from(emotionSnapshots)
     .where(and(
       eq(emotionSnapshots.personaId, personaId),
@@ -2467,24 +2472,51 @@ function fillMissingDays(
   return filled;
 }
 
-export async function getEmotionTimeline(userId: number, days: number) {
+export async function getEmotionTimeline(
+  userId: number,
+  days: number,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return [];
-  const since = new Date(); since.setDate(since.getDate() - days);
+  /**
+   * The window, in the user's own calendar.
+   *
+   * The rows of this chart are filed under the user's day — the `date`
+   * column is their day key — so the window has to be a day key in the
+   * same calendar. It was the server's clock, applied to the instant
+   * the row was written: so the chart showed a day the reader's own
+   * calendar had already closed, and left out the day it had just
+   * opened, while the charts beside it were in the reader's calendar.
+   */
+  const since = zonedDayKeyWindowStart(days, timezone);
   return db.select({
     date: emotionSnapshots.date,
     emotionalState: emotionSnapshots.emotionalState,
     count: count(),
   }).from(emotionSnapshots)
-    .where(and(eq(emotionSnapshots.userId, userId), gte(emotionSnapshots.createdAt, since)))
+    .where(and(eq(emotionSnapshots.userId, userId), gte(emotionSnapshots.date, since)))
     .groupBy(emotionSnapshots.date, emotionSnapshots.emotionalState)
     .orderBy(emotionSnapshots.date);
 }
 
-export async function getPersonaEngagement(userId: number, days: number) {
+export async function getPersonaEngagement(
+  userId: number,
+  days: number,
+  timezone?: string | null,
+) {
   const db = await getDb();
   if (!db) return [];
-  const since = new Date(); since.setDate(since.getDate() - days);
+  /**
+   * The window, in the user's own calendar.
+   *
+   * It was the server's clock — and one day longer than the chart
+   * beside it, because it counted back `days` days from today rather
+   * than the `days` days the window names. So a persona the reader
+   * had not spoken to for a month was still in the list, with the
+   * messages from the day before the window counted towards it.
+   */
+  const since = startOfUserDay(new Date(), timezone, Math.max(0, days - 1));
   return db.select({
     personaId: messages.personaId,
     name: personas.name,
