@@ -159,12 +159,39 @@ describe("evaluateUsage", () => {
   it("still applies the ratio to a week that already had messages", async () => {
     // A flat week before, twice as many messages in the last week.
     getDailyUserChatCounts.mockResolvedValue(
-      dailyRows(NOW, [10, 10, 10, 10, 10, 10, 10, 30, 30, 30, 30, 30, 30, 30]),
+      dailyRows(NOW, [10, 10, 10, 10, 10, 10, 10, 30, 30, 30, 30, 30, 30, 30, 30]),
     );
 
     const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
 
     expect(result.dependencyRising).toBe(true);
+  });
+
+  it("compares two weeks of the same length", async () => {
+    // Ten a day for a week, then sixteen a day for a week. The rise is
+    // 1.6× over seven days — the ratio the product names is 1.5×.
+    //
+    // It used to compare six days against seven, so a rise of 1.6× over
+    // seven days was 1.87× over six — and the signal could not fire in
+    // the case it was written for: the user's own use climbing fastest.
+    getDailyUserChatCounts.mockResolvedValue(
+      dailyRows(NOW, [10, 10, 10, 10, 10, 10, 10, 16, 16, 16, 16, 16, 16, 16, 10]),
+    );
+
+    const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
+
+    expect(result.dependencyRising).toBe(true);
+  });
+
+  it("does not fire on a rise that is under the ratio", async () => {
+    // Ten a day for a week, then fourteen a day for a week: 1.4×.
+    getDailyUserChatCounts.mockResolvedValue(
+      dailyRows(NOW, [10, 10, 10, 10, 10, 10, 10, 14, 14, 14, 14, 14, 14, 14, 10]),
+    );
+
+    const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
+
+    expect(result.dependencyRising).toBe(false);
   });
 
   it("does not fire on a steady frequency", async () => {

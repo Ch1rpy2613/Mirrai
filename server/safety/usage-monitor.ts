@@ -28,6 +28,20 @@ export const DAILY_MESSAGE_LIMIT = 5;
 export const DEPENDENCY_RATIO = 1.5;
 export const DEPENDENCY_RISING_DAYS = 3;
 
+/**
+ * The days the dependency comparison is made over.
+ *
+ * Two full weeks of days that are over, and then today.
+ *
+ * The series used to be fourteen long — one day was taken off the end
+ * for "today", and the two halves were cut at seven — so the recent
+ * half was a day short of the previous one. The ratio is written as
+ * 1.5×, and a rise of 1.5× over seven days is 1.75× over six, so the
+ * signal could not fire in the case it was written for: exactly when
+ * the user's own use was climbing fastest.
+ */
+export const DEPENDENCY_WINDOW_DAYS = 14;
+
 export interface UsageSignals {
   /** How long the current conversation session has been running. */
   sessionDurationMs: number;
@@ -35,7 +49,7 @@ export interface UsageSignals {
   dailyMessageCount: number;
   /** Whether the dependency trend looks like it is climbing. */
   dependencyRising: boolean;
-  /** Daily message counts for the last 14 days, oldest first. */
+  /** Daily message counts for the last 15 days, oldest first. */
   dailyCounts: number[];
 }
 
@@ -94,13 +108,15 @@ export async function evaluateUsage(params: {
     startOfUserDay(now, timezone),
   );
 
-  const since = new Date(now.getTime());
-  since.setDate(since.getDate() - 14);
+  /**
+   * The days, oldest first: two full weeks that are over, and today.
+   */
+  const seriesLength = DEPENDENCY_WINDOW_DAYS + 1;
   // The rows are filed under the user's own day keys.
-  const rows = await db.getDailyUserChatCounts(params.userId, 14, timezone);
+  const rows = await db.getDailyUserChatCounts(params.userId, seriesLength, timezone);
   const byDate = new Map(rows.map((r) => [r.date, Number(r.count)]));
   const dailyCounts: number[] = [];
-  for (let i = 13; i >= 0; i--) {
+  for (let i = seriesLength - 1; i >= 0; i--) {
     const date = new Date(now.getTime());
     date.setDate(date.getDate() - i);
     // The key is the user's day, not the UTC date.
@@ -121,8 +137,8 @@ export async function evaluateUsage(params: {
    */
   const completeDays = dailyCounts.slice(0, -1);
   const todayCount = dailyCounts[dailyCounts.length - 1] ?? 0;
-  const recentWeek = completeDays.slice(7).reduce((a, b) => a + b, 0);
-  const previousWeek = completeDays.slice(0, 7).reduce((a, b) => a + b, 0);
+  const recentWeek = completeDays.slice(DEPENDENCY_WINDOW_DAYS / 2).reduce((a, b) => a + b, 0);
+  const previousWeek = completeDays.slice(0, DEPENDENCY_WINDOW_DAYS / 2).reduce((a, b) => a + b, 0);
 
   const lastDays = completeDays.slice(-DEPENDENCY_RISING_DAYS);
   const risingConsecutively = lastDays.every(
