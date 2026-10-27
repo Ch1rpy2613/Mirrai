@@ -16,6 +16,8 @@ import { translate } from "@/i18n";
 const navigate = vi.fn();
 let personas: any[] = [];
 let results: any[] = [];
+/** Whether the search failed. */
+let searchFailed = false;
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/chat", navigate],
@@ -24,7 +26,7 @@ vi.mock("wouter", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: { list: { useQuery: () => ({ data: personas }) } },
-    chat: { searchAll: { useQuery: () => ({ data: results }) } },
+    chat: { searchAll: { useQuery: () => ({ data: results, isError: searchFailed, isFetching: false }) } },
   },
 }));
 
@@ -44,6 +46,31 @@ describe("the command palette", () => {
     vi.clearAllMocks();
     personas = [];
     results = [];
+    searchFailed = false;
+  });
+
+  it("does not tell the user they wrote nothing when the search failed", async () => {
+    /**
+     * "Nothing found" is a claim about the user's own messages, and it
+     * was made because the request failed. The user searched for
+     * something they had written, and the app said they had not
+     * written it.
+     */
+    const user = userEvent.setup();
+    render(<CommandPalette />);
+
+    await user.keyboard("{Meta>}k{/Meta}");
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder"))).toBeInTheDocument();
+    });
+
+    searchFailed = true;
+    await user.type(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder")), "海边");
+
+    await waitFor(() => {
+      expect(screen.getByText(translate("zh", "common.error"))).toBeInTheDocument();
+    });
+    expect(screen.queryByText(translate("zh", "commandPalette.noResults"))).toBeNull();
   });
 
   it("stays out of the way until it is asked for", () => {

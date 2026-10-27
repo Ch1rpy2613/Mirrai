@@ -195,7 +195,21 @@ export default function CommandPalette() {
             </p>
           )}
 
-          {query.trim() && !results.isFetching && matchingPersonas.length === 0 && matchingMessages.length === 0 && (
+          {/**
+           * The search failed.
+           *
+           * "Nothing found" is a claim about the user's own messages,
+           * and it was made because the request failed. The user
+           * searched for something they had written, and the app said
+           * they had not written it.
+           */}
+          {query.trim() && results.isError && (
+            <p className="text-xs text-destructive text-center py-6" role="alert">
+              {t("common.error")}
+            </p>
+          )}
+
+          {query.trim() && !results.isFetching && !results.isError && matchingPersonas.length === 0 && matchingMessages.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-6" role="status">
               {t("commandPalette.noResults")}
             </p>
