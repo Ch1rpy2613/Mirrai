@@ -19,12 +19,23 @@ const listRefetch = vi.fn();
 
 /** The personas the server sends back. */
 let personas: any[];
+/** Whether the list is still on its way. */
+let personasLoading = false;
+/** Whether the list could not be read. */
+let personasFailed = false;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     setup: { useQuery: () => ({ data: { hasLlmProvider: true, hasUserProvider: false } }) },
     persona: {
-      list: { useQuery: () => ({ data: personas, refetch: listRefetch }) },
+      list: {
+        useQuery: () => ({
+          data: personas,
+          refetch: listRefetch,
+          isLoading: personasLoading,
+          isError: personasFailed,
+        }),
+      },
       stats: { useQuery: () => ({ data: { totalPersonas: 2, totalChats: 10, todayChats: 1 } }) },
       update: { useMutation: () => ({ mutate: update, isPending: false }) },
       delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -103,6 +114,29 @@ describe("the lobby", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     personas = [];
+    personasLoading = false;
+    personasFailed = false;
+  });
+
+  it("does not say the user has no personas while the list is on its way", () => {
+    // The query has no answer yet, so there is no list — and "no list"
+    // used to mean "no personas", so the page said the user had none
+    // and offered to make one. On a slow connection every visit began
+    // with an invitation to create a duplicate.
+    personas = undefined as any;
+    personasLoading = true;
+
+    render(<Lobby />);
+
+    expect(screen.queryByText(translate("zh", "lobby.emptyState.title"))).toBeNull();
+  });
+
+  it("says the user has no personas when there are none", () => {
+    render(<Lobby />);
+
+    // The empty state is the truth here — the list came back and it was
+    // empty.
+    expect(screen.getByText(translate("zh", "lobby.emptyState.title"))).toBeInTheDocument();
   });
 
   it("puts a pinned persona first, whatever the sort is", () => {

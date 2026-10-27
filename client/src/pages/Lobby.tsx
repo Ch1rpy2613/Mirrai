@@ -1804,6 +1804,7 @@ export default function Lobby() {
     data: personas,
     refetch,
     isError: personasFailed,
+    isLoading: personasLoading,
   } = trpc.persona.list.useQuery(undefined, {
     enabled: isAuthenticated,
     refetchInterval: (query) => {
@@ -1891,6 +1892,11 @@ export default function Lobby() {
    * no personas, create your first" and offered to make one. That is a
    * claim about the user's own data, and it was simply false: one
    * network blip replaced their whole list with an invitation.
+   *
+   * The same was true while the list was on its way: the query has no
+   * answer yet, so there is no list, so the page said the user had no
+   * personas — and offered to make one. On a slow connection every
+   * visit began with an invitation to create a duplicate.
    */
   const hasPersonas = !personasFailed && personas && personas.length > 0;
 
@@ -2268,6 +2274,16 @@ export default function Lobby() {
               <TipsSection />
             </section>
           </>
+        ) : personasLoading ? (
+          /**
+           * The list is on its way.
+           *
+           * There is no list yet, and "no list" used to mean "no
+           * personas" — so the page said the user had none and offered
+           * to make one, on every single visit, before the answer
+           * arrived.
+           */
+          <PageLoader />
         ) : personasFailed ? (
           /**
            * The list could not be read.
