@@ -1160,6 +1160,21 @@ export const appRouter = router({
           const persona = await getPersonaById(input.id, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
           const merged = { ...((persona.personaData as any) || {}), ...input.personaData };
+          /**
+           * The ceiling is on the *merged* record, not on the part that
+           * arrived.
+           *
+           * The cap was applied to the input alone — so the record
+           * could be pushed past it one small write at a time, and it
+           * grew for ever: every read of the persona brings the column
+           * back, and every prompt is built from it.
+           */
+          if (Object.keys(merged).length > 60 || JSON.stringify(merged).length > 200_000) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: copy(ctx.locale, "errors.personaDataTooLarge"),
+            });
+          }
           await updatePersona(input.id, ctx.user.id, { personaData: merged });
           return { success: true };
         });

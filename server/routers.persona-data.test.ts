@@ -154,6 +154,43 @@ describe("the persona's own fields", () => {
     expect(last.microRules).toBeDefined();
   });
 
+  it("refuses a write that would push the record past its ceiling", async () => {
+    /**
+     * The column already holds a large record, and the write brings
+     * another large one.
+     */
+    const big = "字".repeat(150_000);
+    let stored: Record<string, unknown> = { note: big };
+    getPersonaById.mockImplementation(async () => ({
+      ...persona,
+      personaData: { ...stored },
+    }));
+    updatePersona.mockImplementation(async (_id: unknown, _uid: unknown, data: any) => {
+      stored = { ...stored, ...(data?.personaData ?? {}) };
+    });
+
+    const caller = appRouter.createCaller(ctxFor(1));
+
+    /**
+     * The part that arrives is well inside the ceiling — so the check
+     * on the input alone is happy with it.
+     */
+    await expect(
+      caller.persona.updatePersonaData({ id: 5, personaData: { other: "字".repeat(100_000) } }),
+    ).rejects.toThrow();
+
+    // And the record was not written.
+    expect(updatePersona).not.toHaveBeenCalled();
+  });
+
+  it("lets a small write through", async () => {
+    const caller = appRouter.createCaller(ctxFor(1));
+
+    await caller.persona.updatePersonaData({ id: 5, personaData: { mood: "开心" } });
+
+    expect(updatePersona).toHaveBeenCalled();
+  });
+
   it("limits how often a correction can be asked for", async () => {
     // The correction sends the persona's whole field set and the user's
     // own words to the provider, and it had no limit at all.

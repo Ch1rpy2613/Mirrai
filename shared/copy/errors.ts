@@ -74,6 +74,17 @@ export const ERRORS = {
     zh: "这个分身的蒸馏还在进行中，请等它结束。",
     en: "This persona is still being distilled — please wait for the run to finish.",
   },
+  /**
+   * The persona's own fields grew past what they may hold.
+   *
+   * The ceiling was applied to the part that arrived, not to the
+   * merged record — so the record could be pushed past it one small
+   * write at a time.
+   */
+  "errors.personaDataTooLarge": {
+    zh: "这个分身的资料已经太长了：请删掉一些内容再保存。",
+    en: "This persona's notes have grown too long: remove some of them and save again.",
+  },
   "errors.nothingToDistil": {
     zh: "还没有可以分析的材料：请先上传聊天记录，或先收集一些。",
     en: "There is nothing to analyse yet: upload some chat logs, or collect some first.",
