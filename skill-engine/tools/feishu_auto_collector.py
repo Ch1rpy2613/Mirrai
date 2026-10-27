@@ -1176,7 +1176,14 @@ def main() -> None:
             config["refresh_token"] = token_data.get("refresh_token", "")
             save_config(config)
             print(f"✅ user_access_token 已保存（scope: {token_data.get('scope', '')}）")
-            print(f"   token: {token_data['access_token'][:20]}...")
+            # The token itself is not printed.
+            #
+            # The collector's output is captured by the server and kept
+            # in the job's log, and the log is shown to the user and
+            # written to the disk. So the first twenty characters of an
+            # access token were being kept there — in a file that is
+            # not secret, for a token that is.
+            print("   token 已写入配置文件，没有打印出来。")
         else:
             print("❌ 换取失败，请检查 code 是否有效")
         return
