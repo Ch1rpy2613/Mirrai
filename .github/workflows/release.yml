@@ -51,7 +51,13 @@ jobs:
       - name: Attach the DMG to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ inputs.tag || github.ref_name }}" build-macos/Mirrai-macOS-arm64.dmg --clobber
+        # The name of the disk image depends on the machine it was built
+        # on — it was written down as arm64, so a build on an Intel
+        # runner produced a file with another name and the upload failed.
+        run: |
+          DMG=$(ls build-macos/Mirrai-macOS-*.dmg | head -1)
+          if [ -z "$DMG" ]; then echo "No .dmg was built." >&2; exit 1; fi
+          gh release upload "${{ inputs.tag || github.ref_name }}" "$DMG" --clobber
 
   windows-app:
     name: Build Windows app

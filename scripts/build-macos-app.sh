@@ -12,15 +12,30 @@ APP_NAME="Mirrai"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
 RESOURCES="$CONTENTS/Resources"
-DMG_NAME="Mirrai-macOS-arm64"
-
 NODE_VERSION="24.22.1"
-NODE_ARCH="arm64"
-NODE_TARBALL="node-v${NODE_VERSION}-darwin-${NODE_ARCH}.tar.gz"
-NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TARBALL}"
 
 log() { echo "==> $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# ─── The architecture of this machine ─────────────────────────────────────────
+#
+# It was written down — arm64 — so building on an Intel Mac produced an
+# app with the Apple Silicon Node inside it, and the app did not start
+# on the machine it was built on (and neither would it on any Intel
+# Mac).
+#
+# The machine says which it is.
+MACHINE_ARCH="$(uname -m)"
+case "$MACHINE_ARCH" in
+  arm64|aarch64) NODE_ARCH="arm64" ;;
+  x86_64|amd64) NODE_ARCH="x64" ;;
+  *) die "Mirrai is not built for this architecture: $MACHINE_ARCH" ;;
+esac
+log "Building for ${NODE_ARCH} (this machine is ${MACHINE_ARCH})."
+
+DMG_NAME="Mirrai-macOS-${NODE_ARCH}"
+NODE_TARBALL="node-v${NODE_VERSION}-darwin-${NODE_ARCH}.tar.gz"
+NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/${NODE_TARBALL}"
 
 # ─── Preflight checks ───────────────────────────────────────────────────────
 log "Checking prerequisites..."
