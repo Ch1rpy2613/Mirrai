@@ -2,7 +2,8 @@ import { Suspense, lazy } from "react";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
+import { useRouteFocus } from "./lib/route-focus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageLoader from "./components/PageLoader";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -25,6 +26,17 @@ const Questionnaire = lazy(() => import("./pages/Questionnaire"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 function Router() {
+  const [location] = useLocation();
+  /**
+   * The focus follows the route.
+   *
+   * A client-side navigation replaces the page without moving the
+   * focus: so a keyboard user who pressed a link is left with the focus
+   * on a link that is not there any more, and a screen reader is still
+   * reading the page they came from.
+   */
+  useRouteFocus(location);
+
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
