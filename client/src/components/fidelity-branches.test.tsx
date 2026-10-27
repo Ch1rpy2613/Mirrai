@@ -116,6 +116,7 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 }));
 
 import FidelityPanel from "./FidelityPanel";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 describe("the branches the interface takes", () => {
   beforeEach(() => {
@@ -142,7 +143,7 @@ describe("the branches the interface takes", () => {
 
   it("says so when the mining found nothing", async () => {
     minedRules = [];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "microRules.mine")));
     await waitFor(() =>
       expect(vi.mocked(toast.info)).toHaveBeenCalledWith(
@@ -153,7 +154,7 @@ describe("the branches the interface takes", () => {
 
   it("says how many candidates the mining found", async () => {
     minedRules = [{ id: "auto-1" }];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "microRules.mine")));
     await waitFor(() =>
       expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
@@ -164,7 +165,7 @@ describe("the branches the interface takes", () => {
 
   it("says so when the search found nothing to take back", async () => {
     collected = 0;
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "outbound.collect")));
     await waitFor(() =>
       expect(vi.mocked(toast.info)).toHaveBeenCalledWith(
@@ -175,7 +176,7 @@ describe("the branches the interface takes", () => {
 
   it("says how many words the search found", async () => {
     collected = 3;
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "outbound.collect")));
     await waitFor(() =>
       expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
@@ -186,7 +187,7 @@ describe("the branches the interface takes", () => {
 
   it("says so when the timing could not be measured", async () => {
     measuredProfile = null;
-    render(<FidelityPanel personaId={1} />);
+    render(<ConfirmProvider><FidelityPanel personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "fidelity.behavior.measure")));
     await waitFor(() =>
       expect(vi.mocked(toast.info)).toHaveBeenCalledWith(
@@ -204,7 +205,7 @@ describe("the branches the interface takes", () => {
       activeHours: [9],
       samples: 30,
     };
-    render(<FidelityPanel personaId={1} />);
+    render(<ConfirmProvider><FidelityPanel personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "fidelity.behavior.measure")));
     await waitFor(() => expect(measure).toHaveBeenCalled());
     expect(vi.mocked(toast.info)).not.toHaveBeenCalled();
@@ -214,7 +215,7 @@ describe("the branches the interface takes", () => {
     mine.mockImplementation((_args: any, opts: any) => {
       opts?.onError?.(new Error("provider exploded"));
     });
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "microRules.mine")));
     await waitFor(() =>
       expect(vi.mocked(toast.error)).toHaveBeenCalledWith("provider exploded"),

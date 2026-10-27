@@ -26,6 +26,7 @@ import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone"
 import { formatDayKey, formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 /**
  * The largest picture the chat will send.
@@ -73,6 +74,14 @@ export default function Chat() {
   const [, navigate] = useLocation();
   const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
+  /**
+   * The app's own confirmation.
+   *
+   * It was the browser's own dialog — whose buttons say "OK" and
+   * "Cancel" in the *browser's* language, not the language the person
+   * is reading the app in.
+   */
+  const confirm = useConfirm();
 
   const [messages, setMessages] = useState<Message[]>([]);
 
@@ -868,7 +877,10 @@ export default function Chat() {
      * did not, and the button's own description said it was "replacing
      * the turn that is on screen" — which is not what it does.
      */
-    if (!window.confirm(t("chat.regenerateConfirm", { count: messagesAfter(msg.id) }))) return;
+    const yes = await confirm({
+      description: t("chat.regenerateConfirm", { count: messagesAfter(msg.id) }),
+    });
+    if (!yes) return;
     setIsSending(true);
     // The stop button works here too.
     const controller = new AbortController();
@@ -959,7 +971,8 @@ export default function Chat() {
      * relationship record, a memory, a diary entry. A message went
      * with one click and nothing said.
      */
-    if (!window.confirm(t("chat.deleteConfirm"))) return;
+    const yes = await confirm({ description: t("chat.deleteConfirm") });
+    if (!yes) return;
     try {
       await deleteMessageMutation.mutateAsync({
         personaId,
@@ -1525,8 +1538,9 @@ export default function Chat() {
                     {/* Clearing the conversation is a single click that
                         deletes the whole transcript, for good. The page
                         asks before it deletes a scene; this one did not. */}
-                    <button onClick={() => {
-                      if (!window.confirm(t("chat.clearConfirm"))) return;
+                    <button onClick={async () => {
+                      const yes = await confirm({ description: t("chat.clearConfirm") });
+                      if (!yes) return;
                       clearMutation.mutate({ personaId });
                     }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors">
@@ -1593,8 +1607,9 @@ export default function Chat() {
                             {t("sceneForm.builtin")}
                           </span>
                         ) : (
-                          <button onClick={() => {
-                            if (!window.confirm(t("sceneForm.confirmDelete"))) return;
+                          <button onClick={async () => {
+                            const yes = await confirm({ description: t("sceneForm.confirmDelete") });
+                            if (!yes) return;
                             deleteSceneMutation.mutate({ id: scene.id });
                           }}
                             aria-label={t("sceneForm.delete")}
@@ -2122,6 +2137,7 @@ const CATEGORY_LABELS: Record<string, { labelKey: "chat.memory.categories.memory
 
 function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: () => void }) {
   const { t, locale } = useLocale();
+  const confirm = useConfirm();
   const { data: memories, refetch, isError: memoriesFailed, isLoading: memoriesLoading } =
     trpc.memory.list.useQuery({ personaId });
   const memoryItems = memories?.items ?? [];
@@ -2282,8 +2298,9 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
                        * single prompt the persona is given.
                        */}
                       <button
-                        onClick={() => {
-                          if (!window.confirm(t("chat.memory.deleteConfirm"))) return;
+                        onClick={async () => {
+                          const yes = await confirm({ description: t("chat.memory.deleteConfirm") });
+                          if (!yes) return;
                           deleteMutation.mutate({ id: m.id });
                         }}
                         disabled={deleteMutation.isPending}

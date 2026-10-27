@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Send, Search, Check, X, Pencil, BookMarked } from "lucide-react";
 import { daysWaiting, isStale } from "@shared/outbound";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 /**
  * The way out.
@@ -29,6 +30,14 @@ import { daysWaiting, isStale } from "@shared/outbound";
  */
 export default function OutboundLetters({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  /**
+   * The app's own confirmation.
+   *
+   * It was the browser's own dialog — whose buttons say "OK" and
+   * "Cancel" in the *browser's* language, not the language the person
+   * is reading the app in.
+   */
+  const confirm = useConfirm();
   const { data, refetch, isLoading, isError } = trpc.outbound.list.useQuery({ personaId });
   const collectMutation = trpc.outbound.collect.useMutation({
     onSuccess: (result) => {
@@ -210,8 +219,9 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
                       variant="ghost"
                       size="sm"
                       disabled={dropMutation.isPending}
-                      onClick={() => {
-                        if (!window.confirm(t("outbound.dropConfirm"))) return;
+                      onClick={async () => {
+                        const yes = await confirm({ description: t("outbound.dropConfirm") });
+                        if (!yes) return;
                         dropMutation.mutate({ id: letter.id });
                       }}
                     >

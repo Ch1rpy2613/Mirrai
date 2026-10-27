@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, useLocation } from "wouter";
 import { useRouteFocus } from "./lib/route-focus";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageLoader from "./components/PageLoader";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -76,7 +77,10 @@ function App() {
               <Toaster />
               <TimezoneSync />
               <CommandPalette />
-              <Router />
+              {/* The app's own confirmation, in the app's own language. */}
+              <ConfirmProvider>
+                <Router />
+              </ConfirmProvider>
             </MotionConfig>
           </TooltipProvider>
         </LocaleProvider>

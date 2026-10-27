@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Save, X, Trash2, Wand2, Check, Pencil } from "lucide-react";
 import type { MicroRule } from "@shared/micro-rules";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 /**
  * The rules, editable.
@@ -48,6 +49,14 @@ const MICRO_RULE_TEXT_MAX = 500;
 
 export default function MicroRulesEditor({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  /**
+   * The app's own confirmation.
+   *
+   * It was the browser's own dialog — whose buttons say "OK" and
+   * "Cancel" in the *browser's* language, not the language the person
+   * is reading the app in.
+   */
+  const confirm = useConfirm();
   // The punctuation follows the interface's language: the full-width
   // colon is Chinese typography, and an English reader saw
   // "Meaning：the meaning".
@@ -137,8 +146,11 @@ export default function MicroRulesEditor({ personaId }: { personaId: number }) {
    * asks first — the messages and the memories, the letter, the
    * persona.
    */
-  function remove(rule: MicroRule) {
-    if (!window.confirm(t("microRules.removeConfirm", { trigger: rule.trigger.join(triggerSeparator) }))) {
+  async function remove(rule: MicroRule) {
+    const yes = await confirm({
+      description: t("microRules.removeConfirm", { trigger: rule.trigger.join(triggerSeparator) }),
+    });
+    if (!yes) {
       return;
     }
     save(rules.filter((r) => r.id !== rule.id));

@@ -66,6 +66,7 @@ vi.mock("@/contexts/LocaleContext", () => ({
 }));
 
 import RelationshipTimeline from "./RelationshipTimeline";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 /** A relationship event, in the shape the server sends it. */
 function makeEvent(overrides: Record<string, any> = {}) {
@@ -86,7 +87,7 @@ describe("the relationship timeline", () => {
   });
 
   it("says so when nothing has been recorded", () => {
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
     expect(screen.getByText(translate("zh", "relationship.empty"))).toBeInTheDocument();
   });
 
@@ -97,7 +98,7 @@ describe("the relationship timeline", () => {
      * calendar it is read in.
      */
     query.data = { events: [makeEvent({ happenedAt: "2026-01-02T03:00:00.000Z" })] };
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     expect(screen.getByText("2026/1/1")).toBeInTheDocument();
   });
@@ -116,7 +117,7 @@ describe("the relationship timeline", () => {
     // in New York.
     vi.setSystemTime(new Date("2026-03-14T02:00:00Z"));
     try {
-      render(<RelationshipTimeline personaId={7} />);
+      render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
       // The form is behind the button that opens it.
       const open = screen.getByRole("button", { name: translate("zh", "relationship.add") });
       fireEvent.click(open);
@@ -129,7 +130,7 @@ describe("the relationship timeline", () => {
 
   it("shows what has been recorded, with its kind", () => {
     query.data = { events: [makeEvent()] };
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     expect(screen.getByText(translate("zh", "relationship.kinds.breakup"))).toBeInTheDocument();
     expect(screen.getByText("我们分手了")).toBeInTheDocument();
@@ -138,7 +139,7 @@ describe("the relationship timeline", () => {
 
   it("opens a form when the user asks to record something", async () => {
     const user = userEvent.setup();
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "relationship.add")));
 
@@ -148,7 +149,7 @@ describe("the relationship timeline", () => {
 
   it("saves what the user wrote", async () => {
     const user = userEvent.setup();
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "relationship.add")));
     await user.type(screen.getByPlaceholderText(translate("zh", "relationship.titlePlaceholder")), "上周复合了");
@@ -169,7 +170,7 @@ describe("the relationship timeline", () => {
 
   it("leaves the detail out when there is none", async () => {
     const user = userEvent.setup();
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "relationship.add")));
     await user.type(screen.getByPlaceholderText(translate("zh", "relationship.titlePlaceholder")), "  出差两周  ");
@@ -185,7 +186,7 @@ describe("the relationship timeline", () => {
 
   it("will not save an entry with no title", async () => {
     const user = userEvent.setup();
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "relationship.add")));
     await user.type(screen.getByPlaceholderText(translate("zh", "relationship.titlePlaceholder")), "   ");
@@ -196,7 +197,7 @@ describe("the relationship timeline", () => {
 
   it("closes the form without saving when the user changes their mind", async () => {
     const user = userEvent.setup();
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "relationship.add")));
     await user.click(screen.getByText(translate("zh", "common.cancel")));
@@ -214,24 +215,24 @@ describe("the relationship timeline", () => {
     query.data = { events: [makeEvent({ id: 9 })] };
     // The record is the user's own; it is not thrown away by one click
     // with nothing said.
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     await user.click(screen.getByLabelText(translate("zh", "relationship.remove")));
+    // The app's own dialog, and the person says yes.
+    await user.click(screen.getByRole("button", { name: translate("zh", "common.confirm") }));
 
-    expect(removeEvent).toHaveBeenCalledWith({ id: 9 });
-    confirm.mockRestore();
+    await waitFor(() => expect(removeEvent).toHaveBeenCalledWith({ id: 9 }));
   });
 
   it("keeps an entry when the user says no", async () => {
     const user = userEvent.setup();
     query.data = { events: [makeEvent({ id: 9 })] };
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<RelationshipTimeline personaId={7} />);
+    render(<ConfirmProvider><RelationshipTimeline personaId={7} /></ConfirmProvider>);
 
     await user.click(screen.getByLabelText(translate("zh", "relationship.remove")));
+    // The person says no.
+    await user.click(screen.getByRole("button", { name: translate("zh", "common.cancel") }));
 
     expect(removeEvent).not.toHaveBeenCalled();
-    confirm.mockRestore();
   });
 });

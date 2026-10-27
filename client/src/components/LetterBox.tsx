@@ -10,6 +10,7 @@ import { USER_MOODS, isUserMood, type UserMood } from "@shared/user-side";
 import { formatInstantInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import CrisisCard from "@/components/CrisisCard";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 /**
  * The letters.
@@ -27,6 +28,14 @@ import CrisisCard from "@/components/CrisisCard";
  */
 export default function LetterBox({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  /**
+   * The app's own confirmation.
+   *
+   * It was the browser's own dialog — whose buttons say "OK" and
+   * "Cancel" in the *browser's* language, not the language the person
+   * is reading the app in.
+   */
+  const confirm = useConfirm();
   /**
    * The user's own calendar.
    *
@@ -248,10 +257,11 @@ export default function LetterBox({ personaId }: { personaId: number }) {
               )}
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   // A letter is the user's own writing. It is not
                   // thrown away by one click with nothing said.
-                  if (!window.confirm(t("letters.removeConfirm"))) return;
+                  const yes = await confirm({ description: t("letters.removeConfirm") });
+                  if (!yes) return;
                   remove.mutate({ id: letter.id });
                 }}
                 /**

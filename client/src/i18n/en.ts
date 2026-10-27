@@ -115,6 +115,8 @@ export const en = {
     error: "Something went wrong.",
     save: "Save",
     cancel: "Cancel",
+    confirm: "Confirm",
+    confirmTitle: "Just to be sure",
     delete: "Delete",
     close: "Close",
     previousSlide: "Previous slide",

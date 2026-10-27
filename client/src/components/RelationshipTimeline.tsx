@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CrisisCard from "@/components/CrisisCard";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 /**
  * What actually happened in the relationship.
@@ -26,6 +27,14 @@ import CrisisCard from "@/components/CrisisCard";
  */
 export default function RelationshipTimeline({ personaId }: { personaId: number }) {
   const { t, locale } = useLocale();
+  /**
+   * The app's own confirmation.
+   *
+   * It was the browser's own dialog — whose buttons say "OK" and
+   * "Cancel" in the *browser's* language, not the language the person
+   * is reading the app in.
+   */
+  const confirm = useConfirm();
   /**
    * The user's own calendar.
    *
@@ -123,11 +132,12 @@ export default function RelationshipTimeline({ personaId }: { personaId: number 
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     // The events are the user's own record of what
                     // happened. They are not thrown away by one click
                     // with nothing said.
-                    if (!window.confirm(t("relationship.removeConfirm"))) return;
+                    const yes = await confirm({ description: t("relationship.removeConfirm") });
+                    if (!yes) return;
                     removeEvent.mutate({ id: event.id });
                   }}
                   // The button is disabled while the removal is in

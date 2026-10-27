@@ -107,6 +107,8 @@ export const zh = {
     retry: "重试",
     save: "保存",
     cancel: "取消",
+    confirm: "确定",
+    confirmTitle: "再确认一下",
     delete: "删除",
     close: "关闭",
     previousSlide: "上一张",

@@ -50,6 +50,7 @@ vi.mock("@/contexts/LocaleContext", () => ({
 }));
 
 import OutboundLetters from "./OutboundLetters";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 describe("the way out", () => {
   beforeEach(() => {
@@ -58,7 +59,7 @@ describe("the way out", () => {
   });
 
   it("says so when there is nothing to take back", () => {
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     expect(screen.getByText(translate("zh", "outbound.empty"))).toBeInTheDocument();
   });
 
@@ -72,7 +73,7 @@ describe("the way out", () => {
         createdAt: new Date().toISOString(),
       },
     ];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     expect(screen.getByText("我其实很害怕你离开我")).toBeInTheDocument();
   });
 
@@ -83,13 +84,13 @@ describe("the way out", () => {
     letters = [
       { id: 1, status: "ready", text: "一句话", createdAt: new Date().toISOString() },
     ];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     expect(screen.queryByText(translate("zh", "outbound.markSent"))).toBeTruthy();
     expect(screen.queryByText(/发送|send/i)).toBeNull();
   });
 
   it("looks through the conversation for what was only said here", async () => {
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "outbound.collect")));
     await waitFor(() => expect(collect).toHaveBeenCalled());
     expect(collect.mock.calls[0][0]).toMatchObject({ personaId: 1 });
@@ -99,7 +100,7 @@ describe("the way out", () => {
     letters = [
       { id: 1, status: "ready", text: "一句话", createdAt: new Date().toISOString() },
     ];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "outbound.markSent")));
     await waitFor(() => expect(markSent).toHaveBeenCalled());
     expect(markSent.mock.calls[0][0]).toMatchObject({ id: 1 });
@@ -109,7 +110,7 @@ describe("the way out", () => {
     letters = [
       { id: 1, status: "ready", text: "一句话", createdAt: new Date().toISOString() },
     ];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     await userEvent.click(screen.getByText(translate("zh", "outbound.forSelf")));
     await waitFor(() => expect(keepForSelf).toHaveBeenCalled());
   });
@@ -117,14 +118,14 @@ describe("the way out", () => {
   it("mentions a letter that has been waiting too long", () => {
     const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
     letters = [{ id: 1, status: "ready", text: "一句话", createdAt: old }];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     expect(screen.getByText(/不会自己消失/)).toBeInTheDocument();
   });
 
   it("says it once — and records that it said it", async () => {
     const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
     letters = [{ id: 1, status: "ready", text: "一句话", createdAt: old }];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
 
     await waitFor(() => expect(markStaleNotified).toHaveBeenCalled());
     expect(markStaleNotified.mock.calls[0][0]).toMatchObject({ id: 1 });
@@ -141,7 +142,7 @@ describe("the way out", () => {
         staleNotifiedAt: new Date().toISOString(),
       },
     ];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     // It was said before, in another session. Saying it again would be
     // nagging, and nagging is the one thing this product promises not
     // to do.
@@ -152,7 +153,7 @@ describe("the way out", () => {
     letters = [
       { id: 1, status: "ready", text: "一句话", createdAt: new Date().toISOString() },
     ];
-    render(<OutboundLetters personaId={1} />);
+    render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     expect(screen.queryByText(/不会自己消失/)).toBeNull();
   });
 });

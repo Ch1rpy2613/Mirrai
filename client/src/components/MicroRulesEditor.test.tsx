@@ -44,6 +44,7 @@ vi.mock("@/contexts/LocaleContext", () => ({
 }));
 
 import MicroRulesEditor from "./MicroRulesEditor";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 describe("the rules", () => {
   beforeEach(() => {
@@ -70,16 +71,15 @@ describe("the rules", () => {
       },
     ];
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
 
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     await user.click(screen.getByLabelText(translate("en", "microRules.delete")));
 
-    expect(confirm).toHaveBeenCalled();
-    const message = confirm.mock.calls[0][0] as string;
-    expect(message).toContain(", ");
-    expect(message).not.toContain("、");
+    // The app's own dialog says it — in the app's own language.
+    const message = screen.getByText(/Remove the rule/);
+    expect(message.textContent).toContain(", ");
+    expect(message.textContent).not.toContain("、");
   });
 
   it("does not let the user write past what the server takes", async () => {
@@ -90,7 +90,7 @@ describe("the rules", () => {
      * rather than about their own text.
      */
     const user = userEvent.setup();
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     await user.click(screen.getByRole("button", { name: translate("zh", "microRules.add") }));
 
@@ -102,7 +102,7 @@ describe("the rules", () => {
   });
 
   it("says so when there are no rules yet", () => {
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
     expect(screen.getByText(translate("zh", "microRules.empty"))).toBeInTheDocument();
   });
 
@@ -119,7 +119,7 @@ describe("the rules", () => {
         evidence: [{ at: "2024-03-02", snippet: "随便你" }],
       },
     ];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     expect(screen.getByText("她真的生气了")).toBeInTheDocument();
     expect(screen.getByText(/更短、更冷/)).toBeInTheDocument();
@@ -139,7 +139,7 @@ describe("the rules", () => {
         evidence: [],
       },
     ];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     await userEvent.click(
       screen.getByText(translate("zh", "microRules.confirm")),
@@ -177,7 +177,7 @@ describe("the rules", () => {
         evidence: [],
       },
     ];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     const confirmButtons = screen.getAllByText(translate("zh", "microRules.confirm"));
     await userEvent.click(confirmButtons[0]);
@@ -207,7 +207,7 @@ describe("the rules", () => {
         evidence: [],
       },
     ];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     await userEvent.click(screen.getByLabelText(translate("zh", "microRules.edit")));
     const meaning = await screen.findByDisplayValue("她真的生气了");
@@ -246,7 +246,7 @@ describe("the rules", () => {
         evidence: [],
       },
     ];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     const deleteButtons = screen.getAllByRole("button", {
       name: translate("zh", "microRules.delete"),
@@ -255,14 +255,13 @@ describe("the rules", () => {
 
     // A rule is removed after the user is asked — everywhere else in
     // the app a destructive click asks first.
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     await userEvent.click(deleteButtons[0]);
+    // The app's own dialog, and the person says yes.
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "common.confirm") }));
     await waitFor(() => expect(save).toHaveBeenCalled());
     const sent = save.mock.calls[0][0];
     expect(sent.rules).toHaveLength(1);
     expect(sent.rules[0].id).toBe("r2");
-    expect(confirmSpy).toHaveBeenCalled();
-    confirmSpy.mockRestore();
   });
 
   it("keeps the rule when the user says no", async () => {
@@ -278,17 +277,17 @@ describe("the rules", () => {
         evidence: [],
       },
     ];
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     await userEvent.click(screen.getByRole("button", { name: translate("zh", "microRules.delete") }));
+    // The person says no.
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "common.cancel") }));
 
     expect(save).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
   });
 
   it("refuses to save a rule that is missing half of itself", async () => {
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     await userEvent.click(screen.getByText(translate("zh", "microRules.add")));
     await userEvent.click(screen.getByText(translate("zh", "microRules.save")));
@@ -297,7 +296,7 @@ describe("the rules", () => {
   });
 
   it("mines new candidates from the records", async () => {
-    render(<MicroRulesEditor personaId={1} />);
+    render(<ConfirmProvider><MicroRulesEditor personaId={1} /></ConfirmProvider>);
 
     await userEvent.click(screen.getByText(translate("zh", "microRules.mine")));
 

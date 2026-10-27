@@ -106,6 +106,7 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 }));
 
 import LetterBox from "./LetterBox";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 describe("the letters", () => {
   beforeEach(() => {
@@ -133,13 +134,13 @@ describe("the letters", () => {
         createdAt: "2026-01-02T03:04:00.000Z",
       },
     ] };
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
     expect(screen.getByText("2026/1/1")).toBeInTheDocument();
     expect(screen.queryByText("2026/1/2")).toBeNull();
   });
 
   it("says so when there is nothing written yet", () => {
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
     expect(screen.getByText(translate("zh", "letters.empty"))).toBeInTheDocument();
   });
 
@@ -149,7 +150,7 @@ describe("the letters", () => {
     todos = [
       { id: 9, body: "等你回来的时候我想说……", kind: "todo", status: "private" },
     ];
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     expect(screen.getByText(/等你回来的时候我想说/)).toBeInTheDocument();
     expect(screen.getByText(translate("zh", "letters.todoTitle"))).toBeInTheDocument();
@@ -158,7 +159,7 @@ describe("the letters", () => {
   it("does not offer the same letter twice", () => {
     listData = { letters: [{ id: 1, body: "有件事我一直没说。", kind: "letter", status: "waiting" }] };
     todos = [{ id: 1, body: "有件事我一直没说。", kind: "todo", status: "private" }];
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     // The delivered letter appears once, not twice.
     expect(screen.getAllByText("有件事我一直没说。")).toHaveLength(1);
@@ -166,7 +167,7 @@ describe("the letters", () => {
 
   it("hands a letter over rather than keeping it, when the person says so", async () => {
     const user = userEvent.setup();
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "letters.write")));
     await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "有件事我一直没说。");
@@ -182,7 +183,7 @@ describe("the letters", () => {
 
   it("keeps a note for later as a note, not as a letter", async () => {
     const user = userEvent.setup();
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "letters.write")));
     await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "等你回来的时候我想说……");
@@ -212,7 +213,7 @@ describe("the letters", () => {
       crisis: true,
     };
     const user = userEvent.setup();
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "letters.write")));
     await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "我不想活了");
@@ -242,7 +243,7 @@ describe("the letters", () => {
     olderPage = [{ id: 99, body: "信 99", kind: "letter", status: "private" }];
 
     const user = userEvent.setup();
-    const { rerender } = render(<LetterBox personaId={1} />);
+    const { rerender } = render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
     await user.click(screen.getByText(translate("zh", "letters.loadOlder")));
     await waitFor(() => {
       expect(screen.getByText("信 99")).toBeInTheDocument();
@@ -250,7 +251,7 @@ describe("the letters", () => {
 
     // The newest letter is deleted: the first page shifts down by one.
     listData = { letters: [first[1], first[2], olderPage[0]], total: 4 };
-    rerender(<LetterBox personaId={1} />);
+    rerender(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
     await waitFor(() => {
       expect(screen.getAllByText("信 99")).toHaveLength(1);
     });
@@ -272,7 +273,7 @@ describe("the letters", () => {
     olderPage = [{ id: 97, body: "信 97", kind: "letter", status: "private" }];
 
     const user = userEvent.setup();
-    const { rerender } = render(<LetterBox personaId={1} />);
+    const { rerender } = render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
     await user.click(screen.getByText(translate("zh", "letters.loadOlder")));
     await waitFor(() => {
       expect(screen.getByText("信 97")).toBeInTheDocument();
@@ -283,7 +284,7 @@ describe("the letters", () => {
       letters: [{ id: 101, body: "新的一封", kind: "letter", status: "private" }, ...first],
       total: 5,
     };
-    rerender(<LetterBox personaId={1} />);
+    rerender(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
     await waitFor(() => {
       expect(screen.getByText("新的一封")).toBeInTheDocument();
     });
@@ -311,14 +312,14 @@ describe("the letters", () => {
     todos = [{ id: 1, body: "等 TA 回来再说", kind: "todo", status: "private" }];
     todosTotal = 5;
 
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     expect(screen.getByText(translate("zh", "letters.todoCapped", { count: 4 }))).toBeInTheDocument();
   });
 
   it("shows no resources for an ordinary letter", async () => {
     const user = userEvent.setup();
-    render(<LetterBox personaId={1} />);
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     await user.click(screen.getByText(translate("zh", "letters.write")));
     await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "今天天气不错。");
