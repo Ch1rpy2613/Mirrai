@@ -201,6 +201,16 @@ export async function getProactivePersonas() {
     presence: personas.presence,
     graduationStatus: personas.graduationStatus,
     proactiveFrequencyHours: personas.proactiveFrequencyHours,
+    /**
+     * Whether the persona is ready, and how it behaves.
+     *
+     * The sweep used to read the whole persona row for every
+     * proactive persona — every minute, for ever — just to learn these
+     * two things. So an instance with twenty proactive personas read
+     * twenty full rows a minute, and threw nineteen of them away.
+     */
+    analysisStatus: personas.analysisStatus,
+    behaviorProfile: personas.behaviorProfile,
   }).from(personas)
     .where(sql`${personas.proactiveFrequencyHours} > 0`);
 }

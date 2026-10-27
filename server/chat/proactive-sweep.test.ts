@@ -111,6 +111,7 @@ describe("the sweep that lets the persona speak first", () => {
       lastChatAt: new Date("2026-05-01T12:00:00Z"),
       presence: "active",
       graduationStatus: null,
+      analysisStatus: "ready",
       proactiveFrequencyHours: 24,
     }]);
 
@@ -125,6 +126,29 @@ describe("the sweep that lets the persona speak first", () => {
     }));
   });
 
+  it("does not read the whole persona for a persona that is not due", async () => {
+    /**
+     * The whole row was read for every proactive persona, every
+     * minute, for ever — just to learn whether the persona was ready
+     * and how it behaves. Both are in the row the sweep already has.
+     */
+    getProactivePersonas.mockResolvedValue([{
+      id: 1,
+      userId: 1,
+      name: "小A",
+      lastChatAt: new Date("2026-06-01T11:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      analysisStatus: "ready",
+      proactiveFrequencyHours: 24,
+    }]);
+
+    const sent = await runProactiveSweep(new Date("2026-06-01T12:00:00Z"));
+
+    expect(sent).toBe(0);
+    expect(getPersonaById).not.toHaveBeenCalled();
+  });
+
   it("stays quiet when the time has not come", async () => {
     getProactivePersonas.mockResolvedValue([{
       id: 1,
@@ -133,6 +157,7 @@ describe("the sweep that lets the persona speak first", () => {
       lastChatAt: new Date("2026-06-01T11:00:00Z"),
       presence: "active",
       graduationStatus: null,
+      analysisStatus: "ready",
       proactiveFrequencyHours: 24,
     }]);
 
@@ -152,6 +177,7 @@ describe("the sweep that lets the persona speak first", () => {
       lastChatAt: new Date("2026-05-01T12:00:00Z"),
       presence: "active",
       graduationStatus: null,
+      analysisStatus: "ready",
       proactiveFrequencyHours: 24,
     }]);
     getChannelBindingsByUserId.mockResolvedValue([{
@@ -191,6 +217,7 @@ describe("the sweep that lets the persona speak first", () => {
       lastChatAt: new Date("2026-05-01T12:00:00Z"),
       presence: "active",
       graduationStatus: null,
+      analysisStatus: "ready",
       proactiveFrequencyHours: 24,
     }]);
     // The database's order: the wechat binding comes first.
@@ -221,6 +248,7 @@ describe("the sweep that lets the persona speak first", () => {
       lastChatAt: new Date("2026-05-01T12:00:00Z"),
       presence: "active",
       graduationStatus: null,
+      analysisStatus: "ready",
       proactiveFrequencyHours: 24,
     }]);
 
@@ -256,6 +284,7 @@ describe("the sweep that lets the persona speak first", () => {
       lastChatAt: new Date("2026-04-01T12:00:00Z"),
       presence: "active",
       graduationStatus: null,
+      analysisStatus: "ready",
       proactiveFrequencyHours: 24,
     };
     getProactivePersonas.mockResolvedValue([row]);
@@ -283,6 +312,7 @@ describe("the sweep that lets the persona speak first", () => {
       lastChatAt: new Date("2026-05-01T12:00:00Z"),
       presence: "active",
       graduationStatus: null,
+      analysisStatus: "ready",
       proactiveFrequencyHours: 24,
     }]);
     getChannelBindingsByUserId.mockResolvedValue([{

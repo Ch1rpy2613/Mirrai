@@ -149,13 +149,20 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
       if (lastFailure !== undefined && now.getTime() - lastFailure < FAILURE_BACKOFF_MS) {
         continue;
       }
-      const persona = await db.getPersonaById(row.id, row.userId);
-      if (!persona) continue;
-      if (persona.analysisStatus !== "ready") continue;
+      /**
+       * The whole persona row is not read here.
+       *
+       * It used to be — every minute, for every proactive persona —
+       * just to learn whether the persona was ready and how it
+       * behaves. Both are in the row the sweep already has. So an
+       * instance with twenty proactive personas read twenty full rows
+       * a minute and threw nineteen of them away.
+       */
+      if (row.analysisStatus !== "ready") continue;
 
       const presence = resolvePresence(
-        persona.presence,
-        persona.graduationStatus,
+        row.presence,
+        row.graduationStatus,
       );
       if (!isProactiveDue({
         frequencyHours: row.proactiveFrequencyHours,
@@ -181,8 +188,8 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         now,
         // The persona's own timing, when it has been measured. Without
         // it the old fixed window applies and nothing changes.
-        personaId: persona.id,
-        behaviorProfile: loadBehaviorProfile(persona),
+        personaId: row.id,
+        behaviorProfile: loadBehaviorProfile(row),
       })) {
         continue;
       }
@@ -232,6 +239,15 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
        * included, and an English user had a Chinese message pushed
        * into their channel.
        */
+      /**
+       * The persona, in full.
+       *
+       * Only now — the persona is about to be spoken for, and the
+       * message is composed from everything it knows.
+       */
+      const persona = await db.getPersonaById(row.id, row.userId);
+      if (!persona) continue;
+
       const text = await composeProactiveMessage({
         persona,
         userId: row.userId,
