@@ -321,6 +321,34 @@ def api_get(path: str, params: dict, config: dict, use_user_token: bool = False)
     return resp.json()
 
 
+# 一次采集最多翻多少页。
+#
+# 不是飞书给的上限，是我们的：万一它一直说「还有」，我们不跟着它转到
+# 天荒地老。
+MAX_PAGES = 200
+
+
+def next_page_token(data: dict, current: Optional[str], pages: int) -> Optional[str]:
+    """翻页时下一页的 token；没有下一页时返回 None。
+
+    原来的写法是：`has_more` 为真就继续，然后把 `page_token` 换成回答里
+    的那个。飞书有时候会回答「还有更多」但**不给** token（或者给一个和
+    上一次一样的）——那时候循环会用同一个请求再问一遍、再问一遍、再问
+    一遍，永远不结束，而每问一轮内存里的列表就多 100 条。
+
+    现在：token 没有变、或者没有 token、或者页数到了上限，就停下来。
+    """
+    if pages >= MAX_PAGES:
+        return None
+    inner = data.get("data") or {}
+    if not inner.get("has_more"):
+        return None
+    token = inner.get("page_token")
+    if not token or token == current:
+        return None
+    return token
+
+
 def api_post(path: str, body: dict, config: dict, use_user_token: bool = False) -> dict:
     if use_user_token and config.get("user_access_token"):
         token = config["user_access_token"]
@@ -425,6 +453,7 @@ def _find_user_by_department(name: str, config: dict) -> Optional[dict]:
     matches = []
     for dept_id in dept_ids:
         page_token = None
+        pages = 0
         while True:
             params = {"department_id": dept_id, "page_size": 50}
             if page_token:
@@ -441,9 +470,10 @@ def _find_user_by_department(name: str, config: dict) -> Optional[dict]:
                 if name in uname or name in en_name or uname == name or en_name == name:
                     matches.append(u)
 
-            if not data.get("data", {}).get("has_more"):
+            pages += 1
+            page_token = next_page_token(data, page_token, pages)
+            if not page_token:
                 break
-            page_token = data.get("data", {}).get("page_token")
 
         if len(matches) >= 10:
             break  # 够了
@@ -552,6 +582,7 @@ def get_chats_with_user(user_open_id: str, config: dict) -> list:
 
     chats = []
     page_token = None
+    pages = 0
 
     while True:
         params = {"page_size": 100}
@@ -566,9 +597,10 @@ def get_chats_with_user(user_open_id: str, config: dict) -> list:
         items = data.get("data", {}).get("items", [])
         chats.extend(items)
 
-        if not data.get("data", {}).get("has_more"):
+        pages += 1
+        page_token = next_page_token(data, page_token, pages)
+        if not page_token:
             break
-        page_token = data.get("data", {}).get("page_token")
 
     print(f"  共 {len(chats)} 个群聊，检查成员 ...", file=sys.stderr)
 
@@ -618,6 +650,7 @@ def fetch_messages_from_chat(
     """从指定群聊拉取目标用户的消息"""
     messages = []
     page_token = None
+    pages = 0
 
     while len(messages) < limit:
         params = {
@@ -679,9 +712,10 @@ def fetch_messages_from_chat(
 
             messages.append({"content": content, "time": ts})
 
-        if not data.get("data", {}).get("has_more"):
+        pages += 1
+        page_token = next_page_token(data, page_token, pages)
+        if not page_token:
             break
-        page_token = data.get("data", {}).get("page_token")
 
     return messages[:limit]
 
@@ -695,6 +729,7 @@ def fetch_p2p_messages(
     """使用 user_access_token 从私聊会话拉取消息（包含双方所有消息）"""
     messages = []
     page_token = None
+    pages = 0
 
     while len(messages) < limit:
         params = {
@@ -765,9 +800,10 @@ def fetch_p2p_messages(
                 "is_target": is_target,
             })
 
-        if not data.get("data", {}).get("has_more"):
+        pages += 1
+        page_token = next_page_token(data, page_token, pages)
+        if not page_token:
             break
-        page_token = data.get("data", {}).get("page_token")
 
     return messages[:limit]
 
