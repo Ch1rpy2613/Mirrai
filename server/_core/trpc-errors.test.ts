@@ -28,7 +28,7 @@ describe("the errors the client is told", () => {
     );
     const formatted = formatErrorForClient({ shape, error });
     expect(formatted.message).not.toMatch(/constraint|duplicate key/i);
-    expect(formatted.message).toBe("Something went wrong on the server.");
+    expect(formatted.message).toBe("出了点问题。");
   });
 
   it("does not leak a database error that tRPC has already wrapped", () => {
@@ -48,7 +48,7 @@ describe("the errors the client is told", () => {
       error,
     });
     expect(formatted.message).not.toMatch(/constraint|duplicate key/i);
-    expect(formatted.message).toBe("Something went wrong on the server.");
+    expect(formatted.message).toBe("出了点问题。");
   });
 
   it("does not leak the SQL of a failed query", () => {
@@ -61,7 +61,7 @@ describe("the errors the client is told", () => {
       error,
     });
     expect(formatted.message).not.toMatch(/select|Failed query|params/i);
-    expect(formatted.message).toBe("Something went wrong on the server.");
+    expect(formatted.message).toBe("出了点问题。");
   });
 
   it("does not leak the path of a procedure either", () => {
@@ -93,6 +93,39 @@ describe("the errors the client is told", () => {
       ctx: { locale: "en" },
     });
     expect(formatted.message).toBe("You are not allowed to do that.");
+  });
+
+  it("says it in the reader's language when the server fails", () => {
+    // The message used to be an English string in a Chinese-first app —
+    // so every failure that was not the app's own said itself in a
+    // language the reader may not read.
+    const cause = new Error("the database is not there");
+    const error = new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause });
+    const formatted = formatErrorForClient({
+      shape: { message: cause.message, code: -32603, data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 } },
+      error,
+      ctx: { locale: "en" },
+    });
+    expect(formatted.message).toBe("Something went wrong.");
+  });
+
+  it("does not blame the server for something the user typed", () => {
+    /**
+     * The input validation fails with the Zod error as the cause.
+     *
+     * The message became "Something went wrong on the server" — which
+     * blames the server for a field the user filled in badly. And it
+     * was in English, in a Chinese-first app.
+     */
+    const cause = { name: "ZodError", issues: [{ code: "invalid_type", path: ["name"] }] };
+    const error = new TRPCError({ code: "BAD_REQUEST", cause: cause as any });
+    const formatted = formatErrorForClient({
+      shape: { message: "Invalid input", code: -32600, data: { code: "BAD_REQUEST", httpStatus: 400 } },
+      error,
+      ctx: { locale: "zh" },
+    });
+    expect(formatted.message).toBe("这一项填得不对，请检查一下。");
+    expect(formatted.message).not.toMatch(/server/i);
   });
 
   it("passes the app's own message through", () => {

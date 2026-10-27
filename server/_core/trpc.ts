@@ -47,9 +47,28 @@ export function formatErrorForClient({
      * the leak was still there.
      */
     if (error.cause) {
+      /**
+       * A field the user filled in badly.
+       *
+       * tRPC's input validation fails with the Zod error as the cause —
+       * and the message became "Something went wrong on the server",
+       * which blames the server for something the user typed. And it
+       * was in English, in a Chinese-first app.
+       */
+      if (isValidationError(error.cause)) {
+        return {
+          ...shape,
+          message: copy(locale, "errors.invalidInput"),
+          data: { ...shape.data, message: undefined },
+        };
+      }
       return {
         ...shape,
-        message: "Something went wrong on the server.",
+        // The reader's language. The message used to be an English
+        // string in a Chinese-first app — so every failure that was
+        // not the app's own said itself in a language the reader may
+        // not read.
+        message: copy(locale, "errors.code.internal"),
         data: { ...shape.data, message: undefined },
       };
     }
@@ -72,9 +91,22 @@ export function formatErrorForClient({
   }
   return {
     ...shape,
-    message: "Something went wrong on the server.",
+    message: copy(ctx?.locale ?? "zh", "errors.code.internal"),
     data: { ...shape.data, message: undefined },
   };
+}
+
+/**
+ * Whether an error is the app's own input validation.
+ *
+ * The shape is checked rather than the class: there can be more than
+ * one copy of the validation library in the tree, and `instanceof` says
+ * "no" when the error came from the other one.
+ */
+function isValidationError(cause: unknown): boolean {
+  if (!cause || typeof cause !== "object") return false;
+  const record = cause as { name?: unknown; issues?: unknown };
+  return record.name === "ZodError" || Array.isArray(record.issues);
 }
 
 /**

@@ -270,6 +270,17 @@ export const ERRORS = {
    * interface showed the token "NOT_FOUND" under a heading that said
    * "not found". The code is for the machine; this is for the person.
    */
+  /**
+   * The app's own input validation said no.
+   *
+   * It used to be "something went wrong on the server" — which blames
+   * the server for something the user typed, and was in English in a
+   * Chinese-first app.
+   */
+  "errors.invalidInput": {
+    zh: "这一项填得不对，请检查一下。",
+    en: "That does not look right — please check it.",
+  },
   "errors.code.notFound": {
     zh: "没有找到要找的东西。",
     en: "That could not be found.",
