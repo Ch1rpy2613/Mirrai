@@ -1,4 +1,3 @@
-import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
@@ -31,9 +30,35 @@ export function formatErrorForClient({
   error: unknown;
   ctx?: { locale?: "zh" | "en" };
 }): { message: string; code: number; data: Record<string, unknown> } {
+  const locale = ctx?.locale ?? "zh";
+  /**
+   * The code, by name, for the machine.
+   *
+   * tRPC puts a *number* in the error's data — `data.code` is
+   * `-32001`, not `"UNAUTHORIZED"`. So every place in the interface
+   * that compared `error.data?.code` with a name was comparing a number
+   * with a string, and never matched:
+   *
+   * - the retry policy, which never stopped retrying an error that
+   *   said the session was over;
+   * - the sign-in redirect, which looked for the English message
+   *   instead;
+   * - the chat page, which showed a generic error and a retry button
+   *   where the "this persona is gone" page belonged;
+   * - the sign-out, which swallowed the errors that were not really
+   *   about the session at all.
+   *
+   * So the name goes into the data — and the number stays where tRPC
+   * put it, because tRPC's own client checks the *top-level* code and
+   * that one has to stay a number.
+   */
+  const withCode = (
+    result: { message: string; code: number; data: Record<string, unknown> },
+    code: string,
+  ) => ({ ...result, data: { ...result.data, code } });
+
   if (error instanceof TRPCError) {
     const code = error.code;
-    const locale = ctx?.locale ?? "zh";
     /**
      * An error from somewhere else.
      *
@@ -56,21 +81,60 @@ export function formatErrorForClient({
        * was in English, in a Chinese-first app.
        */
       if (isValidationError(error.cause)) {
-        return {
-          ...shape,
-          message: copy(locale, "errors.invalidInput"),
-          data: { ...shape.data, message: undefined },
-        };
+        return withCode(
+          {
+            ...shape,
+            message: copy(locale, "errors.invalidInput"),
+            data: { ...shape.data, message: undefined },
+          },
+          code,
+        );
       }
-      return {
-        ...shape,
-        // The reader's language. The message used to be an English
-        // string in a Chinese-first app — so every failure that was
-        // not the app's own said itself in a language the reader may
-        // not read.
-        message: copy(locale, "errors.code.internal"),
-        data: { ...shape.data, message: undefined },
-      };
+      return withCode(
+        {
+          ...shape,
+          // The reader's language. The message used to be an English
+          // string in a Chinese-first app — so every failure that was
+          // not the app's own said itself in a language the reader may
+          // not read.
+          message: copy(locale, "errors.code.internalServerError"),
+          data: { ...shape.data, message: undefined },
+        },
+        code,
+      );
+    }
+    /**
+     * The two the app says on its own behalf.
+     *
+     * They used to be English strings with an internal code in them —
+     * "Please login (10001)" and "You do not have required permission
+     * (10002)" — and they were thrown as the error's message, so they
+     * were passed through to the interface. So a Chinese user whose
+     * session had expired was told, in a Chinese interface, in English,
+     * with a code number that means nothing to them.
+     *
+     * The shared copy table already had the right sentences for exactly
+     * these two codes; they just were not used.
+     */
+    if (code === "UNAUTHORIZED") {
+      return withCode(
+        {
+          ...shape,
+          message: copy(locale, "errors.code.unauthorized"),
+          data: { ...shape.data, message: undefined },
+        },
+        code,
+      );
+    }
+    if (code === "FORBIDDEN") {
+      return withCode(
+        {
+          ...shape,
+          message: copy(locale, "errors.code.forbidden"),
+          data: { ...shape.data, message: undefined },
+        },
+        code,
+      );
     }
     /**
      * A procedure that throws without a message gets the *code* as its
@@ -83,17 +147,25 @@ export function formatErrorForClient({
      *
      * The code is for the machine. This is for the person.
      */
-    if (shape.message && shape.message !== code) return shape;
-    return {
-      ...shape,
-      message: copy(locale, codeKey(code)),
-    };
+    if (shape.message && shape.message !== code) {
+      return withCode(shape, code);
+    }
+    return withCode(
+      {
+        ...shape,
+        message: copy(locale, codeKey(code)),
+      },
+      code,
+    );
   }
-  return {
-    ...shape,
-    message: copy(ctx?.locale ?? "zh", "errors.code.internal"),
-    data: { ...shape.data, message: undefined },
-  };
+  return withCode(
+    {
+      ...shape,
+      message: copy(locale, "errors.code.internalServerError"),
+      data: { ...shape.data, message: undefined },
+    },
+    "INTERNAL_SERVER_ERROR",
+  );
 }
 
 /**
@@ -147,7 +219,9 @@ const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
 
   if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    // The message is replaced by the formatter, in the reader's
+    // language — what is left here is only the code.
+    throw new TRPCError({ code: "UNAUTHORIZED" });
   }
 
   return next({
@@ -165,7 +239,9 @@ export const adminProcedure = t.procedure.use(
     const { ctx, next } = opts;
 
     if (!ctx.user || ctx.user.role !== 'admin') {
-      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+      // The message is replaced by the formatter, in the reader's
+      // language — what is left here is only the code.
+      throw new TRPCError({ code: "FORBIDDEN" });
     }
 
     return next({

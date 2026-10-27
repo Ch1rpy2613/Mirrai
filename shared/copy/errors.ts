@@ -387,7 +387,21 @@ export const ERRORS = {
     zh: "请求太频繁了，请稍后再试。",
     en: "Too many requests — please try again in a moment.",
   },
-  "errors.code.internal": {
+  /**
+   * The key is the one the code derives.
+   *
+   * The table had `errors.code.internal`, but the code is
+   * `INTERNAL_SERVER_ERROR` — and the key is derived from the code, so
+   * it came out as `errors.code.internalServerError`, which is not in
+   * the table. The sentence the table had was never reached by that
+   * path; the raw key was.
+   *
+   * It was only latent — every place the app throws an internal error
+   * carries a message of its own, and one that does not takes the
+   * other branch — but the `as CopyKey` cast defeated exactly the
+   * compile-time guard the comment next to it claims there is.
+   */
+  "errors.code.internalServerError": {
     zh: "出了点问题。",
     en: "Something went wrong.",
   },

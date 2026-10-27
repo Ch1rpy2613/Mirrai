@@ -1,6 +1,5 @@
 import { trpc } from "@/lib/trpc";
 import { registerServiceWorker } from "@/lib/pwa";
-import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -40,7 +39,19 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
+  /**
+   * The code, by name.
+   *
+   * It used to compare the message with an English string — "Please
+   * login (10001)" — because the error's data carried a *number*
+   * (`-32001`), not a name. So the comparison never matched, and an
+   * expired session never sent the user to the sign-in page: they were
+   * left on a screen that could not load anything, with a toast that
+   * said "please login" in a Chinese interface, in English.
+   *
+   * The server now puts the name in the data.
+   */
+  const isUnauthorized = error.data?.code === "UNAUTHORIZED";
 
   if (!isUnauthorized) return;
 
