@@ -137,8 +137,21 @@ import type { TrpcContext } from "./_core/context";
 const ROOT = path.resolve(__dirname, "..");
 const db = readFileSync(path.join(ROOT, "server", "db.ts"), "utf-8");
 
-/** A parameter that identifies a row. */
-const ID_PARAM = /\b(id|personaId|jobId|sceneId|memoryId|targetId|templateId|jobKey|collectionId|sourceId)\b/;
+/**
+ * A parameter that identifies a row.
+ *
+ * The list was fixed, and it did not match every shape an id takes:
+ * `openId`, `ids`, and any name of the form `xxxId` where the suffix
+ * is capitalised. So a helper written as `deleteLetterRow(letterId,
+ * userId)` would take a row id, never be caught by "requires a userId
+ * on every helper that takes a row identifier", and could ship an
+ * unscoped query.
+ *
+ * So the shape is matched rather than the list: a name that ends in
+ * "Id", or that is "id", "ids", "ids" or a key.
+ */
+const ID_PARAM =
+  /\b(id|ids|openId|jobKey|[A-Za-z_]*Id|[A-Za-z_]*Ids)\b/;
 
 interface DbFunction {
   name: string;
@@ -146,31 +159,43 @@ interface DbFunction {
   body: string;
 }
 
-/** Every exported async function in db.ts, with its body. */
+/**
+ * Every exported helper in db.ts, with its body.
+ *
+ * The scan used to match only `export async function` — so a helper
+ * written as `export function` or as `export const x = async () =>`
+ * would escape every assertion. There are none like that today, but
+ * the point of this test is to catch the *next* one.
+ */
 function exportedFunctions(src: string): DbFunction[] {
   const out: DbFunction[] = [];
   // The return type is optional and may itself contain braces, so it is
   // matched loosely up to the opening brace of the body.
-  const pattern = /export async function (\w+)\(([^)]*)\)\s*(?::[^{]+)?\{/g;
+  const patterns = [
+    /export (?:async )?function (\w+)\(([^)]*)\)\s*(?::[^{]+)?\{/g,
+    /export const (\w+)\s*=\s*async\s*\(([^)]*)\)\s*(?::[^{]+)?=>\s*\{/g,
+  ];
   let match: RegExpExecArray | null;
 
-  while ((match = pattern.exec(src)) !== null) {
-    let i = match.index + match[0].length - 1;
-    let depth = 0;
-    while (i < src.length) {
-      if (src[i] === "{") depth++;
-      else if (src[i] === "}") {
-        depth--;
-        if (depth === 0) break;
+  for (const pattern of patterns) {
+    while ((match = pattern.exec(src)) !== null) {
+      let i = match.index + match[0].length - 1;
+      let depth = 0;
+      while (i < src.length) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}") {
+          depth--;
+          if (depth === 0) break;
+        }
+        i++;
       }
-      i++;
+      const body = src.slice(match.index + match[0].length, i);
+      out.push({
+        name: match[1],
+        params: match[2].split(/\s+/).join(" "),
+        body,
+      });
     }
-    const body = src.slice(match.index + match[0].length, i);
-    out.push({
-      name: match[1],
-      params: match[2].split(/\s+/).join(" "),
-      body,
-    });
   }
   return out;
 }
@@ -200,6 +225,16 @@ function isUserScoped(fn: DbFunction): boolean {
 function bindsOwnership(fn: DbFunction): boolean {
   // The ordinary case: the query is filtered by the owner.
   if (/eq\(\s*\w+\.userId\s*,/.test(fn.body)) return true;
+  /**
+   * The same thing, written as raw SQL.
+   *
+   * `getScenes` asks for the built-in scenes *or* the caller's own:
+   * `sql`${scenes.isBuiltin} = true OR ${scenes.userId} = ${userId}``.
+   * The owner is bound — the check just could not see it, because it
+   * looked for `eq(table.userId, userId)` and that is not what is
+   * written there.
+   */
+  if (/\$\{\w+\.userId\}\s*=\s*\$\{userId\}/.test(fn.body)) return true;
   // A helper that only creates rows owns them by writing the owner in.
   if (
     /\.insert\(/.test(fn.body) &&
@@ -241,6 +276,10 @@ describe("db helpers enforce ownership", () => {
       .filter((fn) => ID_PARAM.test(fn.params))
       .filter((fn) => !fn.params.includes("userId"))
       .filter((fn) => !isUserScoped(fn))
+      // The WeChat login path: a person is looked up by their open id
+      // before they have an account here, so there is no owner to
+      // check yet — the open id is how the channel says who they are.
+      .filter((fn) => fn.name !== "getUserByOpenId")
       .map((fn) => `${fn.name}(${fn.params})`);
 
     expect(
@@ -261,6 +300,15 @@ describe("db helpers enforce ownership", () => {
       "bumpUserTokenVersion",
       "deleteUserAccount",
       "getUserById",
+      /**
+       * The WeChat login path.
+       *
+       * A person on WeChat is looked up by their WeChat open id
+       * *before* they have an account here — that is what the open id
+       * is for. There is no owner to check yet: the open id is how the
+       * channel says who they are.
+       */
+      "getUserByOpenId",
       "updateUserGraduationMode",
       "updateUserLastSignedIn",
       "updateUserPassword",
