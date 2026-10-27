@@ -61,15 +61,19 @@ mkdir -p "$PG_DATA" "$UPLOADS" "$LOGS"
 # ─── PostgreSQL: init if needed ──────────────────────────────────────────────
 if [ ! -f "$PG_DATA/PG_VERSION" ]; then
   log "Initializing database (first run)..."
-  "$PG_DIR/bin/initdb" \
+  # The failure is handled here.
+  #
+  # `set -e` ends the shell at the failing command, so the `if [ $? -ne 0 ]`
+  # that used to follow it was dead code: the Terminal window closed with
+  # no message at all, the log was never shown, and the user had no idea
+  # that the first launch had failed.
+  if ! "$PG_DIR/bin/initdb" \
     -D "$PG_DATA" \
     -U "$PG_USER" \
     -A trust \
     --encoding=UTF8 \
     --locale=C \
-    > "$LOGS/initdb.log" 2>&1
-
-  if [ $? -ne 0 ]; then
+    > "$LOGS/initdb.log" 2>&1; then
     log "ERROR: Database init failed. Log:"
     cat "$LOGS/initdb.log"
     read -rp "Press Enter to exit..."
@@ -94,10 +98,19 @@ fi
 
 if [ ! -f "$PG_DATA/postmaster.pid" ]; then
   log "Starting PostgreSQL on port $PG_PORT..."
-  "$PG_DIR/bin/pg_ctl" \
+  # The failure is handled here.
+  #
+  # `set -e` ended the shell at the failing `pg_ctl`, so the handler
+  # below it never ran and the log was never shown.
+  if ! "$PG_DIR/bin/pg_ctl" \
     -D "$PG_DATA" \
     -l "$PG_LOG" \
-    start > /dev/null 2>&1
+    start > /dev/null 2>&1; then
+    log "ERROR: PostgreSQL failed to start. Log:"
+    tail -20 "$PG_LOG" 2>/dev/null || true
+    read -rp "Press Enter to exit..."
+    exit 1
+  fi
 
   if ! wait_for_pg; then
     log "ERROR: PostgreSQL failed to start. Log:"
@@ -110,8 +123,17 @@ fi
 
 # ─── Create database if needed ───────────────────────────────────────────────
 log "Ensuring database '$DB_NAME' exists..."
-CREATE_OUT=$("$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d postgres \
-  -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME';" 2>&1)
+# The failure is handled here.
+#
+# `set -e` ended the shell at the failing command substitution, so the
+# database was never created and nothing said so.
+if ! CREATE_OUT=$("$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d postgres \
+  -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME';" 2>&1); then
+  log "ERROR: Could not reach the database. Log:"
+  tail -5 "$PG_LOG" 2>/dev/null || true
+  read -rp "Press Enter to exit..."
+  exit 1
+fi
 
 if echo "$CREATE_OUT" | grep -q "1"; then
   log "Database '$DB_NAME' already exists."
@@ -156,8 +178,10 @@ fi
 # there. On a fresh database there is nothing to rename yet, and push below
 # creates the final schema in one go.
 log "Applying the WeChat channel migration..."
+# A database that cannot be reached is a database with no bindings
+# table — and the question is not worth ending the launch over.
 HAS_BINDINGS=$("$PG_DIR/bin/psql" -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$DB_NAME" \
-  -tAc "SELECT to_regclass('public.wechat_bindings') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]')
+  -tAc "SELECT to_regclass('public.wechat_bindings') IS NOT NULL;" 2>/dev/null | tr -d '[:space:]' || true)
 
 if [ "$HAS_BINDINGS" = "t" ]; then
   MIGRATION="$APP_DIR/drizzle/0002_wechat_clawbot_channel.sql"
