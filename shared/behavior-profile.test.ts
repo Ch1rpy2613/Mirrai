@@ -34,6 +34,42 @@ describe("fitting a profile", () => {
     expect(fitBehaviorProfile(samples.slice(0, BEHAVIOR_MIN_SAMPLES - 1))).toBeNull();
   });
 
+  it("does not count the rounds where the persona spoke first as measurements", () => {
+    /**
+     * A persona that spoke first has no user message to be measured
+     * against — so the two times are the same and the gap carries no
+     * information. The fit leaves those rounds out of the gaps.
+     *
+     * So five real gaps and three rounds where the persona spoke first
+     * are five measurements, not eight — and the fit refuses, because
+     * it does not have eight.
+     */
+    const fiveGaps = Array.from({ length: 5 }, (_, i) => ({
+      gapSeconds: 20 + i * 15,
+      burstSize: 1,
+      hour: i,
+      personaSpokeFirst: false,
+    }));
+    const threeProactive = Array.from({ length: 3 }, (_, i) => ({
+      gapSeconds: 0,
+      burstSize: 1,
+      hour: i,
+      personaSpokeFirst: true,
+    }));
+
+    expect(fitBehaviorProfile([...fiveGaps, ...threeProactive])).toBeNull();
+    // And with eight real gaps it fits, and says how many it saw.
+    const eightGaps = Array.from({ length: BEHAVIOR_MIN_SAMPLES }, (_, i) => ({
+      gapSeconds: 20 + i * 15,
+      burstSize: 1,
+      hour: i,
+      personaSpokeFirst: false,
+    }));
+    const profile = fitBehaviorProfile([...eightGaps, ...threeProactive]);
+    expect(profile).not.toBeNull();
+    expect(profile!.samples).toBe(BEHAVIOR_MIN_SAMPLES + 3);
+  });
+
   it("fits on enough", () => {
     const profile = fitBehaviorProfile(samples);
     expect(profile).not.toBeNull();
