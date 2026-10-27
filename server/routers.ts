@@ -3763,7 +3763,14 @@ export const appRouter = router({
          */
         happenedAt: z.union([
           z.string().datetime(),
-          z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          /**
+           * A day that exists.
+           *
+           * The shape was checked and not the day: "2026-02-30" was
+           * accepted, and it rolled over to the second of March — so the
+           * timeline showed a day the user never wrote down.
+           */
+          z.string().refine(isRealDayKey, { message: "Not a day." }),
         ]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3823,9 +3830,18 @@ export const appRouter = router({
            * what stops the anniversaries, marks the relationship as
            * over in the prompt, and switches the letter-reply register.
            */
-          const happenedAt = input.happenedAt ? new Date(input.happenedAt) : new Date();
+          /**
+           * The day it ended, in the user's own calendar.
+           *
+           * It was read as `new Date(input.happenedAt)` — which shadows
+           * the moment computed above, and is midnight in *Greenwich*
+           * for a day. So a breakup on the fourteenth was filed under the
+           * thirteenth for anybody west of Greenwich, and that date is
+           * what stops the anniversaries, marks the relationship as over
+           * in the prompt, and switches the letter-reply register.
+           */
           await updatePersona(input.personaId, ctx.user.id, {
-            togetherTo: zonedDateKey(happenedAt, ctx.user.timezone),
+            togetherTo: zonedDateKey(happenedAt ?? new Date(), ctx.user.timezone),
           });
         }
         if ((input.kind === "reunion" || input.kind === "reconciliation") && persona.togetherTo) {
