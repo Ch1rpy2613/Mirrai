@@ -5086,9 +5086,30 @@ export async function restoreOutboundLetter(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
+  /**
+   * Only a letter that was dropped comes back.
+   *
+   * The update had no status filter, so it restored *any* letter — and
+   * a letter the user had already marked as said could be flipped back
+   * to "ready": the badge changed from "already said" to "ready to
+   * take", the "I said it" button came back, and the row said at the
+   * same time that it had been sent and that it had not.
+   *
+   * And the `sentAt` was left behind — so the row still claimed to have
+   * been sent.
+   */
   const rows = await db.update(outboundLetters)
-    .set({ status: "ready", droppedAt: null, updatedAt: new Date() })
-    .where(and(eq(outboundLetters.id, id), eq(outboundLetters.userId, userId)))
+    .set({
+      status: "ready",
+      droppedAt: null,
+      sentAt: null,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(outboundLetters.id, id),
+      eq(outboundLetters.userId, userId),
+      eq(outboundLetters.status, "dropped"),
+    ))
     .returning({ id: outboundLetters.id });
   return rows.length > 0;
 }
