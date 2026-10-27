@@ -1485,6 +1485,7 @@ export const en = {
     eventsFailed: "This part could not be read — it is not that nothing was noticed, it is that nothing was read.",
     handled: "Handled",
     showMore: "Show {{count}} more",
+    capped: "Only the newest {{count}} records are shown here.",
     markHandled: "Got it",
     regret: "Regret",
     gratitude: "Gratitude",

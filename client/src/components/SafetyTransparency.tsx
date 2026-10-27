@@ -38,6 +38,15 @@ export default function SafetyTransparency() {
    * there were more.
    */
   const [limit, setLimit] = useState(20);
+  /**
+   * The most the server will give.
+   *
+   * The limit went past it — so the request failed its own validation,
+   * the list came back empty, and the "show more" button disappeared
+   * with it: the user was told their safety record could not be read,
+   * and there was no way back but a reload.
+   */
+  const MAX_LIMIT = 200;
   const { data: eventsData, isLoading, isError } = trpc.safety.events.useQuery({ limit });
   const { data: assessmentsData, isError: assessmentsError } = trpc.safety.assessments.useQuery();
 
@@ -180,16 +189,28 @@ export default function SafetyTransparency() {
            * with a year of history saw twenty rows and no sign that
            * there were more.
            */}
-          {(eventsData?.total ?? 0) > events.length && (
+          {(eventsData?.total ?? 0) > events.length && limit < MAX_LIMIT && (
             <button
               type="button"
-              onClick={() => setLimit((current) => current + 20)}
+              onClick={() => setLimit((current) => Math.min(MAX_LIMIT, current + 20))}
               className="mt-2 text-[0.625rem] px-2.5 py-1 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"
             >
               {t("safetyPanel.showMore", {
                 count: (eventsData?.total ?? 0) - events.length,
               })}
             </button>
+          )}
+          {/**
+           * The record is longer than the server will hand over.
+           *
+           * The button is gone at that point — so the user needs to be
+           * told that what is on the screen is not everything, rather
+           * than being left to count the rows and wonder.
+           */}
+          {(eventsData?.total ?? 0) > events.length && limit >= MAX_LIMIT && (
+            <p className="mt-2 text-[0.625rem] text-muted-subtle">
+              {t("safetyPanel.capped", { count: MAX_LIMIT })}
+            </p>
           )}
         </div>
       )}

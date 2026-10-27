@@ -29,7 +29,12 @@ vi.mock("@/lib/trpc", () => ({
       safety: { events: { invalidate } },
     }),
     safety: {
-      events: { useQuery: () => events },
+      /**
+       * The server refuses a limit of more than two hundred — so a
+       * request past it comes back with nothing at all, the way a
+       * failed validation does.
+       */
+      events: { useQuery: ({ limit }: any) => ({ data: limit > 200 ? undefined : events.data }) },
       assessments: { useQuery: () => assessments },
       resolveEvent: { useMutation: () => ({ mutate: resolveEvent, isPending: false }) },
     },
@@ -113,6 +118,32 @@ describe("the safety transparency panel", () => {
 
     // Ten at night in New York is the next day in Shanghai.
     expect(screen.getByText("2026/1/1")).toBeInTheDocument();
+  });
+
+  it("does not lose the record when the user asks for more than the server gives", async () => {
+    /**
+     * The limit went past the server's own maximum — so the request
+     * failed its validation, the list came back empty, and the "show
+     * more" button disappeared with it: the user was told their safety
+     * record could not be read, and there was no way back but a reload.
+     */
+    const user = userEvent.setup();
+    events.data = {
+      total: 250,
+      events: [makeEvent({ id: 1, type: "usage" })],
+    };
+    render(<SafetyTransparency />);
+
+    for (let i = 0; i < 12; i++) {
+      const button = screen.queryByText(/^再看/);
+      if (!button) break;
+      await user.click(button);
+    }
+
+    // The record is still on the screen.
+    expect(screen.getByText(translate("zh", "safetyPanel.eventTypes.usage"))).toBeInTheDocument();
+    // And the user is told that what is on the screen is not everything.
+    expect(screen.getByText(translate("zh", "safetyPanel.capped", { count: 200 }))).toBeInTheDocument();
   });
 
   it("shows the assessments of the relationship", () => {
