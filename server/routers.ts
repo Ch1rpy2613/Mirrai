@@ -1686,7 +1686,7 @@ export const appRouter = router({
     getHistory: protectedProcedure
       .input(z.object({
         personaId: z.number(),
-        limit: z.number().min(1).max(200).default(50),
+        limit: z.number().int().min(1).max(200).default(50),
         /** The id of the oldest message on screen; older ones come back. */
         before: z.number().optional(),
       }))
@@ -2246,7 +2246,7 @@ export const appRouter = router({
       }),
 
     search: protectedProcedure
-      .input(z.object({ personaId: z.number(), query: z.string().min(1).max(200), limit: z.number().min(1).max(100).default(50) }))
+      .input(z.object({ personaId: z.number(), query: z.string().min(1).max(200), limit: z.number().int().min(1).max(100).default(50) }))
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
@@ -2985,7 +2985,7 @@ export const appRouter = router({
       .input(z.object({
         personaId: z.number(),
         source: z.enum(["feishu", "dingtalk", "slack", "email", "wechat_export"]).optional(),
-        limit: z.number().min(1).max(500).default(50),
+        limit: z.number().int().min(1).max(500).default(50),
       }))
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
@@ -3059,7 +3059,7 @@ export const appRouter = router({
         source: z.enum(["feishu", "dingtalk", "slack", "email", "wechat_export"]),
         personaId: z.number(),
         target: z.string().max(200).optional(),
-        limit: z.number().min(1).max(5000).optional(),
+        limit: z.number().int().min(1).max(5000).optional(),
         /**
          * The file the source reads, when it reads one.
          *
@@ -3800,7 +3800,7 @@ export const appRouter = router({
 
   diary: router({
     list: protectedProcedure
-      .input(z.object({ personaId: z.number(), limit: z.number().min(1).max(366).default(30) }))
+      .input(z.object({ personaId: z.number(), limit: z.number().int().min(1).max(366).default(30) }))
       .query(async ({ ctx, input }) => getDiaryEntries(ctx.user.id, input.personaId, input.limit)),
 
     getByDate: protectedProcedure
