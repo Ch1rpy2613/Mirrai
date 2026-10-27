@@ -848,8 +848,23 @@ export const appRouter = router({
          * cleared the date, pressed save, saw the success toast, and
          * the date was back.
          */
-        togetherFrom: z.string().max(50).nullable().optional(),
-        togetherTo: z.string().max(50).nullable().optional(),
+        /**
+         * The dates of the relationship, and the same check the create
+         * path has.
+         *
+         * "去年" was stored as it was typed, and the card then said
+         * "together for 1 day" and "today is the anniversary" — both of
+         * them false. The create path refuses it; this one did not, so
+         * an API caller could put it back.
+         */
+        togetherFrom: z.string().max(50).nullable().optional().refine(
+          (value) => value === null || value === undefined || isRealStartKey(value),
+          { message: "Not a date." },
+        ),
+        togetherTo: z.string().max(50).nullable().optional().refine(
+          (value) => value === null || value === undefined || isRealStartKey(value),
+          { message: "Not a date." },
+        ),
         emotionalState: z.enum(["warm","playful","nostalgic","melancholy","happy","distant"]).optional(),
         llmProvider: z.string().max(64).nullable().optional(),
         remindersEnabled: z.boolean().optional(),
