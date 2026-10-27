@@ -737,16 +737,27 @@ function AISettingsTab() {
    * appeared inert, and the user could not tell whether their key was
    * stored.
    */
+  const utils = trpc.useUtils();
   const upsertConfig = trpc.llmConfig.upsert.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t("settings.ai.configSaved"));
       providers.refetch();
       userConfigs.refetch();
+      /**
+       * The answer to "is there a model service?" is cached, and the
+       * cache still said "no" — so the front page sent a user who had
+       * just saved a key straight into the first-run wizard.
+       */
+      await utils.setup.invalidate();
     },
     onError: (e: any) => toast.error(e.message),
   });
   const setDefault = trpc.llmConfig.setDefault.useMutation({
-    onSuccess: () => { toast.success(t("settings.ai.defaultUpdated")); defaultConfig.refetch(); },
+    onSuccess: async () => {
+      toast.success(t("settings.ai.defaultUpdated"));
+      defaultConfig.refetch();
+      await utils.setup.invalidate();
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const updateExtra = trpc.llmConfig.updateExtraConfig.useMutation({

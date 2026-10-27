@@ -13,7 +13,14 @@ export default function HomePage() {
   const { isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
 
-  // A public probe tells us whether an AI provider is configured at all.
+  /**
+   * A public probe tells us whether an AI provider is configured at all.
+   *
+   * The answer is about *this* user, and it changes when the user
+   * configures a provider — so the cached answer is not to be trusted on
+   * arrival: the user who has just finished the wizard comes back here
+   * and is sent into it again.
+   */
   const setup = trpc.setup.useQuery(undefined, { enabled: !loading });
 
   // Whether there is a provider to chat with.
@@ -38,10 +45,19 @@ export default function HomePage() {
     if (loading) return;
     if (!isAuthenticated) return;
     if (!setup.data) return;
+    /**
+     * Only an answer that was fetched *after* this page was opened.
+     *
+     * The cached answer is what the page shows for the first moment —
+     * and then the fresh one arrives. Deciding on the cached answer
+     * sent the user who had just configured a provider straight back
+     * into the wizard they had just finished.
+     */
+    if (!setup.isFetchedAfterMount) return;
     if (hasProvider) return;
     if (onboardingDismissed()) return;
     navigate("/onboarding", { replace: true });
-  }, [loading, isAuthenticated, setup.data, hasProvider, navigate]);
+  }, [loading, isAuthenticated, setup.data, setup.isFetchedAfterMount, hasProvider, navigate]);
 
   if (loading) {
     return <PageLoader />;

@@ -19,6 +19,9 @@ const providers: { data: any; isLoading: boolean; isError: boolean } = {
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({
+      setup: { invalidate: vi.fn().mockResolvedValue(undefined) },
+    }),
     setup: { useQuery: () => ({ data: { hasLlmProvider: false, hasUserProvider: false } }) },
     llmConfig: {
       listProviders: { useQuery: () => providers },

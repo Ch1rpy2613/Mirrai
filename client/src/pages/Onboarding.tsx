@@ -56,6 +56,7 @@ export default function Onboarding() {
   const upsertConfig = trpc.llmConfig.upsert.useMutation();
   const setDefault = trpc.llmConfig.setDefault.useMutation();
   const createPersona = trpc.persona.create.useMutation();
+  const utils = trpc.useUtils();
 
   // A provider that is already configured needs no key from the user.
   //
@@ -103,6 +104,15 @@ export default function Onboarding() {
         model: model || undefined,
       });
       await setDefault.mutateAsync({ providerName });
+      /**
+       * The answer to "is there a model service?" is cached, and the
+       * cache still said "no" — so the front page sent the user who had
+       * just configured one straight back into this wizard.
+       *
+       * The wizard finishes by sending them to the front page, so they
+       * went round and round.
+       */
+      await utils.setup.invalidate();
       toast.success(t("onboarding.providerSaved"));
       setStep("persona");
     } catch (e: any) {
