@@ -832,6 +832,8 @@ export const zh = {
       limitPlaceholder: "例如 500",
       submitting: "提交中...",
       jobQueued: "采集任务已加入队列",
+      stopJob: "停止",
+      jobCancelled: "采集已停止",
       jobsTitle: "任务列表",
       jobsNote: "采集任务实时进度",
       noJobs: "还没有采集任务。",

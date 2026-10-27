@@ -837,6 +837,8 @@ export const en = {
       limitPlaceholder: "e.g. 500",
       submitting: "Submitting…",
       jobQueued: "The collection job was queued",
+      stopJob: "Stop",
+      jobCancelled: "The collection was stopped",
       jobsTitle: "Job list",
       jobsNote: "Live progress of the collection jobs",
       noJobs: "No collection jobs yet.",

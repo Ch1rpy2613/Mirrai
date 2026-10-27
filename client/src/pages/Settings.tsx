@@ -1829,6 +1829,16 @@ function DataSourcesTab() {
     onError: (e: any) => toast.error(e.message),
   });
   /**
+   * Stops a collection that is running.
+   *
+   * A collection can run for half an hour — the DingTalk one drives a
+   * browser — and there was no way to stop it.
+   */
+  const cancelJob = trpc.collector.cancel.useMutation({
+    onSuccess: () => { toast.success(t("settings.sources.jobCancelled")); jobs.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  /**
    * The file a source reads, uploaded first.
    *
    * The collector is pointed at a file on the server's disk, so the
@@ -2152,6 +2162,26 @@ function DataSourcesTab() {
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {t("settings.sources.messageCount", { count: job.messageCount })}
                     </span>
+                    {/**
+                        * The stop button.
+
+                        A collection can run for half an hour — the
+                        DingTalk one drives a browser — and there was no
+                        way to stop it. The function that stops it was
+                        written and exported; nothing called it.
+                        */}
+                    {(job.status === "queued" || job.status === "running") && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={cancelJob.isPending}
+                        onClick={() => cancelJob.mutate({ jobId: job.id })}
+                        className="h-7 px-2 text-xs"
+                      >
+                        {t("settings.sources.stopJob")}
+                      </Button>
+                    )}
                     {/**
                         * The collection was cut short.
 

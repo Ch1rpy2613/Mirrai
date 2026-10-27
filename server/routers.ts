@@ -134,6 +134,7 @@ import { applyPersonaCorrection, buildCorrectionLog } from "./skill-engine/corre
 import {
   COLLECTOR_SOURCES,
   CollectorQueueFullError,
+  cancelCollectorJob,
   enqueueCollectorJob,
   getCollector,
   getCollectorJob,
@@ -3054,6 +3055,38 @@ export const appRouter = router({
         hasCredentials: !!s.config?.encrypted,
       }));
     }),
+
+    /**
+     * Stops a collection run.
+     *
+     * A collection can run for half an hour — the DingTalk one drives a
+     * browser — and there was no way to stop it. The function that
+     * stops it was written and exported; nothing called it.
+     */
+    cancel: protectedProcedure
+      .input(z.object({ jobId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        /**
+         * The job has to be the caller's own.
+         *
+         * The job id is the only thing the caller sends, and it is
+         * enough to stop somebody else's collection — so it is checked
+         * against the owner first, the way every other procedure that
+         * takes an id is.
+         */
+        const job = getCollectorJob(input.jobId);
+        if (!job || job.userId !== String(ctx.user.id)) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        const cancelled = cancelCollectorJob(input.jobId);
+        if (!cancelled) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.collectorNotRunning"),
+          });
+        }
+        return { success: true };
+      }),
 
     /** Reports the progress of one job. */
     getJob: protectedProcedure

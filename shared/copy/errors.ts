@@ -94,6 +94,16 @@ export const ERRORS = {
    * in the wrong language, and the one sentence that explains what
    * went wrong was the one sentence the user could not read.
    */
+  /**
+   * The job is not running any more.
+   *
+   * So there was nothing to stop — the collection had already finished,
+   * failed, or been stopped.
+   */
+  "errors.collectorNotRunning": {
+    zh: "这个采集已经不在运行了。",
+    en: "This collection is not running any more.",
+  },
   "errors.collectorNoOutput": {
     zh: "采集器「{{source}}」没有输出任何内容。",
     en: "The collector \"{{source}}\" produced no output.",
