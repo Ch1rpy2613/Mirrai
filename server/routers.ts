@@ -4567,14 +4567,23 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({
         name: z.string().min(1).max(100),
-        description: z.string().optional(),
+        /**
+         * Bounded, like every other free-text field.
+         *
+         * The description and the overlay had no limit at all — and the
+         * overlay is injected into every prompt built for a persona with
+         * that scene active. So a pasted (or scripted) multi-megabyte
+         * overlay silently became part of every system prompt, and the
+         * provider started refusing the request.
+         */
+        description: z.string().max(2000).optional(),
         icon: z.string().max(10).optional(),
-        systemPromptOverlay: z.string().optional(),
+        systemPromptOverlay: z.string().max(20_000).optional(),
         // The scene's mood has to be one the persona's state machine knows,
         // otherwise the scene would put a word into the prompt that nothing
         // else understands.
         emotionalState: z.enum(["warm", "playful", "nostalgic", "melancholy", "happy", "distant"]).optional(),
-        starters: z.array(z.string()).optional(),
+        starters: z.array(z.string().max(500)).max(20).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return createScene({ ...input, userId: ctx.user.id, starters: input.starters || [], isBuiltin: false });
