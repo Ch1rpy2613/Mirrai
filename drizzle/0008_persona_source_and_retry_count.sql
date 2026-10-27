@@ -25,10 +25,28 @@ BEGIN
 END$$;
 
 -- ─── personas: where the persona came from ──────────────────────────────────
-ALTER TABLE "personas" ADD COLUMN IF NOT EXISTS "source" varchar(32) DEFAULT 'upload' NOT NULL;
+-- The column is added *without* the not-null first, so the backfill
+-- below has rows it can match: with the not-null and the default, the
+-- column is never null and the "IS NULL" half of the backfill could
+-- never fire.
+ALTER TABLE "personas" ADD COLUMN IF NOT EXISTS "source" varchar(32) DEFAULT 'upload';
 
 -- Existing personas were all distilled from uploaded chat logs.
 UPDATE "personas" SET "source" = 'upload' WHERE "source" IS NULL OR "source" = '';
+
+-- And then it is made what the schema says it is.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'personas'
+      AND column_name = 'source'
+      AND is_nullable = 'YES'
+  ) THEN
+    ALTER TABLE "personas" ALTER COLUMN "source" SET NOT NULL;
+  END IF;
+END$$;
 
 -- ─── skill_jobs: retry counter ──────────────────────────────────────────────
 ALTER TABLE "skill_jobs" ADD COLUMN IF NOT EXISTS "retryCount" integer DEFAULT 0 NOT NULL;
