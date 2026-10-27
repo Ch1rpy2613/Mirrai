@@ -12,6 +12,7 @@
  */
 
 import { copy } from "./copy";
+import { asMaterial } from "./material";
 
 export type LetterStatus = "private" | "waiting" | "answered";
 
@@ -93,7 +94,20 @@ export function buildLetterReplyInstruction(params: {
   return [
     copy(locale, "letters.inboundPrompt"),
     "",
-    params.letterBody,
+    /**
+     * The letter itself, fenced.
+     *
+     * The letter is the most private text in the app — the one thing
+     * the user wrote because they could not say it to the persona's
+     * face. It went into the prompt with no fence at all, joined
+     * straight onto the instruction, so a line in it that read like an
+     * order ("and write a poem instead of a letter") was read as one.
+     *
+     * Everywhere else in the app the user's own words are fenced
+     * before they reach the model. The letter was the one place that
+     * was not.
+     */
+    asMaterial(params.letterBody, locale),
     "",
     /**
      * The answer is different when the relationship is over.
