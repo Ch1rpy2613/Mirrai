@@ -22,12 +22,17 @@ let lastRun: any = null;
 let behaviorFailed = false;
 
 const invalidate = vi.fn();
+/** The history is refreshed by its own call. */
+const invalidateList = vi.fn();
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     // The panel refreshes the numbers after a run.
     useUtils: () => ({
-      eval: { latest: { invalidate: (...a: unknown[]) => invalidate(...a) } },
+      eval: {
+        latest: { invalidate: (...a: unknown[]) => invalidate(...a) },
+        list: { invalidate: (...a: unknown[]) => invalidateList(...a) },
+      },
     }),
     behavior: {
       get: { useQuery: () => ({ data: { profile }, isError: behaviorFailed, refetch: vi.fn() }) },
@@ -82,6 +87,23 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 import FidelityPanel from "./FidelityPanel";
 
 describe("the ruler and the timing", () => {
+  it("refreshes the history after a run, not only the numbers", async () => {
+    /**
+     * The history is a separate query — and it was never invalidated,
+     * so the toast said "done" while the list underneath still showed
+     * the runs before it: the run the user had just paid for was
+     * missing from the panel that exists to compare runs.
+     */
+    const user = userEvent.setup();
+    render(<FidelityPanel personaId={1} />);
+
+    await user.click(screen.getByRole("button", { name: translate("zh", "fidelity.run") }));
+
+    await waitFor(() => {
+      expect(invalidateList).toHaveBeenCalledWith({ personaId: 1 });
+    });
+  });
+
   it("does not claim the persona was never measured when the request failed", () => {
     /**
      * "Not measured yet — import more of the conversation and it can
@@ -100,6 +122,7 @@ describe("the ruler and the timing", () => {
 
   beforeEach(() => {
     behaviorFailed = false;
+    invalidateList.mockClear();
     vi.clearAllMocks();
     profile = null;
     lastRun = null;

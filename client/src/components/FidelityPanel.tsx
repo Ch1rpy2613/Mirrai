@@ -146,6 +146,15 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
       // way to see the result of the run they had just paid for. The
       // measurement next door does refresh its own.
       utils.eval.latest.invalidate({ personaId });
+      /**
+       * The history too.
+       *
+       * It is a separate query — and it was never invalidated, so the
+       * toast said "done" while the list underneath still showed the
+       * runs before it: the run the user had just paid for was missing
+       * from the panel that exists to compare runs.
+       */
+      utils.eval.list.invalidate({ personaId });
     },
     onError: (e: any) => toast.error(e.message),
   });
