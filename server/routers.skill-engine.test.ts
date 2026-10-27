@@ -104,6 +104,26 @@ describe("distilling a persona", () => {
     expect(runSkillPipeline.mock.calls[0][0].provider).toBe("ollama");
   });
 
+  it("is limited, so the pipeline cannot be started without a stop", async () => {
+    // A distillation is a multi-stage run of model calls, and this
+    // procedure had no limit at all — so it was the cheapest way to
+    // start as many of them as you liked.
+    const caller = appRouter.createCaller(ctxFor(987654));
+    let refused = false;
+    for (let i = 0; i < 15; i++) {
+      try {
+        await caller.skillEngine.startPipeline({
+          personaId: 5,
+          characterFamily: "relationship",
+        });
+      } catch {
+        refused = true;
+        break;
+      }
+    }
+    expect(refused).toBe(true);
+  });
+
   it("leaves the provider alone when the persona has none of its own", async () => {
     getPersonaById.mockResolvedValue({ ...persona, llmProvider: null });
 

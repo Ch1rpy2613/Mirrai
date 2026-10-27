@@ -3071,6 +3071,14 @@ export const appRouter = router({
 
   skillEngine: router({
     startPipeline: protectedProcedure
+      /**
+       * The same limit as the other entry point.
+       *
+       * A distillation is a multi-stage run of model calls, and this
+       * procedure had no limit at all — so it was the cheapest way to
+       * start as many of them as you liked.
+       */
+      .use(rateLimit(RATE_LIMITS.llmHeavy))
       .input(z.object({
         personaId: z.number(),
         characterFamily: z.enum(["colleague", "relationship", "celebrity"]).default("relationship"),
