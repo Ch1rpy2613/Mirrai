@@ -22,7 +22,7 @@ import path from "path";
 import { sql } from "drizzle-orm";
 import { invokeForUser } from "../llm";
 import { loadPrompt, loadRegistry } from "./prompts";
-import { asMaterial } from "./material";
+import { asMaterial, fencedName } from "./material";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
 import { ENV } from "../_core/env";
@@ -862,7 +862,7 @@ export async function runCelebrityResearch(
   let tracksWithContent = 0;
   for (const dimension of researchDimensions(locale)) {
     const userContent = [
-      copy(locale, "skillPrompts.research.personName", { name: input.name }),
+      copy(locale, "skillPrompts.research.personName", { name: fencedName(input.name, locale) }),
       copy(locale, "skillPrompts.research.track", {
         track: dimension.track,
         title: dimension.title,
@@ -929,7 +929,7 @@ export async function runCelebrityResearch(
     const auditContent = await invokeStage(
       auditPrompt,
       [
-        copy(locale, "skillPrompts.research.personName", { name: input.name }),
+        copy(locale, "skillPrompts.research.personName", { name: fencedName(input.name, locale) }),
         "",
         copy(locale, "skillPrompts.research.notesHeading"),
         notes.join("\n\n---\n\n").slice(0, 40000),
@@ -984,7 +984,7 @@ export async function runCelebrityResearch(
     const synthesisRaw = await invokeStage(
       synthesisPrompt,
       [
-        copy(locale, "skillPrompts.research.personName", { name: input.name }),
+        copy(locale, "skillPrompts.research.personName", { name: fencedName(input.name, locale) }),
         "",
         copy(locale, "skillPrompts.research.notesHeading"),
         notes.join("\n\n---\n\n").slice(0, 40000),
@@ -1073,7 +1073,7 @@ export async function runCelebrityResearch(
     const validationRaw = await invokeStage(
       validationPrompt,
       [
-        copy(locale, "skillPrompts.research.personName", { name: input.name }),
+        copy(locale, "skillPrompts.research.personName", { name: fencedName(input.name, locale) }),
         "",
         copy(locale, "skillPrompts.research.auditHeading"),
         audit.slice(0, 10000),

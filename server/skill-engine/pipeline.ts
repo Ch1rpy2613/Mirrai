@@ -25,7 +25,7 @@ import { invokeForUser, invokeForUserWithReason } from "../llm";
 import { resolveProviderForUser } from "../llm/user-provider";
 import type { LLMMessage, LLMOptions } from "../llm/types";
 import { loadPrompt } from "./prompts";
-import { asMaterial } from "./material";
+import { asMaterial, fencedName } from "./material";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
 import {
@@ -296,7 +296,7 @@ export async function describeImages(
     const content: Array<{ type: "text"; text: string } | { type: "image_url"; url: string }> = [
       {
         type: "text",
-        text: copy(locale, "skillPrompts.pipeline.describeImages", { name }),
+        text: copy(locale, "skillPrompts.pipeline.describeImages", { name: fencedName(name, locale) }),
       },
     ];
     /**
@@ -612,7 +612,7 @@ async function runIntakeStage(input: {
   try {
     const prompt = loadPrompt(input.characterFamily, "intake", input.profile);
     const material = [
-      copy(locale, "skillPrompts.pipeline.intakePersonName", { name: input.name }),
+      copy(locale, "skillPrompts.pipeline.intakePersonName", { name: fencedName(input.name, locale) }),
       copy(locale, "skillPrompts.pipeline.intakeChatLength", {
         length: input.chatContent.length,
       }),
@@ -678,7 +678,7 @@ async function runWorkDimension(input: {
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.workAnalyzerName", { name: input.name }) +
+            copy(locale, "skillPrompts.pipeline.workAnalyzerName", { name: fencedName(input.name, locale) }) +
             "\n\n" +
             copy(locale, "skillPrompts.pipeline.workAnalyzerResult", {
               result: input.analysisResult,
@@ -697,7 +697,7 @@ async function runWorkDimension(input: {
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.workAnalyzerName", { name: input.name }) +
+            copy(locale, "skillPrompts.pipeline.workAnalyzerName", { name: fencedName(input.name, locale) }) +
             "\n\n" +
             copy(locale, "skillPrompts.pipeline.workBuilderResult", { analysis }) +
             researchBlock,
@@ -745,7 +745,7 @@ async function runMerger(input: {
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.mergerName", { name: input.name }) + "\n\n" +
+            copy(locale, "skillPrompts.pipeline.mergerName", { name: fencedName(input.name, locale) }) + "\n\n" +
             `=== persona.md ===\n${input.personaDocument}\n\n` +
             `=== work.md ===\n${input.workDocument}`,
         },
@@ -1112,7 +1112,7 @@ async function runSkillPipelineOnce(
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.analyzerName", { name }) +
+            copy(locale, "skillPrompts.pipeline.analyzerName", { name: fencedName(name, locale) }) +
             "\n\n" +
             copy(locale, "skillPrompts.pipeline.analyzerMaterial", {
               // The material is fenced: it is the user's own chat log,
@@ -1155,7 +1155,7 @@ async function runSkillPipelineOnce(
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.builderName", { name }) + "\n\n" + builderMaterial,
+            copy(locale, "skillPrompts.pipeline.builderName", { name: fencedName(name, locale) }) + "\n\n" + builderMaterial,
         },
       ],
       options: { provider: input.provider, temperature: preset.analysisTemperature },
@@ -1243,7 +1243,7 @@ async function runSkillPipelineOnce(
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.structurerName", { name }) +
+            copy(locale, "skillPrompts.pipeline.structurerName", { name: fencedName(name, locale) }) +
             "\n\n" +
             copy(locale, "skillPrompts.pipeline.structurerAnalysis", {
               analysis: analysisResult,
