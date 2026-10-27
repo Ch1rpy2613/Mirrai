@@ -81,7 +81,10 @@ function verifyLegacySha256(password: string, stored: string): boolean {
   const expectedHex = stored.slice(separator + 1);
   if (!/^[0-9a-f]{64}$/i.test(expectedHex)) return false;
 
-  const actual = createHash("sha256").update(password + salt).digest("hex");
+  const actual = createHash("sha256")
+    // codeql[js/insufficient-password-hash]
+    .update(password + salt)
+    .digest("hex");
   const a = Buffer.from(actual, "hex");
   const b = Buffer.from(expectedHex, "hex");
   return a.length === b.length && timingSafeEqual(a, b);

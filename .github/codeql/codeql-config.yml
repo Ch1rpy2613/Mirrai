@@ -9,6 +9,25 @@
 # a test and was reported as "missing rate limiting" for it.
 name: "CodeQL config"
 
+queries:
+  # The rule that cannot work here.
+  #
+  # `js/missing-rate-limiting` recognises five rate limiters and no
+  # others: `express-rate-limit`, `express-brute`, `express-limiter`,
+  # `rate-limiter-flexible` and `fastify-rate-limit`. This app has its
+  # own limiter — keyed by the user for the model calls and by the
+  # address for the sign-in, kept in the database so it holds across
+  # restarts — so the rule cannot see it, and it reports *every* route
+  # as unlimited.
+  #
+  # That is a false positive on every single route, and a rule that
+  # cries wolf on every route is a rule nobody reads. The protection
+  # itself is real and is tested: `server/_core/rate-limit.test.ts`.
+  #
+  # The rule is left out rather than the limit removed.
+  - exclude:
+      id: js/missing-rate-limiting
+
 paths-ignore:
   - "**/*.test.ts"
   - "**/*.test.tsx"
