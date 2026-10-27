@@ -11,11 +11,13 @@ import type { TrpcContext } from "./_core/context";
 
 const getCollectorJob = vi.fn();
 const cancelCollectorJob = vi.fn();
+const enqueueCollectorJob = vi.fn();
+const getPersonaById = vi.fn();
 
 vi.mock("./collectors", () => ({
   getCollectorJob: (...a: unknown[]) => getCollectorJob(...a),
   cancelCollectorJob: (...a: unknown[]) => cancelCollectorJob(...a),
-  enqueueCollectorJob: vi.fn(),
+  enqueueCollectorJob: (...a: unknown[]) => enqueueCollectorJob(...a),
   getCollector: vi.fn(),
   listCollectorJobs: vi.fn(),
   COLLECTOR_SOURCES: [],
@@ -23,7 +25,7 @@ vi.mock("./collectors", () => ({
 }));
 
 vi.mock("./db", () => ({
-  getPersonaById: vi.fn(),
+  getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getPersonaFileById: vi.fn(),
   getCollectedMessageSources: vi.fn(),
   getCollectedMessagesForPersona: vi.fn(),
@@ -55,6 +57,46 @@ function ctxFor(userId: number): TrpcContext {
     res: {} as any,
   } as unknown as TrpcContext;
 }
+
+describe("starting a collection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    enqueueCollectorJob.mockResolvedValue({ jobId: "job-2" });
+    getPersonaById.mockResolvedValue({ id: 1, name: "小A" });
+  });
+
+  it("passes the browser profile on, so the source can collect at all", async () => {
+    /**
+     * The DingTalk source reads the message history by driving a
+     * browser, and the browser's login *is* the credential — so the
+     * profile has to be named.
+     *
+     * There was nowhere to name it: the procedure did not accept one,
+     * so the source could be authorised and could never collect.
+     */
+    await appRouter
+      .createCaller(ctxFor(1))
+      .collector.start({
+        source: "dingtalk",
+        personaId: 1,
+        chromeProfile: "/Users/me/Library/Application Support/Google/Chrome/Default",
+      });
+
+    const job = enqueueCollectorJob.mock.calls[0][0] as any;
+    expect(job.input.options.chrome_profile).toBe(
+      "/Users/me/Library/Application Support/Google/Chrome/Default",
+    );
+  });
+
+  it("refuses a browser profile that is not a path", async () => {
+    await expect(
+      appRouter
+        .createCaller(ctxFor(1))
+        .collector.start({ source: "dingtalk", personaId: 1, chromeProfile: "   " }),
+    ).rejects.toThrow();
+    expect(enqueueCollectorJob).not.toHaveBeenCalled();
+  });
+});
 
 describe("stopping a collection", () => {
   beforeEach(() => {

@@ -136,6 +136,16 @@ export interface SourceConnector {
   labelForLocale?(locale: "zh" | "en"): string;
   /** True when the source needs Playwright + a Chromium download. */
   requiresBrowser?: boolean;
+  /**
+   * Whether the source needs the user's own browser profile.
+   *
+   * The DingTalk source reads the message history by driving a browser,
+   * and the browser's login *is* the credential — so the profile has to
+   * be the user's own and it has to be named. There was nowhere to
+   * name it: the procedure that starts a collection did not accept
+   * one, so the source could be authorised and could never collect.
+   */
+  needsChromeProfile?: boolean;
   /** Python tool this connector drives, relative to skill-engine/tools/. */
   tool: string;
   /** CLI arguments, excluding the tool name. */
@@ -594,6 +604,13 @@ const DINGTALK_CREDENTIAL_KEYS = ["app_key", "app_secret"];
 const dingtalkConnector: SourceConnector = {
   id: "dingtalk",
   label: copy("zh", "labels.collector.dingtalk"),
+  /**
+   * The browser profile has to be named.
+   *
+   * There was nowhere to name it — so the source could be authorised
+   * and could never collect.
+   */
+  needsChromeProfile: true,
   labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.dingtalk"),
   requiresBrowser: true,
   tool: "dingtalk_auto_collector.py",

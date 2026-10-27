@@ -2775,6 +2775,15 @@ export const appRouter = router({
          * were chosen.
          */
         needsFile: source.id === "email" || source.id === "wechat_export",
+        /**
+         * Whether the source needs the user's own browser profile.
+         *
+         * The DingTalk source reads the message history by driving a
+         * browser, and the browser's login *is* the credential — so
+         * the profile has to be named, and there was nowhere to name
+         * it.
+         */
+        needsChromeProfile: source.needsChromeProfile === true,
       }))
     ),
 
@@ -2873,6 +2882,17 @@ export const appRouter = router({
          * chosen, with an error about a missing option.
          */
         fileId: z.number().optional(),
+        /**
+         * The browser profile the source reads.
+         *
+         * The DingTalk source reads the message history by driving a
+         * browser, and the browser's login *is* the credential — so the
+         * profile has to be the user's own and it has to be named.
+         * There was nowhere to name it: the procedure did not accept
+         * one, so the source could be authorised and could never
+         * collect.
+         */
+        chromeProfile: z.string().min(1).max(500).optional(),
       }))
       .use(rateLimit(RATE_LIMITS.collector))
       .mutation(async ({ ctx, input }) => {
@@ -2903,6 +2923,24 @@ export const appRouter = router({
           const path = resolveStoredPath(file.fileKey);
           if (!path) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.collectorFileMissing") });
           options = { file: path };
+        }
+
+        /**
+         * The browser profile, when the source reads one.
+         *
+         * It is the user's own path on the machine the app runs on —
+         * so it is passed on as it is, and the collector is pointed at
+         * a folder the user named.
+         */
+        if (input.chromeProfile !== undefined) {
+          const profile = input.chromeProfile.trim();
+          if (!profile || profile.includes("\0")) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: copy(ctx.locale, "errors.collectorChromeProfileInvalid"),
+            });
+          }
+          options = { ...(options ?? {}), chrome_profile: profile };
         }
 
         let handle;

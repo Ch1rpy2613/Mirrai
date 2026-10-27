@@ -100,6 +100,13 @@ export const ERRORS = {
    * So there was nothing to stop — the collection had already finished,
    * failed, or been stopped.
    */
+  /**
+   * The browser profile is not a path.
+   */
+  "errors.collectorChromeProfileInvalid": {
+    zh: "浏览器 Profile 的路径不对。",
+    en: "That browser profile path is not a path.",
+  },
   "errors.collectorNotRunning": {
     zh: "这个采集已经不在运行了。",
     en: "This collection is not running any more.",

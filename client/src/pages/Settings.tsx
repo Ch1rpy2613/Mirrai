@@ -1857,6 +1857,15 @@ function DataSourcesTab() {
    * were chosen.
    */
   const [sourceFileId, setSourceFileId] = useState<number | null>(null);
+  /**
+   * The browser profile the source reads.
+   *
+   * The DingTalk source reads the message history by driving a browser,
+   * and the browser's login *is* the credential — so the profile has to
+   * be the user's own and it has to be named. There was nowhere to name
+   * it, so the source could be authorised and could never collect.
+   */
+  const [chromeProfile, setChromeProfile] = useState("");
   const [sourceFileName, setSourceFileName] = useState("");
   const [personaId, setPersonaId] = useState("");
   const [target, setTarget] = useState("");
@@ -1931,6 +1940,7 @@ function DataSourcesTab() {
       target: target.trim() || undefined,
       limit: parsedLimit && Number.isFinite(parsedLimit) ? parsedLimit : undefined,
       fileId: sourceFileId ?? undefined,
+      chromeProfile: chromeProfile.trim() || undefined,
     });
   }
 
@@ -2121,8 +2131,30 @@ function DataSourcesTab() {
             </div>
           )}
 
+          {selectedSource?.needsChromeProfile && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground" htmlFor="source-chrome-profile">
+                {t("settings.sources.chromeProfileLabel")}
+              </Label>
+              <Input
+                id="source-chrome-profile"
+                value={chromeProfile}
+                onChange={e => setChromeProfile(e.target.value)}
+                placeholder={t("settings.sources.chromeProfilePlaceholder")}
+                className="h-9 rounded-md text-sm"
+              />
+              <p className="text-[11px] text-muted-subtle leading-relaxed">
+                {t("settings.sources.chromeProfileNote")}
+              </p>
+            </div>
+          )}
+
           <Button size="sm" className="rounded-md px-5"
-            disabled={!sourceId || !personaId || startJob.isPending || (selectedSource?.needsFile && !sourceFileId)}
+            disabled={
+              !sourceId || !personaId || startJob.isPending ||
+              (selectedSource?.needsFile && !sourceFileId) ||
+              (selectedSource?.needsChromeProfile && !chromeProfile.trim())
+            }
             onClick={handleStart}>
             {startJob.isPending ? t("settings.sources.submitting") : t("settings.sources.start")}
           </Button>
