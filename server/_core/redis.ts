@@ -602,8 +602,51 @@ function stopManagedOnExit() {
     }
   };
   process.once("exit", stop);
-  process.once("SIGINT", () => { stop(); process.exit(0); });
-  process.once("SIGTERM", () => { stop(); process.exit(0); });
+  /**
+   * The signals.
+   *
+   * They used to call `process.exit(0)` — and the app's own shutdown
+   * never ran.
+   *
+   * The Redis is connected early (the scheduler needs it), so this
+   * handler was registered *before* the server's, and it killed the
+   * process while the HTTP server was still serving, the channels were
+   * still connected, and the requests in flight were still running.
+   * And in the other order it was no better: the server's shutdown is
+   * asynchronous, so the second handler ended the process while the
+   * first was still stopping the scheduler.
+   *
+   * So the handler only stops the Redis it started, and the app's own
+   * shutdown decides when the process goes. When nothing else is
+   * listening for the signal, the process still ends the way the
+   * signal says.
+   */
+  const onSigint = () => { stop(); endOnSignal("SIGINT", onSigint); };
+  const onSigterm = () => { stop(); endOnSignal("SIGTERM", onSigterm); };
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+}
+
+/**
+ * Whether the signal should end the process.
+ *
+ * The app's own shutdown is registered for the same signal — and it
+ * does the work: the scheduler, the collection jobs, the channels and
+ * the requests in flight. So when somebody else is listening, the
+ * process is left to them.
+ *
+ * `once` listeners are removed *before* they are called, so this
+ * handler is no longer in the list by the time it runs — which is
+ * exactly what the check needs to know.
+ */
+export function endOnSignal(
+  signal: "SIGINT" | "SIGTERM",
+  self: (...args: unknown[]) => void,
+): boolean {
+  const others = process.listeners(signal).filter((listener) => listener !== self);
+  if (others.length > 0) return false;
+  process.exit(0);
+  return true;
 }
 
 /**
