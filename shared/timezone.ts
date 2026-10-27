@@ -327,8 +327,27 @@ export function zonedNoonForDayKey(dayKey: string, timeZone?: string | null): Da
   const year = Number(match[1]);
   const month = Number(match[2]) - 1;
   const day = Number(match[3]);
+  /**
+   * No zone: the server's own noon.
+   *
+   * It used to be *UTC* noon — while `zonedMidnightForDayKey`, the
+   * other half of the same pair, returns the server's own *local*
+   * midnight. So the two disagreed about what "no zone" means: on a
+   * server that is eight hours ahead of UTC, a day the user typed was
+   * filed at 20:00 in the evening, and the interface showed 20:00 for
+   * it. And on a server thirteen hours ahead, the very same entry
+   * landed on the next calendar day.
+   *
+   * The user's own midnight is the server's own midnight — that is the
+   * convention the pair follows, and it is the one the database's day
+   * column is on.
+   */
+  if (!timeZone) {
+    const noon = new Date(utcWallClock(year, month, day));
+    noon.setHours(12, 0, 0, 0);
+    return noon;
+  }
   const wallNoon = utcWallClock(year, month, day, 12);
-  if (!timeZone) return new Date(wallNoon);
   let offset = zonedOffsetMinutes(new Date(wallNoon), timeZone);
   const offsetAtNoon = zonedOffsetMinutes(new Date(wallNoon - offset * 60_000), timeZone);
   if (offsetAtNoon !== offset) offset = offsetAtNoon;
