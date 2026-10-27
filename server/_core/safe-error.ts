@@ -22,6 +22,19 @@ const URL = /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi;
 const NAMED_KEY = /\b(sk|pk|api|key|token|secret|bearer)[-_]?[A-Za-z0-9_-]{8,}\b/gi;
 
 /**
+ * An absolute path on the machine the app runs on.
+ *
+ * The collector's failure is a Python traceback, and a traceback says
+ * where the tool lives: "/Users/someone/Mirrai/skill-engine/tools/x.py".
+ * That path was shown in the browser, so anybody who could see the
+ * screen could see how the operator's machine is laid out.
+ */
+const POSIX_PATH = /(^|[\s("'[])((?:\/[A-Za-z0-9._@+-]+){2,})/g;
+
+/** The same, on Windows. */
+const WINDOWS_PATH = /\b([A-Za-z]:\\(?:[^\\\s"']+\\)*[^\\\s"']*)/g;
+
+/**
  * The reason, with the dangerous parts taken out.
  *
  * The provider's own message is kept — it is the part that says
@@ -47,6 +60,8 @@ export function safeErrorMessage(error: unknown): string {
   return text
     .replace(URL, "[the endpoint]")
     .replace(NAMED_KEY, "$1=[hidden]")
+    .replace(POSIX_PATH, "$1[the path]")
+    .replace(WINDOWS_PATH, "[the path]")
     // A long run of letters and digits is a key, a token or a hash.
     .replace(TOKEN, (match) => {
       // A word in capitals is a name, not a secret.

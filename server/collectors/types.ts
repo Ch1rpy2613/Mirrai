@@ -485,9 +485,21 @@ async function collectViaOutputDir(
     const transcript = readCollectorTranscript(outputDir);
     const raw = transcript ?? stdout;
     if (!raw.trim()) {
+      /**
+       * The stderr is for the log.
+       *
+       * It is a Python traceback, and a traceback says where the tool
+       * lives on the operator's machine. It was shown in the browser
+       * word for word.
+       */
+      console.error(
+        `[Collector] ${connector.tool} produced no transcript:`,
+        stderr.trim().slice(-500),
+      );
       throw new Error(
-        `Collector "${connector.id}" produced no transcript (${connector.tool}). ` +
-          stderr.trim().slice(-500),
+        copy(effective.locale ?? "zh", "errors.collectorNoTranscript", {
+          source: connector.id,
+        }),
       );
     }
     return normaliseCollectorOutput(raw, connector.id, {

@@ -111,6 +111,23 @@ export const ERRORS = {
     zh: "这个采集已经不在运行了。",
     en: "This collection is not running any more.",
   },
+  /**
+   * The collector process failed.
+   *
+   * The detail used to be the Python traceback — which says where the
+   * tool lives on the operator's machine. It is in the log now.
+   */
+  "errors.collectorFailed": {
+    zh: "采集器「{{source}}」没有跑完（{{reason}}）。",
+    en: "The collector \"{{source}}\" did not finish ({{reason}}).",
+  },
+  /**
+   * The collector ran but left nothing to read.
+   */
+  "errors.collectorNoTranscript": {
+    zh: "采集器「{{source}}」没有留下可以读取的内容。",
+    en: "The collector \"{{source}}\" left nothing that could be read.",
+  },
   "errors.collectorNoOutput": {
     zh: "采集器「{{source}}」没有输出任何内容。",
     en: "The collector \"{{source}}\" produced no output.",

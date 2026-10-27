@@ -297,9 +297,18 @@ export async function runCollector(
       }
       const detail = stderr.trim().slice(-500);
       const reason = signal ? `signal ${signal}` : `exit code ${code}`;
+      /**
+       * The detail is for the log, not for the browser.
+       *
+       * The collector's stderr is a Python traceback, and a traceback
+       * says where the tool lives — "/Users/someone/Mirrai/skill-
+       * engine/tools/x.py" — and what the operator's machine is
+       * called. It was shown in the browser word for word.
+       */
+      console.error(`[Collector] ${tool} failed with ${reason}:`, detail);
       reject(
         new Error(
-          `Collector "${tool}" failed with ${reason}${detail ? `: ${detail}` : ""}`,
+          copy(opts.locale ?? "zh", "errors.collectorFailed", { source: tool, reason }),
         ),
       );
     });

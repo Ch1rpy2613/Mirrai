@@ -32,6 +32,30 @@ describe("safeErrorMessage", () => {
     expect(message).toContain("ANTHROPIC_CLAUDE");
   });
 
+  it("removes the path of the machine the app runs on", () => {
+    /**
+     * The collector's failure is a Python traceback, and a traceback
+     * says where the tool lives — so the operator's home directory and
+     * the layout of their machine were shown in the browser.
+     */
+    const message = safeErrorMessage(
+      new Error(
+        'File "/Users/someone/Mirrai/skill-engine/tools/feishu_auto_collector.py", line 120',
+      ),
+    );
+    expect(message).not.toContain("/Users/someone");
+    expect(message).not.toContain("Mirrai");
+    expect(message).toContain("[the path]");
+  });
+
+  it("removes a Windows path too", () => {
+    const message = safeErrorMessage(
+      new Error('File "C:\\Users\\someone\\Mirrai\\tools\\x.py", line 3'),
+    );
+    expect(message).not.toContain("someone");
+    expect(message).toContain("[the path]");
+  });
+
   it("takes anything at all", () => {
     expect(safeErrorMessage(undefined)).toBeTruthy();
     expect(safeErrorMessage({ weird: true })).toContain("weird");
