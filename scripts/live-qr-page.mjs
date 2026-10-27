@@ -12,11 +12,9 @@
  * Usage: node scripts/live-qr-page.mjs [port]
  */
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
 
-const require = createRequire(import.meta.url);
 const ROOT = process.cwd();
 const STATE_FILE = path.join(ROOT, ".live-wechat-state.json");
 const PORT = Number(process.argv[2]) || 8898;
@@ -26,16 +24,14 @@ const APP_ID = process.env.WECHAT_ILINK_APP_ID || "bot";
 const BOT_TYPE = process.env.WECHAT_BOT_TYPE || "3";
 const APP_VERSION = process.env.APP_VERSION || "1.0.0";
 
-function loadQrcode() {
-  const pnpmDir = path.join(ROOT, "node_modules/.pnpm");
-  if (existsSync(pnpmDir)) {
-    const match = readdirSync(pnpmDir).find((d) => d.startsWith("qrcode@"));
-    if (match) return require(path.join(pnpmDir, match, "node_modules/qrcode"));
-  }
-  return require("qrcode");
-}
-const QRCode = loadQrcode();
-
+/**
+ * The QR image is the one the backend sends.
+ *
+ * The page used to draw its own, with the `qrcode` package — a package
+ * that is not a dependency of this project, so the script could not
+ * start at all. And the image it drew was of whatever the backend had
+ * sent, which is the image itself.
+ */
 const { startQrLogin, pollQrLogin } = await import(
   path.join(ROOT, ".live-test/ilink/login.js")
 );
@@ -81,13 +77,10 @@ async function issueFresh() {
       issuing = null;
       throw new Error(result.message);
     }
-    const png = await QRCode.toBuffer(result.qrcodeImgContent, {
-      type: "png", width: 520, margin: 2, errorCorrectionLevel: "M",
-    });
     current = {
       qrcode: result.qrcode,
       url: result.qrcodeImgContent,
-      png: `data:image/png;base64,${png.toString("base64")}`,
+      png: result.qrcodeImgContent,
       issuedAt: Date.now(),
     };
     state.qrcode = result.qrcode;

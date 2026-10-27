@@ -4,12 +4,9 @@
  * All paths are environment-driven so the scripts work on any machine and in
  * any checkout location. See scripts/README.md for usage.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-
-const require = createRequire(import.meta.url);
 
 /**
  * Repository root — defaults to the parent of this script's directory.
@@ -71,16 +68,6 @@ export const STUB_PORT = Number(process.env.MIRRAI_LIVE_STUB_PORT ?? 9911);
 
 /** Database URL for the live test database. */
 export const DATABASE_URL = process.env.DATABASE_URL ?? "";
-
-/** Resolves the `qrcode` package from the pnpm store, whatever its version. */
-export function loadQrcode() {
-  const pnpmDir = path.join(ROOT, "node_modules/.pnpm");
-  if (existsSync(pnpmDir)) {
-    const match = readdirSync(pnpmDir).find((d) => d.startsWith("qrcode@"));
-    if (match) return require(path.join(pnpmDir, match, "node_modules/qrcode"));
-  }
-  return require("qrcode");
-}
 
 /** Reads a JSON file, returning null when it is missing or unreadable. */
 export function readJsonSafe(file) {

@@ -17,27 +17,10 @@
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
 const ROOT = process.cwd();
 const STATE_FILE = path.join(ROOT, ".live-wechat-state.json");
 const QR_PNG = path.join(ROOT, "live-wechat-qr.png");
 const QR_URL_FILE = path.join(ROOT, "live-wechat-qr-url.txt");
-
-/** Resolves the `qrcode` package from the pnpm store, whatever its version. */
-function loadQrcode() {
-  const pnpmDir = path.join(ROOT, "node_modules/.pnpm");
-  if (existsSync(pnpmDir)) {
-    const match = readdirSync(pnpmDir).find((d) => d.startsWith("qrcode@"));
-    if (match) {
-      return require(path.join(pnpmDir, match, "node_modules/qrcode"));
-    }
-  }
-  return require("qrcode");
-}
-
-const QRCode = loadQrcode();
 
 const { startQrLogin, pollQrLogin } = await import(
   path.join(ROOT, ".live-test/ilink/login.js")
@@ -92,13 +75,20 @@ async function issueQr(state) {
   state.qrImgContent = result.qrcodeImgContent;
   saveState(state);
 
-  const png = await QRCode.toBuffer(result.qrcodeImgContent, {
-    type: "png",
-    width: 600,
-    margin: 2,
-    errorCorrectionLevel: "M",
-  });
-  writeFileSync(QR_PNG, png);
+  /**
+   * The image is the one the backend sends.
+   *
+   * It used to be drawn here, with the `qrcode` package — a package that
+   * is not a dependency of this project, so the watcher could not start
+   * at all. And what it drew was whatever the backend had sent, which
+   * is the image itself.
+   */
+  const image = await fetch(result.qrcodeImgContent);
+  if (!image.ok) {
+    console.log(`[${new Date().toISOString()}] could not fetch the QR image: ${image.status}`);
+    return false;
+  }
+  writeFileSync(QR_PNG, Buffer.from(await image.arrayBuffer()));
   writeFileSync(QR_URL_FILE, result.qrcodeImgContent, "utf-8");
 
   console.log(`[${new Date().toISOString()}] new QR issued: ${result.qrcode}`);

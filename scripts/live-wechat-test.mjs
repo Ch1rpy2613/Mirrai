@@ -83,29 +83,20 @@ if (command === "qr") {
   console.log("QR URL :", result.qrcodeImgContent);
   console.log("QRCODE :", result.qrcode);
 
-  // Render a PNG so the user can scan it directly.
+  // Save the image so the user can scan it directly.
+  //
+  // It used to be drawn here, with the `qrcode` package — a package that
+  // is not a dependency of this project, so the render always failed and
+  // no image was ever written. And what it drew was whatever the
+  // backend had sent, which is the image itself.
   try {
-    const { readdirSync } = await import("node:fs");
-    const pnpmDir = path.join(ROOT, "node_modules/.pnpm");
-    const match = existsSync(pnpmDir)
-      ? readdirSync(pnpmDir).find((d) => d.startsWith("qrcode@"))
-      : null;
-    const QRCode = require(
-      match
-        ? path.join(pnpmDir, match, "node_modules/qrcode")
-        : "qrcode",
-    );
-    const png = await QRCode.toBuffer(result.qrcodeImgContent, {
-      type: "png",
-      width: 600,
-      margin: 2,
-      errorCorrectionLevel: "M",
-    });
+    const image = await fetch(result.qrcodeImgContent);
+    if (!image.ok) throw new Error(`the image could not be fetched (${image.status})`);
     const out = path.join(ROOT, "live-wechat-qr.png");
-    writeFileSync(out, png);
+    writeFileSync(out, Buffer.from(await image.arrayBuffer()));
     console.log("PNG    :", out);
   } catch (e) {
-    console.log("PNG    : (render failed)", String(e.message).slice(0, 100));
+    console.log("PNG    : (not saved)", String(e.message).slice(0, 100));
   }
 }
 

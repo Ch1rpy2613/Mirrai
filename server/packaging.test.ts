@@ -223,6 +223,27 @@ describe("the packaged app", () => {
     expect(config).not.toMatch(/new URL\(import\.meta\.url\)\.pathname/);
   });
 
+  it("does not ask for a package the project does not have", () => {
+    // The `qrcode` package is not a dependency of this project — so the
+    // scripts that asked for it could not start at all.
+    const packageJson = JSON.parse(
+      readFileSync(path.join(ROOT, "package.json"), "utf-8"),
+    ) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    const scripts = readdirSync(path.join(ROOT, "scripts"));
+    for (const name of scripts) {
+      if (!/\.(mjs|ts|js)$/.test(name)) continue;
+      const source = readFileSync(path.join(ROOT, "scripts", name), "utf-8");
+      const asked = [...source.matchAll(/require\(["'`]([^"'`]+)["'`]/g)].map((m) => m[1]);
+      for (const module of asked) {
+        if (!module || module.startsWith(".") || module.startsWith("node:")) continue;
+        const known =
+          packageJson.dependencies?.[module] !== undefined ||
+          packageJson.devDependencies?.[module] !== undefined;
+        expect(known, `${name} asks for ${module}, which is not a dependency`).toBe(true);
+      }
+    }
+  });
+
   it("stops when the schema cannot be synchronised", () => {
     // `push` applies the difference between the schema and the live
     // database — so a failure means the two still disagree, and the app
