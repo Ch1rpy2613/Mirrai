@@ -1826,6 +1826,27 @@ export default function Lobby() {
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [showSort]);
+
+  /**
+   * The focus goes into the menu when it opens.
+   *
+   * The items are `tabIndex={-1}` — they are reached with the arrow
+   * keys, the way a menu's items are. But nothing ever moved the focus
+   * into the menu, so the arrow-key handler (which lives on the menu)
+   * never received a key event: the key was pressed on the trigger
+   * button, which is not inside the menu.
+   *
+   * So Tab skipped the items and the arrow keys did nothing, and the
+   * order could not be changed at all without a mouse — while the
+   * button announced a menu.
+   */
+  useEffect(() => {
+    if (!showSort) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`lobby-sort-${sortBy}`)?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showSort, sortBy]);
   /** The graduated personas are folded away by default. */
   const [showGraduated, setShowGraduated] = useState(false);
   /** The bulk selection. */

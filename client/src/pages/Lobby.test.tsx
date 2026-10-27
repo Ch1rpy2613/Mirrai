@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -212,6 +212,38 @@ describe("the lobby", () => {
     // 丙 is pinned, so it is first even though it was spoken to before 乙.
     // The rest keep the order the sort gave them.
     expect(names).toEqual(["丙", "乙", "甲"]);
+  });
+
+  it("puts the focus into the sort menu when it opens", async () => {
+    /**
+     * The items are reached with the arrow keys, the way a menu's items
+     * are — so the focus has to be in the menu.
+     *
+     * It was not: nothing moved it there, so the arrow-key handler
+     * (which lives on the menu) never received a key event, and Tab
+     * skipped the items. The order could not be changed at all without
+     * a mouse — while the button announced a menu.
+     */
+    const user = userEvent.setup();
+    personas = [makePersona()];
+
+    render(<Lobby />);
+
+    await user.click(screen.getByRole("button", { name: /最近|recent/i }));
+
+    const items = screen.getAllByRole("menuitem");
+    expect(items.length).toBeGreaterThan(0);
+    // The focus is inside the menu.
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("menuitem").some((item) => document.activeElement === item),
+      ).toBe(true);
+    });
+
+    // And the arrow keys move between the items.
+    await user.keyboard("{ArrowDown}");
+    const after = screen.getAllByRole("menuitem");
+    expect(after.some((item) => document.activeElement === item)).toBe(true);
   });
 
   it("folds the graduated ones away until they are asked for", async () => {
