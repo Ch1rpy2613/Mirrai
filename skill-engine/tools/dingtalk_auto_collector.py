@@ -107,6 +107,11 @@ API_BASE = "https://api.dingtalk.com"
 
 SOURCE_NAME = "dingtalk"
 
+# 最多查几个工作空间。
+#
+# 不是钉钉的上限，是我们的：每个空间都要问一次接口。
+WORKSPACE_LIMIT = 5
+
 
 # ─── 统一输出协议 ─────────────────────────────────────────────────────────────
 #
@@ -487,27 +492,46 @@ def search_docs_by_user(user_id: str, name: str, doc_limit: int, config: dict) -
         # 方式二：遍历工作空间找文档
         print("  搜索无结果，遍历工作空间 ...", file=sys.stderr)
         workspaces = list_workspaces(config)
-        for ws in workspaces[:5]:  # 最多查 5 个空间
+        # 每个空间里的文件也要翻页。
+        #
+        # 它原来只取前 20 个，而且从来不看返回的游标：所以一个有 25 篇
+        # 文档的同事只剩下 5 篇，而报告上写着"共 12 篇"——一个关于他
+        # 同事的假话。
+        for ws in workspaces[:WORKSPACE_LIMIT]:
             ws_id = ws.get("spaceId") or ws.get("workspaceId")
             if not ws_id:
                 continue
-            files_data = api_get(
-                f"/v1.0/doc/workspaces/{ws_id}/files",
-                {"maxResults": 20, "orderBy": "modified_time", "order": "DESC"},
-                config,
-            )
-            for f in files_data.get("files", []):
-                creator_id = f.get("creatorId", "")
-                if user_id and creator_id and creator_id != user_id:
-                    continue
-                docs.append({
-                    "title": f.get("fileName", "无标题"),
-                    "docId": f.get("docId", ""),
-                    "spaceId": ws_id,
-                    "type": f.get("docType", ""),
-                    "url": f.get("shareUrl", ""),
-                    "creator": name,
-                })
+            page_token = None
+            while True:
+                params = {"maxResults": 50, "orderBy": "modified_time", "order": "DESC"}
+                if page_token:
+                    params["pageToken"] = page_token
+                files_data = api_get(
+                    f"/v1.0/doc/workspaces/{ws_id}/files",
+                    params,
+                    config,
+                )
+                files = files_data.get("files", []) or files_data.get("result", {}).get("files", [])
+                for f in files:
+                    creator_id = f.get("creatorId", "")
+                    if user_id and creator_id and creator_id != user_id:
+                        continue
+                    docs.append({
+                        "title": f.get("fileName", "无标题"),
+                        "docId": f.get("docId", ""),
+                        "spaceId": ws_id,
+                        "type": f.get("docType", ""),
+                        "url": f.get("shareUrl", ""),
+                        "creator": name,
+                    })
+                if not files:
+                    break
+                next_token = files_data.get("nextToken") or files_data.get("pageToken")
+                next_token = next_token or files_data.get("result", {}).get("nextToken")
+                next_token = next_token or files_data.get("result", {}).get("pageToken")
+                if not next_token or next_token == page_token:
+                    break
+                page_token = next_token
 
     print(f"  找到 {len(docs)} 篇文档", file=sys.stderr)
     return docs[:doc_limit]
@@ -544,8 +568,15 @@ def fetch_doc_content(doc_id: str, space_id: str, config: dict) -> str:
         try:
             resp = requests.get(dl_url, timeout=15)
             return decode_response_text(resp)
-        except Exception:
-            pass
+        except Exception as e:
+            # 下载失败要说出来。
+            #
+            # 它原来被 `except Exception: pass` 吞掉，然后返回空字符串，
+            # 而调用方看到的是"内容为空，跳过"——所以一次网络错误、一个
+            # 403、一个过期的下载链接，都和"这篇文档本来就没有文字"长得
+            # 一模一样。那篇文档就那么从这位同事的资料里消失了，而摘要
+            # 和日志里一个字也没有。
+            print(f"  ⚠️  文档下载失败：{e}", file=sys.stderr)
 
     return ""
 
@@ -666,7 +697,17 @@ def fetch_bitable_content(base_id: str, config: dict) -> str:
             page = records_data.get("records", []) or records_data.get("result", {}).get("records", [])
             records.extend(page)
 
-            next_token = records_data.get("pageToken") or records_data.get("result", {}).get("pageToken")
+            # 游标在响应里的名字不止一个，而它原来只认"请求里用的那个
+            # 名字"——所以翻页一次就停了，一张有五百行的表只剩下前两百
+            # 行，而导出来的表看起来是完整的：表头在，只是后面没有行。
+            next_token = (
+                records_data.get("nextToken")
+                or records_data.get("nextCursor")
+                or records_data.get("pageToken")
+                or records_data.get("result", {}).get("nextToken")
+                or records_data.get("result", {}).get("nextCursor")
+                or records_data.get("result", {}).get("pageToken")
+            )
             if not page or not next_token or next_token == page_token:
                 break
             page_token = next_token

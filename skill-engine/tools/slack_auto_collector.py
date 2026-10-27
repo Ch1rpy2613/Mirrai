@@ -122,6 +122,12 @@ MAX_RETRIES = 5
 RETRY_BASE_WAIT = 1.0     # 最短等待秒数
 RETRY_MAX_WAIT = 60.0     # 最长等待秒数
 
+# 一次翻页最多翻多少页。
+#
+# 不是 Slack 给的上限，是我们的：万一它一直说「还有」，我们不跟着它
+# 转到天荒地老。飞书那边的翻页有同样的上限。
+MAX_PAGES = 200
+
 # 采集默认值
 DEFAULT_MSG_LIMIT = 1000
 DEFAULT_CHANNEL_LIMIT = 50  # 最多检查的频道数
@@ -310,9 +316,20 @@ class RateLimitedClient:
 
     def __init__(self, token: str) -> None:
         self._client = WebClient(token=token)
+        # 有哪些接口的翻页没有走完。
+        #
+        # 它原来只看得出来"没有下一页"和"接口报错了"这两件事是一样的：
+        # 出错的时候 `call()` 返回一个空字典，`paginate()` 就把它当成
+        # 到底了。于是 600 个成员只拿到 400 个，界面上只留下一行
+        # "[API 警告] users_list 返回错误：internal_error"，而用户看到
+        # 的是"未找到用户：张三"——一个关于他同事的假话。
+        self.truncated_methods: set[str] = set()
+        # 上一次调用是不是失败了。
+        self._last_call_failed = False
 
     def call(self, method: str, **kwargs) -> dict:
         """调用任意 Slack API，遇到 ratelimited 自动等待重试"""
+        self._last_call_failed = False
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 fn = getattr(self._client, method)
@@ -353,16 +370,32 @@ class RateLimitedClient:
 
                 # 其他错误：打印警告，返回空数据
                 print(f"  [API 警告] {method} 返回错误：{error}", file=sys.stderr)
+                self._last_call_failed = True
                 return {}
 
         # 重试耗尽
         print(f"  [错误] {method} 多次重试后仍失败，跳过", file=sys.stderr)
+        self._last_call_failed = True
         return {}
 
     def paginate(self, method: str, result_key: str, **kwargs) -> list:
-        """自动翻页，返回所有结果的合并列表"""
+        """
+        自动翻页，返回所有结果的合并列表。
+
+        它会停下来，两种情况：
+        - 翻到页数上限，或者接口把同一个游标又给了回来（那就不是在
+          往前走了，是转圈）；
+        - 接口在中间报错了。
+
+        第二种原来和"到底了"长得一模一样：出错的时候 `call()` 返回一个
+        空字典，翻页就停了。于是 600 个成员只拿到 400 个，而用户看到
+        的是"未找到用户：张三"——一个关于他同事的假话。
+
+        所以停下来的时候说清楚是哪一种。
+        """
         items: list = []
         cursor = None
+        pages = 0
 
         while True:
             params = dict(kwargs)
@@ -371,14 +404,38 @@ class RateLimitedClient:
 
             data = self.call(method, **params)
             if not data:
+                if self._last_call_failed:
+                    self.truncated_methods.add(method)
+                    print(
+                        f"  [API 警告] {method} 在翻页途中出错，结果不完整",
+                        file=sys.stderr,
+                    )
                 break
 
             items.extend(data.get(result_key, []))
 
             meta = data.get("response_metadata", {})
-            cursor = meta.get("next_cursor")
-            if not cursor:
+            next_cursor = meta.get("next_cursor")
+            if not next_cursor:
                 break
+
+            pages += 1
+            if pages >= MAX_PAGES:
+                self.truncated_methods.add(method)
+                print(
+                    f"  [API 警告] {method} 翻到了 {MAX_PAGES} 页上限，结果不完整",
+                    file=sys.stderr,
+                )
+                break
+            # 同一个游标又来了，那就不是在往前走了。
+            if next_cursor == cursor:
+                self.truncated_methods.add(method)
+                print(
+                    f"  [API 警告] {method} 把同一个游标又给了回来，停止翻页",
+                    file=sys.stderr,
+                )
+                break
+            cursor = next_cursor
 
         return items
 
@@ -397,6 +454,17 @@ def find_user(name: str, client: RateLimitedClient) -> Optional[dict]:
     except SlackScopeError as e:
         print(f"  ❌ {e}", file=sys.stderr)
         sys.exit(1)
+
+    # 名单没有走完，所以"没找到"这句话是不知道的。
+    #
+    # 它原来在翻页途中出错的时候就把名单当成全部了：600 个成员只拿到
+    # 400 个，然后用户看到的是"未找到用户：张三"——一个关于他同事的假
+    # 话，而那个同事就在这 200 个没拿到的人里面。
+    if "users_list" in client.truncated_methods:
+        print(
+            f"  ⚠️  用户名单没有拿完，所以「{name} 不在工作区里」这句话不能确定",
+            file=sys.stderr,
+        )
 
     # 过滤掉 Bot / 已停用账号
     members = [
@@ -819,6 +887,12 @@ def collect_all(
     print(f"\n📡 查找与 {real_name} 共同的频道（上限 {channel_limit} 个）...", file=sys.stderr)
     channels, unchecked_channels = get_channels_with_user(user_id, channel_limit, client)
     print(f"  共同频道：{len(channels)} 个", file=sys.stderr)
+    # 频道列表本身没有走完，所以"没有共同的频道"这句话是不知道的。
+    if "conversations_list" in client.truncated_methods:
+        print(
+            "  ⚠️  频道列表没有拿完，所以「没有共同的频道」这句话不能确定",
+            file=sys.stderr,
+        )
     if unchecked_channels:
         # 答案不完整，所以说出来。
         #
