@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { USER_MOODS, isUserMood, type UserMood } from "@shared/user-side";
 import { formatInstantInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
+import CrisisCard from "@/components/CrisisCard";
 
 /**
  * The letters.
@@ -51,6 +52,14 @@ export default function LetterBox({ personaId }: { personaId: number }) {
   const [body, setBody] = useState("");
   const [mood, setMood] = useState<UserMood | "">("");
   const [kind, setKind] = useState<"letter" | "todo">("letter");
+  /**
+   * The support resources.
+   *
+   * A letter is what a person writes when they cannot say it any other
+   * way, so the server reads it — and when it finds crisis language
+   * the resources are shown here.
+   */
+  const [showCrisis, setShowCrisis] = useState(false);
 
   const write = trpc.letter.write.useMutation({
     onSuccess: (data) => {
@@ -66,6 +75,16 @@ export default function LetterBox({ personaId }: { personaId: number }) {
       setBody("");
       setMood("");
       setShowWrite(false);
+      /**
+       * The support resources.
+       *
+       * A letter is the most personal thing the app holds — it is
+       * what a person writes when they cannot say it any other way.
+       * The server reads it for crisis language, and when it finds
+       * something the resources are shown here, the way they are for
+       * the mood check-in and the relationship timeline.
+       */
+      if ((data as any)?.crisis) setShowCrisis(true);
       toast.success(
         /**
          * A note to say later is not a letter.
@@ -129,6 +148,7 @@ export default function LetterBox({ personaId }: { personaId: number }) {
 
   return (
     <div className="space-y-4">
+      {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
       {letters.length === 0 && !showWrite && (
         <p className="text-xs text-muted-foreground leading-relaxed">
           {/* "No letters yet" while the letters are still on their way

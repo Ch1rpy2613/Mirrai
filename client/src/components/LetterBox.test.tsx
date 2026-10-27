@@ -17,15 +17,43 @@ const invalidate = vi.fn();
 
 let letters: any[] = [];
 let todos: any[] = [];
+/** What the server answered with when the letter was written. */
+let writeResult: any = { success: true, letter: { kind: "letter", status: "private" } };
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ letter: { list: { invalidate } } }),
+    useUtils: () => ({ letter: { list: { invalidate }, todos: { invalidate } } }),
     letter: {
       list: { useQuery: () => ({ data: { letters } }) },
       todos: { useQuery: () => ({ data: { todos } }) },
-      write: { useMutation: () => ({ mutate: write, isPending: false }) },
+      write: {
+        useMutation: (options: any) => ({
+          mutate: (values: any) => {
+            write(values);
+            options?.onSuccess?.(writeResult);
+          },
+          isPending: false,
+        }),
+      },
       remove: { useMutation: () => ({ mutate: remove, isPending: false }) },
+    },
+    safety: {
+      resources: {
+        useQuery: () => ({
+          data: {
+            resources: [
+              {
+                id: "cn-national",
+                region: "中国大陆",
+                description: "全国心理援助热线",
+                contact: "12356",
+              },
+            ],
+          },
+          isError: false,
+          isLoading: false,
+        }),
+      },
     },
   },
 }));
@@ -64,6 +92,7 @@ describe("the letters", () => {
     vi.clearAllMocks();
     letters = [];
     todos = [];
+    writeResult = { success: true, letter: { kind: "letter", status: "private" } };
   });
 
   it("shows the date in the user's own calendar", () => {
@@ -145,5 +174,43 @@ describe("the letters", () => {
         deliver: false,
       }),
     );
+  });
+
+  it("offers the support resources when the letter says something alarming", async () => {
+    /**
+     * A letter is what a person writes when they cannot say it any
+     * other way — so the server reads it, and when it finds crisis
+     * language the resources are shown here, the way they are for the
+     * mood check-in and the relationship timeline.
+     */
+    writeResult = {
+      success: true,
+      letter: { kind: "letter", status: "private" },
+      crisis: true,
+    };
+    const user = userEvent.setup();
+    render(<LetterBox personaId={1} />);
+
+    await user.click(screen.getByText(translate("zh", "letters.write")));
+    await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "我不想活了");
+    await user.click(screen.getByText(translate("zh", "letters.keep")));
+
+    await waitFor(() => {
+      expect(screen.getByText("12356")).toBeInTheDocument();
+    });
+  });
+
+  it("shows no resources for an ordinary letter", async () => {
+    const user = userEvent.setup();
+    render(<LetterBox personaId={1} />);
+
+    await user.click(screen.getByText(translate("zh", "letters.write")));
+    await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "今天天气不错。");
+    await user.click(screen.getByText(translate("zh", "letters.keep")));
+
+    await waitFor(() => {
+      expect(write).toHaveBeenCalled();
+    });
+    expect(screen.queryByText("12356")).not.toBeInTheDocument();
   });
 });

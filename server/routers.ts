@@ -4152,7 +4152,30 @@ export const appRouter = router({
           deliver: input.kind === "todo" ? false : input.deliver,
           kind: input.kind,
         });
-        return { success: true, letter, asleep };
+
+        /**
+         * The letter is scanned.
+         *
+         * A letter is the most personal thing the app holds — it is
+         * what a person writes when they cannot say it any other way.
+         * And it was the one place the user could write freely that
+         * the crisis detector never read *at the moment of writing*:
+         * the only scan was at answer time, and a letter that is kept
+         * — or written as a note to say later — is never answered.
+         *
+         * So "我不想活了" written into a letter was stored, never
+         * looked at, and never shown to the person who wrote it.
+         */
+        const crisis = detectCrisis(input.body);
+        if (crisis.crisis) {
+          await createSafetyEvent({
+            userId: ctx.user.id,
+            personaId: input.personaId,
+            type: "crisis",
+            severity: "critical",
+          }).catch((e: unknown) => console.warn("[Safety] Failed to record the crisis event:", e));
+        }
+        return { success: true, letter, asleep, crisis: crisis.crisis };
       }),
 
     /** The notes the user kept for later. */
