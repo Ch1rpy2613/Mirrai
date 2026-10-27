@@ -142,7 +142,15 @@ bundle_binaries() {
     [ -f "$bin" ] || continue
     for lib in $(otool -L "$bin" 2>/dev/null | awk '{print $1}' | grep -E "^/opt/homebrew|^/usr/local/(opt|Cellar)"); do
       libname=$(basename "$lib")
-      install_name_tool -change "$lib" "@executable_path/../lib/$libname" "$bin" 2>/dev/null || true
+      # The failure is fatal.
+      #
+      # A binary that still points at Homebrew does not run on any other
+      # machine — and the failure was swallowed, so the build produced a
+      # bundle that could not start and said nothing about it.
+      install_name_tool -change "$lib" "@executable_path/../lib/$libname" "$bin" || {
+        log "ERROR: Could not fix the library path of $(basename "$bin")."
+        return 1
+      }
     done
   done
 
@@ -150,10 +158,16 @@ bundle_binaries() {
   for dylib in "$dest/lib/"*.dylib; do
     [ -f "$dylib" ] || continue
     libname=$(basename "$dylib")
-    install_name_tool -id "@loader_path/$libname" "$dylib" 2>/dev/null || true
+    install_name_tool -id "@loader_path/$libname" "$dylib" || {
+      log "ERROR: Could not set the identity of $(basename "$dylib")."
+      return 1
+    }
     for dep in $(otool -L "$dylib" 2>/dev/null | awk '{print $1}' | grep -E "^/opt/homebrew|^/usr/local/(opt|Cellar)"); do
       depname=$(basename "$dep")
-      install_name_tool -change "$dep" "@loader_path/$depname" "$dylib" 2>/dev/null || true
+      install_name_tool -change "$dep" "@loader_path/$depname" "$dylib" || {
+        log "ERROR: Could not fix the library path of $(basename "$dylib")."
+        return 1
+      }
     done
   done
 
@@ -161,8 +175,12 @@ bundle_binaries() {
   log "Verifying library paths..."
   local REMAINING=$(for f in "$dest/bin/"* "$dest/lib/"*.dylib; do otool -L "$f" 2>/dev/null; done | grep -E "^\s+/opt/homebrew|^\s+/usr/local/(opt|Cellar)" || true)
   if [ -n "$REMAINING" ]; then
-    log "WARNING: Some Homebrew paths still unresolved:"
+    # A path that is still pointing at Homebrew is a binary that will not
+    # run on the user's machine. The build used to warn about it and
+    # carry on — and the bundle was shipped broken.
+    log "ERROR: Some Homebrew paths are still unresolved:"
     echo "$REMAINING"
+    return 1
   else
     log "All library paths resolved."
   fi
@@ -171,7 +189,18 @@ bundle_binaries() {
   log "Re-signing binaries..."
   for f in "$dest/bin/"* "$dest/lib/"*.dylib; do
     [ -f "$f" ] || continue
-    codesign --force --sign - "$f" 2>/dev/null || true
+    # Only a Mach-O binary can be signed — a script in the folder would
+    # fail, and it does not need signing.
+    file "$f" | grep -q "Mach-O" || continue
+    # The failure is fatal.
+    #
+    # An unsigned binary does not run on an Apple Silicon Mac — and the
+    # failure was swallowed, so the build produced a bundle that macOS
+    # refused to open.
+    codesign --force --sign - "$f" || {
+      log "ERROR: Could not sign $(basename "$f")."
+      return 1
+    }
   done
 }
 

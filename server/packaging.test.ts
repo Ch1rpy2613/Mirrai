@@ -175,6 +175,18 @@ describe("the packaged app", () => {
     expect(workflow).toMatch(/Mirrai\.exe[\s\S]{0,400}throw/);
   });
 
+  it("does not ship a macOS bundle that cannot run", () => {
+    // A binary that still points at Homebrew does not run on any other
+    // machine, and an unsigned binary does not run on an Apple Silicon
+    // Mac at all. Both failures were swallowed, so the build produced a
+    // bundle that could not start — and said nothing about it.
+    const macos = readFileSync(path.join(ROOT, "scripts/build-macos-app.sh"), "utf-8");
+    expect(macos).not.toMatch(/install_name_tool[^\n]*\|\| true/);
+    expect(macos).not.toMatch(/codesign[^\n]*\|\| true/);
+    // And the check that the paths are gone stops the build.
+    expect(macos).toMatch(/Homebrew paths are still unresolved[\s\S]{0,120}return 1/);
+  });
+
   it("stops when the schema cannot be synchronised", () => {
     // `push` applies the difference between the schema and the live
     // database — so a failure means the two still disagree, and the app
