@@ -52,6 +52,23 @@ registry.registerFactory(
 );
 
 registry.registerFactory(
+  "APIRoute",
+  (cfg) =>
+    new OpenAIProvider(
+      "APIRoute",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? "https://global.api-route.com/v1",
+      cfg.model ?? "gpt-6.1-sol",
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.apiRouteApiKey,
+    baseUrl: ENV.apiRouteBaseUrl,
+    model: ENV.apiRouteModel,
+  },
+);
+
+registry.registerFactory(
   "CheaperInference",
   (cfg) =>
     new OpenAIProvider(

@@ -185,6 +185,10 @@ export const ENV = {
   atlasBaseUrl: process.env.ATLAS_BASE_URL ?? "https://api.atlascloud.ai/v1",
   atlasModel: process.env.ATLAS_MODEL ?? "google/gemini-3-flash-preview",
 
+  apiRouteApiKey: process.env.API_ROUTE_API_KEY ?? "",
+  apiRouteBaseUrl: process.env.API_ROUTE_BASE_URL ?? "https://global.api-route.com/v1",
+  apiRouteModel: process.env.API_ROUTE_MODEL ?? "gpt-6.1-sol",
+
   cheaperInferenceApiKey: process.env.CHEAPER_INFERENCE_API_KEY ?? "",
   cheaperInferenceBaseUrl: process.env.CHEAPER_INFERENCE_BASE_URL ?? "https://api.cheaperinference.com/v1",
   cheaperInferenceModel: process.env.CHEAPER_INFERENCE_MODEL ?? "gpt-5.4-mini",
