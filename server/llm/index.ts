@@ -69,6 +69,23 @@ registry.registerFactory(
 );
 
 registry.registerFactory(
+  "Opper",
+  (cfg) =>
+    new OpenAIProvider(
+      "Opper",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? "https://api.opper.ai/v3/compat",
+      cfg.model ?? "claude-sonnet-4-6",
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.opperApiKey,
+    baseUrl: ENV.opperBaseUrl,
+    model: ENV.opperModel,
+  },
+);
+
+registry.registerFactory(
   "Kimi",
   (cfg) =>
     new OpenAIProvider(
