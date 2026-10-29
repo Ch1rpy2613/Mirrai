@@ -13,7 +13,7 @@
 
 ![Mirrai landing page](docs/images/landing-hero.png)
 
-Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digital persona from real chat history — their tone, their habits, even the moments they go cold. Every byte stays on your machine, 12 LLM providers plug in out of the box, and it ships with something no other companion product has: a **graduation mechanism** — designed not to keep you, but to help you say goodbye.
+Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digital persona from real chat history — their tone, their habits, even the moments they go cold. Every byte stays on your machine, 13 LLM providers plug in out of the box, and it ships with something no other companion product has: a **graduation mechanism** — designed not to keep you, but to help you say goodbye.
 
 > ⚠️ The app UI is currently Chinese-first; full English localization is on the [roadmap](#roadmap). English-speaking users can still set it up and the landing page is bilingual.
 
@@ -27,7 +27,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 | 🧠 **Memory that grows on its own** | After enough has been said, the persona extracts what was worth keeping on its own — no button, and pressing a button twice no longer stores everything twice. Every reply shows which memories it recalled, so a detail from three months ago is visibly *recalled* rather than invented. Memories about you and memories about them are kept apart. |
 | ✉️ **Letters, and the distance** | Some things cannot be said into a chat box. Write one and keep it forever, or hand it over — it is answered about a day later, because a person does not reply in three seconds. There is also a list of things to say "when they come back", and a **"we can't reach each other right now"** state that is deliberately *not* a breakup: the reminders stop and the register turns to a letter's. |
 | 💬 **They can speak first** | Off by default. The frequency is yours to set, and zero is a real value: an app that speaks first is something you buy, not something you are given. When it is on, it goes out over the channel you have already bound — WeChat, Feishu — and it respects your quiet hours. |
-| 🔌 **12 LLM providers** | OpenAI, Claude, DeepSeek, Kimi, Qwen, Doubao, 302.ai, Atlas Cloud, Cheaper Inference, Dify, Xunfei — and Ollama for fully local inference. |
+| 🔌 **13 LLM providers** | OpenAI, Claude, DeepSeek, Kimi, Qwen, Doubao, 302.ai, Atlas Cloud, Cheaper Inference, Runcrate, Dify, Xunfei — and Ollama for fully local inference. |
 | 💬 **WeChat via official ClawBot** | Connect to WeChat through the official "ClawBot" plugin (Tencent iLink protocol) — scan a QR code, authorize, and chat with your persona in WeChat. Shares persona and memory with the web app. **No ban risk**: this is a first-party WeChat channel, not a third-party protocol. | |
 | 🔒 **Local-first** | Uploads stay in `./uploads/`. With Ollama, nothing ever leaves your machine. |
 
@@ -38,7 +38,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 | Persona built from real chat logs | ✅ multi-stage distillation | ❌ manual | ⚠️ manual prompting |
 | Emotion states drift with conversation | ✅ 6-state machine | ⚠️ limited | ⚠️ manual |
 | Fully local data | ✅ | ❌ cloud | ✅ |
-| Swappable LLM backends | ✅ 12 providers / local | ❌ locked | ✅ |
+| Swappable LLM backends | ✅ 13 providers / local | ❌ locked | ✅ |
 | Designed to help you let go | ✅ graduation | ❌ | ❌ |
 | Open source, self-hosted | ✅ MIT | ❌ | ✅ |
 
@@ -176,7 +176,7 @@ an empty database — use `db:push` there.
 - [x] Multi-stage persona distillation pipeline
 - [x] 6-state emotion engine + intimacy system
 - [x] Graduation mechanism (farewell letter + dormancy/awakening)
-- [x] 12 LLM providers
+- [x] 13 LLM providers
 - [x] WeChat ClawBot channel integration
 - [x] Diary / memory nodes / analytics / TTS
 - [ ] SillyTavern character card (PNG v2) import/export

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { LLMService } from "./index";
+import { LLMService, registry as defaultRegistry } from "./index";
 import { ProviderRegistry } from "./provider-registry";
 import type { LLMProvider } from "./types";
 
@@ -26,5 +26,13 @@ describe("LLMService retry policy", () => {
 
     await expect(service.invoke({ messages: [] })).rejects.toThrow("HTTP 503");
     expect(invoke).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Runcrate provider", () => {
+  it("is registered under its lowercase name with the OpenAI-compatible client", () => {
+    const provider = defaultRegistry.get("runcrate");
+    expect(provider?.name).toBe("Runcrate");
+    expect(provider?.capabilities.streaming).toBe(true);
   });
 });

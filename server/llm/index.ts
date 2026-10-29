@@ -69,6 +69,23 @@ registry.registerFactory(
 );
 
 registry.registerFactory(
+  "Runcrate",
+  (cfg) =>
+    new OpenAIProvider(
+      "Runcrate",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? "https://api.runcrate.ai/v1",
+      cfg.model ?? "deepseek-ai/DeepSeek-V4.1-Flash",
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.runcrateApiKey,
+    baseUrl: ENV.runcrateBaseUrl,
+    model: ENV.runcrateModel,
+  },
+);
+
+registry.registerFactory(
   "Kimi",
   (cfg) =>
     new OpenAIProvider(
