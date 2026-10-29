@@ -189,6 +189,10 @@ export const ENV = {
   cheaperInferenceBaseUrl: process.env.CHEAPER_INFERENCE_BASE_URL ?? "https://api.cheaperinference.com/v1",
   cheaperInferenceModel: process.env.CHEAPER_INFERENCE_MODEL ?? "gpt-5.4-mini",
 
+  runcrateApiKey: process.env.RUNCRATE_API_KEY ?? "",
+  runcrateBaseUrl: process.env.RUNCRATE_BASE_URL ?? "https://api.runcrate.ai/v1",
+  runcrateModel: process.env.RUNCRATE_MODEL ?? "deepseek-ai/DeepSeek-V4.1-Flash",
+
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
